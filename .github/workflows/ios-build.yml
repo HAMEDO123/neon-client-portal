@@ -1,0 +1,48 @@
+name: Build iOS app (unsigned)
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build unsigned .app
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -project NeonAdmin.xcodeproj \
+            -scheme NeonAdmin \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
+
+      - name: Package .ipa
+        working-directory: ios
+        run: |
+          mkdir -p Payload
+          cp -r "build/Build/Products/Release-iphoneos/NeonAdmin.app" Payload/
+          zip -r "NeonAdmin-unsigned.ipa" Payload
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeonAdmin-unsigned-ipa
+          path: ios/NeonAdmin-unsigned.ipa
