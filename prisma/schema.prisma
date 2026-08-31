@@ -1,0 +1,296 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PublishState {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// Admin-facing pipeline label shown as a status pill on the project cover.
+enum PipelineStatus {
+  DRAFT
+  INTERNAL_REVIEW
+  SENT_TO_CLIENT
+  CLIENT_REVIEWING
+  CHANGES_REQUESTED
+  APPROVED
+  EXECUTION
+  COMPLETED
+  ARCHIVED
+}
+
+// Drives the visual journey timeline on the client page.
+enum ProjectStage {
+  CONCEPT
+  DESIGN
+  VISUALIZATION
+  TECHNICAL_DRAWINGS
+  BOQ
+  PRICING
+  APPROVAL
+  HANDOVER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum CommentAuthor {
+  CLIENT
+  ADMIN
+}
+
+enum CommentStatus {
+  OPEN
+  RESOLVED
+}
+
+model Project {
+  id       String @id @default(cuid())
+  token    String @unique
+  name     String
+  clientName  String
+  clientEmail String?
+  clientPhone String?
+
+  location    String?
+  area        String?
+  projectType String?
+  description String? @db.Text
+
+  coverImageUrl String?
+  deliveryDate  DateTime?
+
+  publishState      PublishState   @default(DRAFT)
+  pipelineStatus    PipelineStatus @default(DRAFT)
+  currentStage       ProjectStage  @default(CONCEPT)
+  completionPercent Int            @default(0)
+
+  // Client-visibility settings (item 13 / 47 / 26 of the spec).
+  showPricing         Boolean @default(false)
+  showDetailedPricing Boolean @default(true)
+  showBoqQuantities   Boolean @default(true)
+  showBoqPrices       Boolean @default(false)
+  allowDownloads      Boolean @default(true)
+  watermarkEnabled    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  spaces       GallerySpace[]
+  drawings     Drawing[]
+  documents    Document[]
+  boqItems     BoqItem[]
+  pricingItems PricingItem[]
+  materials    Material[]
+  furniture    FurnitureItem[]
+  approvals    Approval[]
+  comments     Comment[]
+  activities   ProjectActivity[]
+}
+
+model GallerySpace {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name  String
+  order Int    @default(0)
+
+  images GalleryImage[]
+}
+
+model GalleryImage {
+  id      String       @id @default(cuid())
+  spaceId String
+  space   GallerySpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  imageUrl       String
+  caption        String?
+  isBeforeAfter  Boolean @default(false)
+  beforeImageUrl String?
+  order          Int     @default(0)
+  createdAt      DateTime @default(now())
+
+  hotspots ImageHotspot[]
+}
+
+model ImageHotspot {
+  id      String       @id @default(cuid())
+  imageId String
+  image   GalleryImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  xPercent    Float
+  yPercent    Float
+  label       String
+  description String?
+  category    String?
+  linkLabel   String?
+  order       Int     @default(0)
+}
+
+model Drawing {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  category      String
+  subCategory   String?
+  name          String
+  drawingNumber String?
+  revision      String  @default("R00")
+  fileUrl       String
+  thumbnailUrl  String?
+  fileType      String
+  fileSize      Int?
+  order         Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  revisions DrawingRevision[]
+}
+
+model DrawingRevision {
+  id        String  @id @default(cuid())
+  drawingId String
+  drawing   Drawing @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+
+  revision  String
+  note      String?
+  fileUrl   String
+  createdAt DateTime @default(now())
+}
+
+model Document {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  category  String
+  title     String
+  fileUrl   String
+  fileType  String
+  fileSize  Int?
+  version   String?
+  order     Int     @default(0)
+  createdAt DateTime @default(now())
+}
+
+model BoqItem {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  category       String
+  name           String
+  description    String?
+  specification  String?
+  unit           String
+  quantity       Float
+  unitPrice      Float?
+  imageUrl       String?
+  relatedDrawing String?
+  relatedSpace   String?
+  notes          String?
+  order          Int     @default(0)
+}
+
+model PricingItem {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  category    String
+  label       String
+  description String?
+  amount      Float
+  isOptional  Boolean @default(false)
+  order       Int     @default(0)
+}
+
+model Material {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  category      String
+  name          String
+  brand         String?
+  model         String?
+  color         String?
+  finish        String?
+  specification String?
+  supplier      String?
+  reference     String?
+  imageUrl      String?
+  estimatedQty  String?
+  price         Float?
+  relatedSpaces String?
+  order         Int     @default(0)
+}
+
+model FurnitureItem {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name       String
+  brand      String?
+  model      String?
+  dimensions String?
+  quantity   Int     @default(1)
+  finish     String?
+  supplier   String?
+  reference  String?
+  imageUrl   String?
+  price      Float?
+  space      String?
+  order      Int     @default(0)
+}
+
+model Approval {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  itemLabel   String
+  status      ApprovalStatus @default(PENDING)
+  clientName  String?
+  note        String?
+  respondedAt DateTime?
+  order       Int            @default(0)
+  createdAt   DateTime       @default(now())
+}
+
+model Comment {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorName String
+  authorType CommentAuthor @default(CLIENT)
+  message    String        @db.Text
+  refLabel   String?
+  status     CommentStatus @default(OPEN)
+  createdAt  DateTime      @default(now())
+}
+
+model ProjectActivity {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  type      String
+  detail    String?
+  createdAt DateTime @default(now())
+}
