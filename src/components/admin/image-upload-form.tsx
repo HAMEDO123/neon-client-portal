@@ -26,6 +26,7 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
     const caption = formData.get("caption");
     const isBeforeAfter = formData.get("isBeforeAfter") === "on";
     const beforeImage = formData.get("beforeImage");
+    const compress = formData.get("compress") === "on";
 
     setProgress({ done: 0, total: isBeforeAfter ? 1 : files.length });
     try {
@@ -34,6 +35,7 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
         single.append("image", files[0]);
         if (caption) single.append("caption", caption);
         single.append("isBeforeAfter", "on");
+        if (compress) single.append("compress", "on");
         if (beforeImage instanceof File && beforeImage.size > 0) single.append("beforeImage", beforeImage);
         await addImage(projectId, spaceId, single);
         setProgress({ done: 1, total: 1 });
@@ -42,6 +44,7 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
           const single = new FormData();
           single.append("image", files[i]);
           if (caption) single.append("caption", caption);
+          if (compress) single.append("compress", "on");
           await addImage(projectId, spaceId, single);
           setProgress({ done: i + 1, total: files.length });
         }
@@ -64,9 +67,16 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
       <div>
         <label className="mb-1 block text-xs font-medium text-ink/50">Images (select multiple to batch-upload)</label>
         <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/avif" required multiple className="text-xs" />
-        <p className="mt-1 text-[11px] text-ink/35">Anything over 1MB is compressed automatically. Uploaded one at a time — no batch size limit.</p>
+        <p className="mt-1 text-[11px] text-ink/35">Uploaded one at a time — no batch size limit.</p>
       </div>
       <TextInput label="Caption (optional)" name="caption" defaultValue="" required={false} className="w-48" />
+      <Checkbox
+        label="Compress images"
+        name="compress"
+        defaultChecked
+        description="Shrinks anything over 1MB for faster loading. Uncheck to keep full original quality."
+        className="w-56"
+      />
       <Checkbox label="Before / After pair" name="isBeforeAfter" className="w-56" />
       <div>
         <label className="mb-1 block text-xs font-medium text-ink/50">“Before” image (if checked, uses only the first image above)</label>

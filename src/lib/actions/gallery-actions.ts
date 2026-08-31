@@ -35,15 +35,16 @@ export async function addImage(projectId: string, spaceId: string, formData: For
   const caption = String(formData.get("caption") ?? "") || null;
   const isBeforeAfter = formData.get("isBeforeAfter") === "on";
   const beforeFile = formData.get("beforeImage");
+  const compress = formData.get("compress") === "on";
 
   let count = await prisma.galleryImage.count({ where: { spaceId } });
 
   if (isBeforeAfter) {
     // Before/after pairing only makes sense for a single "after" image at a time.
-    const saved = await saveFile(files[0], `projects/${projectId}/gallery`, "image");
+    const saved = await saveFile(files[0], `projects/${projectId}/gallery`, "image", compress);
     let beforeImageUrl: string | null = null;
     if (beforeFile instanceof File && beforeFile.size > 0) {
-      beforeImageUrl = (await saveFile(beforeFile, `projects/${projectId}/gallery`, "image")).url;
+      beforeImageUrl = (await saveFile(beforeFile, `projects/${projectId}/gallery`, "image", compress)).url;
     }
     await prisma.galleryImage.create({
       data: {
@@ -57,7 +58,7 @@ export async function addImage(projectId: string, spaceId: string, formData: For
     });
   } else {
     for (const file of files) {
-      const saved = await saveFile(file, `projects/${projectId}/gallery`, "image");
+      const saved = await saveFile(file, `projects/${projectId}/gallery`, "image", compress);
       await prisma.galleryImage.create({
         data: { spaceId, imageUrl: saved.url, caption, order: count },
       });

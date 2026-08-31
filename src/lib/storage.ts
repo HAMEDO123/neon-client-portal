@@ -114,7 +114,12 @@ export interface SavedFile {
   fileSize: number;
 }
 
-export async function saveFile(file: File, folder: string, kind: UploadKind = "document"): Promise<SavedFile> {
+export async function saveFile(
+  file: File,
+  folder: string,
+  kind: UploadKind = "document",
+  compress: boolean = true
+): Promise<SavedFile> {
   const rule = RULES[kind];
   if (!rule.types.includes(file.type)) {
     throw new Error(`Unsupported file type. Use: ${rule.label}.`);
@@ -126,7 +131,7 @@ export async function saveFile(file: File, folder: string, kind: UploadKind = "d
   let buffer: Buffer = Buffer.from(await file.arrayBuffer());
   let ext = extFromFile(file);
 
-  if (kind === "image" && buffer.length > COMPRESS_THRESHOLD_BYTES) {
+  if (kind === "image" && compress && buffer.length > COMPRESS_THRESHOLD_BYTES) {
     const compressed = await compressImage(buffer);
     buffer = compressed.buffer;
     ext = compressed.ext;
