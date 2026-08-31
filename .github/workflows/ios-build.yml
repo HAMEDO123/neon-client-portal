@@ -97,17 +97,26 @@ jobs:
         working-directory: ios
         run: |
           APP="buildsim/Build/Products/Debug-iphonesimulator/NeonAdmin.app"
+          mkdir -p screenshots
           xcrun simctl install "$DEVICE_ID" "$APP"
+
           xcrun simctl launch "$DEVICE_ID" com.neon.admin
           sleep 6
-          mkdir -p screenshots
           xcrun simctl io "$DEVICE_ID" screenshot screenshots/login-screen.png
 
-      - name: Commit screenshot
+          # -uiTestMode is a Debug-only flag (see APIClient.swift / Models.swift)
+          # that injects fixture data instead of a real login, so the Dashboard
+          # can be screenshotted without any production credentials in CI.
+          xcrun simctl terminate "$DEVICE_ID" com.neon.admin || true
+          xcrun simctl launch "$DEVICE_ID" com.neon.admin -uiTestMode
+          sleep 6
+          xcrun simctl io "$DEVICE_ID" screenshot screenshots/dashboard-preview.png
+
+      - name: Commit screenshots
         working-directory: ios
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add screenshots/login-screen.png
-          git diff --cached --quiet && echo "No screenshot changes" || git commit -m "ci: update simulator screenshot [skip ci]"
+          git add screenshots/login-screen.png screenshots/dashboard-preview.png
+          git diff --cached --quiet && echo "No screenshot changes" || git commit -m "ci: update simulator screenshots [skip ci]"
           git push

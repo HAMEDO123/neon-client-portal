@@ -20,8 +20,17 @@ final class APIClient: ObservableObject {
         didSet { UserDefaults.standard.set(token, forKey: "session_token") }
     }
 
+    #if DEBUG
+    // CI screenshot fixture only — see Models.swift's DashboardResponse.preview.
+    // Never compiled into the Release build used for real installs.
+    static let uiTestMode = ProcessInfo.processInfo.arguments.contains("-uiTestMode")
+    #endif
+
     private init() {
         token = UserDefaults.standard.string(forKey: "session_token")
+        #if DEBUG
+        if Self.uiTestMode { token = "preview" }
+        #endif
     }
 
     var isLoggedIn: Bool { token != nil }
@@ -46,6 +55,9 @@ final class APIClient: ObservableObject {
     }
 
     func fetchDashboard() async throws -> DashboardResponse {
+        #if DEBUG
+        if Self.uiTestMode { return .preview }
+        #endif
         guard let token else { throw APIError.unauthorized }
         var request = URLRequest(url: baseURL.appendingPathComponent("dashboard"))
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
