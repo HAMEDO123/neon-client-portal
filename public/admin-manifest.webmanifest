@@ -1,0 +1,14 @@
+{
+  "name": "NEON Admin",
+  "short_name": "NEON Admin",
+  "description": "NEON Design & Programming — client project delivery admin",
+  "start_url": "/admin/login",
+  "scope": "/admin",
+  "display": "standalone",
+  "background_color": "#f7f6fb",
+  "theme_color": "#15131f",
+  "icons": [
+    { "src": "/admin-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/admin-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
