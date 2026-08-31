@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { getProjectById } from "@/lib/queries";
-import { createSpace, deleteSpace, addImage, deleteImage } from "@/lib/actions/gallery-actions";
-import { TextInput, Checkbox } from "@/components/admin/fields";
+import { createSpace, deleteSpace, deleteImage } from "@/lib/actions/gallery-actions";
+import { TextInput } from "@/components/admin/fields";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Images } from "lucide-react";
 import { HotspotEditor } from "@/components/admin/hotspot-editor";
+import { ImageUploadForm } from "@/components/admin/image-upload-form";
 
 export default async function GalleryAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -63,23 +64,7 @@ export default async function GalleryAdminPage({ params }: { params: Promise<{ i
             </div>
           )}
 
-          <form
-            action={addImage.bind(null, project.id, space.id)}
-            className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-dashed border-ink/12 p-4"
-          >
-            <div>
-              <label className="mb-1 block text-xs font-medium text-ink/50">Images (select multiple to batch-upload)</label>
-              <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/avif" required multiple className="text-xs" />
-              <p className="mt-1 text-[11px] text-ink/35">Anything over 1MB is compressed automatically. Keep each batch under ~100MB total.</p>
-            </div>
-            <TextInput label="Caption (optional)" name="caption" defaultValue="" required={false} className="w-48" />
-            <Checkbox label="Before / After pair" name="isBeforeAfter" className="w-56" />
-            <div>
-              <label className="mb-1 block text-xs font-medium text-ink/50">“Before” image (if checked, uses only the first image above)</label>
-              <input type="file" name="beforeImage" accept="image/jpeg,image/png,image/webp,image/avif" className="text-xs" />
-            </div>
-            <SaveButton label="Add Image(s)" />
-          </form>
+          <ImageUploadForm projectId={project.id} spaceId={space.id} />
         </section>
       ))}
     </div>

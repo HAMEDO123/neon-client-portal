@@ -7,9 +7,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      // Batch gallery uploads send several images in one request before server-side compression runs.
-      // Kept well under Render's free-tier 512MB RAM ceiling — this is the raw upload, before compression.
-      bodySizeLimit: "100mb",
+      // Gallery images now upload one file per request (see ImageUploadForm), so this only
+      // needs to cover the single largest upload: a 50MB document/video (see storage.ts RULES).
+      bodySizeLimit: "60mb",
     },
   },
   images: {
