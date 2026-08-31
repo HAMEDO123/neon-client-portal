@@ -4,8 +4,12 @@ on:
   push:
     paths:
       - "ios/**"
+      - "!ios/screenshots/**"
       - ".github/workflows/ios-build.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -20,7 +24,7 @@ jobs:
         working-directory: ios
         run: xcodegen generate
 
-      - name: Build unsigned .app
+      - name: Build unsigned .app (device)
         working-directory: ios
         run: |
           xcodebuild \
@@ -46,9 +50,8 @@ jobs:
           find "$APP" -maxdepth 2 -exec ls -la {} \;
           BIN_SIZE=$(stat -f%z "$BIN")
           echo "Executable size: $BIN_SIZE bytes"
-          # A real compiled Swift/WKWebView binary is well into six figures even
-          # unsigned and unstripped extras aside — anything tiny means the build
-          # silently produced a stub instead of the actual app.
+          # A real compiled Swift binary with networking + SwiftUI views is well
+          # into six figures — anything tiny means the build produced a stub.
           test "$BIN_SIZE" -gt 50000 || { echo "::error::Executable suspiciously small ($BIN_SIZE bytes) — build likely broken"; exit 1; }
 
       - name: Package .ipa
@@ -65,3 +68,46 @@ jobs:
         with:
           name: NeonAdmin-unsigned-ipa
           path: ios/NeonAdmin-unsigned.ipa
+
+      # --- Simulator build + real screenshot, so the UI is actually verified
+      # instead of just "the compile succeeded". The screenshot gets committed
+      # straight back into the repo since artifact downloads need a token that
+      # isn't available outside this CI job.
+      - name: Boot simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j | jq -r '.devices | to_entries[] | .value[] | select(.name | test("iPhone")) | .udid' | head -1)
+          echo "Using simulator: $DEVICE_ID"
+          echo "DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+
+      - name: Build for simulator
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -project NeonAdmin.xcodeproj \
+            -scheme NeonAdmin \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath buildsim \
+            -destination "id=$DEVICE_ID" \
+            build
+
+      - name: Install, launch, and screenshot
+        working-directory: ios
+        run: |
+          APP="buildsim/Build/Products/Debug-iphonesimulator/NeonAdmin.app"
+          xcrun simctl install "$DEVICE_ID" "$APP"
+          xcrun simctl launch "$DEVICE_ID" com.neon.admin
+          sleep 6
+          mkdir -p screenshots
+          xcrun simctl io "$DEVICE_ID" screenshot screenshots/login-screen.png
+
+      - name: Commit screenshot
+        working-directory: ios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add screenshots/login-screen.png
+          git diff --cached --quiet && echo "No screenshot changes" || git commit -m "ci: update simulator screenshot [skip ci]"
+          git push
