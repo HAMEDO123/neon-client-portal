@@ -70,7 +70,7 @@ export default async function GalleryAdminPage({ params }: { params: Promise<{ i
             <div>
               <label className="mb-1 block text-xs font-medium text-ink/50">Images (select multiple to batch-upload)</label>
               <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/avif" required multiple className="text-xs" />
-              <p className="mt-1 text-[11px] text-ink/35">Anything over 1MB is compressed automatically.</p>
+              <p className="mt-1 text-[11px] text-ink/35">Anything over 1MB is compressed automatically. Keep each batch under ~100MB total.</p>
             </div>
             <TextInput label="Caption (optional)" name="caption" defaultValue="" required={false} className="w-48" />
             <Checkbox label="Before / After pair" name="isBeforeAfter" className="w-56" />
