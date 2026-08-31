@@ -11,8 +11,10 @@ type UploadKind = "image" | "document";
 const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: string }> = {
   image: {
     types: ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"],
-    maxBytes: 12 * 1024 * 1024,
-    label: "JPEG, PNG, WebP, GIF, or AVIF (max 12MB)",
+    // This is checked before compression runs, so it has to cover the raw
+    // original — a high-res camera photo or 4K render export easily clears 12MB.
+    maxBytes: 40 * 1024 * 1024,
+    label: "JPEG, PNG, WebP, GIF, or AVIF (max 40MB)",
   },
   document: {
     types: [
@@ -125,7 +127,7 @@ export async function saveFile(
     throw new Error(`Unsupported file type. Use: ${rule.label}.`);
   }
   if (file.size > rule.maxBytes) {
-    throw new Error(`File is too large. Max size: ${rule.label.split("max ")[1] ?? "limit"}.`);
+    throw new Error(`File is too large. Max size: ${rule.label.match(/max ([^)]+)/)?.[1] ?? "limit"}.`);
   }
 
   let buffer: Buffer = Buffer.from(await file.arrayBuffer());
