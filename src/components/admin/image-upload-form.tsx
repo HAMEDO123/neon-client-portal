@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addImage } from "@/lib/actions/gallery-actions";
+import { compressInBrowser } from "@/lib/client-image-compress";
 import { TextInput, Checkbox } from "@/components/admin/fields";
 import { buttonClasses } from "@/components/ui/buttons";
 
@@ -32,17 +33,19 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
     try {
       if (isBeforeAfter) {
         const single = new FormData();
-        single.append("image", files[0]);
+        single.append("image", compress ? await compressInBrowser(files[0]) : files[0]);
         if (caption) single.append("caption", caption);
         single.append("isBeforeAfter", "on");
         if (compress) single.append("compress", "on");
-        if (beforeImage instanceof File && beforeImage.size > 0) single.append("beforeImage", beforeImage);
+        if (beforeImage instanceof File && beforeImage.size > 0) {
+          single.append("beforeImage", compress ? await compressInBrowser(beforeImage) : beforeImage);
+        }
         await addImage(projectId, spaceId, single);
         setProgress({ done: 1, total: 1 });
       } else {
         for (let i = 0; i < files.length; i++) {
           const single = new FormData();
-          single.append("image", files[i]);
+          single.append("image", compress ? await compressInBrowser(files[i]) : files[i]);
           if (caption) single.append("caption", caption);
           if (compress) single.append("compress", "on");
           await addImage(projectId, spaceId, single);
