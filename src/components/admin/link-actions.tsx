@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Check, Copy, ExternalLink, RefreshCw, MessageCircle } from "lucide-react";
-import { regenerateProjectLink } from "@/lib/actions/project-actions";
+import { Check, Copy, ExternalLink, RefreshCw, Send, BellRing } from "lucide-react";
+import { regenerateProjectLink, logClientNotification } from "@/lib/actions/project-actions";
 import { buttonClasses } from "@/components/ui/buttons";
 import { cn } from "@/lib/utils";
 
-export function LinkActions({ projectId, token, clientName }: { projectId: string; token: string; clientName: string }) {
+export function LinkActions({
+  projectId,
+  token,
+  clientName,
+  clientPhone,
+}: {
+  projectId: string;
+  token: string;
+  clientName: string;
+  clientPhone?: string | null;
+}) {
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
   // Starts relative (matches the server render) and upgrades to an absolute URL
@@ -18,7 +28,16 @@ export function LinkActions({ projectId, token, clientName }: { projectId: strin
   }, []);
 
   const url = `${origin}/p/${token}`;
-  const whatsappMessage = `Hi ${clientName}, your project from NEON is ready. You can review the designs, drawings, quantities, and more here: ${url}`;
+  // wa.me needs digits only (country code, no "+" or spaces). With no number it
+  // still opens WhatsApp with the message ready — the sender just picks the
+  // contact themselves, so this degrades gracefully when clientPhone is unset.
+  const waNumber = clientPhone ? clientPhone.replace(/\D/g, "") : "";
+  const sendMessage = `Hi ${clientName}, your project from NEON is ready. You can review the designs, drawings, quantities, and more here: ${url}`;
+  const updateMessage = `Hi ${clientName}, there's an update on your NEON project. View the latest here: ${url}`;
+
+  function notify(type: "sent_to_client" | "sent_update") {
+    logClientNotification(projectId, type).catch(() => {});
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -43,13 +62,24 @@ export function LinkActions({ projectId, token, clientName }: { projectId: strin
         Preview
       </a>
       <a
-        href={`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`}
+        href={`https://wa.me/${waNumber}?text=${encodeURIComponent(sendMessage)}`}
         target="_blank"
         rel="noreferrer"
+        onClick={() => notify("sent_to_client")}
         className={cn(buttonClasses("outline", "sm"), "border-emerald-200 text-emerald-700 hover:bg-emerald-50")}
       >
-        <MessageCircle size={14} />
-        WhatsApp
+        <Send size={14} />
+        Send to Client
+      </a>
+      <a
+        href={`https://wa.me/${waNumber}?text=${encodeURIComponent(updateMessage)}`}
+        target="_blank"
+        rel="noreferrer"
+        onClick={() => notify("sent_update")}
+        className={cn(buttonClasses("outline", "sm"), "border-cyan-200 text-cyan-700 hover:bg-cyan-50")}
+      >
+        <BellRing size={14} />
+        Send Update
       </a>
       <button
         type="button"

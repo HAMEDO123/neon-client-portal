@@ -11,6 +11,8 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   approved: "Approved a design",
   requested_changes: "Requested changes",
   commented: "Left a comment",
+  sent_to_client: "Project link sent to client (WhatsApp)",
+  sent_update: "Client notified of an update (WhatsApp)",
 };
 
 export function activityLabel(type: string) {

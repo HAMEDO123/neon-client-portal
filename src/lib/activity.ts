@@ -12,7 +12,9 @@ export type ActivityType =
   | "viewed_pricing"
   | "approved"
   | "requested_changes"
-  | "commented";
+  | "commented"
+  | "sent_to_client"
+  | "sent_update";
 
 export async function logActivity(projectId: string, type: ActivityType, detail?: string) {
   await prisma.projectActivity.create({ data: { projectId, type, detail } }).catch(() => {});

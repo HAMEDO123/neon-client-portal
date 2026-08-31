@@ -31,7 +31,12 @@ export default async function ProjectLayout({
       </div>
 
       <div className="mt-4">
-        <LinkActions projectId={project.id} token={project.token} clientName={project.clientName} />
+        <LinkActions
+          projectId={project.id}
+          token={project.token}
+          clientName={project.clientName}
+          clientPhone={project.clientPhone}
+        />
       </div>
 
       <ProjectTabs projectId={project.id} className="mt-8" />

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { generateProjectToken } from "@/lib/tokens";
+import { logActivity } from "@/lib/activity";
 import type { PipelineStatus, ProjectStage, PublishState } from "@/generated/prisma/enums";
 
 function refresh(id?: string) {
@@ -97,6 +98,10 @@ export async function updateProjectSettings(id: string, formData: FormData) {
 export async function setPublishState(id: string, state: PublishState) {
   await prisma.project.update({ where: { id }, data: { publishState: state } });
   refresh(id);
+}
+
+export async function logClientNotification(id: string, type: "sent_to_client" | "sent_update") {
+  await logActivity(id, type);
 }
 
 export async function regenerateProjectLink(id: string) {
