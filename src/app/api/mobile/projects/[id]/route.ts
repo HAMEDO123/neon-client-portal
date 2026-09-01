@@ -1,6 +1,68 @@
 import { NextResponse } from "next/server";
 import { requireMobileAuth } from "@/lib/mobile-auth";
 import { getProjectById } from "@/lib/queries";
+import { prisma } from "@/lib/db";
+import type { PipelineStatus, PublishState } from "@/generated/prisma/enums";
+
+const PIPELINE_STATUSES: PipelineStatus[] = [
+  "DRAFT", "INTERNAL_REVIEW", "SENT_TO_CLIENT", "CLIENT_REVIEWING",
+  "CHANGES_REQUESTED", "APPROVED", "EXECUTION", "COMPLETED", "ARCHIVED",
+];
+const PUBLISH_STATES: PublishState[] = ["DRAFT", "PUBLISHED", "ARCHIVED"];
+
+// Employee edits from the app: pipeline status, completion %, publish state.
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  if (!requireMobileAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  const { id } = await context.params;
+  const existing = await prisma.project.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid body." }, { status: 400 });
+  }
+
+  const data: { pipelineStatus?: PipelineStatus; completionPercent?: number; publishState?: PublishState } = {};
+
+  if (body.pipelineStatus !== undefined) {
+    if (!PIPELINE_STATUSES.includes(body.pipelineStatus)) {
+      return NextResponse.json({ error: "Invalid pipelineStatus." }, { status: 400 });
+    }
+    data.pipelineStatus = body.pipelineStatus;
+  }
+  if (body.completionPercent !== undefined) {
+    const pct = Number(body.completionPercent);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      return NextResponse.json({ error: "completionPercent must be 0-100." }, { status: 400 });
+    }
+    data.completionPercent = Math.round(pct);
+  }
+  if (body.publishState !== undefined) {
+    if (!PUBLISH_STATES.includes(body.publishState)) {
+      return NextResponse.json({ error: "Invalid publishState." }, { status: 400 });
+    }
+    data.publishState = body.publishState;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
+  }
+
+  const updated = await prisma.project.update({ where: { id }, data });
+  return NextResponse.json({
+    pipelineStatus: updated.pipelineStatus,
+    completionPercent: updated.completionPercent,
+    publishState: updated.publishState,
+  });
+}
 
 export async function GET(
   request: Request,

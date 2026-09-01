@@ -101,4 +101,95 @@ final class APIClient: ObservableObject {
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.network }
         return try JSONDecoder().decode(ProjectDetail.CommentItem.self, from: data)
     }
+
+    func setCommentStatus(projectId: String, commentId: String, status: String) async throws {
+        guard let token else { throw APIError.unauthorized }
+        var request = URLRequest(url: baseURL.appendingPathComponent("projects/\(projectId)/comments"))
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["commentId": commentId, "status": status])
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.network }
+    }
+
+    func updateProject(
+        id: String,
+        pipelineStatus: String? = nil,
+        completionPercent: Int? = nil,
+        publishState: String? = nil
+    ) async throws {
+        guard let token else { throw APIError.unauthorized }
+        var request = URLRequest(url: baseURL.appendingPathComponent("projects/\(id)"))
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = [:]
+        if let pipelineStatus { body["pipelineStatus"] = pipelineStatus }
+        if let completionPercent { body["completionPercent"] = completionPercent }
+        if let publishState { body["publishState"] = publishState }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.network }
+    }
+
+    func uploadGalleryImages(
+        projectId: String,
+        spaceId: String?,
+        spaceName: String?,
+        caption: String?,
+        images: [Data]
+    ) async throws {
+        var fields: [String: String] = [:]
+        if let spaceId { fields["spaceId"] = spaceId }
+        if let spaceName { fields["spaceName"] = spaceName }
+        if let caption, !caption.isEmpty { fields["caption"] = caption }
+        try await uploadMultipart(
+            path: "projects/\(projectId)/gallery",
+            fields: fields,
+            files: images.map { ("image", "photo.jpg", "image/jpeg", $0) }
+        )
+    }
+
+    func uploadCover(projectId: String, image: Data) async throws {
+        try await uploadMultipart(
+            path: "projects/\(projectId)/cover",
+            fields: [:],
+            files: [("image", "cover.jpg", "image/jpeg", image)]
+        )
+    }
+
+    private func uploadMultipart(
+        path: String,
+        fields: [String: String],
+        files: [(name: String, filename: String, mimeType: String, data: Data)]
+    ) async throws {
+        guard let token else { throw APIError.unauthorized }
+        let boundary = "neon-\(UUID().uuidString)"
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        for (key, value) in fields {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+        for file in files {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(file.name)\"; filename=\"\(file.filename)\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: \(file.mimeType)\r\n\r\n".data(using: .utf8)!)
+            body.append(file.data)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.network }
+    }
 }

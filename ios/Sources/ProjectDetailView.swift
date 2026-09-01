@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct ProjectDetailView: View {
     let project: ProjectSummary
@@ -7,6 +8,10 @@ struct ProjectDetailView: View {
     @State private var detail: ProjectDetail?
     @State private var errorMessage: String?
     @State private var section: DetailSection = .overview
+    @State private var showEdit = false
+    @State private var coverPickerActive = false
+    @State private var coverSelection: PhotosPickerItem?
+    @State private var uploadingCover = false
 
     var body: some View {
         ScrollView {
@@ -50,6 +55,24 @@ struct ProjectDetailView: View {
         .neonAmbientBackground()
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if detail != nil {
+                    Button("Edit") { showEdit = true }
+                        .foregroundStyle(Color.neonInk)
+                }
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            if let detail {
+                EditProjectSheet(detail: detail) { Task { await load() } }
+            }
+        }
+        .photosPicker(isPresented: $coverPickerActive, selection: $coverSelection, matching: .images)
+        .onChange(of: coverSelection) { item in
+            guard let item else { return }
+            Task { await uploadCover(item) }
+        }
         .task { await load() }
     }
 
@@ -62,11 +85,28 @@ struct ProjectDetailView: View {
         }
     }
 
+    private func uploadCover(_ item: PhotosPickerItem) async {
+        uploadingCover = true
+        defer { uploadingCover = false; coverSelection = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.9) else {
+            Haptic.error()
+            return
+        }
+        do {
+            try await api.uploadCover(projectId: project.id, image: jpeg)
+            Haptic.success()
+            await load()
+        } catch {
+            Haptic.error()
+        }
+    }
+
     private var cover: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(LinearGradient.neonAmbient)
-            if let url = project.resolvedCoverURL {
+            if let url = resolvedMediaURL(detail?.coverImageUrl ?? project.coverImageUrl) {
                 AsyncImage(url: url) { phase in
                     if let image = phase.image {
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -85,6 +125,20 @@ struct ProjectDetailView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Color.neonInk.opacity(0.08), lineWidth: 1)
         )
+        .overlay(alignment: .bottomTrailing) {
+            Button {
+                coverPickerActive = true
+            } label: {
+                Image(systemName: uploadingCover ? "hourglass" : "camera.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Color.neonInk.opacity(0.75), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(uploadingCover)
+            .padding(10)
+        }
         .shadow(color: Color.neonInk.opacity(0.10), radius: 20, x: 0, y: 10)
     }
 
@@ -142,7 +196,7 @@ struct ProjectDetailView: View {
     private func sectionContent(for detail: ProjectDetail) -> some View {
         switch section {
         case .overview: OverviewSection(detail: detail)
-        case .gallery: GallerySection(spaces: detail.spaces)
+        case .gallery: GallerySection(projectId: detail.id, spaces: detail.spaces) { Task { await load() } }
         case .drawings: DrawingsSection(drawings: detail.drawings)
         case .documents: DocumentsSection(documents: detail.documents)
         case .boq: BoqSection(items: detail.boqItems)
@@ -175,8 +229,8 @@ enum DetailSection: CaseIterable {
 
     func isAvailable(in detail: ProjectDetail) -> Bool {
         switch self {
-        case .overview, .comments: return true
-        case .gallery: return !detail.spaces.isEmpty
+        // Gallery stays visible even when empty — it's where employees upload.
+        case .overview, .comments, .gallery: return true
         case .drawings: return !detail.drawings.isEmpty
         case .documents: return !detail.documents.isEmpty
         case .boq: return !detail.boqItems.isEmpty
@@ -260,12 +314,22 @@ private struct InfoRow: View {
 // MARK: - Gallery
 
 private struct GallerySection: View {
+    let projectId: String
     let spaces: [ProjectDetail.GallerySpace]
+    let onUploaded: () -> Void
 
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            GalleryUploader(projectId: projectId, spaces: spaces, onUploaded: onUploaded)
+
+            if spaces.isEmpty {
+                Text("No photos yet — upload the first ones.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.neonInk.opacity(0.5))
+            }
+
             ForEach(spaces) { space in
                 VStack(alignment: .leading, spacing: 10) {
                     Text(space.name.uppercased())
@@ -279,6 +343,96 @@ private struct GallerySection: View {
                     }
                 }
             }
+        }
+    }
+}
+
+private struct GalleryUploader: View {
+    let projectId: String
+    let spaces: [ProjectDetail.GallerySpace]
+    let onUploaded: () -> Void
+
+    @EnvironmentObject var api: APIClient
+    @State private var selection: [PhotosPickerItem] = []
+    @State private var pickerActive = false
+    @State private var targetSpaceId: String?
+    @State private var newSpaceName = ""
+    @State private var promptNewSpace = false
+    @State private var uploading = false
+
+    var body: some View {
+        Menu {
+            ForEach(spaces) { space in
+                Button(space.name) {
+                    targetSpaceId = space.id
+                    newSpaceName = ""
+                    pickerActive = true
+                }
+            }
+            Button {
+                promptNewSpace = true
+            } label: {
+                Label("New Space…", systemImage: "plus")
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: uploading ? "hourglass" : "photo.badge.plus")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.neonPurpleStrong)
+                Text(uploading ? "Uploading…" : "Add Photos")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.neonInk)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.neonInk.opacity(0.3))
+            }
+            .padding(14)
+            .glassCard(radius: 16)
+        }
+        .buttonStyle(.plain)
+        .disabled(uploading)
+        .alert("New Space", isPresented: $promptNewSpace) {
+            TextField("Space name (e.g. Bedroom)", text: $newSpaceName)
+            Button("Choose Photos") {
+                guard !newSpaceName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                targetSpaceId = nil
+                pickerActive = true
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .photosPicker(isPresented: $pickerActive, selection: $selection, maxSelectionCount: 10, matching: .images)
+        .onChange(of: selection) { items in
+            guard !items.isEmpty else { return }
+            Task { await upload(items) }
+        }
+    }
+
+    private func upload(_ items: [PhotosPickerItem]) async {
+        uploading = true
+        defer { uploading = false; selection = [] }
+
+        var images: [Data] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.9) {
+                images.append(jpeg)
+            }
+        }
+        guard !images.isEmpty else { Haptic.error(); return }
+
+        do {
+            try await api.uploadGalleryImages(
+                projectId: projectId,
+                spaceId: targetSpaceId,
+                spaceName: targetSpaceId == nil ? newSpaceName.trimmingCharacters(in: .whitespaces) : nil,
+                caption: nil,
+                images: images
+            )
+            Haptic.success()
+            onUploaded()
+        } catch {
+            Haptic.error()
         }
     }
 }
@@ -667,8 +821,27 @@ private struct CommentsSection: View {
             }
 
             ForEach(comments) { comment in
-                CommentBubble(comment: comment)
+                CommentBubble(comment: comment) {
+                    Task { await toggleStatus(comment) }
+                }
             }
+        }
+    }
+
+    private func toggleStatus(_ comment: ProjectDetail.CommentItem) async {
+        let newStatus = comment.status == "RESOLVED" ? "OPEN" : "RESOLVED"
+        do {
+            try await api.setCommentStatus(projectId: projectId, commentId: comment.id, status: newStatus)
+            if let index = comments.firstIndex(where: { $0.id == comment.id }) {
+                comments[index] = ProjectDetail.CommentItem(
+                    id: comment.id, authorName: comment.authorName, authorType: comment.authorType,
+                    message: comment.message, refLabel: comment.refLabel, status: newStatus,
+                    createdAt: comment.createdAt
+                )
+            }
+            Haptic.success()
+        } catch {
+            Haptic.error()
         }
     }
 
@@ -690,6 +863,7 @@ private struct CommentsSection: View {
 
 private struct CommentBubble: View {
     let comment: ProjectDetail.CommentItem
+    let onToggleStatus: () -> Void
 
     private var isAdmin: Bool { comment.authorType == "ADMIN" }
 
@@ -703,9 +877,15 @@ private struct CommentBubble: View {
                     BadgeView(text: ref, tone: .cyan)
                 }
                 Spacer()
-                if comment.status == "RESOLVED" {
-                    BadgeView(text: "Resolved", tone: .success)
+                Button {
+                    onToggleStatus()
+                } label: {
+                    BadgeView(
+                        text: comment.status == "RESOLVED" ? "Resolved" : "Resolve",
+                        tone: comment.status == "RESOLVED" ? .success : .neutral
+                    )
                 }
+                .buttonStyle(.plain)
             }
             Text(comment.message)
                 .font(.system(size: 14))
@@ -724,6 +904,91 @@ private struct CommentBubble: View {
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
         .glassCard(radius: 14)
+    }
+}
+
+// MARK: - Edit sheet
+
+private struct EditProjectSheet: View {
+    let detail: ProjectDetail
+    let onSaved: () -> Void
+
+    @EnvironmentObject var api: APIClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var pipeline: String
+    @State private var completion: Double
+    @State private var publish: String
+    @State private var saving = false
+
+    private static let pipelineStatuses = [
+        "DRAFT", "INTERNAL_REVIEW", "SENT_TO_CLIENT", "CLIENT_REVIEWING",
+        "CHANGES_REQUESTED", "APPROVED", "EXECUTION", "COMPLETED", "ARCHIVED",
+    ]
+    private static let publishStates = ["DRAFT", "PUBLISHED", "ARCHIVED"]
+
+    init(detail: ProjectDetail, onSaved: @escaping () -> Void) {
+        self.detail = detail
+        self.onSaved = onSaved
+        _pipeline = State(initialValue: detail.pipelineStatus)
+        _completion = State(initialValue: Double(detail.completionPercent))
+        _publish = State(initialValue: detail.publishState)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Pipeline Status") {
+                    Picker("Status", selection: $pipeline) {
+                        ForEach(Self.pipelineStatuses, id: \.self) {
+                            Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                Section("Completion — \(Int(completion))%") {
+                    Slider(value: $completion, in: 0...100, step: 1)
+                        .tint(.neonPurple)
+                }
+                Section("Visibility") {
+                    Picker("Publish State", selection: $publish) {
+                        ForEach(Self.publishStates, id: \.self) {
+                            Text($0.capitalized).tag($0)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
+            .navigationTitle("Edit Project")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                        .fontWeight(.semibold)
+                        .disabled(saving)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            try await api.updateProject(
+                id: detail.id,
+                pipelineStatus: pipeline,
+                completionPercent: Int(completion),
+                publishState: publish
+            )
+            Haptic.success()
+            onSaved()
+            dismiss()
+        } catch {
+            Haptic.error()
+        }
     }
 }
 
