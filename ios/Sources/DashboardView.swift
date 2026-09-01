@@ -5,6 +5,7 @@ struct DashboardView: View {
     @State private var data: DashboardResponse?
     @State private var errorMessage: String?
     @State private var appeared = false
+    @State private var showNewProject = false
 
     var body: some View {
         NavigationStack {
@@ -17,10 +18,21 @@ struct DashboardView: View {
 
                     if let data {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            StatCard(label: "Total Projects", value: data.stats.total, symbol: "folder.fill", tone: .cyan)
-                            StatCard(label: "Published", value: data.stats.published, symbol: "checkmark.seal.fill", tone: .purple)
-                            StatCard(label: "Pending Approvals", value: data.stats.pendingApprovals, symbol: "clock.fill", tone: .orange)
-                            StatCard(label: "Updated This Week", value: data.stats.recentlyUpdated, symbol: "chart.line.uptrend.xyaxis", tone: .pink)
+                            let stats = [
+                                ("Total Projects", data.stats.total, "folder.fill", BadgeTone.cyan),
+                                ("Published", data.stats.published, "checkmark.seal.fill", .purple),
+                                ("Pending Approvals", data.stats.pendingApprovals, "clock.fill", .orange),
+                                ("Updated This Week", data.stats.recentlyUpdated, "chart.line.uptrend.xyaxis", .pink),
+                            ]
+                            ForEach(Array(stats.enumerated()), id: \.offset) { index, stat in
+                                StatCard(label: stat.0, value: stat.1, symbol: stat.2, tone: stat.3)
+                                    .opacity(appeared ? 1 : 0)
+                                    .scaleEffect(appeared ? 1 : 0.92)
+                                    .animation(
+                                        .spring(response: 0.45, dampingFraction: 0.8).delay(Double(index) * 0.06),
+                                        value: appeared
+                                    )
+                            }
                         }
 
                         Text("ALL PROJECTS")
@@ -69,9 +81,22 @@ struct DashboardView: View {
             .navigationTitle("Dashboard")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptic.tap()
+                        showNewProject = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(Color.neonPurpleStrong)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Sign Out") { api.logout() }
                         .foregroundStyle(Color.neonInk.opacity(0.6))
                 }
+            }
+            .sheet(isPresented: $showNewProject) {
+                NewProjectSheet { Task { await load() } }
             }
         }
         .neonAmbientBackground()
@@ -86,6 +111,102 @@ struct DashboardView: View {
             withAnimation { appeared = true }
         } catch {
             errorMessage = "Couldn't load — pull to retry."
+        }
+    }
+}
+
+// Create a project from the phone — same fields as the web admin's form.
+private struct NewProjectSheet: View {
+    let onCreated: () -> Void
+
+    @EnvironmentObject var api: APIClient
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name = ""
+    @State private var clientName = ""
+    @State private var clientEmail = ""
+    @State private var clientPhone = ""
+    @State private var location = ""
+    @State private var area = ""
+    @State private var projectType = ""
+    @State private var descriptionText = ""
+    @State private var hasDeliveryDate = false
+    @State private var deliveryDate = Date()
+    @State private var saving = false
+    @State private var saveFailed = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Project") {
+                    TextField("Project name (required)", text: $name)
+                    TextField("Location", text: $location)
+                    TextField("Area (e.g. 450 m²)", text: $area)
+                    TextField("Type (e.g. Residential Villa)", text: $projectType)
+                }
+                Section("Client") {
+                    TextField("Client name", text: $clientName)
+                    TextField("Email", text: $clientEmail)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("Phone (with country code)", text: $clientPhone)
+                        .keyboardType(.phonePad)
+                }
+                Section("Description") {
+                    TextField("What is this project about?", text: $descriptionText, axis: .vertical)
+                        .lineLimit(3...8)
+                }
+                Section("Delivery") {
+                    Toggle("Delivery date set", isOn: $hasDeliveryDate.animation())
+                        .tint(.neonPurple)
+                    if hasDeliveryDate {
+                        DatePicker("Delivery date", selection: $deliveryDate, displayedComponents: .date)
+                    }
+                }
+            }
+            .navigationTitle("New Project")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(saving ? "Creating…" : "Create") { Task { await create() } }
+                        .fontWeight(.semibold)
+                        .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .alert("Couldn't create the project — try again.", isPresented: $saveFailed) {
+                Button("OK", role: .cancel) {}
+            }
+        }
+    }
+
+    private func create() async {
+        saving = true
+        defer { saving = false }
+        var fields: [String: Any] = [
+            "name": name.trimmingCharacters(in: .whitespaces),
+            "clientName": clientName.trimmingCharacters(in: .whitespaces),
+            "clientEmail": clientEmail.trimmingCharacters(in: .whitespaces),
+            "clientPhone": clientPhone.trimmingCharacters(in: .whitespaces),
+            "location": location.trimmingCharacters(in: .whitespaces),
+            "area": area.trimmingCharacters(in: .whitespaces),
+            "projectType": projectType.trimmingCharacters(in: .whitespaces),
+            "description": descriptionText.trimmingCharacters(in: .whitespacesAndNewlines),
+        ]
+        if hasDeliveryDate {
+            fields["deliveryDate"] = ISO8601DateFormatter().string(from: deliveryDate)
+        }
+        do {
+            _ = try await api.createProject(fields: fields)
+            Haptic.success()
+            onCreated()
+            dismiss()
+        } catch {
+            Haptic.error()
+            saveFailed = true
         }
     }
 }
@@ -161,7 +282,7 @@ private struct ProjectRow: View {
             .padding(12)
             .glassCard(radius: 16)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }
 

@@ -12,6 +12,7 @@ struct ProjectDetailView: View {
     @State private var coverPickerActive = false
     @State private var coverSelection: PhotosPickerItem?
     @State private var uploadingCover = false
+    @State private var coverViewer: ImageViewerPayload?
 
     var body: some View {
         ScrollView {
@@ -19,22 +20,30 @@ struct ProjectDetailView: View {
                 cover
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(project.name)
+                    Text(detail?.name ?? project.name)
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.neonInk)
 
                     HStack(spacing: 8) {
-                        BadgeView(text: project.publishState, tone: publishTone(project.publishState))
+                        BadgeView(text: detail?.publishState ?? project.publishState, tone: publishTone(detail?.publishState ?? project.publishState))
                         BadgeView(text: (detail?.pipelineStatus ?? project.pipelineStatus).replacingOccurrences(of: "_", with: " "), tone: .purple)
                     }
                 }
 
                 if let detail {
-                    if detail.completionPercent > 0 {
-                        completionBar(detail.completionPercent)
+                    Group {
+                        if detail.completionPercent > 0 {
+                            completionBar(detail.completionPercent)
+                        }
+                        sectionPicker(for: detail)
+                        sectionContent(for: detail)
+                            .id(section)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .opacity
+                            ))
                     }
-                    sectionPicker(for: detail)
-                    sectionContent(for: detail)
+                    .transition(.opacity.combined(with: .offset(y: 10)))
                 } else if let errorMessage {
                     VStack(spacing: 12) {
                         Text(errorMessage).foregroundStyle(Color.neonInk.opacity(0.5))
@@ -73,12 +82,14 @@ struct ProjectDetailView: View {
             guard let item else { return }
             Task { await uploadCover(item) }
         }
+        .fullScreenCover(item: $coverViewer) { ImageViewerView(payload: $0) }
         .task { await load() }
     }
 
     private func load() async {
         do {
-            detail = try await api.fetchProject(id: project.id)
+            let loaded = try await api.fetchProject(id: project.id)
+            withAnimation(.easeOut(duration: 0.3)) { detail = loaded }
             errorMessage = nil
         } catch {
             errorMessage = "Couldn't load project."
@@ -102,11 +113,13 @@ struct ProjectDetailView: View {
         }
     }
 
+    private var coverURL: URL? { resolvedMediaURL(detail?.coverImageUrl ?? project.coverImageUrl) }
+
     private var cover: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(LinearGradient.neonAmbient)
-            if let url = resolvedMediaURL(detail?.coverImageUrl ?? project.coverImageUrl) {
+            if let url = coverURL {
                 AsyncImage(url: url) { phase in
                     if let image = phase.image {
                         image.resizable().aspectRatio(contentMode: .fill)
@@ -120,6 +133,15 @@ struct ProjectDetailView: View {
         }
         .frame(height: 190)
         .frame(maxWidth: .infinity)
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onTapGesture {
+            guard let url = coverURL else { return }
+            Haptic.tap()
+            coverViewer = ImageViewerPayload(
+                items: [ImageViewerItem(id: "cover", url: url, caption: nil)],
+                startIndex: 0
+            )
+        }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -143,28 +165,7 @@ struct ProjectDetailView: View {
     }
 
     private func completionBar(_ percent: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Completion")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
-                Spacer()
-                Text("\(percent)%")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.neonPurpleStrong)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.neonInk.opacity(0.08))
-                    Capsule()
-                        .fill(LinearGradient.neonWordmark)
-                        .frame(width: geo.size.width * CGFloat(percent) / 100)
-                }
-            }
-            .frame(height: 8)
-        }
-        .padding(14)
-        .glassCard(radius: 16)
+        CompletionBar(percent: percent)
     }
 
     private func sectionPicker(for detail: ProjectDetail) -> some View {
@@ -185,7 +186,7 @@ struct ProjectDetailView: View {
                             )
                             .foregroundStyle(section == s ? .white : Color.neonInk.opacity(0.65))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                 }
             }
             .padding(.vertical, 2)
@@ -242,6 +243,44 @@ enum DetailSection: CaseIterable {
     }
 }
 
+// The gradient fill sweeps in from zero when the bar first appears, and the
+// percentage counts up with it.
+private struct CompletionBar: View {
+    let percent: Int
+    @State private var animated = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Completion")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.neonInk.opacity(0.5))
+                Spacer()
+                Text("\(animated ? percent : 0)%")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.neonPurpleStrong)
+                    .contentTransition(.numericText())
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.neonInk.opacity(0.08))
+                    Capsule()
+                        .fill(LinearGradient.neonWordmark)
+                        .frame(width: geo.size.width * CGFloat(animated ? percent : 0) / 100)
+                }
+            }
+            .frame(height: 8)
+        }
+        .padding(14)
+        .glassCard(radius: 16)
+        .onAppear {
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.85).delay(0.15)) {
+                animated = true
+            }
+        }
+    }
+}
+
 // MARK: - Overview
 
 private struct OverviewSection: View {
@@ -249,6 +288,8 @@ private struct OverviewSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            ShareLinkCard(detail: detail)
+
             VStack(spacing: 0) {
                 InfoRow(symbol: "person.fill", label: "Client", value: detail.clientName)
                 if let email = detail.clientEmail { divided(InfoRow(symbol: "envelope.fill", label: "Email", value: email)) }
@@ -279,6 +320,104 @@ private struct OverviewSection: View {
             Divider().padding(.leading, 46)
             row
         }
+    }
+}
+
+// The public client link (/p/<token>) with the same actions the web admin
+// has: copy, preview, and the two WhatsApp sends.
+private struct ShareLinkCard: View {
+    let detail: ProjectDetail
+
+    @Environment(\.openURL) private var openURL
+    @State private var copied = false
+
+    var body: some View {
+        if let link = detail.clientLink {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "link")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.neonPurpleStrong)
+                    Text("CLIENT LINK")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(Color.neonInk.opacity(0.4))
+                    Spacer()
+                    ShareLink(item: link) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.neonInk.opacity(0.5))
+                    }
+                }
+
+                Text(link.absoluteString)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color.neonInk.opacity(0.55))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.neonInk.opacity(0.05), in: Capsule())
+
+                HStack(spacing: 8) {
+                    shareButton(
+                        copied ? "Copied" : "Copy",
+                        symbol: copied ? "checkmark" : "doc.on.doc",
+                        tint: .neonInk
+                    ) {
+                        UIPasteboard.general.string = link.absoluteString
+                        Haptic.success()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { copied = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                            withAnimation { copied = false }
+                        }
+                    }
+                    shareButton("Preview", symbol: "safari", tint: .neonCyanStrong) {
+                        Haptic.tap()
+                        openURL(link)
+                    }
+                    shareButton("WhatsApp", symbol: "paperplane.fill", tint: Color(hex: 0x16A34A)) {
+                        Haptic.tap()
+                        sendWhatsApp(message: "Hi \(detail.clientName), your project from NEON is ready. You can review the designs, drawings, quantities, and more here: \(link.absoluteString)")
+                    }
+                    shareButton("Update", symbol: "bell.fill", tint: .neonPurpleStrong) {
+                        Haptic.tap()
+                        sendWhatsApp(message: "Hi \(detail.clientName), there's an update on your NEON project. View the latest here: \(link.absoluteString)")
+                    }
+                }
+            }
+            .padding(14)
+            .glassCard(radius: 18)
+        }
+    }
+
+    // wa.me needs digits only; with no number WhatsApp still opens with the
+    // message ready and the sender picks the contact — same as the web admin.
+    private func sendWhatsApp(message: String) {
+        let number = (detail.clientPhone ?? "").filter(\.isNumber)
+        var components = URLComponents(string: "https://wa.me/\(number)")
+        components?.queryItems = [URLQueryItem(name: "text", value: message)]
+        guard let url = components?.url else { return }
+        openURL(url)
+    }
+
+    private func shareButton(_ title: String, symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.pressable)
     }
 }
 
@@ -320,6 +459,8 @@ private struct GallerySection: View {
 
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
+    @State private var viewer: ImageViewerPayload?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             GalleryUploader(projectId: projectId, spaces: spaces, onUploaded: onUploaded)
@@ -337,13 +478,25 @@ private struct GallerySection: View {
                         .tracking(0.6)
                         .foregroundStyle(Color.neonInk.opacity(0.4))
                     LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(space.images) { image in
-                            GalleryTile(image: image)
+                        ForEach(Array(space.images.enumerated()), id: \.element.id) { index, image in
+                            Button {
+                                Haptic.tap()
+                                viewer = ImageViewerPayload(
+                                    items: space.images.map {
+                                        ImageViewerItem(id: $0.id, url: resolvedMediaURL($0.imageUrl), caption: $0.caption)
+                                    },
+                                    startIndex: index
+                                )
+                            } label: {
+                                GalleryTile(image: image)
+                            }
+                            .buttonStyle(.pressable)
                         }
                     }
                 }
             }
         }
+        .fullScreenCover(item: $viewer) { ImageViewerView(payload: $0) }
     }
 }
 
@@ -915,10 +1068,23 @@ private struct EditProjectSheet: View {
 
     @EnvironmentObject var api: APIClient
     @Environment(\.dismiss) private var dismiss
+
+    @State private var name: String
+    @State private var clientName: String
+    @State private var clientEmail: String
+    @State private var clientPhone: String
+    @State private var location: String
+    @State private var area: String
+    @State private var projectType: String
+    @State private var descriptionText: String
+    @State private var hasDeliveryDate: Bool
+    @State private var deliveryDate: Date
+    @State private var stage: String
     @State private var pipeline: String
     @State private var completion: Double
     @State private var publish: String
     @State private var saving = false
+    @State private var saveFailed = false
 
     private static let pipelineStatuses = [
         "DRAFT", "INTERNAL_REVIEW", "SENT_TO_CLIENT", "CLIENT_REVIEWING",
@@ -929,6 +1095,22 @@ private struct EditProjectSheet: View {
     init(detail: ProjectDetail, onSaved: @escaping () -> Void) {
         self.detail = detail
         self.onSaved = onSaved
+        _name = State(initialValue: detail.name)
+        _clientName = State(initialValue: detail.clientName)
+        _clientEmail = State(initialValue: detail.clientEmail ?? "")
+        _clientPhone = State(initialValue: detail.clientPhone ?? "")
+        _location = State(initialValue: detail.location ?? "")
+        _area = State(initialValue: detail.area ?? "")
+        _projectType = State(initialValue: detail.projectType ?? "")
+        _descriptionText = State(initialValue: detail.description ?? "")
+        let parsedDelivery = detail.deliveryDate.flatMap { iso -> Date? in
+            let parser = ISO8601DateFormatter()
+            parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+        }
+        _hasDeliveryDate = State(initialValue: parsedDelivery != nil)
+        _deliveryDate = State(initialValue: parsedDelivery ?? Date())
+        _stage = State(initialValue: detail.currentStage)
         _pipeline = State(initialValue: detail.pipelineStatus)
         _completion = State(initialValue: Double(detail.completionPercent))
         _publish = State(initialValue: detail.publishState)
@@ -937,8 +1119,40 @@ private struct EditProjectSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Pipeline Status") {
-                    Picker("Status", selection: $pipeline) {
+                Section("Project") {
+                    TextField("Project name", text: $name)
+                    TextField("Location", text: $location)
+                    TextField("Area (e.g. 450 m²)", text: $area)
+                    TextField("Type (e.g. Residential Villa)", text: $projectType)
+                }
+                Section("Client") {
+                    TextField("Client name", text: $clientName)
+                    TextField("Email", text: $clientEmail)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("Phone (with country code)", text: $clientPhone)
+                        .keyboardType(.phonePad)
+                }
+                Section("Description") {
+                    TextField("What is this project about?", text: $descriptionText, axis: .vertical)
+                        .lineLimit(3...8)
+                }
+                Section("Delivery") {
+                    Toggle("Delivery date set", isOn: $hasDeliveryDate.animation())
+                        .tint(.neonPurple)
+                    if hasDeliveryDate {
+                        DatePicker("Delivery date", selection: $deliveryDate, displayedComponents: .date)
+                    }
+                }
+                Section("Status") {
+                    Picker("Journey stage", selection: $stage) {
+                        ForEach(projectStages, id: \.self) {
+                            Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    Picker("Pipeline status", selection: $pipeline) {
                         ForEach(Self.pipelineStatuses, id: \.self) {
                             Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
                         }
@@ -967,8 +1181,11 @@ private struct EditProjectSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(saving ? "Saving…" : "Save") { Task { await save() } }
                         .fontWeight(.semibold)
-                        .disabled(saving)
+                        .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
+            }
+            .alert("Couldn't save — check your connection and try again.", isPresented: $saveFailed) {
+                Button("OK", role: .cancel) {}
             }
         }
     }
@@ -976,18 +1193,31 @@ private struct EditProjectSheet: View {
     private func save() async {
         saving = true
         defer { saving = false }
+        var fields: [String: Any] = [
+            "name": name.trimmingCharacters(in: .whitespaces),
+            "clientName": clientName.trimmingCharacters(in: .whitespaces),
+            "clientEmail": clientEmail.trimmingCharacters(in: .whitespaces),
+            "clientPhone": clientPhone.trimmingCharacters(in: .whitespaces),
+            "location": location.trimmingCharacters(in: .whitespaces),
+            "area": area.trimmingCharacters(in: .whitespaces),
+            "projectType": projectType.trimmingCharacters(in: .whitespaces),
+            "description": descriptionText.trimmingCharacters(in: .whitespacesAndNewlines),
+            "currentStage": stage,
+            "pipelineStatus": pipeline,
+            "completionPercent": Int(completion),
+            "publishState": publish,
+        ]
+        fields["deliveryDate"] = hasDeliveryDate
+            ? ISO8601DateFormatter().string(from: deliveryDate)
+            : ""
         do {
-            try await api.updateProject(
-                id: detail.id,
-                pipelineStatus: pipeline,
-                completionPercent: Int(completion),
-                publishState: publish
-            )
+            try await api.updateProject(id: detail.id, fields: fields)
             Haptic.success()
             onSaved()
             dismiss()
         } catch {
             Haptic.error()
+            saveFailed = true
         }
     }
 }

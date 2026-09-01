@@ -22,15 +22,19 @@ struct ProjectSummary: Codable, Identifiable {
     var resolvedCoverURL: URL? { resolvedMediaURL(coverImageUrl) }
 }
 
+let portalOrigin = URL(string: "https://neon-client-portal.onrender.com")!
+
 // The API returns some file/image paths as web-relative (e.g. "/seed-images/…"),
 // which URL(string:) alone can't load — resolve those against the portal origin.
 func resolvedMediaURL(_ raw: String?) -> URL? {
     guard let raw, !raw.isEmpty else { return nil }
-    return URL(string: raw, relativeTo: URL(string: "https://neon-client-portal.onrender.com"))
+    return URL(string: raw, relativeTo: portalOrigin)
 }
 
 struct ProjectDetail: Codable {
     let id: String
+    // Share token for the public client page (/p/<token>).
+    let token: String?
     let name: String
     let clientName: String
     let clientEmail: String?
@@ -152,7 +156,19 @@ struct ProjectDetail: Codable {
         let status: String
         let createdAt: String
     }
+
+    // The link the client opens — what "Send to Client" shares.
+    var clientLink: URL? {
+        guard let token, !token.isEmpty else { return nil }
+        return portalOrigin.appendingPathComponent("p/\(token)")
+    }
 }
+
+// Visual journey stages shown on the client page timeline (ProjectStage enum).
+let projectStages = [
+    "CONCEPT", "DESIGN", "VISUALIZATION", "TECHNICAL_DRAWINGS",
+    "BOQ", "PRICING", "APPROVAL", "HANDOVER",
+]
 
 func formattedISODate(_ iso: String?) -> String? {
     guard let iso else { return nil }

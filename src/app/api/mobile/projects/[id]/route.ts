@@ -2,15 +2,25 @@ import { NextResponse } from "next/server";
 import { requireMobileAuth } from "@/lib/mobile-auth";
 import { getProjectById } from "@/lib/queries";
 import { prisma } from "@/lib/db";
-import type { PipelineStatus, PublishState } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
+import type { PipelineStatus, ProjectStage, PublishState } from "@/generated/prisma/enums";
 
 const PIPELINE_STATUSES: PipelineStatus[] = [
   "DRAFT", "INTERNAL_REVIEW", "SENT_TO_CLIENT", "CLIENT_REVIEWING",
   "CHANGES_REQUESTED", "APPROVED", "EXECUTION", "COMPLETED", "ARCHIVED",
 ];
 const PUBLISH_STATES: PublishState[] = ["DRAFT", "PUBLISHED", "ARCHIVED"];
+const PROJECT_STAGES: ProjectStage[] = [
+  "CONCEPT", "DESIGN", "VISUALIZATION", "TECHNICAL_DRAWINGS",
+  "BOQ", "PRICING", "APPROVAL", "HANDOVER",
+];
 
-// Employee edits from the app: pipeline status, completion %, publish state.
+// Optional text columns: an empty string from the form clears the value.
+const OPTIONAL_TEXT_FIELDS = [
+  "clientEmail", "clientPhone", "location", "area", "projectType", "description",
+] as const;
+
+// Employee edits from the app — the full overview form, matching the web admin.
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -30,7 +40,46 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid body." }, { status: 400 });
   }
 
-  const data: { pipelineStatus?: PipelineStatus; completionPercent?: number; publishState?: PublishState } = {};
+  const data: Prisma.ProjectUpdateInput = {};
+
+  if (body.name !== undefined) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) {
+      return NextResponse.json({ error: "name cannot be empty." }, { status: 400 });
+    }
+    data.name = name;
+  }
+  if (body.clientName !== undefined) {
+    if (typeof body.clientName !== "string") {
+      return NextResponse.json({ error: "Invalid clientName." }, { status: 400 });
+    }
+    data.clientName = body.clientName.trim();
+  }
+  for (const field of OPTIONAL_TEXT_FIELDS) {
+    if (body[field] !== undefined) {
+      if (body[field] !== null && typeof body[field] !== "string") {
+        return NextResponse.json({ error: `Invalid ${field}.` }, { status: 400 });
+      }
+      data[field] = (body[field] ?? "").trim() || null;
+    }
+  }
+  if (body.deliveryDate !== undefined) {
+    if (body.deliveryDate === null || body.deliveryDate === "") {
+      data.deliveryDate = null;
+    } else {
+      const parsed = new Date(String(body.deliveryDate));
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "Invalid deliveryDate." }, { status: 400 });
+      }
+      data.deliveryDate = parsed;
+    }
+  }
+  if (body.currentStage !== undefined) {
+    if (!PROJECT_STAGES.includes(body.currentStage)) {
+      return NextResponse.json({ error: "Invalid currentStage." }, { status: 400 });
+    }
+    data.currentStage = body.currentStage;
+  }
 
   if (body.pipelineStatus !== undefined) {
     if (!PIPELINE_STATUSES.includes(body.pipelineStatus)) {
@@ -58,7 +107,10 @@ export async function PATCH(
 
   const updated = await prisma.project.update({ where: { id }, data });
   return NextResponse.json({
+    name: updated.name,
+    clientName: updated.clientName,
     pipelineStatus: updated.pipelineStatus,
+    currentStage: updated.currentStage,
     completionPercent: updated.completionPercent,
     publishState: updated.publishState,
   });
@@ -80,6 +132,7 @@ export async function GET(
 
   return NextResponse.json({
     id: p.id,
+    token: p.token,
     name: p.name,
     clientName: p.clientName,
     clientEmail: p.clientEmail,

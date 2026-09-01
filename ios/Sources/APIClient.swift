@@ -114,25 +114,31 @@ final class APIClient: ObservableObject {
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.network }
     }
 
-    func updateProject(
-        id: String,
-        pipelineStatus: String? = nil,
-        completionPercent: Int? = nil,
-        publishState: String? = nil
-    ) async throws {
+    // Full overview edit — pass every field; empty strings clear optional
+    // columns server-side, matching the web admin form's semantics.
+    func updateProject(id: String, fields: [String: Any]) async throws {
         guard let token else { throw APIError.unauthorized }
         var request = URLRequest(url: baseURL.appendingPathComponent("projects/\(id)"))
         request.httpMethod = "PATCH"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body: [String: Any] = [:]
-        if let pipelineStatus { body["pipelineStatus"] = pipelineStatus }
-        if let completionPercent { body["completionPercent"] = completionPercent }
-        if let publishState { body["publishState"] = publishState }
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.httpBody = try JSONSerialization.data(withJSONObject: fields)
 
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.network }
+    }
+
+    func createProject(fields: [String: Any]) async throws -> ProjectSummary {
+        guard let token else { throw APIError.unauthorized }
+        var request = URLRequest(url: baseURL.appendingPathComponent("projects"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: fields)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.network }
+        return try JSONDecoder().decode(ProjectSummary.self, from: data)
     }
 
     func uploadGalleryImages(
