@@ -121,38 +121,47 @@ private struct ProjectRow: View {
     let project: ProjectSummary
 
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.neonInk.opacity(0.06))
-                if let urlString = project.coverImageUrl, let url = URL(string: urlString) {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().aspectRatio(contentMode: .fill)
+        NavigationLink {
+            ProjectDetailView(project: project)
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.neonInk.opacity(0.06))
+                    if let url = project.resolvedCoverURL {
+                        AsyncImage(url: url) { phase in
+                            if let image = phase.image {
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            }
                         }
                     }
                 }
+                .frame(width: 56, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(project.name)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color.neonInk)
+                        .lineLimit(1)
+                    Text(project.clientName + (project.location.map { " · \($0)" } ?? ""))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.neonInk.opacity(0.5))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                BadgeView(text: project.publishState, tone: publishTone(project.publishState))
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.neonInk.opacity(0.3))
             }
-            .frame(width: 56, height: 48)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(project.name)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.neonInk)
-                    .lineLimit(1)
-                Text(project.clientName + (project.location.map { " · \($0)" } ?? ""))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 8)
-
-            BadgeView(text: project.publishState, tone: publishTone(project.publishState))
+            .padding(12)
+            .glassCard(radius: 16)
         }
-        .padding(12)
-        .glassCard(radius: 16)
+        .buttonStyle(.plain)
     }
 }
 

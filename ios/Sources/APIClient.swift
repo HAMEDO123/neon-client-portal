@@ -71,4 +71,34 @@ final class APIClient: ObservableObject {
         guard http.statusCode == 200 else { throw APIError.network }
         return try JSONDecoder().decode(DashboardResponse.self, from: data)
     }
+
+    func fetchProject(id: String) async throws -> ProjectDetail {
+        guard let token else { throw APIError.unauthorized }
+        var request = URLRequest(url: baseURL.appendingPathComponent("projects/\(id)"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.network }
+        if http.statusCode == 401 {
+            self.token = nil
+            throw APIError.unauthorized
+        }
+        guard http.statusCode == 200 else { throw APIError.network }
+        return try JSONDecoder().decode(ProjectDetail.self, from: data)
+    }
+
+    func postComment(projectId: String, message: String, refLabel: String? = nil) async throws -> ProjectDetail.CommentItem {
+        guard let token else { throw APIError.unauthorized }
+        var request = URLRequest(url: baseURL.appendingPathComponent("projects/\(projectId)/comments"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: String] = ["message": message]
+        if let refLabel { body["refLabel"] = refLabel }
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.network }
+        return try JSONDecoder().decode(ProjectDetail.CommentItem.self, from: data)
+    }
 }
