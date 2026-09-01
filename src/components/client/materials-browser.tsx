@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/client-i18n";
 
 export interface MaterialRow {
   id: string;
@@ -26,6 +27,7 @@ export interface MaterialRow {
 }
 
 export function MaterialsBrowser({ materials, showPrice }: { materials: MaterialRow[]; showPrice: boolean }) {
+  const { t } = useI18n();
   const categories = useMemo(() => ["All", ...Array.from(new Set(materials.map((m) => m.category)))], [materials]);
   const [active, setActive] = useState("All");
   const [selected, setSelected] = useState<MaterialRow | null>(null);
@@ -44,7 +46,7 @@ export function MaterialsBrowser({ materials, showPrice }: { materials: Material
               active === c ? "border-ink bg-ink text-bg" : "border-ink/10 bg-white/50 text-ink/60 hover:border-cyan-strong hover:text-cyan-strong"
             )}
           >
-            {c}
+            {c === "All" ? t("All") : c}
           </button>
         ))}
       </div>
@@ -101,19 +103,19 @@ export function MaterialsBrowser({ materials, showPrice }: { materials: Material
                 </div>
 
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  {selected.brand && <Field label="Brand" value={selected.brand} />}
-                  {selected.model && <Field label="Model" value={selected.model} />}
-                  {selected.color && <Field label="Color" value={selected.color} />}
-                  {selected.finish && <Field label="Finish" value={selected.finish} />}
-                  {selected.supplier && <Field label="Supplier" value={selected.supplier} />}
-                  {selected.estimatedQty && <Field label="Est. Quantity" value={selected.estimatedQty} />}
-                  {selected.reference && <Field label="Reference" value={selected.reference} />}
-                  {showPrice && selected.price != null && <Field label="Price" value={formatCurrency(selected.price)} />}
+                  {selected.brand && <Field label={t("Brand")} value={selected.brand} />}
+                  {selected.model && <Field label={t("Model")} value={selected.model} />}
+                  {selected.color && <Field label={t("Color")} value={selected.color} />}
+                  {selected.finish && <Field label={t("Finish")} value={selected.finish} />}
+                  {selected.supplier && <Field label={t("Supplier")} value={selected.supplier} />}
+                  {selected.estimatedQty && <Field label={t("Est. Quantity")} value={selected.estimatedQty} />}
+                  {selected.reference && <Field label={t("Reference")} value={selected.reference} />}
+                  {showPrice && selected.price != null && <Field label={t("Price")} value={formatCurrency(selected.price)} />}
                 </dl>
 
                 {selected.specification && <p className="mt-4 text-sm leading-relaxed text-ink/60">{selected.specification}</p>}
                 {selected.relatedSpaces && (
-                  <p className="mt-4 text-xs text-ink/40">Used in: {selected.relatedSpaces}</p>
+                  <p className="mt-4 text-xs text-ink/40">{t("Used in: {s}", { s: selected.relatedSpaces })}</p>
                 )}
               </div>
             </motion.div>

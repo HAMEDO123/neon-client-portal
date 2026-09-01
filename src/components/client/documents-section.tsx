@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatFileSize } from "@/lib/format";
 import { DocumentViewer, type ViewerFile } from "@/components/client/document-viewer";
 import type { FullProject } from "@/lib/queries";
+import { useI18n } from "@/lib/client-i18n";
 
 export function DocumentsSection({
   documents,
@@ -19,14 +20,15 @@ export function DocumentsSection({
   allowDownloads: boolean;
   token: string;
 }) {
+  const { t } = useI18n();
   const [viewerFile, setViewerFile] = useState<ViewerFile | null>(null);
 
   return (
     <SectionShell id="documents">
-      <SectionHeader eyebrow="Reference" title="Document Center" description="Contracts, specifications, reports, and every reference file in one place." />
+      <SectionHeader eyebrow={t("Reference")} title={t("Document Center")} description={t("Contracts, specifications, reports, and every reference file in one place.")} />
 
       {documents.length === 0 ? (
-        <EmptyState className="mt-8" icon={FolderOpen} title="No documents yet" description="Reference documents will appear here as they become available." />
+        <EmptyState className="mt-8" icon={FolderOpen} title={t("No documents yet")} description={t("Reference documents will appear here as they become available.")} />
       ) : (
         <div className="mt-8 flex flex-col gap-2">
           {documents.map((d) => (
@@ -53,11 +55,11 @@ export function DocumentsSection({
                 }
                 className="inline-flex items-center gap-1.5 rounded-full border border-ink/12 px-4 py-1.5 text-xs font-medium text-ink transition-colors hover:border-cyan-strong hover:text-cyan-strong"
               >
-                <Eye size={13} /> View
+                <Eye size={13} /> {t("View")}
               </button>
               {allowDownloads && (
                 <a href={`/p/${token}/dl/document/${d.id}`} className="rounded-full bg-ink px-4 py-1.5 text-xs font-medium text-bg">
-                  Download
+                  {t("Download")}
                 </a>
               )}
             </div>

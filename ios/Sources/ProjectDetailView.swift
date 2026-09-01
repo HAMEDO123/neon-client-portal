@@ -13,6 +13,7 @@ struct ProjectDetailView: View {
     @State private var coverSelection: PhotosPickerItem?
     @State private var uploadingCover = false
     @State private var coverViewer: ImageViewerPayload?
+    @State private var showCoverPicker = false
 
     var body: some View {
         ScrollView {
@@ -83,6 +84,11 @@ struct ProjectDetailView: View {
             Task { await uploadCover(item) }
         }
         .fullScreenCover(item: $coverViewer) { ImageViewerView(payload: $0) }
+        .sheet(isPresented: $showCoverPicker) {
+            if let detail {
+                CoverPickerSheet(projectId: detail.id, spaces: detail.spaces) { Task { await load() } }
+            }
+        }
         .task { await load() }
     }
 
@@ -148,8 +154,17 @@ struct ProjectDetailView: View {
                 .strokeBorder(Color.neonInk.opacity(0.08), lineWidth: 1)
         )
         .overlay(alignment: .bottomTrailing) {
-            Button {
-                coverPickerActive = true
+            Menu {
+                Button {
+                    coverPickerActive = true
+                } label: {
+                    Label(L("Upload New Photo"), systemImage: "camera.fill")
+                }
+                Button {
+                    showCoverPicker = true
+                } label: {
+                    Label(L("Choose from Project Photos"), systemImage: "photo.on.rectangle")
+                }
             } label: {
                 Image(systemName: uploadingCover ? "hourglass" : "camera.fill")
                     .font(.system(size: 13, weight: .semibold))
@@ -1063,6 +1078,98 @@ private struct CommentBubble: View {
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
         .glassCard(radius: 14)
+    }
+}
+
+// MARK: - Cover picker
+
+// Pick the project's cover (the image shown on the dashboard and client page)
+// from the photos already uploaded to the gallery.
+private struct CoverPickerSheet: View {
+    let projectId: String
+    let spaces: [ProjectDetail.GallerySpace]
+    let onPicked: () -> Void
+
+    @EnvironmentObject var api: APIClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var savingUrl: String?
+    @State private var failed = false
+
+    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if spaces.allSatisfy({ $0.images.isEmpty }) {
+                        Text(L("No photos uploaded yet."))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.neonInk.opacity(0.5))
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
+                    }
+                    ForEach(spaces.filter { !$0.images.isEmpty }) { space in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(space.name.uppercased())
+                                .font(.system(size: 12, weight: .semibold))
+                                .tracking(0.6)
+                                .foregroundStyle(Color.neonInk.opacity(0.4))
+                            LazyVGrid(columns: columns, spacing: 10) {
+                                ForEach(space.images) { image in
+                                    Button {
+                                        Task { await pick(image.imageUrl) }
+                                    } label: {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .fill(Color.neonInk.opacity(0.06))
+                                            AsyncImage(url: resolvedMediaURL(image.imageUrl)) { phase in
+                                                if let img = phase.image {
+                                                    img.resizable().aspectRatio(contentMode: .fill)
+                                                }
+                                            }
+                                            if savingUrl == image.imageUrl {
+                                                Color.black.opacity(0.4)
+                                                ProgressView().tint(.white)
+                                            }
+                                        }
+                                        .frame(height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    }
+                                    .buttonStyle(.pressable)
+                                    .disabled(savingUrl != nil)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            .neonAmbientBackground()
+            .navigationTitle(L("Cover Photo"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(L("Cancel")) { dismiss() }
+                }
+            }
+            .alert(L("Couldn't save — check your connection and try again."), isPresented: $failed) {
+                Button(L("OK"), role: .cancel) {}
+            }
+        }
+    }
+
+    private func pick(_ imageUrl: String) async {
+        savingUrl = imageUrl
+        defer { savingUrl = nil }
+        do {
+            try await api.updateProject(id: projectId, fields: ["coverImageUrl": imageUrl])
+            Haptic.success()
+            onPicked()
+            dismiss()
+        } catch {
+            Haptic.error()
+            failed = true
+        }
     }
 }
 

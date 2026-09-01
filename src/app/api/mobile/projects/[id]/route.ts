@@ -80,6 +80,21 @@ export async function PATCH(
     }
     data.currentStage = body.currentStage;
   }
+  // Set the cover from an already-uploaded gallery image — the URL must belong
+  // to this project so the endpoint can't point the cover at arbitrary files.
+  if (body.coverImageUrl !== undefined) {
+    if (typeof body.coverImageUrl !== "string" || !body.coverImageUrl) {
+      return NextResponse.json({ error: "Invalid coverImageUrl." }, { status: 400 });
+    }
+    const owned = await prisma.galleryImage.findFirst({
+      where: { imageUrl: body.coverImageUrl, space: { projectId: id } },
+      select: { id: true },
+    });
+    if (!owned) {
+      return NextResponse.json({ error: "coverImageUrl is not one of this project's gallery images." }, { status: 400 });
+    }
+    data.coverImageUrl = body.coverImageUrl;
+  }
 
   if (body.pipelineStatus !== undefined) {
     if (!PIPELINE_STATUSES.includes(body.pipelineStatus)) {

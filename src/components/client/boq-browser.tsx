@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Search, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/client-i18n";
 
 export interface BoqRow {
   id: string;
@@ -22,6 +23,7 @@ export interface BoqRow {
 }
 
 export function BoqBrowser({ items, showQuantities, showPrices }: { items: BoqRow[]; showQuantities: boolean; showPrices: boolean }) {
+  const { t } = useI18n();
   const categories = useMemo(() => ["All", ...Array.from(new Set(items.map((i) => i.category)))], [items]);
   const [active, setActive] = useState("All");
   const [query, setQuery] = useState("");
@@ -46,29 +48,29 @@ export function BoqBrowser({ items, showQuantities, showPrices }: { items: BoqRo
                 active === c ? "border-ink bg-ink text-bg" : "border-ink/10 bg-white/50 text-ink/60 hover:border-cyan-strong hover:text-cyan-strong"
               )}
             >
-              {c}
+              {c === "All" ? t("All") : c}
             </button>
           ))}
         </div>
         <div className="relative w-full sm:w-64">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30" />
+          <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-ink/30" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search items…"
-            className="w-full rounded-full border border-ink/10 bg-white/60 py-2 pl-8 pr-3 text-sm outline-none focus:border-cyan-strong"
+            placeholder={t("Search items…")}
+            className="w-full rounded-full border border-ink/10 bg-white/60 py-2 ps-8 pe-3 text-sm outline-none focus:border-cyan-strong"
           />
         </div>
       </div>
 
       <div className="mt-5 overflow-hidden rounded-2xl border border-ink/8">
-        <table className="w-full text-left text-sm">
+        <table className="w-full text-start text-sm">
           <thead className="bg-ink/[0.03] text-xs uppercase tracking-wider text-ink/40">
             <tr>
-              <th className="px-4 py-3">Item</th>
-              <th className="px-4 py-3">Category</th>
-              {showQuantities && <th className="px-4 py-3">Quantity</th>}
-              {showPrices && <th className="px-4 py-3">Est. Cost</th>}
+              <th className="px-4 py-3 text-start">{t("Item")}</th>
+              <th className="px-4 py-3 text-start">{t("Category")}</th>
+              {showQuantities && <th className="px-4 py-3 text-start">{t("Quantity")}</th>}
+              {showPrices && <th className="px-4 py-3 text-start">{t("Est. Cost")}</th>}
               <th className="w-8 px-4 py-3" />
             </tr>
           </thead>
@@ -110,8 +112,8 @@ export function BoqBrowser({ items, showQuantities, showPrices }: { items: BoqRo
                             {item.description && <p className="mt-1">{item.description}</p>}
                             {item.notes && <p className="mt-1 italic text-ink/45">{item.notes}</p>}
                             <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink/40">
-                              {item.relatedSpace && <span>Used in: {item.relatedSpace}</span>}
-                              {item.relatedDrawing && <span>Drawing: {item.relatedDrawing}</span>}
+                              {item.relatedSpace && <span>{t("Used in:")} {item.relatedSpace}</span>}
+                              {item.relatedDrawing && <span>{t("Drawing:")} {item.relatedDrawing}</span>}
                             </div>
                           </div>
                         </div>
@@ -127,7 +129,7 @@ export function BoqBrowser({ items, showQuantities, showPrices }: { items: BoqRo
 
       {total !== null && (
         <div className="glass-strong mt-4 flex items-center justify-between rounded-xl p-4">
-          <p className="font-semibold text-ink">Estimated Total</p>
+          <p className="font-semibold text-ink">{t("Estimated Total")}</p>
           <p className="text-lg font-semibold text-ink">{formatCurrency(total)}</p>
         </div>
       )}

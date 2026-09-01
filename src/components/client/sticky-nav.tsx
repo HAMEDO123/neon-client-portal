@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/client-i18n";
 
 export interface NavItem {
   key: string;
@@ -10,6 +11,7 @@ export interface NavItem {
 }
 
 export function StickyNav({ items, projectName }: { items: NavItem[]; projectName: string }) {
+  const { t } = useI18n();
   const [active, setActive] = useState(items[0]?.key ?? "");
   const [visible, setVisible] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
@@ -66,7 +68,7 @@ export function StickyNav({ items, projectName }: { items: NavItem[]; projectNam
                 active === item.key ? "bg-ink text-bg" : "text-ink/55 hover:bg-ink/5 hover:text-ink"
               )}
             >
-              {item.label}
+              {t(item.label)}
             </button>
           ))}
         </div>
@@ -76,6 +78,7 @@ export function StickyNav({ items, projectName }: { items: NavItem[]; projectNam
 }
 
 export function MobileNav({ items }: { items: NavItem[] }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [visible, setVisible] = useState(false);
 
@@ -101,9 +104,9 @@ export function MobileNav({ items }: { items: NavItem[] }) {
             <button
               key={item.key}
               onClick={() => go(item.key)}
-              className="rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink/70 hover:bg-ink/5"
+              className="rounded-xl px-3 py-2.5 text-start text-sm font-medium text-ink/70 hover:bg-ink/5"
             >
-              {item.label}
+              {t(item.label)}
             </button>
           ))}
         </div>
@@ -113,7 +116,7 @@ export function MobileNav({ items }: { items: NavItem[] }) {
         className="glass-strong flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-sm font-medium text-ink shadow-lg"
       >
         {open ? <X size={16} /> : <Menu size={16} />}
-        {open ? "Close Menu" : "Project Sections"}
+        {open ? t("Close Menu") : t("Project Sections")}
       </button>
     </div>
   );

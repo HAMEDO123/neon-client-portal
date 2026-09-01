@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { X, ChevronLeft, ChevronRight, Presentation } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/client-i18n";
 
 export type Slide =
   | { kind: "cover"; eyebrow: string; title: string; subtitle?: string; image?: string | null }
@@ -16,6 +17,7 @@ export type Slide =
   | { kind: "cta"; title: string; subtitle?: string; ctaLabel: string; ctaHref: string };
 
 export function PresentationTrigger({ slides }: { slides: Slide[] }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   return (
@@ -25,7 +27,7 @@ export function PresentationTrigger({ slides }: { slides: Slide[] }) {
         className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/5 px-6 py-3 text-sm font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/15"
       >
         <Presentation size={15} />
-        Presentation Mode
+        {t("Presentation Mode")}
       </button>
       {open && <PresentationMode slides={slides} onClose={() => setOpen(false)} />}
     </>

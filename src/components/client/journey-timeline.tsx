@@ -4,15 +4,17 @@ import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROJECT_STAGES } from "@/lib/constants";
+import { useI18n } from "@/lib/client-i18n";
 
 export function JourneyTimeline({ currentStage, completionPercent }: { currentStage: string; completionPercent: number }) {
+  const { t } = useI18n();
   const currentIndex = PROJECT_STAGES.findIndex((s) => s.value === currentStage);
 
   return (
     <div>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wider text-ink/40">Project Journey</span>
-        <span className="text-xs font-medium text-cyan-strong">{completionPercent}% Complete</span>
+        <span className="text-xs font-medium uppercase tracking-wider text-ink/40">{t("Project Journey")}</span>
+        <span className="text-xs font-medium text-cyan-strong">{t("{n}% Complete", { n: completionPercent })}</span>
       </div>
 
       <div className="relative mt-6">
@@ -42,7 +44,7 @@ export function JourneyTimeline({ currentStage, completionPercent }: { currentSt
                   {done && <Check size={12} strokeWidth={3} />}
                 </span>
                 <span className={cn("max-w-[80px] text-center text-[11px] leading-tight", active ? "font-medium text-ink" : "text-ink/45")}>
-                  {stage.label}
+                  {t(stage.label)}
                 </span>
               </div>
             );

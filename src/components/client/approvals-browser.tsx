@@ -7,6 +7,7 @@ import { respondToApproval } from "@/lib/actions/approval-actions";
 import { cn } from "@/lib/utils";
 import { buttonClasses } from "@/components/ui/buttons";
 import { formatDate } from "@/lib/format";
+import { useI18n } from "@/lib/client-i18n";
 
 export interface ApprovalRow {
   id: string;
@@ -24,6 +25,7 @@ const STATUS_META = {
 } as const;
 
 export function ApprovalsBrowser({ token, approvals }: { token: string; approvals: ApprovalRow[] }) {
+  const { t } = useI18n();
   const [modal, setModal] = useState<{ approval: ApprovalRow; mode: "APPROVED" | "CHANGES_REQUESTED" } | null>(null);
 
   return (
@@ -44,15 +46,15 @@ export function ApprovalsBrowser({ token, approvals }: { token: string; approval
             </div>
             <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium", meta.tone)}>
               <meta.icon size={13} />
-              {meta.label}
+              {t(meta.label)}
             </span>
             {a.status === "PENDING" && (
               <div className="flex gap-2">
                 <button onClick={() => setModal({ approval: a, mode: "CHANGES_REQUESTED" })} className={buttonClasses("outline", "sm")}>
-                  Request Changes
+                  {t("Request Changes")}
                 </button>
                 <button onClick={() => setModal({ approval: a, mode: "APPROVED" })} className={buttonClasses("primary", "sm")}>
-                  Approve
+                  {t("Approve")}
                 </button>
               </div>
             )}
@@ -74,6 +76,7 @@ function ResponseModal({
   state: { approval: ApprovalRow; mode: "APPROVED" | "CHANGES_REQUESTED" } | null;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -102,7 +105,7 @@ function ResponseModal({
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-ink/40">
-                  {state.mode === "APPROVED" ? "Approve Design" : "Request Changes"}
+                  {state.mode === "APPROVED" ? t("Approve Design") : t("Request Changes")}
                 </p>
                 <h3 className="mt-1 text-lg font-semibold text-ink">{state.approval.itemLabel}</h3>
               </div>
@@ -113,13 +116,13 @@ function ResponseModal({
 
             <p className="mt-3 text-sm text-ink/55">
               {state.mode === "APPROVED"
-                ? "Are you sure you want to approve this design? This will be recorded with your name and today’s date."
-                : "Let NEON know what you’d like changed."}
+                ? t("Are you sure you want to approve this design? This will be recorded with your name and today’s date.")
+                : t("Let NEON know what you’d like changed.")}
             </p>
 
             <div className="mt-4 flex flex-col gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-ink/50">Your Name</label>
+                <label className="mb-1 block text-xs font-medium text-ink/50">{t("Your Name")}</label>
                 <input
                   name="clientName"
                   required
@@ -128,7 +131,7 @@ function ResponseModal({
               </div>
               {state.mode === "CHANGES_REQUESTED" && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-ink/50">What would you like changed?</label>
+                  <label className="mb-1 block text-xs font-medium text-ink/50">{t("What would you like changed?")}</label>
                   <textarea
                     name="note"
                     required
@@ -140,7 +143,7 @@ function ResponseModal({
             </div>
 
             <button type="submit" disabled={pending} className={buttonClasses("primary", "md", "mt-5 w-full")}>
-              {pending ? "Submitting…" : state.mode === "APPROVED" ? "Confirm Approval" : "Send to NEON"}
+              {pending ? t("Submitting…") : state.mode === "APPROVED" ? t("Confirm Approval") : t("Send to NEON")}
             </button>
           </motion.form>
         </motion.div>

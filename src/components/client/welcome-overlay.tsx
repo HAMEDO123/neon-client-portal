@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useI18n } from "@/lib/client-i18n";
 
 export function WelcomeOverlay({ projectName }: { projectName: string }) {
+  const { t } = useI18n();
   // False on both the server render and the first client render (sessionStorage is
   // browser-only), then flipped on right after mount — this avoids a hydration mismatch.
   const [show, setShow] = useState(false);
@@ -34,7 +36,7 @@ export function WelcomeOverlay({ projectName }: { projectName: string }) {
             transition={{ delay: 0.2, duration: 0.6 }}
             className="text-xs font-medium uppercase tracking-[0.3em] text-white/50"
           >
-            Welcome to your project
+            {t("Welcome to your project")}
           </motion.span>
           <motion.span
             initial={{ opacity: 0, y: 8 }}
@@ -42,7 +44,7 @@ export function WelcomeOverlay({ projectName }: { projectName: string }) {
             transition={{ delay: 0.4, duration: 0.6 }}
             className="text-gradient-neon mt-3 text-2xl font-bold"
           >
-            Designed by NEON
+            {t("Designed by NEON")}
           </motion.span>
         </motion.div>
       )}

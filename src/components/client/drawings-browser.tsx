@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatFileSize } from "@/lib/format";
 import { DocumentViewer, type ViewerFile } from "@/components/client/document-viewer";
+import { useI18n } from "@/lib/client-i18n";
 
 export interface DrawingRow {
   id: string;
@@ -21,6 +22,7 @@ export interface DrawingRow {
 }
 
 export function DrawingsBrowser({ drawings, allowDownloads, token }: { drawings: DrawingRow[]; allowDownloads: boolean; token: string }) {
+  const { t } = useI18n();
   const categories = useMemo(() => ["All", ...Array.from(new Set(drawings.map((d) => d.category)))], [drawings]);
   const [active, setActive] = useState("All");
   const [viewerFile, setViewerFile] = useState<ViewerFile | null>(null);
@@ -40,7 +42,7 @@ export function DrawingsBrowser({ drawings, allowDownloads, token }: { drawings:
               active === c ? "border-ink bg-ink text-bg" : "border-ink/10 bg-white/50 text-ink/60 hover:border-cyan-strong hover:text-cyan-strong"
             )}
           >
-            {c}
+            {c === "All" ? t("All") : c}
           </button>
         ))}
       </div>
@@ -76,14 +78,14 @@ export function DrawingsBrowser({ drawings, allowDownloads, token }: { drawings:
                 }
                 className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-ink/12 py-2 text-xs font-medium text-ink transition-colors hover:border-cyan-strong hover:text-cyan-strong"
               >
-                <Eye size={13} /> View
+                <Eye size={13} /> {t("View")}
               </button>
               {allowDownloads && (
                 <a
                   href={`/p/${token}/dl/drawing/${d.id}`}
                   className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-ink py-2 text-xs font-medium text-bg"
                 >
-                  Download
+                  {t("Download")}
                 </a>
               )}
             </div>
@@ -95,13 +97,13 @@ export function DrawingsBrowser({ drawings, allowDownloads, token }: { drawings:
                   className="flex items-center gap-1.5 text-xs font-medium text-ink/45 hover:text-ink"
                 >
                   <History size={12} />
-                  Revision History
+                  {t("Revision History")}
                   <ChevronDown size={12} className={cn("transition-transform", historyOpen === d.id && "rotate-180")} />
                 </button>
                 {historyOpen === d.id && (
                   <div className="mt-2 flex flex-col gap-1.5 border-t border-ink/8 pt-2">
                     <div className="flex items-center justify-between text-[11px] text-ink/50">
-                      <span className="font-semibold">{d.revision} · Current</span>
+                      <span className="font-semibold">{d.revision} · {t("Current")}</span>
                     </div>
                     {d.revisions.map((r) => (
                       <div key={r.id} className="flex items-center justify-between text-[11px] text-ink/40">

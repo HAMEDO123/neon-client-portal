@@ -1,8 +1,11 @@
+"use client";
+
 import { MapPin, Ruler, LayoutGrid, User, CalendarClock, Gauge } from "lucide-react";
 import { SectionShell } from "@/components/client/section-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { JourneyTimeline } from "@/components/client/journey-timeline";
 import { formatDate } from "@/lib/format";
+import { useI18n } from "@/lib/client-i18n";
 
 export function OverviewSection({
   clientName,
@@ -25,18 +28,19 @@ export function OverviewSection({
   currentStage: string;
   deliveryDate: Date | null;
 }) {
+  const { t } = useI18n();
   const facts = [
-    { icon: User, label: "Client", value: clientName },
-    { icon: MapPin, label: "Location", value: location ?? "—" },
-    { icon: Ruler, label: "Area", value: area ?? "—" },
-    { icon: LayoutGrid, label: "Design Scope", value: projectType ?? "—" },
-    { icon: Gauge, label: "Spaces", value: spaceCount ? `${spaceCount} spaces` : "—" },
-    { icon: CalendarClock, label: "Delivery", value: deliveryDate ? formatDate(deliveryDate) : "To be confirmed" },
+    { icon: User, label: t("Client"), value: clientName },
+    { icon: MapPin, label: t("Location"), value: location ?? "—" },
+    { icon: Ruler, label: t("Area"), value: area ?? "—" },
+    { icon: LayoutGrid, label: t("Design Scope"), value: projectType ?? "—" },
+    { icon: Gauge, label: t("Spaces"), value: spaceCount ? t("{n} spaces", { n: spaceCount }) : "—" },
+    { icon: CalendarClock, label: t("Delivery"), value: deliveryDate ? formatDate(deliveryDate) : t("To be confirmed") },
   ];
 
   return (
     <SectionShell id="overview">
-      <SectionHeader eyebrow="Discover" title="Project Overview" description={description ?? undefined} />
+      <SectionHeader eyebrow={t("Discover")} title={t("Project Overview")} description={description ?? undefined} />
 
       <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {facts.map((f) => (

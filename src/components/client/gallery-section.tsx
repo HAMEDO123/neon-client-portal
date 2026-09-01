@@ -1,3 +1,5 @@
+"use client";
+
 import { SectionShell } from "@/components/client/section-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { GalleryGrid } from "@/components/client/gallery-grid";
@@ -5,6 +7,7 @@ import { BeforeAfterSlider } from "@/components/client/before-after-slider";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Images } from "lucide-react";
 import type { FullProject } from "@/lib/queries";
+import { useI18n } from "@/lib/client-i18n";
 
 export function GallerySection({
   spaces,
@@ -17,18 +20,19 @@ export function GallerySection({
   token: string;
   watermark: boolean;
 }) {
+  const { t } = useI18n();
   const nonEmptySpaces = spaces.filter((s) => s.images.length > 0);
 
   return (
     <SectionShell id="gallery">
       <SectionHeader
-        eyebrow="Explore"
-        title="Design Gallery"
-        description="Every space, rendered in detail. Tap any image to view it fullscreen."
+        eyebrow={t("Explore")}
+        title={t("Design Gallery")}
+        description={t("Every space, rendered in detail. Tap any image to view it fullscreen.")}
       />
 
       {nonEmptySpaces.length === 0 ? (
-        <EmptyState className="mt-8" icon={Images} title="Renders coming soon" description="The design gallery will appear here once NEON uploads the first renders." />
+        <EmptyState className="mt-8" icon={Images} title={t("Renders coming soon")} description={t("The design gallery will appear here once NEON uploads the first renders.")} />
       ) : (
         <>
           <div className="scrollbar-none mt-8 flex gap-2 overflow-x-auto">
@@ -39,7 +43,7 @@ export function GallerySection({
                 className="shrink-0 rounded-full border border-ink/10 bg-white/50 px-4 py-2 text-xs font-medium text-ink/60 transition-colors hover:border-cyan-strong hover:text-cyan-strong"
               >
                 {space.name}
-                <span className="ml-1.5 text-ink/30">{space.images.length}</span>
+                <span className="ms-1.5 text-ink/30">{space.images.length}</span>
               </a>
             ))}
           </div>

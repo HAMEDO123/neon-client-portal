@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X, Download, ExternalLink } from "lucide-react";
+import { useI18n } from "@/lib/client-i18n";
 
 export interface ViewerFile {
   url: string;
@@ -14,6 +15,7 @@ export interface ViewerFile {
 const IMAGE_TYPES = ["jpg", "jpeg", "png", "webp", "avif", "gif"];
 
 export function DocumentViewer({ file, onClose }: { file: ViewerFile | null; onClose: () => void }) {
+  const { t } = useI18n();
   useEffect(() => {
     if (!file) return;
     function onKey(e: KeyboardEvent) {
@@ -74,7 +76,7 @@ export function DocumentViewer({ file, onClose }: { file: ViewerFile | null; onC
                 <p className="text-sm">Preview isn&apos;t available for this file type ({file.fileType.toUpperCase()}).</p>
                 {file.downloadUrl && (
                   <a href={file.downloadUrl} className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-ink">
-                    Download to view
+                    {t("Download to view")}
                   </a>
                 )}
               </div>

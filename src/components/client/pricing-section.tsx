@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { SectionShell } from "@/components/client/section-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/client-i18n";
 
 export interface PricingRow {
   id: string;
@@ -17,6 +18,7 @@ export interface PricingRow {
 const BAR_COLORS = ["bg-cyan-strong", "bg-purple-strong", "bg-pink-strong", "bg-orange-strong"];
 
 export function PricingSection({ items, showDetailed }: { items: PricingRow[]; showDetailed: boolean }) {
+  const { t } = useI18n();
   const required = items.filter((i) => !i.isOptional);
   const optional = items.filter((i) => i.isOptional);
   const total = required.reduce((sum, i) => sum + i.amount, 0);
@@ -24,7 +26,7 @@ export function PricingSection({ items, showDetailed }: { items: PricingRow[]; s
 
   return (
     <SectionShell id="pricing">
-      <SectionHeader eyebrow="Approve" title="Execution Proposal" description="A transparent breakdown of the investment required to bring this project to life." />
+      <SectionHeader eyebrow={t("Approve")} title={t("Execution Proposal")} description={t("A transparent breakdown of the investment required to bring this project to life.")} />
 
       <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-5">
         <div className="lg:col-span-3">
@@ -50,12 +52,12 @@ export function PricingSection({ items, showDetailed }: { items: PricingRow[]; s
               ))}
             </div>
           ) : (
-            <p className="text-sm text-ink/50">A detailed cost breakdown is available on request.</p>
+            <p className="text-sm text-ink/50">{t("A detailed cost breakdown is available on request.")}</p>
           )}
 
           {optional.length > 0 && (
             <div className="mt-8 border-t border-ink/8 pt-6">
-              <p className="text-xs font-medium uppercase tracking-wider text-ink/40">Optional Items</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-ink/40">{t("Optional Items")}</p>
               <div className="mt-3 flex flex-col gap-2">
                 {optional.map((item) => (
                   <div key={item.id} className="flex items-center justify-between text-sm">
@@ -70,9 +72,9 @@ export function PricingSection({ items, showDetailed }: { items: PricingRow[]; s
 
         <div className="lg:col-span-2">
           <div className="glass-strong sticky top-24 rounded-3xl p-8 text-center">
-            <p className="text-xs font-medium uppercase tracking-wider text-ink/40">Total Project Cost</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-ink/40">{t("Total Project Cost")}</p>
             <p className="text-gradient-neon mt-3 text-4xl font-bold">{formatCurrency(total)}</p>
-            <p className="mt-3 text-xs text-ink/40">Execution scope, materials, labor &amp; installation</p>
+            <p className="mt-3 text-xs text-ink/40">{t("Execution scope, materials, labor & installation")}</p>
           </div>
         </div>
       </div>

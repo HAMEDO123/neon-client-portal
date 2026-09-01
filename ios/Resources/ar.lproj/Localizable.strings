@@ -54,6 +54,12 @@
 "Hi %@, your project from NEON is ready. You can review the designs, drawings, quantities, and more here: %@" = "مرحبًا %@، مشروعك من NEON جاهز. يمكنك الاطلاع على التصاميم والمخططات والكميات والمزيد هنا: %@";
 "Hi %@, there's an update on your NEON project. View the latest here: %@" = "مرحبًا %@، هناك تحديث على مشروعك من NEON. اطّلع على آخر المستجدات هنا: %@";
 
+/* Cover picker */
+"Upload New Photo" = "رفع صورة جديدة";
+"Choose from Project Photos" = "اختيار من صور المشروع";
+"Cover Photo" = "صورة الغلاف";
+"No photos uploaded yet." = "لا توجد صور مرفوعة بعد.";
+
 /* Gallery */
 "Add Photos" = "إضافة صور";
 "Uploading…" = "جارٍ الرفع…";

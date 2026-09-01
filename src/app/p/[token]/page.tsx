@@ -17,6 +17,7 @@ import { FeedbackSection } from "@/components/client/feedback-section";
 import { HandoverSection } from "@/components/client/handover-section";
 import { ShareFab } from "@/components/client/share-fab";
 import { buildPresentationSlides } from "@/lib/presentation";
+import { LanguageProvider, LanguageToggle } from "@/lib/client-i18n";
 import { Lock } from "lucide-react";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -75,7 +76,9 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
   ];
 
   return (
+    <LanguageProvider>
     <main className="bg-background">
+      <LanguageToggle />
       <WelcomeOverlay projectName={project.name} />
       <StickyNav items={navItems} projectName={project.name} />
       <MobileNav items={navItems} />
@@ -144,5 +147,6 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
         checklist={checklist}
       />
     </main>
+    </LanguageProvider>
   );
 }

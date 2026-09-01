@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/format";
 import { PIPELINE_STATUSES } from "@/lib/constants";
 import { PresentationTrigger, type Slide } from "@/components/client/presentation-mode";
 import { WatermarkOverlay } from "@/components/client/watermark-overlay";
+import { useI18n } from "@/lib/client-i18n";
 
 const PIPELINE_LABEL = new Map<string, string>(PIPELINE_STATUSES.map((s) => [s.value, s.label]));
 
@@ -30,6 +31,7 @@ export function Hero({
   watermark: boolean;
   slides: Slide[];
 }) {
+  const { t } = useI18n();
   return (
     <section className="relative flex h-[92vh] min-h-[560px] w-full items-end overflow-hidden bg-ink text-bg">
       {coverImageUrl ? (
@@ -75,11 +77,11 @@ export function Hero({
           {deliveryDate && (
             <>
               <span className="h-1 w-1 rounded-full bg-white/40" />
-              <span>Delivery {formatDate(deliveryDate)}</span>
+              <span>{t("Delivery")} {formatDate(deliveryDate)}</span>
             </>
           )}
           <Badge tone="cyan" className="border-white/20 bg-white/10 text-white">
-            {PIPELINE_LABEL.get(pipelineStatus) ?? pipelineStatus}
+            {t(PIPELINE_LABEL.get(pipelineStatus) ?? pipelineStatus)}
           </Badge>
         </motion.div>
 
@@ -93,7 +95,7 @@ export function Hero({
             href="#overview"
             className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-ink transition-transform hover:scale-[1.03]"
           >
-            Explore Project
+            {t("Explore Project")}
             <ArrowDown size={15} />
           </a>
           <PresentationTrigger slides={slides} />
