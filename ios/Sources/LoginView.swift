@@ -10,13 +10,36 @@ struct LoginView: View {
 
     var body: some View {
         VStack(spacing: 28) {
+            HStack {
+                Spacer()
+                Button {
+                    Haptic.tap()
+                    AppLanguage.toggle()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(AppLanguage.current.toggleLabel)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.neonInk.opacity(0.6))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.white.opacity(0.6), in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.neonInk.opacity(0.1), lineWidth: 1))
+                }
+                .buttonStyle(.pressable)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
             Spacer()
 
             VStack(spacing: 6) {
                 Text("NEON")
                     .font(.system(size: 40, weight: .heavy, design: .rounded))
                     .foregroundStyle(LinearGradient.neonWordmark)
-                Text("Admin")
+                Text(L("Admin"))
                     .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundStyle(Color.neonInk.opacity(0.55))
             }
@@ -24,7 +47,7 @@ struct LoginView: View {
             .offset(y: appeared ? 0 : 8)
 
             VStack(spacing: 14) {
-                SecureField("Password", text: $password)
+                SecureField(L("Password"), text: $password)
                     .focused($fieldFocused)
                     .padding(.horizontal, 16)
                     .frame(height: 50)
@@ -49,7 +72,7 @@ struct LoginView: View {
                     Task { await login() }
                 } label: {
                     ZStack {
-                        Text("Sign In")
+                        Text(L("Sign In"))
                             .font(.system(size: 16, weight: .semibold, design: .rounded))
                             .opacity(loading ? 0 : 1)
                         if loading {
@@ -73,7 +96,7 @@ struct LoginView: View {
             Spacer()
             Spacer()
 
-            Text("NEON Design & Programming")
+            Text(L("NEON Design & Programming"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.neonInk.opacity(0.3))
                 .padding(.bottom, 12)
@@ -93,7 +116,7 @@ struct LoginView: View {
             try await api.login(password: password)
             Haptic.success()
         } catch {
-            withAnimation { self.error = "Invalid password." }
+            withAnimation { self.error = L("Invalid password.") }
             Haptic.error()
         }
     }

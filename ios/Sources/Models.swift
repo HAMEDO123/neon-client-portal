@@ -175,7 +175,10 @@ func formattedISODate(_ iso: String?) -> String? {
     let parser = ISO8601DateFormatter()
     parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return nil }
-    return date.formatted(date: .abbreviated, time: .shortened)
+    // Follows the in-app language, not the phone's, so the toggle covers dates too.
+    return date.formatted(
+        Date.FormatStyle(date: .abbreviated, time: .shortened, locale: AppLanguage.current.locale)
+    )
 }
 
 struct DashboardResponse: Codable {

@@ -1,0 +1,131 @@
+/* Login */
+"Admin" = "الإدارة";
+"Password" = "كلمة المرور";
+"Sign In" = "تسجيل الدخول";
+"Invalid password." = "كلمة المرور غير صحيحة.";
+"NEON Design & Programming" = "NEON للتصميم والبرمجة";
+
+/* Dashboard */
+"Dashboard" = "لوحة التحكم";
+"An overview of every client project delivery." = "نظرة عامة على تسليم كل مشاريع العملاء.";
+"Total Projects" = "إجمالي المشاريع";
+"Published" = "منشور";
+"Pending Approvals" = "موافقات معلّقة";
+"Updated This Week" = "تحديثات هذا الأسبوع";
+"ALL PROJECTS" = "كل المشاريع";
+"No projects yet." = "لا توجد مشاريع بعد.";
+"Couldn't load — pull to retry." = "تعذّر التحميل — اسحب للأسفل للمحاولة مجددًا.";
+"Retry" = "إعادة المحاولة";
+"Sign Out" = "تسجيل الخروج";
+
+/* Project detail */
+"Couldn't load project." = "تعذّر تحميل المشروع.";
+"Completion" = "الإنجاز";
+"Overview" = "نظرة عامة";
+"Gallery" = "المعرض";
+"Drawings" = "المخططات";
+"Documents" = "المستندات";
+"BOQ" = "جدول الكميات";
+"Pricing" = "التسعير";
+"Materials" = "المواد";
+"Furniture" = "الأثاث";
+"Approvals" = "الموافقات";
+"Comments" = "التعليقات";
+"Client" = "العميل";
+"Email" = "البريد الإلكتروني";
+"Phone" = "الهاتف";
+"Location" = "الموقع";
+"Area" = "المساحة";
+"Type" = "النوع";
+"Delivery" = "التسليم";
+"Stage" = "المرحلة";
+"Last Updated" = "آخر تحديث";
+"Total" = "الإجمالي";
+"Optional" = "اختياري";
+"JOD" = "د.أ";
+
+/* Client link card */
+"CLIENT LINK" = "رابط العميل";
+"Copy" = "نسخ";
+"Copied" = "تم النسخ";
+"Preview" = "معاينة";
+"WhatsApp" = "واتساب";
+"Update" = "تحديث";
+"Hi %@, your project from NEON is ready. You can review the designs, drawings, quantities, and more here: %@" = "مرحبًا %@، مشروعك من NEON جاهز. يمكنك الاطلاع على التصاميم والمخططات والكميات والمزيد هنا: %@";
+"Hi %@, there's an update on your NEON project. View the latest here: %@" = "مرحبًا %@، هناك تحديث على مشروعك من NEON. اطّلع على آخر المستجدات هنا: %@";
+
+/* Gallery */
+"Add Photos" = "إضافة صور";
+"Uploading…" = "جارٍ الرفع…";
+"New Space…" = "مساحة جديدة…";
+"New Space" = "مساحة جديدة";
+"Space name (e.g. Bedroom)" = "اسم المساحة (مثال: غرفة النوم)";
+"Choose Photos" = "اختيار الصور";
+"No photos yet — upload the first ones." = "لا توجد صور بعد — ارفع أولى الصور.";
+
+/* Comments */
+"Reply to client…" = "اكتب ردًا للعميل…";
+"No comments yet." = "لا توجد تعليقات بعد.";
+"Resolve" = "حلّ";
+"Resolved" = "تم الحل";
+
+/* Forms (edit + new project) */
+"Edit" = "تعديل";
+"Edit Project" = "تعديل المشروع";
+"New Project" = "مشروع جديد";
+"Project" = "المشروع";
+"Project name" = "اسم المشروع";
+"Project name (required)" = "اسم المشروع (مطلوب)";
+"Area (e.g. 450 m²)" = "المساحة (مثال: 450 م²)";
+"Type (e.g. Residential Villa)" = "النوع (مثال: فيلا سكنية)";
+"Client name" = "اسم العميل";
+"Phone (with country code)" = "الهاتف (مع رمز الدولة)";
+"Description" = "الوصف";
+"What is this project about?" = "ما فكرة هذا المشروع؟";
+"Delivery date set" = "تحديد تاريخ التسليم";
+"Delivery date" = "تاريخ التسليم";
+"Status" = "الحالة";
+"Journey stage" = "مرحلة المشروع";
+"Pipeline status" = "حالة سير العمل";
+"Completion — %d%%" = "الإنجاز — %d%%";
+"Visibility" = "الظهور";
+"Publish State" = "حالة النشر";
+"Cancel" = "إلغاء";
+"Save" = "حفظ";
+"Saving…" = "جارٍ الحفظ…";
+"Create" = "إنشاء";
+"Creating…" = "جارٍ الإنشاء…";
+"OK" = "حسنًا";
+"Couldn't save — check your connection and try again." = "تعذّر الحفظ — تحقق من الاتصال وحاول مجددًا.";
+"Couldn't create the project — try again." = "تعذّر إنشاء المشروع — حاول مجددًا.";
+
+/* Publish states */
+"publish.DRAFT" = "مسودة";
+"publish.PUBLISHED" = "منشور";
+"publish.ARCHIVED" = "مؤرشف";
+
+/* Pipeline statuses */
+"pipeline.DRAFT" = "مسودة";
+"pipeline.INTERNAL_REVIEW" = "مراجعة داخلية";
+"pipeline.SENT_TO_CLIENT" = "أُرسل للعميل";
+"pipeline.CLIENT_REVIEWING" = "قيد مراجعة العميل";
+"pipeline.CHANGES_REQUESTED" = "طُلبت تعديلات";
+"pipeline.APPROVED" = "معتمد";
+"pipeline.EXECUTION" = "قيد التنفيذ";
+"pipeline.COMPLETED" = "مكتمل";
+"pipeline.ARCHIVED" = "مؤرشف";
+
+/* Journey stages */
+"stage.CONCEPT" = "الفكرة";
+"stage.DESIGN" = "التصميم";
+"stage.VISUALIZATION" = "التصوّر ثلاثي الأبعاد";
+"stage.TECHNICAL_DRAWINGS" = "المخططات التنفيذية";
+"stage.BOQ" = "جدول الكميات";
+"stage.PRICING" = "التسعير";
+"stage.APPROVAL" = "الموافقة";
+"stage.HANDOVER" = "التسليم";
+
+/* Approval statuses */
+"approval.PENDING" = "معلّق";
+"approval.APPROVED" = "معتمد";
+"approval.CHANGES_REQUESTED" = "طُلبت تعديلات";

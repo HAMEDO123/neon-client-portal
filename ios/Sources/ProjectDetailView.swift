@@ -25,8 +25,8 @@ struct ProjectDetailView: View {
                         .foregroundStyle(Color.neonInk)
 
                     HStack(spacing: 8) {
-                        BadgeView(text: detail?.publishState ?? project.publishState, tone: publishTone(detail?.publishState ?? project.publishState))
-                        BadgeView(text: (detail?.pipelineStatus ?? project.pipelineStatus).replacingOccurrences(of: "_", with: " "), tone: .purple)
+                        BadgeView(text: localizedEnum("publish", detail?.publishState ?? project.publishState), tone: publishTone(detail?.publishState ?? project.publishState))
+                        BadgeView(text: localizedEnum("pipeline", detail?.pipelineStatus ?? project.pipelineStatus), tone: .purple)
                     }
                 }
 
@@ -47,7 +47,7 @@ struct ProjectDetailView: View {
                 } else if let errorMessage {
                     VStack(spacing: 12) {
                         Text(errorMessage).foregroundStyle(Color.neonInk.opacity(0.5))
-                        Button("Retry") { Task { await load() } }
+                        Button(L("Retry")) { Task { await load() } }
                             .buttonStyle(.borderedProminent)
                             .tint(.neonInk)
                     }
@@ -67,7 +67,7 @@ struct ProjectDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if detail != nil {
-                    Button("Edit") { showEdit = true }
+                    Button(L("Edit")) { showEdit = true }
                         .foregroundStyle(Color.neonInk)
                 }
             }
@@ -92,7 +92,7 @@ struct ProjectDetailView: View {
             withAnimation(.easeOut(duration: 0.3)) { detail = loaded }
             errorMessage = nil
         } catch {
-            errorMessage = "Couldn't load project."
+            errorMessage = L("Couldn't load project.")
         }
     }
 
@@ -215,16 +215,16 @@ enum DetailSection: CaseIterable {
 
     var title: String {
         switch self {
-        case .overview: return "Overview"
-        case .gallery: return "Gallery"
-        case .drawings: return "Drawings"
-        case .documents: return "Documents"
-        case .boq: return "BOQ"
-        case .pricing: return "Pricing"
-        case .materials: return "Materials"
-        case .furniture: return "Furniture"
-        case .approvals: return "Approvals"
-        case .comments: return "Comments"
+        case .overview: return L("Overview")
+        case .gallery: return L("Gallery")
+        case .drawings: return L("Drawings")
+        case .documents: return L("Documents")
+        case .boq: return L("BOQ")
+        case .pricing: return L("Pricing")
+        case .materials: return L("Materials")
+        case .furniture: return L("Furniture")
+        case .approvals: return L("Approvals")
+        case .comments: return L("Comments")
         }
     }
 
@@ -252,7 +252,7 @@ private struct CompletionBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Completion")
+                Text(L("Completion"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.neonInk.opacity(0.5))
                 Spacer()
@@ -291,15 +291,15 @@ private struct OverviewSection: View {
             ShareLinkCard(detail: detail)
 
             VStack(spacing: 0) {
-                InfoRow(symbol: "person.fill", label: "Client", value: detail.clientName)
-                if let email = detail.clientEmail { divided(InfoRow(symbol: "envelope.fill", label: "Email", value: email)) }
-                if let phone = detail.clientPhone { divided(InfoRow(symbol: "phone.fill", label: "Phone", value: phone)) }
-                if let location = detail.location { divided(InfoRow(symbol: "mappin.and.ellipse", label: "Location", value: location)) }
-                if let area = detail.area { divided(InfoRow(symbol: "ruler.fill", label: "Area", value: area)) }
-                if let type = detail.projectType { divided(InfoRow(symbol: "building.2.fill", label: "Type", value: type)) }
-                if let delivery = formattedISODate(detail.deliveryDate) { divided(InfoRow(symbol: "calendar", label: "Delivery", value: delivery)) }
-                divided(InfoRow(symbol: "flag.fill", label: "Stage", value: detail.currentStage.replacingOccurrences(of: "_", with: " ").capitalized))
-                if let updated = formattedISODate(detail.updatedAt) { divided(InfoRow(symbol: "clock.fill", label: "Last Updated", value: updated)) }
+                InfoRow(symbol: "person.fill", label: L("Client"), value: detail.clientName)
+                if let email = detail.clientEmail { divided(InfoRow(symbol: "envelope.fill", label: L("Email"), value: email)) }
+                if let phone = detail.clientPhone { divided(InfoRow(symbol: "phone.fill", label: L("Phone"), value: phone)) }
+                if let location = detail.location { divided(InfoRow(symbol: "mappin.and.ellipse", label: L("Location"), value: location)) }
+                if let area = detail.area { divided(InfoRow(symbol: "ruler.fill", label: L("Area"), value: area)) }
+                if let type = detail.projectType { divided(InfoRow(symbol: "building.2.fill", label: L("Type"), value: type)) }
+                if let delivery = formattedISODate(detail.deliveryDate) { divided(InfoRow(symbol: "calendar", label: L("Delivery"), value: delivery)) }
+                divided(InfoRow(symbol: "flag.fill", label: L("Stage"), value: localizedEnum("stage", detail.currentStage)))
+                if let updated = formattedISODate(detail.updatedAt) { divided(InfoRow(symbol: "clock.fill", label: L("Last Updated"), value: updated)) }
             }
             .glassCard(radius: 18)
 
@@ -338,7 +338,7 @@ private struct ShareLinkCard: View {
                     Image(systemName: "link")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.neonPurpleStrong)
-                    Text("CLIENT LINK")
+                    Text(L("CLIENT LINK"))
                         .font(.system(size: 11, weight: .semibold))
                         .tracking(0.6)
                         .foregroundStyle(Color.neonInk.opacity(0.4))
@@ -362,7 +362,7 @@ private struct ShareLinkCard: View {
 
                 HStack(spacing: 8) {
                     shareButton(
-                        copied ? "Copied" : "Copy",
+                        copied ? L("Copied") : L("Copy"),
                         symbol: copied ? "checkmark" : "doc.on.doc",
                         tint: .neonInk
                     ) {
@@ -373,17 +373,23 @@ private struct ShareLinkCard: View {
                             withAnimation { copied = false }
                         }
                     }
-                    shareButton("Preview", symbol: "safari", tint: .neonCyanStrong) {
+                    shareButton(L("Preview"), symbol: "safari", tint: .neonCyanStrong) {
                         Haptic.tap()
                         openURL(link)
                     }
-                    shareButton("WhatsApp", symbol: "paperplane.fill", tint: Color(hex: 0x16A34A)) {
+                    shareButton(L("WhatsApp"), symbol: "paperplane.fill", tint: Color(hex: 0x16A34A)) {
                         Haptic.tap()
-                        sendWhatsApp(message: "Hi \(detail.clientName), your project from NEON is ready. You can review the designs, drawings, quantities, and more here: \(link.absoluteString)")
+                        sendWhatsApp(message: L(
+                            "Hi %@, your project from NEON is ready. You can review the designs, drawings, quantities, and more here: %@",
+                            detail.clientName, link.absoluteString
+                        ))
                     }
-                    shareButton("Update", symbol: "bell.fill", tint: .neonPurpleStrong) {
+                    shareButton(L("Update"), symbol: "bell.fill", tint: .neonPurpleStrong) {
                         Haptic.tap()
-                        sendWhatsApp(message: "Hi \(detail.clientName), there's an update on your NEON project. View the latest here: \(link.absoluteString)")
+                        sendWhatsApp(message: L(
+                            "Hi %@, there's an update on your NEON project. View the latest here: %@",
+                            detail.clientName, link.absoluteString
+                        ))
                     }
                 }
             }
@@ -466,7 +472,7 @@ private struct GallerySection: View {
             GalleryUploader(projectId: projectId, spaces: spaces, onUploaded: onUploaded)
 
             if spaces.isEmpty {
-                Text("No photos yet — upload the first ones.")
+                Text(L("No photos yet — upload the first ones."))
                     .font(.system(size: 13))
                     .foregroundStyle(Color.neonInk.opacity(0.5))
             }
@@ -525,14 +531,14 @@ private struct GalleryUploader: View {
             Button {
                 promptNewSpace = true
             } label: {
-                Label("New Space…", systemImage: "plus")
+                Label(L("New Space…"), systemImage: "plus")
             }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: uploading ? "hourglass" : "photo.badge.plus")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.neonPurpleStrong)
-                Text(uploading ? "Uploading…" : "Add Photos")
+                Text(uploading ? L("Uploading…") : L("Add Photos"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.neonInk)
                 Spacer()
@@ -545,14 +551,14 @@ private struct GalleryUploader: View {
         }
         .buttonStyle(.plain)
         .disabled(uploading)
-        .alert("New Space", isPresented: $promptNewSpace) {
-            TextField("Space name (e.g. Bedroom)", text: $newSpaceName)
-            Button("Choose Photos") {
+        .alert(L("New Space"), isPresented: $promptNewSpace) {
+            TextField(L("Space name (e.g. Bedroom)"), text: $newSpaceName)
+            Button(L("Choose Photos")) {
                 guard !newSpaceName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
                 targetSpaceId = nil
                 pickerActive = true
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L("Cancel"), role: .cancel) {}
         }
         .photosPicker(isPresented: $pickerActive, selection: $selection, maxSelectionCount: 10, matching: .images)
         .onChange(of: selection) { items in
@@ -769,7 +775,7 @@ private struct PricingSection: View {
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(Color.neonInk)
                             if item.isOptional {
-                                BadgeView(text: "Optional", tone: .neutral)
+                                BadgeView(text: L("Optional"), tone: .neutral)
                             }
                         }
                         if let description = item.description, !description.isEmpty {
@@ -789,7 +795,7 @@ private struct PricingSection: View {
             }
 
             HStack {
-                Text("Total")
+                Text(L("Total"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.neonInk)
                 Spacer()
@@ -901,7 +907,7 @@ private struct ApprovalsSection: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(Color.neonInk)
                         Spacer()
-                        BadgeView(text: item.status.replacingOccurrences(of: "_", with: " "), tone: approvalTone(item.status))
+                        BadgeView(text: localizedEnum("approval", item.status), tone: approvalTone(item.status))
                     }
                     if let note = item.note, !note.isEmpty {
                         Text(note)
@@ -948,7 +954,7 @@ private struct CommentsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                TextField("Reply to client…", text: $draft, axis: .vertical)
+                TextField(L("Reply to client…"), text: $draft, axis: .vertical)
                     .font(.system(size: 14))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
@@ -967,7 +973,7 @@ private struct CommentsSection: View {
             }
 
             if comments.isEmpty {
-                Text("No comments yet.")
+                Text(L("No comments yet."))
                     .font(.system(size: 13))
                     .foregroundStyle(Color.neonInk.opacity(0.5))
                     .padding(.top, 12)
@@ -1034,7 +1040,7 @@ private struct CommentBubble: View {
                     onToggleStatus()
                 } label: {
                     BadgeView(
-                        text: comment.status == "RESOLVED" ? "Resolved" : "Resolve",
+                        text: comment.status == "RESOLVED" ? L("Resolved") : L("Resolve"),
                         tone: comment.status == "RESOLVED" ? .success : .neutral
                     )
                 }
@@ -1119,73 +1125,73 @@ private struct EditProjectSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Project") {
-                    TextField("Project name", text: $name)
-                    TextField("Location", text: $location)
-                    TextField("Area (e.g. 450 m²)", text: $area)
-                    TextField("Type (e.g. Residential Villa)", text: $projectType)
+                Section(L("Project")) {
+                    TextField(L("Project name"), text: $name)
+                    TextField(L("Location"), text: $location)
+                    TextField(L("Area (e.g. 450 m²)"), text: $area)
+                    TextField(L("Type (e.g. Residential Villa)"), text: $projectType)
                 }
-                Section("Client") {
-                    TextField("Client name", text: $clientName)
-                    TextField("Email", text: $clientEmail)
+                Section(L("Client")) {
+                    TextField(L("Client name"), text: $clientName)
+                    TextField(L("Email"), text: $clientEmail)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("Phone (with country code)", text: $clientPhone)
+                    TextField(L("Phone (with country code)"), text: $clientPhone)
                         .keyboardType(.phonePad)
                 }
-                Section("Description") {
-                    TextField("What is this project about?", text: $descriptionText, axis: .vertical)
+                Section(L("Description")) {
+                    TextField(L("What is this project about?"), text: $descriptionText, axis: .vertical)
                         .lineLimit(3...8)
                 }
-                Section("Delivery") {
-                    Toggle("Delivery date set", isOn: $hasDeliveryDate.animation())
+                Section(L("Delivery")) {
+                    Toggle(L("Delivery date set"), isOn: $hasDeliveryDate.animation())
                         .tint(.neonPurple)
                     if hasDeliveryDate {
-                        DatePicker("Delivery date", selection: $deliveryDate, displayedComponents: .date)
+                        DatePicker(L("Delivery date"), selection: $deliveryDate, displayedComponents: .date)
                     }
                 }
-                Section("Status") {
-                    Picker("Journey stage", selection: $stage) {
+                Section(L("Status")) {
+                    Picker(L("Journey stage"), selection: $stage) {
                         ForEach(projectStages, id: \.self) {
-                            Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
+                            Text(localizedEnum("stage", $0)).tag($0)
                         }
                     }
                     .pickerStyle(.menu)
-                    Picker("Pipeline status", selection: $pipeline) {
+                    Picker(L("Pipeline status"), selection: $pipeline) {
                         ForEach(Self.pipelineStatuses, id: \.self) {
-                            Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
+                            Text(localizedEnum("pipeline", $0)).tag($0)
                         }
                     }
                     .pickerStyle(.menu)
                 }
-                Section("Completion — \(Int(completion))%") {
+                Section(L("Completion — %d%%", Int(completion))) {
                     Slider(value: $completion, in: 0...100, step: 1)
                         .tint(.neonPurple)
                 }
-                Section("Visibility") {
-                    Picker("Publish State", selection: $publish) {
+                Section(L("Visibility")) {
+                    Picker(L("Publish State"), selection: $publish) {
                         ForEach(Self.publishStates, id: \.self) {
-                            Text($0.capitalized).tag($0)
+                            Text(localizedEnum("publish", $0)).tag($0)
                         }
                     }
                     .pickerStyle(.segmented)
                 }
             }
-            .navigationTitle("Edit Project")
+            .navigationTitle(L("Edit Project"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button(L("Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(saving ? "Saving…" : "Save") { Task { await save() } }
+                    Button(saving ? L("Saving…") : L("Save")) { Task { await save() } }
                         .fontWeight(.semibold)
                         .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .alert("Couldn't save — check your connection and try again.", isPresented: $saveFailed) {
-                Button("OK", role: .cancel) {}
+            .alert(L("Couldn't save — check your connection and try again."), isPresented: $saveFailed) {
+                Button(L("OK"), role: .cancel) {}
             }
         }
     }
@@ -1268,7 +1274,9 @@ private extension Double {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
+        // Western digits in both languages — only the currency label localizes.
+        formatter.locale = Locale(identifier: "en_US")
         let value = formatter.string(from: NSNumber(value: self)) ?? "\(self)"
-        return "JOD \(value)"
+        return "\(L("JOD")) \(value)"
     }
 }

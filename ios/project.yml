@@ -14,10 +14,14 @@ targets:
       # matches the SDK, and PNG resources need no compiler at all.
       - path: Resources/Icons
         buildPhase: resources
+      - path: Resources/ar.lproj
+        buildPhase: resources
     info:
       path: Info.plist
       properties:
         CFBundleDisplayName: "NEON Admin"
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, ar]
         CFBundleIcons:
           CFBundlePrimaryIcon:
             CFBundleIconFiles: [AppIcon60x60]

@@ -11,7 +11,7 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("An overview of every client project delivery.")
+                    Text(L("An overview of every client project delivery."))
                         .font(.system(size: 14))
                         .foregroundStyle(Color.neonInk.opacity(0.5))
                         .padding(.top, 4)
@@ -19,10 +19,10 @@ struct DashboardView: View {
                     if let data {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                             let stats = [
-                                ("Total Projects", data.stats.total, "folder.fill", BadgeTone.cyan),
-                                ("Published", data.stats.published, "checkmark.seal.fill", .purple),
-                                ("Pending Approvals", data.stats.pendingApprovals, "clock.fill", .orange),
-                                ("Updated This Week", data.stats.recentlyUpdated, "chart.line.uptrend.xyaxis", .pink),
+                                (L("Total Projects"), data.stats.total, "folder.fill", BadgeTone.cyan),
+                                (L("Published"), data.stats.published, "checkmark.seal.fill", .purple),
+                                (L("Pending Approvals"), data.stats.pendingApprovals, "clock.fill", .orange),
+                                (L("Updated This Week"), data.stats.recentlyUpdated, "chart.line.uptrend.xyaxis", .pink),
                             ]
                             ForEach(Array(stats.enumerated()), id: \.offset) { index, stat in
                                 StatCard(label: stat.0, value: stat.1, symbol: stat.2, tone: stat.3)
@@ -35,14 +35,14 @@ struct DashboardView: View {
                             }
                         }
 
-                        Text("ALL PROJECTS")
+                        Text(L("ALL PROJECTS"))
                             .font(.system(size: 12, weight: .semibold))
                             .tracking(0.6)
                             .foregroundStyle(Color.neonInk.opacity(0.4))
                             .padding(.top, 6)
 
                         if data.projects.isEmpty {
-                            Text("No projects yet.")
+                            Text(L("No projects yet."))
                                 .font(.subheadline)
                                 .foregroundStyle(Color.neonInk.opacity(0.5))
                                 .padding(.top, 12)
@@ -62,7 +62,7 @@ struct DashboardView: View {
                     } else if let errorMessage {
                         VStack(spacing: 12) {
                             Text(errorMessage).foregroundStyle(Color.neonInk.opacity(0.5))
-                            Button("Retry") { Task { await load() } }
+                            Button(L("Retry")) { Task { await load() } }
                                 .buttonStyle(.borderedProminent)
                                 .tint(.neonInk)
                         }
@@ -78,8 +78,22 @@ struct DashboardView: View {
                 Haptic.tap()
                 await load()
             }
-            .navigationTitle("Dashboard")
+            .navigationTitle(L("Dashboard"))
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        Haptic.tap()
+                        AppLanguage.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(AppLanguage.current.toggleLabel)
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(Color.neonInk.opacity(0.6))
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Haptic.tap()
@@ -91,7 +105,7 @@ struct DashboardView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Sign Out") { api.logout() }
+                    Button(L("Sign Out")) { api.logout() }
                         .foregroundStyle(Color.neonInk.opacity(0.6))
                 }
             }
@@ -110,7 +124,7 @@ struct DashboardView: View {
             appeared = false
             withAnimation { appeared = true }
         } catch {
-            errorMessage = "Couldn't load — pull to retry."
+            errorMessage = L("Couldn't load — pull to retry.")
         }
     }
 }
@@ -138,47 +152,47 @@ private struct NewProjectSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Project") {
-                    TextField("Project name (required)", text: $name)
-                    TextField("Location", text: $location)
-                    TextField("Area (e.g. 450 m²)", text: $area)
-                    TextField("Type (e.g. Residential Villa)", text: $projectType)
+                Section(L("Project")) {
+                    TextField(L("Project name (required)"), text: $name)
+                    TextField(L("Location"), text: $location)
+                    TextField(L("Area (e.g. 450 m²)"), text: $area)
+                    TextField(L("Type (e.g. Residential Villa)"), text: $projectType)
                 }
-                Section("Client") {
-                    TextField("Client name", text: $clientName)
-                    TextField("Email", text: $clientEmail)
+                Section(L("Client")) {
+                    TextField(L("Client name"), text: $clientName)
+                    TextField(L("Email"), text: $clientEmail)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("Phone (with country code)", text: $clientPhone)
+                    TextField(L("Phone (with country code)"), text: $clientPhone)
                         .keyboardType(.phonePad)
                 }
-                Section("Description") {
-                    TextField("What is this project about?", text: $descriptionText, axis: .vertical)
+                Section(L("Description")) {
+                    TextField(L("What is this project about?"), text: $descriptionText, axis: .vertical)
                         .lineLimit(3...8)
                 }
-                Section("Delivery") {
-                    Toggle("Delivery date set", isOn: $hasDeliveryDate.animation())
+                Section(L("Delivery")) {
+                    Toggle(L("Delivery date set"), isOn: $hasDeliveryDate.animation())
                         .tint(.neonPurple)
                     if hasDeliveryDate {
-                        DatePicker("Delivery date", selection: $deliveryDate, displayedComponents: .date)
+                        DatePicker(L("Delivery date"), selection: $deliveryDate, displayedComponents: .date)
                     }
                 }
             }
-            .navigationTitle("New Project")
+            .navigationTitle(L("New Project"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button(L("Cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(saving ? "Creating…" : "Create") { Task { await create() } }
+                    Button(saving ? L("Creating…") : L("Create")) { Task { await create() } }
                         .fontWeight(.semibold)
                         .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .alert("Couldn't create the project — try again.", isPresented: $saveFailed) {
-                Button("OK", role: .cancel) {}
+            .alert(L("Couldn't create the project — try again."), isPresented: $saveFailed) {
+                Button(L("OK"), role: .cancel) {}
             }
         }
     }
@@ -273,9 +287,9 @@ private struct ProjectRow: View {
 
                 Spacer(minLength: 8)
 
-                BadgeView(text: project.publishState, tone: publishTone(project.publishState))
+                BadgeView(text: localizedEnum("publish", project.publishState), tone: publishTone(project.publishState))
 
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.neonInk.opacity(0.3))
             }
