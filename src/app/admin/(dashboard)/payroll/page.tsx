@@ -36,7 +36,7 @@ export default async function AdminPayrollPage({
 
   const totals = rows.reduce(
     (sum, row) => ({
-      cutoff: sum.cutoff + row.breakdown.cutoff,
+      cutoff: sum.cutoff + row.breakdown.cutoff + row.breakdown.adjustmentTotal,
       receipts: sum.receipts + row.breakdown.receiptTotal,
       final: sum.final + row.breakdown.finalPay,
     }),
@@ -62,7 +62,7 @@ export default async function AdminPayrollPage({
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Team" value={String(rows.length)} />
-        <Stat label="Total cutoff" value={`${totals.cutoff.toFixed(2)} JOD`} />
+        <Stat label="Total deducted" value={`${totals.cutoff.toFixed(2)} JOD`} />
         <Stat label="Receipts owed" value={`${totals.receipts.toFixed(2)} JOD`} />
         <Stat label="Total payable" value={`${totals.final.toFixed(2)} JOD`} />
       </div>
@@ -82,12 +82,13 @@ export default async function AdminPayrollPage({
                 <th className="px-4 py-3">Per hour</th>
                 <th className="px-4 py-3">Late</th>
                 <th className="px-4 py-3">Cutoff</th>
+                <th className="px-4 py-3">Adjustments</th>
                 <th className="px-4 py-3">Receipts</th>
                 <th className="px-4 py-3">Final pay</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ employee, breakdown, delayDays, receiptCount }) => (
+              {rows.map(({ employee, breakdown, delayDays, receiptCount, adjustments }) => (
                 <tr key={employee.id} className="border-t border-ink/6">
                   <td className="px-4 py-3">
                     <p className="font-medium text-ink">{employee.name}</p>
@@ -111,6 +112,17 @@ export default async function AdminPayrollPage({
                     {delayDays > 0 && <span className="ml-1 text-xs text-ink/35">({delayDays}d)</span>}
                   </td>
                   <td className="px-4 py-3 text-red-600">−{breakdown.cutoff.toFixed(2)}</td>
+                  <td className="px-4 py-3">
+                    {breakdown.adjustmentTotal === 0 ? (
+                      <span className="text-ink/30">—</span>
+                    ) : (
+                      // The reason travels with the number: a deduction on a
+                      // payslip that nobody can explain is a dispute waiting.
+                      <span className="text-red-600" title={adjustments.map((a) => a.reason).join(" · ")}>
+                        −{breakdown.adjustmentTotal.toFixed(2)}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-emerald-700">
                     +{breakdown.receiptTotal.toFixed(2)}
                     {receiptCount > 0 && <span className="ml-1 text-xs text-ink/35">({receiptCount})</span>}

@@ -5,7 +5,7 @@ import type { PayBasis } from "@/generated/prisma/enums";
 //
 //   hourly rate  = salary ÷ working days ÷ 8
 //   cutoff       = hourly rate × hours arrived late
-//   final pay    = salary − cutoff + reimbursed receipts
+//   final pay    = salary − cutoff − adjustments + reimbursed receipts
 //
 // Monthly staff divide by 26 working days. Weekly staff divide by 6 — the
 // same six-day week, one week at a time.
@@ -41,6 +41,8 @@ export type PayrollInput = {
   payBasis: PayBasis;
   delayHours: number;
   receiptTotal: number;
+  /** Deductions decided elsewhere — a performance shortfall, say. Positive is money off. */
+  adjustmentTotal?: number;
 };
 
 export type PayrollBreakdown = {
@@ -50,6 +52,7 @@ export type PayrollBreakdown = {
   hourlyRate: number;
   delayHours: number;
   cutoff: number;
+  adjustmentTotal: number;
   receiptTotal: number;
   finalPay: number;
 };
@@ -62,6 +65,10 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
   // Lateness can reduce the salary to nothing but never below it — a deduction
   // must not turn into a debt the employee owes.
   const cutoff = Math.min(round(rate * delayHours), salary);
+
+  // Every deduction obeys the same limit together: lateness plus anything else
+  // can take the salary to zero and no further.
+  const adjustmentTotal = Math.min(round(Math.max(0, input.adjustmentTotal ?? 0)), salary - cutoff);
   const receiptTotal = Math.max(0, input.receiptTotal);
 
   return {
@@ -71,10 +78,11 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
     hourlyRate: round(rate),
     delayHours: round(delayHours),
     cutoff,
+    adjustmentTotal,
     receiptTotal: round(receiptTotal),
     // Reimbursements are added after the deduction: they are money the
     // employee already spent, not part of the salary being docked.
-    finalPay: round(salary - cutoff + receiptTotal),
+    finalPay: round(salary - cutoff - adjustmentTotal + receiptTotal),
   };
 }
 

@@ -13,6 +13,7 @@ const PRIORITY_STYLE = {
 
 const STATE_STYLE = {
   DONE: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
+  SUBMITTED: "bg-purple/10 text-purple-strong border-purple/20",
   IN_PROGRESS: "bg-cyan/10 text-cyan-strong border-cyan/20",
   TOMORROW: "bg-amber-500/10 text-amber-700 border-amber-500/20",
   TODO: "bg-ink/5 text-ink/55 border-ink/10",

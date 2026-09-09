@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { LiveSync } from "@/components/live-sync";
+import type { AdminBadges } from "@/lib/admin-badges";
 import { cn } from "@/lib/utils";
 
 // The sidebar layout only works at desktop widths — on a phone (the iOS
@@ -15,7 +17,7 @@ export function AdminShell({
   badges,
 }: {
   children: ReactNode;
-  badges?: { chat: number; requests: number };
+  badges?: AdminBadges;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -28,6 +30,8 @@ export function AdminShell({
   // while the content scrolls, the way a desktop app behaves.
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* Board, badges and review queue stay current on their own. */}
+      <LiveSync />
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-ink/8 bg-white/40 lg:block">
         <AdminNav badges={badges} />
       </aside>

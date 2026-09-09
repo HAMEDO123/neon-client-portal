@@ -6,6 +6,7 @@ import { getSessionEmployee } from "@/lib/employee-session";
 import { getEmployeeBadges } from "@/lib/employee-badges";
 import { EmployeeNav } from "@/components/employee/employee-nav";
 import { AppViewport } from "@/components/employee/app-viewport";
+import { LiveSync } from "@/components/live-sync";
 
 // Server-side gate for the whole portal. Anything under this layout has an
 // authenticated, enabled employee behind it — and every action it can reach
@@ -57,6 +58,8 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
 
       <EmployeeNav unreadChat={unreadChat} />
       <AppViewport />
+      {/* Badges, task states and review outcomes arrive without a reload. */}
+      <LiveSync />
     </div>
   );
 }

@@ -6,6 +6,9 @@ import {
   LayoutDashboard,
   FolderKanban,
   ListChecks,
+  ClipboardCheck,
+  ChartNoAxesColumn,
+  Bell,
   Users,
   MessagesSquare,
   ShoppingBag,
@@ -16,11 +19,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/actions/auth-actions";
+import type { AdminBadges } from "@/lib/admin-badges";
 
-export function AdminNav({ badges }: { badges?: { chat: number; requests: number } }) {
+export function AdminNav({ badges }: { badges?: AdminBadges }) {
   const pathname = usePathname();
   const isDashboard = pathname === "/admin";
   const isTasks = pathname.startsWith("/admin/tasks");
+  const isReviews = pathname.startsWith("/admin/reviews");
+  const isAnalytics = pathname.startsWith("/admin/analytics");
+  const isAlerts = pathname.startsWith("/admin/alerts");
   const isEmployees = pathname.startsWith("/admin/employees");
   const isChat = pathname.startsWith("/admin/chat");
   const isRequests = pathname.startsWith("/admin/requests");
@@ -60,6 +67,38 @@ export function AdminNav({ badges }: { badges?: { chat: number; requests: number
       >
         <ListChecks size={16} strokeWidth={1.75} />
         Tasks
+      </Link>
+      <Link
+        href="/admin/reviews"
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          isReviews ? "bg-ink text-bg" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
+        )}
+      >
+        <ClipboardCheck size={16} strokeWidth={1.75} />
+        Reviews
+        <Badge count={badges?.reviews ?? 0} active={isReviews} />
+      </Link>
+      <Link
+        href="/admin/analytics"
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          isAnalytics ? "bg-ink text-bg" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
+        )}
+      >
+        <ChartNoAxesColumn size={16} strokeWidth={1.75} />
+        Analytics
+      </Link>
+      <Link
+        href="/admin/alerts"
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          isAlerts ? "bg-ink text-bg" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
+        )}
+      >
+        <Bell size={16} strokeWidth={1.75} />
+        Activity
+        <Badge count={badges?.alerts ?? 0} active={isAlerts} />
       </Link>
       <Link
         href="/admin/chat"

@@ -6,11 +6,13 @@ import { TEAM_CHANNEL_KEY } from "@/lib/chat";
 // The sidebar renders on every admin page, so this runs on every navigation —
 // the same reason the employee badges are one query rather than four.
 
-export type AdminBadges = { chat: number; requests: number };
+export type AdminBadges = { chat: number; requests: number; reviews: number; alerts: number };
 
 export async function getAdminBadges(): Promise<AdminBadges> {
   try {
-    const rows = await prisma.$queryRaw<{ chat: bigint; requests: bigint }[]>`
+    const rows = await prisma.$queryRaw<
+      { chat: bigint; requests: bigint; reviews: bigint; alerts: bigint }[]
+    >`
       SELECT
         (
           SELECT COUNT(*) FROM "ChatMessage" m
@@ -30,13 +32,24 @@ export async function getAdminBadges(): Promise<AdminBadges> {
         ) AS chat,
         (
           SELECT COUNT(*) FROM "SupplyRequest" WHERE "status" = 'PENDING'
-        ) AS requests
+        ) AS requests,
+        (
+          SELECT COUNT(*) FROM "TaskSubmission" WHERE "status" = 'PENDING'
+        ) AS reviews,
+        (
+          SELECT COUNT(*) FROM "AdminNotification" WHERE "readAt" IS NULL
+        ) AS alerts
     `;
 
     const row = rows[0];
-    return { chat: Number(row?.chat ?? 0), requests: Number(row?.requests ?? 0) };
+    return {
+      chat: Number(row?.chat ?? 0),
+      requests: Number(row?.requests ?? 0),
+      reviews: Number(row?.reviews ?? 0),
+      alerts: Number(row?.alerts ?? 0),
+    };
   } catch {
     // A badge is not worth failing a page render over.
-    return { chat: 0, requests: 0 };
+    return { chat: 0, requests: 0, reviews: 0, alerts: 0 };
   }
 }

@@ -139,6 +139,7 @@ export async function getTaskBoard() {
         dueAt: true,
         adminNote: true,
         assigneeId: true,
+        excludedFromProgress: true,
       },
     }),
   ]);
@@ -187,13 +188,17 @@ export async function getTaskBoard() {
         dueAt: entry?.dueAt ? entry.dueAt.toISOString() : null,
         adminNote: entry?.adminNote ?? null,
         assigneeId: entry?.assigneeId ?? null,
+        excludedFromProgress: entry?.excludedFromProgress ?? false,
       };
     });
+    // Excluded cells are still on the board; they are just not part of anyone's
+    // score, so the row's own tally leaves them out too.
+    const counted = cells.filter((c) => !c.excludedFromProgress);
     return {
       project,
       cells,
-      done: cells.filter((c) => c.state === "DONE").length,
-      tomorrow: cells.filter((c) => c.state === "TOMORROW").length,
+      done: counted.filter((c) => c.state === "DONE").length,
+      tomorrow: counted.filter((c) => c.state === "TOMORROW").length,
     };
   });
 

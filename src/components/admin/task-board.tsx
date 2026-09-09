@@ -5,7 +5,9 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   Check,
+  CalendarCheck,
   CalendarClock,
+  Camera,
   ChevronLeft,
   ChevronRight,
   Loader,
@@ -34,7 +36,9 @@ import type { TaskBoard as TaskBoardData, TaskBoardGroup } from "@/lib/queries";
 import type { TaskState } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
-type CellPatch = { projectId: string; taskId: string; state: TaskState };
+type CellPatch =
+  | { kind: "state"; projectId: string; taskId: string; state: TaskState }
+  | { kind: "details"; projectId: string; taskId: string; details: CellDetails };
 
 export function TaskBoard({
   board,
@@ -55,7 +59,13 @@ export function TaskBoard({
       if (row.project.id !== patch.projectId) return row;
       return {
         ...row,
-        cells: row.cells.map((c) => (c.taskId === patch.taskId ? { ...c, state: patch.state } : c)),
+        cells: row.cells.map((c) =>
+          c.taskId !== patch.taskId
+            ? c
+            : patch.kind === "state"
+              ? { ...c, state: patch.state }
+              : { ...c, ...patch.details }
+        ),
       };
     })
   );
@@ -94,7 +104,7 @@ export function TaskBoard({
   function cycle(projectId: string, taskId: string, state: TaskState) {
     const next = NEXT_STATE[state];
     startTransition(async () => {
-      applyPatch({ projectId, taskId, state: next });
+      applyPatch({ kind: "state", projectId, taskId, state: next });
       await setTaskState(projectId, taskId, next);
     });
   }
@@ -121,6 +131,7 @@ export function TaskBoard({
         ))}
         <span className="ml-auto hidden items-center gap-3 text-xs text-ink/40 md:flex">
           <Legend state="DONE" />
+          <Legend state="SUBMITTED" />
           <Legend state="TOMORROW" />
           <Legend state="TODO" />
         </span>
@@ -226,9 +237,14 @@ export function TaskBoard({
 
           <tbody>
             {rows.map((row) => {
-              const states = visibleIndices.map((i) => row.cells[i]?.state ?? "TODO");
-              const done = states.filter((s) => s === "DONE").length;
-              const tomorrow = states.filter((s) => s === "TOMORROW").length;
+              // "Not counted" cells drop out of the fraction entirely, so a
+              // step that never applied to this project cannot hold the row
+              // below 100%.
+              const counted = visibleIndices
+                .map((i) => row.cells[i])
+                .filter((cell) => !cell?.excludedFromProgress);
+              const done = counted.filter((cell) => cell?.state === "DONE").length;
+              const tomorrow = counted.filter((cell) => cell?.state === "TOMORROW").length;
 
               return (
                 <tr key={row.project.id} className="group/row">
@@ -257,6 +273,7 @@ export function TaskBoard({
                         >
                           <TaskCell
                             state={state}
+                            excluded={cell?.excludedFromProgress ?? false}
                             label={`${task.name} · ${row.project.name}`}
                             onClick={() => cycle(row.project.id, task.id, state)}
                           />
@@ -271,7 +288,11 @@ export function TaskBoard({
                               dueAt: cell?.dueAt ?? null,
                               adminNote: cell?.adminNote ?? null,
                               assigneeId: cell?.assigneeId ?? null,
+                              excludedFromProgress: cell?.excludedFromProgress ?? false,
                             }}
+                            onSaved={(details) =>
+                              applyPatch({ kind: "details", projectId: row.project.id, taskId: task.id, details })
+                            }
                             owners={owners}
                             defaultOwnerId={group.editable ? group.id : null}
                             todayKey={todayKey}
@@ -299,7 +320,7 @@ export function TaskBoard({
                   {!empty && (
                   <td className="border-b border-l border-ink/8 px-1.5 py-2.5 text-center">
                     <div className="flex items-center justify-center gap-1.5">
-                      <ProgressPill done={done} total={visibleIndices.length} tomorrow={tomorrow} />
+                      <ProgressPill done={done} total={counted.length} tomorrow={tomorrow} />
                       <button
                         type="button"
                         onClick={() => {
@@ -341,33 +362,50 @@ export function TaskBoard({
   );
 }
 
-function TaskCell({ state, label, onClick }: { state: TaskState; label: string; onClick: () => void }) {
+function TaskCell({
+  state,
+  label,
+  excluded,
+  onClick,
+}: {
+  state: TaskState;
+  label: string;
+  excluded: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${label} — ${STATE_LABEL[state]}. Click to change.`}
-      title={`${label}\n${STATE_LABEL[state]} — click to change`}
-      className="flex h-11 w-full items-center justify-center transition-colors hover:bg-ink/[0.05]"
+      aria-label={`${label} — ${STATE_LABEL[state]}${excluded ? ", not counted" : ""}. Click to change.`}
+      title={`${label}\n${STATE_LABEL[state]}${excluded ? " · not counted towards progress" : ""} — click to change`}
+      className={cn(
+        "flex h-11 w-full items-center justify-center transition-colors hover:bg-ink/[0.05]",
+        // Still tickable, just visibly out of the count.
+        excluded && "opacity-40"
+      )}
     >
       <span
         className={cn(
           "flex h-6 w-6 items-center justify-center rounded-md border transition-colors",
           state === "DONE" && "border-emerald-500/30 bg-emerald-500/15 text-emerald-700",
           state === "IN_PROGRESS" && "border-cyan/40 bg-cyan/15 text-cyan-strong",
+          // Waiting on the manager: it looks unlike anything they set themselves.
+          state === "SUBMITTED" && "border-purple/40 bg-purple/15 text-purple-strong",
           state === "TOMORROW" && "border-amber-500/30 bg-amber-500/15 text-amber-700",
           state === "TODO" && "border-ink/15 bg-white/70"
         )}
       >
         {state === "DONE" && <Check size={14} strokeWidth={3} />}
         {state === "IN_PROGRESS" && <Loader size={13} strokeWidth={2.5} />}
+        {state === "SUBMITTED" && <Camera size={13} strokeWidth={2.25} />}
         {state === "TOMORROW" && <CalendarClock size={13} strokeWidth={2.25} />}
       </span>
     </button>
   );
 }
 
-// Sits in the corner of a cell: a dot once the task is scheduled, and the
+// Sits in the corner of a cell: a calendar once the task has a date, and the
 // scheduling editor on click. The cell's main click still cycles the status,
 // so the board's existing rhythm is untouched.
 function CellSchedule({
@@ -380,6 +418,7 @@ function CellSchedule({
   defaultOwnerId,
   todayKey,
   tomorrowKey,
+  onSaved,
 }: {
   projectId: string;
   projectName: string;
@@ -390,6 +429,7 @@ function CellSchedule({
   defaultOwnerId: string | null;
   todayKey: string;
   tomorrowKey: string;
+  onSaved: (details: CellDetails) => void;
 }) {
   const [open, setOpen] = useState(false);
   const scheduled = Boolean(details.scheduledFor);
@@ -404,15 +444,16 @@ function CellSchedule({
         width={EDITOR_WIDTH}
         triggerLabel={`Schedule ${taskName} on ${projectName}`}
         triggerClassName={cn(
-          "flex h-4 w-4 items-center justify-center rounded text-ink/30 transition-opacity hover:bg-ink/10 hover:text-ink focus-visible:opacity-100",
-          scheduled ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"
+          "flex h-4 w-4 items-center justify-center rounded transition-opacity hover:bg-ink/10 focus-visible:opacity-100",
+          // A scheduled cell wears its date openly: the marker is what tells
+          // you the step has a day on it, so it stays visible and reads as a
+          // calendar rather than a stray dot.
+          scheduled
+            ? cn("opacity-100", urgent ? "text-pink" : "text-cyan-strong")
+            : "text-ink/30 opacity-0 hover:text-ink group-hover/cell:opacity-100"
         )}
         trigger={
-          scheduled ? (
-            <span className={cn("h-1.5 w-1.5 rounded-full", urgent ? "bg-pink" : "bg-cyan-strong")} aria-hidden />
-          ) : (
-            <CalendarPlus size={10} strokeWidth={2.25} />
-          )
+          scheduled ? <CalendarCheck size={11} strokeWidth={2.5} /> : <CalendarPlus size={10} strokeWidth={2.25} />
         }
       >
         <TaskScheduleEditor
@@ -426,6 +467,7 @@ function CellSchedule({
           todayKey={todayKey}
           tomorrowKey={tomorrowKey}
           onClose={() => setOpen(false)}
+          onSaved={onSaved}
         />
       </Popover>
     </span>
@@ -723,6 +765,8 @@ function PopoverField({
 
 const POPOVER_WIDTH = 224; // w-56
 const EDITOR_WIDTH = 272;
+// However cramped the window, a panel never shrinks below this — it scrolls.
+const MIN_PANEL_HEIGHT = 200;
 
 // A header cell is only ~96px wide, so its editor floats above the table. The
 // board scrolls sideways, and a horizontal overflow container clips vertically
@@ -759,9 +803,30 @@ function Popover({
       const panel = panelRef.current;
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!panel || !rect) return;
+
+      const margin = 8;
       const offset = align === "end" ? rect.width - width : align === "center" ? (rect.width - width) / 2 : 0;
-      panel.style.top = `${rect.bottom + 4}px`;
-      panel.style.left = `${Math.max(8, Math.min(rect.left + offset, window.innerWidth - width - 8))}px`;
+      panel.style.left = `${Math.max(margin, Math.min(rect.left + offset, window.innerWidth - width - margin))}px`;
+
+      // The scheduling editor is far taller than the cell that opens it, and
+      // the board sits low on the page — hung under its trigger it ran off the
+      // bottom of the window, taking the Save button with it. Measure first,
+      // then hang it wherever there is more room and cap it to that, so the
+      // whole form is always reachable and scrolls inside itself if it must.
+      panel.style.maxHeight = "none";
+      const height = panel.scrollHeight;
+      const below = window.innerHeight - rect.bottom - margin * 2;
+      const above = rect.top - margin * 2;
+
+      if (height <= below || below >= above) {
+        panel.style.top = `${rect.bottom + 4}px`;
+        panel.style.maxHeight = `${Math.max(below, MIN_PANEL_HEIGHT)}px`;
+      } else {
+        const capped = Math.min(height, above);
+        panel.style.top = `${Math.max(margin, rect.top - capped - 4)}px`;
+        panel.style.maxHeight = `${Math.max(above, MIN_PANEL_HEIGHT)}px`;
+      }
+
       panel.style.visibility = "visible";
     }
 
@@ -809,8 +874,12 @@ function Popover({
         createPortal(
           <div
             ref={panelRef}
+            role="dialog"
             style={{ width, visibility: "hidden" }}
-            className="glass-strong fixed z-50 rounded-xl p-3 text-left text-sm font-normal normal-case tracking-normal text-ink"
+            // Solid rather than glass: this is a form to fill in, and the board
+            // showing through it made the fields hard to read. z-50 keeps it
+            // above the sticky header and the first sticky column.
+            className="fixed z-50 overflow-y-auto overscroll-contain rounded-xl border border-ink/10 bg-white p-3 text-left text-sm font-normal normal-case tracking-normal text-ink shadow-[0_16px_40px_-14px_rgba(21,19,31,0.28)]"
           >
             <button
               type="button"
@@ -861,11 +930,13 @@ function Legend({ state }: { state: TaskState }) {
         className={cn(
           "flex h-4 w-4 items-center justify-center rounded border",
           state === "DONE" && "border-emerald-500/30 bg-emerald-500/15 text-emerald-700",
+          state === "SUBMITTED" && "border-purple/40 bg-purple/15 text-purple-strong",
           state === "TOMORROW" && "border-amber-500/30 bg-amber-500/15 text-amber-700",
           state === "TODO" && "border-ink/15 bg-white/70"
         )}
       >
         {state === "DONE" && <Check size={10} strokeWidth={3} />}
+        {state === "SUBMITTED" && <Camera size={9} strokeWidth={2.5} />}
         {state === "TOMORROW" && <CalendarClock size={9} strokeWidth={2.5} />}
       </span>
       {STATE_LABEL[state]}

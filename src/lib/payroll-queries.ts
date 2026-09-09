@@ -16,6 +16,8 @@ export type PayrollRow = {
   delayDays: number;
   breakdown: PayrollBreakdown;
   receiptCount: number;
+  /** Why money was taken off beyond lateness, in the employee's own words on the payslip. */
+  adjustments: { amount: number; reason: string }[];
 };
 
 export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]> {
@@ -45,22 +47,37 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
     _count: { _all: true },
   });
 
+  const adjustments = await prisma.salaryAdjustment.findMany({
+    where: { periodKey: period },
+    select: { employeeId: true, amount: true, reason: true },
+  });
+
+  const adjustmentBy = new Map<string, { amount: number; reason: string }[]>();
+  for (const row of adjustments) {
+    const list = adjustmentBy.get(row.employeeId) ?? [];
+    list.push({ amount: row.amount, reason: row.reason });
+    adjustmentBy.set(row.employeeId, list);
+  }
+
   const delayBy = new Map(attendance.map((row) => [row.employeeId, row]));
   const receiptBy = new Map(receipts.map((row) => [row.employeeId, row]));
 
   return employees.map((employee) => {
     const delay = delayBy.get(employee.id);
     const receipt = receiptBy.get(employee.id);
+    const adjusted = adjustmentBy.get(employee.id) ?? [];
 
     return {
       employee,
       delayDays: delay?._count._all ?? 0,
       receiptCount: receipt?._count._all ?? 0,
+      adjustments: adjusted,
       breakdown: computePayroll({
         salaryAmount: employee.salaryAmount,
         payBasis: employee.payBasis,
         delayHours: delay?._sum.delayHours ?? 0,
         receiptTotal: receipt?._sum.countedAmount ?? 0,
+        adjustmentTotal: adjusted.reduce((total, row) => total + row.amount, 0),
       }),
     };
   });

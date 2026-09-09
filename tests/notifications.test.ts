@@ -206,8 +206,12 @@ describe("timezone handling", () => {
 });
 
 describe("employee permissions", () => {
-  it("lets an employee set only the three execution statuses", () => {
-    assert.deepEqual(EMPLOYEE_SETTABLE_STATES, ["TODO", "IN_PROGRESS", "DONE"]);
+  it("lets an employee start work but never declare it finished", () => {
+    assert.deepEqual(EMPLOYEE_SETTABLE_STATES, ["TODO", "IN_PROGRESS"]);
+    // Completion is the manager approving a photo, so it is not a status
+    // anyone can tap their way into.
+    assert.equal(EMPLOYEE_SETTABLE_STATES.includes("DONE"), false);
+    assert.equal(EMPLOYEE_SETTABLE_STATES.includes("SUBMITTED"), false);
     // TOMORROW is an admin planning marker, not an employee status.
     assert.equal(EMPLOYEE_SETTABLE_STATES.includes("TOMORROW"), false);
   });

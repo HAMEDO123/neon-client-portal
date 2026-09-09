@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
-import { EMPLOYEE_SETTABLE_STATES } from "@/lib/task-board";
 import type { TaskState } from "@/generated/prisma/enums";
+import { notifyAdmin } from "@/lib/admin-notifications";
+import { EMPLOYEE_SETTABLE_STATES, EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 
 // Everything an employee is allowed to change, and nothing else.
 //
@@ -18,6 +19,9 @@ function refresh(entryId?: string) {
   revalidatePath("/employee");
   revalidatePath("/employee/tasks");
   if (entryId) revalidatePath(`/employee/tasks/${entryId}`);
+  // The manager's board is showing this same row: mark it stale too, so the
+  // next render there is the new state rather than a cached old one.
+  revalidatePath("/admin/tasks");
 }
 
 export async function setMyTaskStatus(entryId: string, state: TaskState) {
@@ -36,10 +40,23 @@ export async function setMyTaskStatus(entryId: string, state: TaskState) {
     where: { id: task.id },
     data: {
       state,
-      completedAt: state === "DONE" ? new Date() : null,
+      completedAt: null,
       startedAt: state === "IN_PROGRESS" ? (task.startedAt ?? new Date()) : task.startedAt,
     },
   });
+
+  // Nothing here is worth an alert if it did not actually change.
+  if (task.state !== state) {
+    await notifyAdmin({
+      type: "TASK_STATUS_CHANGED",
+      title: `${employee.name}: ${EMPLOYEE_STATE_LABEL[state]}`,
+      message: `${task.task.name} — ${task.project.name} moved from ${EMPLOYEE_STATE_LABEL[task.state]} to ${EMPLOYEE_STATE_LABEL[state]}.`,
+      url: "/admin/tasks",
+      dedupeKey: `TASK_STATUS:${task.id}:${state}:${Date.now()}`,
+      entryId: task.id,
+      employeeId: employee.id,
+    });
+  }
 
   refresh(entryId);
 }

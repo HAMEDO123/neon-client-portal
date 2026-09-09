@@ -50,6 +50,9 @@ export function dotTone(color: string) {
 export const NEXT_STATE: Record<TaskState, TaskState> = {
   TODO: "DONE",
   IN_PROGRESS: "DONE",
+  // A submitted task is the employee's claim that it is finished; the manager
+  // ticking the cell is them accepting it.
+  SUBMITTED: "DONE",
   DONE: "TOMORROW",
   TOMORROW: "TODO",
 };
@@ -57,6 +60,7 @@ export const NEXT_STATE: Record<TaskState, TaskState> = {
 export const STATE_LABEL: Record<TaskState, string> = {
   TODO: "To do",
   IN_PROGRESS: "In progress",
+  SUBMITTED: "Awaiting review",
   DONE: "Done",
   TOMORROW: "Tomorrow",
 };
@@ -67,12 +71,15 @@ export const STATE_LABEL: Record<TaskState, string> = {
 export const EMPLOYEE_STATE_LABEL: Record<TaskState, string> = {
   TODO: "Pending",
   IN_PROGRESS: "In progress",
+  SUBMITTED: "Sent for review",
   DONE: "Completed",
   TOMORROW: "Planned for tomorrow",
 };
 
-// The statuses an employee is allowed to set on their own task.
-export const EMPLOYEE_SETTABLE_STATES: TaskState[] = ["TODO", "IN_PROGRESS", "DONE"];
+// The statuses an employee can set with a tap. Completion is not among them:
+// finishing a task means sending evidence for review, which is a different
+// action with a photo attached.
+export const EMPLOYEE_SETTABLE_STATES: TaskState[] = ["TODO", "IN_PROGRESS"];
 
 export const PRIORITY_LABEL = {
   LOW: "Low",

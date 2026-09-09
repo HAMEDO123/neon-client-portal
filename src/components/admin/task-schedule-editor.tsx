@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, StickyNote, X } from "lucide-react";
+import { CalendarClock, EyeOff, StickyNote, X } from "lucide-react";
 import { updateTaskEntryDetails } from "@/lib/actions/task-detail-actions";
 import { PRIORITY_LABEL } from "@/lib/task-board";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ export type CellDetails = {
   dueAt: string | null;
   adminNote: string | null;
   assigneeId: string | null;
+  excludedFromProgress: boolean;
 };
 
 export function TaskScheduleEditor({
@@ -29,6 +30,7 @@ export function TaskScheduleEditor({
   todayKey,
   tomorrowKey,
   onClose,
+  onSaved,
 }: {
   projectId: string;
   projectName: string;
@@ -40,8 +42,11 @@ export function TaskScheduleEditor({
   todayKey: string;
   tomorrowKey: string;
   onClose: () => void;
+  /** Lets the board show the change straight away, before the server answers. */
+  onSaved?: (details: CellDetails) => void;
 }) {
   const [scheduled, setScheduled] = useState(details.scheduledFor ?? "");
+  const [excluded, setExcluded] = useState(details.excludedFromProgress);
   const [pending, setPending] = useState(false);
 
   // The stored deadline is an instant; the input wants local wall-clock time.
@@ -53,6 +58,19 @@ export function TaskScheduleEditor({
     <form
       action={async (formData) => {
         setPending(true);
+
+        // Paint the cell before the round trip: the marker appears the moment
+        // Save is pressed rather than after the board has been re-fetched.
+        const dueTime = String(formData.get("dueTime") ?? "").trim();
+        onSaved?.({
+          priority: (formData.get("priority") as CellDetails["priority"]) ?? "MEDIUM",
+          scheduledFor: scheduled || null,
+          dueAt: scheduled && dueTime ? `${scheduled}T${dueTime}` : null,
+          adminNote: String(formData.get("adminNote") ?? "").trim() || null,
+          assigneeId: String(formData.get("assigneeId") ?? "") || null,
+          excludedFromProgress: formData.get("excludedFromProgress") === "on",
+        });
+
         try {
           await updateTaskEntryDetails(projectId, taskId, formData);
           onClose();
@@ -161,6 +179,25 @@ export function TaskScheduleEditor({
           placeholder="Anything they need to know…"
           className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
         />
+      </label>
+
+      <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-ink/10 bg-white/60 px-2 py-1.5">
+        <input
+          type="checkbox"
+          name="excludedFromProgress"
+          checked={excluded}
+          onChange={(e) => setExcluded(e.target.checked)}
+          className="mt-0.5 h-3.5 w-3.5 accent-ink"
+        />
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink/45">
+            <EyeOff size={11} strokeWidth={2} />
+            Not counted
+          </span>
+          <span className="mt-0.5 block text-[10px] leading-tight text-ink/40">
+            Leaves this step out of the employee&apos;s progress percentage. It stays on the board.
+          </span>
+        </span>
       </label>
 
       <button

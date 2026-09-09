@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Building2, CalendarDays, Clock, FileText, Flag } from "lucide-react";
+import { ArrowLeft, Building2, CalendarDays, Camera, Clock, FileText, Flag } from "lucide-react";
 import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
 import { saveMyTaskNote } from "@/lib/actions/employee-actions";
@@ -8,6 +8,8 @@ import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { EMPLOYEE_STATE_LABEL, PRIORITY_LABEL } from "@/lib/task-board";
 import { StatusControl } from "@/components/employee/status-control";
+import { CompletionForm } from "@/components/employee/completion-form";
+import { submissionsForEntry } from "@/lib/submissions";
 import { SaveButton } from "@/components/admin/form-buttons";
 
 export default async function EmployeeTaskDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +21,7 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
   if (!task) notFound();
 
   const timezone = await getTimezone();
+  const submissions = await submissionsForEntry(task.id);
   const due = formatTimeIn(timezone, task.dueAt);
   const dueDay = formatDayIn(timezone, task.dueAt);
   const scheduled = formatDayIn(timezone, task.scheduledFor);
@@ -59,6 +62,48 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
           <StatusControl entryId={task.id} state={task.state} />
         </div>
       </section>
+
+      <CompletionForm entryId={task.id} state={task.state} />
+
+      {submissions.length > 0 && (
+        <section className="glass rounded-2xl p-4">
+          <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
+            <Camera size={13} strokeWidth={2} />
+            What you sent
+          </h2>
+          <ul className="mt-3 flex flex-col gap-3">
+            {submissions.map((submission) => (
+              <li key={submission.id} className="flex gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={submission.imageUrl}
+                  alt=""
+                  className="h-16 w-16 shrink-0 rounded-lg border border-ink/10 object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <span
+                    className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      submission.status === "APPROVED"
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700"
+                        : submission.status === "REJECTED"
+                          ? "border-pink/20 bg-pink/10 text-pink-strong"
+                          : "border-purple/20 bg-purple/10 text-purple-strong"
+                    }`}
+                  >
+                    {submission.status === "PENDING" ? "Waiting for review" : submission.status.toLowerCase()}
+                  </span>
+                  <p className="mt-1 text-[11px] text-ink/40">
+                    {formatDayIn(timezone, submission.createdAt)} · {formatTimeIn(timezone, submission.createdAt)}
+                  </p>
+                  {submission.reviewNote && (
+                    <p className="mt-1 text-sm text-ink/70">{submission.reviewNote}</p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {task.adminNote && (
         <section className="glass rounded-2xl p-4">

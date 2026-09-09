@@ -54,6 +54,7 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
   const priorityRaw = String(formData.get("priority") ?? "MEDIUM");
   const priority = PRIORITIES.includes(priorityRaw as TaskPriority) ? (priorityRaw as TaskPriority) : "MEDIUM";
   const adminNote = String(formData.get("adminNote") ?? "").trim().slice(0, 2000) || null;
+  const excludedFromProgress = formData.get("excludedFromProgress") === "on";
 
   const scheduledFor = scheduledKey ? dayKeyToDate(scheduledKey) : null;
   const dueAt = scheduledKey && dueTime ? toInstant(scheduledKey, dueTime, timezone) : null;
@@ -67,8 +68,8 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
 
   const entry = await prisma.projectTaskEntry.upsert({
     where: { projectId_taskId: { projectId, taskId } },
-    create: { projectId, taskId, assigneeId, scheduledFor, dueAt, priority, adminNote },
-    update: { assigneeId, scheduledFor, dueAt, priority, adminNote },
+    create: { projectId, taskId, assigneeId, scheduledFor, dueAt, priority, adminNote, excludedFromProgress },
+    update: { assigneeId, scheduledFor, dueAt, priority, adminNote, excludedFromProgress },
     include: detailInclude,
   });
 
@@ -83,6 +84,7 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
   }
 
   revalidatePath("/admin/tasks");
+  revalidatePath("/admin/analytics");
   revalidatePath("/employee", "layout");
 }
 
