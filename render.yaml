@@ -46,8 +46,19 @@ services:
       # both degrade gracefully and everything else is unaffected.
       - key: ANTHROPIC_API_KEY
         sync: false
-      # WhatsApp goes out through the whatsapp-web.js worker the Nixora app
-      # already runs; this deployment only needs to reach it.
+      # WhatsApp, from the nexora-whatsapp library. Either transport works;
+      # the official Cloud API is preferred when both are set because it is
+      # the one that cannot get the number banned.
+      - key: WHATSAPP_CLOUD_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_CLOUD_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_CLOUD_BUSINESS_ACCOUNT_ID
+        sync: false
+      - key: WHATSAPP_CLOUD_APP_SECRET
+        sync: false
+      # Or the whatsapp-web.js session the Nixora worker already holds; this
+      # deployment only needs to reach it.
       - key: WHATSAPP_WORKER_URL
         sync: false
       - key: WHATSAPP_WORKER_KEY

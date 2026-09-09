@@ -7,7 +7,7 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { setSetting, TIMEZONE_SETTING_KEY } from "@/lib/settings";
 import { resolveTimezone } from "@/lib/time";
-import { checkWhatsAppNumber, sendWhatsAppText } from "@/lib/whatsapp/worker";
+import { sendWhatsApp, sendWhatsAppFile } from "@/lib/whatsapp";
 
 // Sending through the shared WhatsApp worker, plus the platform settings that
 // live beside it. Admin only — these send real messages to real clients.
@@ -50,7 +50,7 @@ export async function sendProjectWhatsApp(
       ? `Hi ${project.clientName}, your project from NEON is ready. You can review the designs, drawings, quantities and more here: ${link}`
       : `Hi ${project.clientName}, there's an update on your NEON project. View the latest here: ${link}`);
 
-  const result = await sendWhatsAppText(phone, text);
+  const result = await sendWhatsApp(phone, text);
 
   if (!result.ok) return { ok: false, message: result.error };
 
@@ -71,12 +71,7 @@ export async function sendTestWhatsApp(formData: FormData): Promise<SendOutcome>
 
   if (!phone) return { ok: false, message: "Enter a number to send to." };
 
-  const reachable = await checkWhatsAppNumber(phone);
-  if (reachable.ok && !reachable.data.reachable) {
-    return { ok: false, message: `${phone} is not reachable on WhatsApp.` };
-  }
-
-  const result = await sendWhatsAppText(phone, text);
+  const result = await sendWhatsApp(phone, text);
   return result.ok ? { ok: true, message: `Sent to ${phone}.` } : { ok: false, message: result.error };
 }
 
@@ -92,4 +87,33 @@ export async function saveTimezone(formData: FormData) {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/tasks");
   revalidatePath("/employee", "layout");
+}
+
+/** Sends a project's gallery PDF straight to the client on WhatsApp. */
+export async function sendGalleryPdfWhatsApp(projectId: string): Promise<SendOutcome> {
+  await requireAdmin();
+
+  const project = await prisma.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { name: true, token: true, clientName: true, clientPhone: true, allowDownloads: true, publishState: true },
+  });
+
+  if (!project.clientPhone) return { ok: false, message: "This project has no client phone number." };
+  if (project.publishState !== "PUBLISHED" || !project.allowDownloads) {
+    return { ok: false, message: "Publish the project and allow downloads first." };
+  }
+
+  const baseUrl = process.env.PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  if (!baseUrl) return { ok: false, message: "PUBLIC_APP_URL is not set, so the file has no address to fetch from." };
+
+  const result = await sendWhatsAppFile(project.clientPhone, {
+    url: `${baseUrl}/p/${project.token}/gallery.pdf`,
+    mimeType: "application/pdf",
+    filename: `${project.name} - Gallery.pdf`,
+  });
+
+  if (!result.ok) return { ok: false, message: result.error };
+
+  await logActivity(projectId, "sent_update", "Gallery PDF sent on WhatsApp");
+  return { ok: true, message: `Gallery sent to ${project.clientPhone}.` };
 }

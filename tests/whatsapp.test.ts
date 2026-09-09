@@ -167,3 +167,68 @@ describe("worker client", () => {
     process.env.WHATSAPP_WORKER_KEY = WORKER_KEY;
   });
 });
+
+describe("transport selection", () => {
+  const saved = { ...process.env };
+
+  function reset() {
+    delete process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID;
+    delete process.env.WHATSAPP_CLOUD_ACCESS_TOKEN;
+    delete process.env.WHATSAPP_WORKER_URL;
+    delete process.env.WHATSAPP_WORKER_KEY;
+  }
+
+  after(() => {
+    Object.assign(process.env, saved);
+  });
+
+  it("reports no transport when nothing is set", async () => {
+    reset();
+    const { activeTransport, isWhatsAppAvailable } = await import("@/lib/whatsapp");
+    assert.equal(activeTransport(), "none");
+    assert.equal(isWhatsAppAvailable(), false);
+  });
+
+  it("uses the session worker when only it is set", async () => {
+    reset();
+    process.env.WHATSAPP_WORKER_URL = `http://127.0.0.1:${port}`;
+    process.env.WHATSAPP_WORKER_KEY = WORKER_KEY;
+
+    const { activeTransport } = await import("@/lib/whatsapp");
+    assert.equal(activeTransport(), "worker");
+  });
+
+  it("prefers the Cloud API when both are set", async () => {
+    reset();
+    process.env.WHATSAPP_WORKER_URL = `http://127.0.0.1:${port}`;
+    process.env.WHATSAPP_WORKER_KEY = WORKER_KEY;
+    process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID = "123456";
+    process.env.WHATSAPP_CLOUD_ACCESS_TOKEN = "token";
+
+    // The official API is the one that cannot get the number banned, which is
+    // the whole reason the library ships it — so it wins.
+    const { activeTransport } = await import("@/lib/whatsapp");
+    assert.equal(activeTransport(), "cloud");
+  });
+
+  it("refuses an unusable number before choosing a transport", async () => {
+    reset();
+    process.env.WHATSAPP_WORKER_URL = `http://127.0.0.1:${port}`;
+    process.env.WHATSAPP_WORKER_KEY = WORKER_KEY;
+
+    const { sendWhatsApp } = await import("@/lib/whatsapp");
+    seen.length = 0;
+
+    const result = await sendWhatsApp("12", "Hello");
+    assert.equal(result.ok, false);
+    assert.equal(seen.length, 0);
+  });
+
+  it("says so plainly when nothing is configured", async () => {
+    reset();
+    const { sendWhatsApp } = await import("@/lib/whatsapp");
+    const result = await sendWhatsApp("962791234567", "Hello");
+    assert.equal(result.ok, false);
+    assert.match(result.ok === false ? result.error : "", /not configured/i);
+  });
+});

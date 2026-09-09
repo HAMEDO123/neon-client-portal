@@ -3,7 +3,8 @@ import { saveTimezone } from "@/lib/actions/whatsapp-actions";
 import { getTimezone } from "@/lib/settings";
 import { isAiConfigured } from "@/lib/ai/client";
 import { isPushConfigured } from "@/lib/notifications/push";
-import { getWhatsAppConfig, whatsAppHealth, whatsAppLineStatus } from "@/lib/whatsapp/worker";
+import { activeTransport, checkWhatsAppConnection, getCloudCredentials } from "@/lib/whatsapp";
+import { getWhatsAppConfig as getWorkerConfig } from "@/lib/whatsapp/worker";
 import { WhatsAppTest } from "@/components/admin/whatsapp-test";
 import { SaveButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
@@ -23,12 +24,13 @@ const TIMEZONES = [
 
 export default async function AdminSettingsPage() {
   const timezone = await getTimezone();
-  const whatsapp = getWhatsAppConfig();
+  const transport = activeTransport();
+  const cloud = getCloudCredentials();
+  const worker = getWorkerConfig();
 
-  // Only reach out when it is configured — otherwise the page waits on a
-  // request that was never going to arrive.
-  const health = whatsapp ? await whatsAppHealth() : null;
-  const line = whatsapp && health?.ok ? await whatsAppLineStatus() : null;
+  // Only reach out when something is configured — otherwise the page waits on
+  // a request that was never going to arrive.
+  const connection = transport === "none" ? null : await checkWhatsAppConnection();
 
   return (
     <div className="flex flex-col gap-8">
@@ -44,45 +46,69 @@ export default async function AdminSettingsPage() {
             <MessageCircle size={16} strokeWidth={2} />
             WhatsApp
           </h2>
-          {whatsapp ? (
-            health?.ok ? (
-              <Badge tone="success">Connected</Badge>
-            ) : (
-              <Badge tone="warning">Unreachable</Badge>
-            )
-          ) : (
+          {transport === "none" ? (
             <Badge tone="neutral">Not configured</Badge>
+          ) : connection?.ok ? (
+            <Badge tone="success">{transport === "cloud" ? "Cloud API" : "Session worker"}</Badge>
+          ) : (
+            <Badge tone="warning">Unreachable</Badge>
           )}
         </div>
 
-        {whatsapp ? (
+        {transport !== "none" ? (
           <>
             <dl className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-              <Row label="Worker" value={whatsapp.baseUrl} />
-              <Row label="Line" value={whatsapp.line === "main" ? "Company line (main)" : whatsapp.line} />
-              {health?.ok && <Row label="Company" value={health.data.companyId} />}
-              {health && !health.ok && <Row label="Error" value={health.error} tone="text-red-600" />}
-              {line && !line.ok && <Row label="Line status" value={line.error} tone="text-amber-700" />}
-              {line?.ok && <Row label="Line status" value={describeLine(line.data)} />}
+              <Row
+                label="Transport"
+                value={
+                  transport === "cloud"
+                    ? "Meta Cloud API — official, cannot get the number banned"
+                    : "whatsapp-web.js session (the Nixora worker)"
+                }
+              />
+              {cloud && <Row label="Phone number ID" value={cloud.phoneNumberId} />}
+              {worker && transport === "worker" && <Row label="Worker" value={worker.baseUrl} />}
+              {connection?.number && (
+                <Row label={transport === "cloud" ? "Sends from" : "Line"} value={connection.number} />
+              )}
+              <Row
+                label="Status"
+                value={connection?.detail ?? "Unknown"}
+                tone={connection?.ok ? undefined : "text-red-600"}
+              />
             </dl>
 
-            <WhatsAppTest disabled={!health?.ok} />
+            <WhatsAppTest disabled={!connection?.ok} />
           </>
         ) : (
           <div className="mt-3 text-sm text-ink/60">
             <p>
-              This portal sends through the same whatsapp-web.js worker the Nixora app already runs — it holds the
-              linked session, so nothing needs to be linked again here.
+              Two ways to send, from the same nexora-whatsapp library. Set either one.
             </p>
-            <p className="mt-3 text-xs text-ink/45">Set these on the server and the panel above goes live:</p>
+
+            <p className="mt-4 text-xs font-medium uppercase tracking-wider text-ink/40">
+              Official Cloud API — recommended
+            </p>
             <pre className="mt-2 overflow-x-auto rounded-lg bg-ink/[0.04] p-3 text-xs text-ink/70">
-{`WHATSAPP_WORKER_URL   the worker's URL, e.g. https://wa.example.com
+{`WHATSAPP_CLOUD_PHONE_NUMBER_ID   from Meta Business
+WHATSAPP_CLOUD_ACCESS_TOKEN      a permanent token
+WHATSAPP_CLOUD_APP_SECRET        optional, for inbound webhooks`}
+            </pre>
+            <p className="mt-1.5 text-xs text-ink/45">
+              Runs here with nothing else to host, and the number cannot be banned for automation.
+            </p>
+
+            <p className="mt-4 text-xs font-medium uppercase tracking-wider text-ink/40">
+              Or the existing session worker
+            </p>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-ink/[0.04] p-3 text-xs text-ink/70">
+{`WHATSAPP_WORKER_URL   the Nixora worker's URL
 WHATSAPP_WORKER_KEY   its WORKER_API_KEY
 WHATSAPP_LINE_ID      "main" for the company line (default)`}
             </pre>
-            <p className="mt-2 text-xs text-ink/45">
-              The worker must be reachable from this deployment — on the same network, or exposed through the
-              tunnel it already uses.
+            <p className="mt-1.5 text-xs text-ink/45">
+              The worker holds the linked WhatsApp Web session, so nothing is linked again here — but it must be
+              reachable from this deployment.
             </p>
           </div>
         )}
@@ -140,15 +166,6 @@ WHATSAPP_LINE_ID      "main" for the company line (default)`}
       </section>
     </div>
   );
-}
-
-function describeLine(status: unknown) {
-  if (status && typeof status === "object") {
-    const record = status as Record<string, unknown>;
-    const state = record.state ?? record.status ?? record.connection;
-    if (typeof state === "string") return state;
-  }
-  return "Linked";
 }
 
 function Row({ label, value, tone }: { label: string; value: string; tone?: string }) {
