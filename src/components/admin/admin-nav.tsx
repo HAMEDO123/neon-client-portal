@@ -10,6 +10,7 @@ import {
   MessagesSquare,
   ShoppingBag,
   Wallet,
+  Settings,
   Plus,
   LogOut,
 } from "lucide-react";
@@ -24,6 +25,7 @@ export function AdminNav() {
   const isChat = pathname.startsWith("/admin/chat");
   const isRequests = pathname.startsWith("/admin/requests");
   const isPayroll = pathname.startsWith("/admin/payroll");
+  const isSettings = pathname.startsWith("/admin/settings");
 
   return (
     <nav className="flex h-full flex-col gap-1 p-4">
@@ -108,6 +110,16 @@ export function AdminNav() {
       </Link>
 
       <div className="mt-auto flex flex-col gap-1 pt-4">
+        <Link
+          href="/admin/settings"
+          className={cn(
+            "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            isSettings ? "bg-ink text-bg" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
+          )}
+        >
+          <Settings size={16} strokeWidth={1.75} />
+          Settings
+        </Link>
         <form action={logout}>
           <button
             type="submit"

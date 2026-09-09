@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { Check, Copy, ExternalLink, RefreshCw, Send, BellRing } from "lucide-react";
 import { regenerateProjectLink, logClientNotification } from "@/lib/actions/project-actions";
+import { sendProjectWhatsApp } from "@/lib/actions/whatsapp-actions";
 import { buttonClasses } from "@/components/ui/buttons";
 import { cn } from "@/lib/utils";
 
@@ -11,11 +12,16 @@ export function LinkActions({
   token,
   clientName,
   clientPhone,
+  // True when the WhatsApp worker is wired up on this deployment. With it,
+  // the buttons send the message themselves; without it they keep opening
+  // WhatsApp with the text prepared, exactly as before.
+  canSendDirect = false,
 }: {
   projectId: string;
   token: string;
   clientName: string;
   clientPhone?: string | null;
+  canSendDirect?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -35,8 +41,20 @@ export function LinkActions({
   const sendMessage = `Hi ${clientName}, your project from NEON is ready. You can review the designs, drawings, quantities, and more here: ${url}`;
   const updateMessage = `Hi ${clientName}, there's an update on your NEON project. View the latest here: ${url}`;
 
+  const [sendResult, setSendResult] = useState<string | null>(null);
+
   function notify(type: "sent_to_client" | "sent_update") {
     logClientNotification(projectId, type).catch(() => {});
+  }
+
+  // Sending through the worker logs the same activity the manual path does,
+  // so the client timeline reads the same either way.
+  function sendDirect(kind: "sent_to_client" | "sent_update") {
+    setSendResult(null);
+    startTransition(async () => {
+      const result = await sendProjectWhatsApp(projectId, kind);
+      setSendResult(result.message);
+    });
   }
 
   return (
@@ -61,26 +79,51 @@ export function LinkActions({
         <ExternalLink size={14} />
         Preview
       </a>
-      <a
-        href={`https://wa.me/${waNumber}?text=${encodeURIComponent(sendMessage)}`}
-        target="_blank"
-        rel="noreferrer"
-        onClick={() => notify("sent_to_client")}
-        className={cn(buttonClasses("outline", "sm"), "border-emerald-200 text-emerald-700 hover:bg-emerald-50")}
-      >
-        <Send size={14} />
-        Send to Client
-      </a>
-      <a
-        href={`https://wa.me/${waNumber}?text=${encodeURIComponent(updateMessage)}`}
-        target="_blank"
-        rel="noreferrer"
-        onClick={() => notify("sent_update")}
-        className={cn(buttonClasses("outline", "sm"), "border-cyan-200 text-cyan-700 hover:bg-cyan-50")}
-      >
-        <BellRing size={14} />
-        Send Update
-      </a>
+      {canSendDirect && clientPhone ? (
+        <>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => sendDirect("sent_to_client")}
+            className={cn(buttonClasses("outline", "sm"), "border-emerald-200 text-emerald-700 hover:bg-emerald-50")}
+          >
+            <Send size={14} />
+            Send to Client
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => sendDirect("sent_update")}
+            className={cn(buttonClasses("outline", "sm"), "border-cyan-200 text-cyan-700 hover:bg-cyan-50")}
+          >
+            <BellRing size={14} />
+            Send Update
+          </button>
+        </>
+      ) : (
+        <>
+          <a
+            href={`https://wa.me/${waNumber}?text=${encodeURIComponent(sendMessage)}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => notify("sent_to_client")}
+            className={cn(buttonClasses("outline", "sm"), "border-emerald-200 text-emerald-700 hover:bg-emerald-50")}
+          >
+            <Send size={14} />
+            Send to Client
+          </a>
+          <a
+            href={`https://wa.me/${waNumber}?text=${encodeURIComponent(updateMessage)}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => notify("sent_update")}
+            className={cn(buttonClasses("outline", "sm"), "border-cyan-200 text-cyan-700 hover:bg-cyan-50")}
+          >
+            <BellRing size={14} />
+            Send Update
+          </a>
+        </>
+      )}
       <button
         type="button"
         disabled={pending}
@@ -93,6 +136,8 @@ export function LinkActions({
         <RefreshCw size={14} className={pending ? "animate-spin" : ""} />
         Regenerate
       </button>
+
+      {sendResult && <p className="w-full text-xs text-ink/60">{sendResult}</p>}
     </div>
   );
 }

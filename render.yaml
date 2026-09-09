@@ -42,3 +42,18 @@ services:
       # CRON_SECRET GitHub Actions secret.
       - key: CRON_SECRET
         generateValue: true
+      # Claude — the manager's chat assistant and receipt reading. Without it
+      # both degrade gracefully and everything else is unaffected.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # WhatsApp goes out through the whatsapp-web.js worker the Nixora app
+      # already runs; this deployment only needs to reach it.
+      - key: WHATSAPP_WORKER_URL
+        sync: false
+      - key: WHATSAPP_WORKER_KEY
+        sync: false
+      - key: WHATSAPP_LINE_ID
+        value: main
+      # Used to build the client link inside outgoing WhatsApp messages.
+      - key: PUBLIC_APP_URL
+        sync: false
