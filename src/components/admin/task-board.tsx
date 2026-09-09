@@ -121,12 +121,12 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
           pending && "opacity-95"
         )}
       >
-        <table className="w-full border-separate border-spacing-0 text-left text-sm">
+        <table className="w-full min-w-[46rem] table-fixed border-separate border-spacing-0 text-left text-sm">
           <thead>
             <tr>
               <th
                 rowSpan={2}
-                className="sticky left-0 z-20 min-w-[13.5rem] border-b border-ink/8 bg-bg-soft px-4 py-3 text-xs font-medium uppercase tracking-wider text-ink/40"
+                className="sticky left-0 z-20 w-[10rem] border-b border-ink/8 bg-bg-soft px-3 py-3 text-xs font-medium uppercase tracking-wider text-ink/40 sm:w-[11.5rem] sm:px-4"
               >
                 Project
               </th>
@@ -153,7 +153,7 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
                   rowSpan={2}
                   className={cn(
                     "border-b border-l border-ink/8 bg-bg-soft p-0 align-middle",
-                    empty ? "w-full" : "w-10"
+                    empty ? "w-full" : "w-8"
                   )}
                 >
                   <InlineAdd
@@ -168,7 +168,7 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
               {!empty && (
                 <th
                   rowSpan={2}
-                  className="border-b border-l border-ink/8 bg-bg-soft px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-ink/40"
+                  className="w-[5.5rem] border-b border-l border-ink/8 bg-bg-soft px-2 py-3 text-center text-xs font-medium uppercase tracking-wider text-ink/40"
                 >
                   Progress
                 </th>
@@ -181,7 +181,7 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
                   <th
                     key={task.id}
                     className={cn(
-                      "relative w-24 min-w-24 border-b border-ink/8 p-0 align-bottom",
+                      "relative min-w-[3.25rem] border-b border-ink/8 p-0 align-bottom",
                       i === 0 && "border-l border-ink/8",
                       group.editable && columnTone(group.color)
                     )}
@@ -194,7 +194,7 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
                       <th
                         key={`${group.id}-add`}
                         className={cn(
-                          "w-10 border-b border-ink/8 p-0 align-bottom",
+                          "w-8 border-b border-ink/8 p-0 align-bottom",
                           tasks.length === 0 && "border-l border-ink/8",
                           columnTone(group.color)
                         )}
@@ -221,7 +221,7 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
                 <tr key={row.project.id} className="group/row">
                   <th
                     scope="row"
-                    className="sticky left-0 z-10 border-b border-ink/6 bg-white px-4 py-2.5 text-left font-normal group-hover/row:bg-bg-soft/80"
+                    className="sticky left-0 z-10 border-b border-ink/6 bg-white px-3 py-2.5 text-left font-normal group-hover/row:bg-bg-soft/80 sm:px-4"
                   >
                     <Link href={`/admin/projects/${row.project.id}`} className="block min-w-0">
                       <span className="block truncate text-sm font-medium text-ink">{row.project.name}</span>
@@ -266,7 +266,7 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
                   {!employeeFilter && <td className="border-b border-l border-ink/8 bg-bg-soft/40" />}
 
                   {!empty && (
-                  <td className="border-b border-l border-ink/8 px-3 py-2.5 text-center">
+                  <td className="border-b border-l border-ink/8 px-1.5 py-2.5 text-center">
                     <div className="flex items-center justify-center gap-1.5">
                       <ProgressPill done={done} total={visibleIndices.length} tomorrow={tomorrow} />
                       <button
@@ -337,10 +337,13 @@ function TaskCell({ state, label, onClick }: { state: TaskState; label: string; 
 function ProgressPill({ done, total, tomorrow }: { done: number; total: number; tomorrow: number }) {
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
   return (
-    <span className="inline-flex flex-col items-center gap-1">
-      <span className="text-xs font-medium text-ink/70">
-        {done}/{total}
-      </span>
+    <span
+      className="inline-flex flex-col items-center gap-1"
+      // The raw count still matters when you are deciding what to pick up, so
+      // it stays one hover away rather than taking room in the column.
+      title={`${done} of ${total} steps done`}
+    >
+      <span className="text-xs font-semibold text-ink/70">{percent}%</span>
       <span className="block h-1.5 w-14 overflow-hidden rounded-full bg-ink/8">
         <span className="block h-full rounded-full bg-emerald-500/70 transition-all" style={{ width: `${percent}%` }} />
       </span>
@@ -368,8 +371,10 @@ function EmployeeHeader({ group, run }: { group: TaskBoardGroup; run: (action: (
       }}
       trigger={
         <span className="block w-full px-1">
-          <span className="block truncate text-[13px] font-semibold">{group.name}</span>
-          {group.role && <span className="block truncate text-[11px] font-normal opacity-70">{group.role}</span>}
+          <span className="block break-words text-center text-[13px] font-semibold">{group.name}</span>
+          {group.role && (
+            <span className="block truncate text-center text-[11px] font-normal opacity-70">{group.role}</span>
+          )}
         </span>
       }
       triggerLabel={`Edit ${group.name}`}
@@ -423,6 +428,9 @@ function EmployeeHeader({ group, run }: { group: TaskBoardGroup; run: (action: (
   );
 }
 
+// Hyphenate first, break as a last resort: a long step name should read as
+// "Require-ments", but it must never overflow into the neighbouring column,
+// which is what happens if nothing can break it at all.
 function TaskHeader({
   task,
   ownerId,
@@ -449,7 +457,9 @@ function TaskHeader({
         }
       }}
       trigger={
-        <span className="line-clamp-2 px-2 py-2 text-[11px] font-medium leading-tight text-ink/60">{task.name}</span>
+        <span className="block hyphens-auto break-words px-0.5 py-2 text-center text-[10px] font-medium leading-[1.25] tracking-tight text-ink/60">
+          {task.name}
+        </span>
       }
       triggerLabel={`Edit ${task.name}`}
       align="center"

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { cn } from "@/lib/utils";
 
 // The sidebar layout only works at desktop widths — on a phone (the iOS
 // sideload wrapper, or just Safari) a fixed 256px sidebar eats most of the
@@ -10,6 +12,11 @@ import { AdminNav } from "@/components/admin/admin-nav";
 // + slide-in drawer instead.
 export function AdminShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Forms and lists read better in a narrow column, but the task board is a
+  // matrix — it gets the whole window so it fits without sideways scrolling.
+  const wide = pathname.startsWith("/admin/tasks");
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -34,7 +41,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </div>
 
         <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-10">
-          <div className="mx-auto max-w-5xl">{children}</div>
+          <div className={cn("mx-auto", wide ? "max-w-none" : "max-w-5xl")}>{children}</div>
         </main>
       </div>
 
