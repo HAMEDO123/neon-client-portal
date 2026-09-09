@@ -157,6 +157,26 @@ h1, h2, h3, h4 {
   padding-inline: clamp(1.25rem, 5vw, 5rem);
 }
 
+/* The employee portal's chrome, as numbers the layout can do sums with.
+   --keyboard-inset is written by KeyboardInset from the visual viewport;
+   the tab bar takes no height while the keyboard is open, because it is
+   hidden then. */
+:root {
+  --keyboard-inset: 0px;
+  --employee-header: calc(3.25rem + env(safe-area-inset-top));
+  --employee-nav: calc(3.5rem + env(safe-area-inset-bottom));
+}
+
+body[data-keyboard="open"] {
+  --employee-nav: 0px;
+}
+
+/* Typing is a full-screen activity: the tab bar would otherwise sit on top
+   of the keyboard, which is what pushed the whole page up. */
+body[data-keyboard="open"] .employee-tabbar {
+  display: none;
+}
+
 /* Scoped scrollbar hide for horizontal chip/tab rails. */
 .scrollbar-none {
   scrollbar-width: none;

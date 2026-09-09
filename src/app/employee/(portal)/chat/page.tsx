@@ -21,9 +21,18 @@ export default async function EmployeeChatPage() {
   await recordChatRead(viewer);
 
   return (
-    // Fills the space between the app header and the tab bar, so the composer
-    // sits just above the thumb rather than below the fold.
-    <div className="-mx-4 -mt-5 flex h-[calc(100dvh-9.5rem)] flex-col overflow-hidden">
+    // Pinned rather than laid out in the page: the screen itself must not
+    // scroll, or the keyboard opening drags the whole conversation upward and
+    // leaves the tab bar floating. Only the message list inside moves. The
+    // bottom sits above the tab bar, or above the keyboard when it is open —
+    // both are variables the layout keeps up to date.
+    <div
+      className="fixed inset-x-0 z-20 flex flex-col overflow-hidden"
+      style={{
+        top: "var(--employee-header)",
+        bottom: "calc(var(--employee-nav) + var(--keyboard-inset))",
+      }}
+    >
       <ChatRoom
         initialMessages={messages}
         viewerType="EMPLOYEE"

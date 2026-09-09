@@ -5,6 +5,7 @@ import { Bell } from "lucide-react";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { getEmployeeBadges } from "@/lib/employee-badges";
 import { EmployeeNav } from "@/components/employee/employee-nav";
+import { KeyboardInset } from "@/components/employee/keyboard-inset";
 
 // Server-side gate for the whole portal. Anything under this layout has an
 // authenticated, enabled employee behind it — and every action it can reach
@@ -47,6 +48,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-32 pt-5">{children}</main>
 
       <EmployeeNav unreadChat={unreadChat} />
+      <KeyboardInset />
     </div>
   );
 }

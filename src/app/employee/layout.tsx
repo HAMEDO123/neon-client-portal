@@ -25,6 +25,10 @@ export const viewport: Viewport = {
   // should not zoom the page.
   maximumScale: 1,
   viewportFit: "cover",
+  // Browsers that support it shrink the page when the keyboard opens,
+  // which is what keeps a fixed composer sitting on top of it. iOS does
+  // not yet, which is what KeyboardInset is for.
+  interactiveWidget: "resizes-content",
 };
 
 export default function EmployeeLayout({ children }: { children: ReactNode }) {

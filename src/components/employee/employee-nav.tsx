@@ -20,7 +20,7 @@ export function EmployeeNav({ unreadChat = 0 }: { unreadChat?: number }) {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/8 bg-bg/95 backdrop-blur-lg">
+    <nav className="employee-tabbar fixed inset-x-0 bottom-0 z-30 border-t border-ink/8 bg-bg/95 backdrop-blur-lg">
       <div className="mx-auto flex w-full max-w-2xl items-stretch justify-around px-2 pb-[env(safe-area-inset-bottom)]">
         {TABS.map((tab) => {
           const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
