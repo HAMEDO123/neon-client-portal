@@ -100,7 +100,7 @@ export function WhatsAppChannelCard({
 
       {!workerConfigured && (
         <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-800">
-          The session worker is not reachable yet, so there is nothing to link to. See the note under these cards.
+          The session worker is not running yet, so there is nothing to link to — see the note below.
         </p>
       )}
 
@@ -239,36 +239,6 @@ function LinkPanel({
       <p className={cn("mt-3 text-center text-[11px]", state?.status === "pending" ? "text-cyan-strong" : "text-ink/35")}>
         {state?.status === "pending" ? "Waiting for the scan…" : "The code refreshes on its own."}
       </p>
-    </div>
-  );
-}
-
-/** The channels that are not wired up yet, shown so the set reads as a whole. */
-export function ComingSoonChannelCard({
-  name,
-  description,
-  icon,
-  tint,
-}: {
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  tint: string;
-}) {
-  return (
-    <div className="glass flex flex-col rounded-2xl p-5 opacity-70">
-      <span className={cn("flex h-11 w-11 items-center justify-center rounded-2xl", tint)}>{icon}</span>
-      <h3 className="mt-4 text-base font-semibold text-ink">{name}</h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-ink/55">{description}</p>
-      <div className="mt-auto pt-4">
-        <button
-          type="button"
-          disabled
-          className="h-11 w-full rounded-xl border border-ink/10 bg-ink/[0.03] text-sm font-medium text-ink/35"
-        >
-          Not available yet
-        </button>
-      </div>
     </div>
   );
 }
