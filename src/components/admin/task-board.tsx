@@ -8,8 +8,10 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Loader,
   Plus,
   RotateCcw,
+  CalendarPlus,
   Trash2,
   Users,
   X,
@@ -27,13 +29,22 @@ import {
   updateProcessTask,
 } from "@/lib/actions/task-actions";
 import { NEXT_STATE, STATE_LABEL, columnTone, dotTone, headerTone } from "@/lib/task-board";
+import { TaskScheduleEditor, type CellDetails } from "@/components/admin/task-schedule-editor";
 import type { TaskBoard as TaskBoardData, TaskBoardGroup } from "@/lib/queries";
 import type { TaskState } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
 type CellPatch = { projectId: string; taskId: string; state: TaskState };
 
-export function TaskBoard({ board }: { board: TaskBoardData }) {
+export function TaskBoard({
+  board,
+  todayKey,
+  tomorrowKey,
+}: {
+  board: TaskBoardData;
+  todayKey: string;
+  tomorrowKey: string;
+}) {
   const [pending, startTransition] = useTransition();
   const [employeeFilter, setEmployeeFilter] = useState<string | null>(null);
 
@@ -194,8 +205,10 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
                       <th
                         key={`${group.id}-add`}
                         className={cn(
-                          "w-8 border-b border-ink/8 p-0 align-bottom",
-                          tasks.length === 0 && "border-l border-ink/8",
+                          "border-b border-ink/8 p-0 align-bottom",
+                          // A person with no steps yet has only this column to
+                          // carry their name, so it gets room to show it.
+                          tasks.length === 0 ? "w-24 border-l border-ink/8" : "w-8",
                           columnTone(group.color)
                         )}
                       >
@@ -231,12 +244,13 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
 
                   {columns.flatMap(({ group, tasks }) => [
                     ...tasks.map(({ task, index }, i) => {
-                      const state = row.cells[index]?.state ?? "TODO";
+                      const cell = row.cells[index];
+                      const state = cell?.state ?? "TODO";
                       return (
                         <td
                           key={task.id}
                           className={cn(
-                            "border-b border-ink/6 p-0 text-center",
+                            "group/cell relative border-b border-ink/6 p-0 text-center",
                             i === 0 && "border-l border-ink/8",
                             group.editable && columnTone(group.color)
                           )}
@@ -245,6 +259,23 @@ export function TaskBoard({ board }: { board: TaskBoardData }) {
                             state={state}
                             label={`${task.name} · ${row.project.name}`}
                             onClick={() => cycle(row.project.id, task.id, state)}
+                          />
+                          <CellSchedule
+                            projectId={row.project.id}
+                            projectName={row.project.name}
+                            taskId={task.id}
+                            taskName={task.name}
+                            details={{
+                              priority: cell?.priority ?? "MEDIUM",
+                              scheduledFor: cell?.scheduledFor ?? null,
+                              dueAt: cell?.dueAt ?? null,
+                              adminNote: cell?.adminNote ?? null,
+                              assigneeId: cell?.assigneeId ?? null,
+                            }}
+                            owners={owners}
+                            defaultOwnerId={group.editable ? group.id : null}
+                            todayKey={todayKey}
+                            tomorrowKey={tomorrowKey}
                           />
                         </td>
                       );
@@ -323,14 +354,81 @@ function TaskCell({ state, label, onClick }: { state: TaskState; label: string; 
         className={cn(
           "flex h-6 w-6 items-center justify-center rounded-md border transition-colors",
           state === "DONE" && "border-emerald-500/30 bg-emerald-500/15 text-emerald-700",
+          state === "IN_PROGRESS" && "border-cyan/40 bg-cyan/15 text-cyan-strong",
           state === "TOMORROW" && "border-amber-500/30 bg-amber-500/15 text-amber-700",
           state === "TODO" && "border-ink/15 bg-white/70"
         )}
       >
         {state === "DONE" && <Check size={14} strokeWidth={3} />}
+        {state === "IN_PROGRESS" && <Loader size={13} strokeWidth={2.5} />}
         {state === "TOMORROW" && <CalendarClock size={13} strokeWidth={2.25} />}
       </span>
     </button>
+  );
+}
+
+// Sits in the corner of a cell: a dot once the task is scheduled, and the
+// scheduling editor on click. The cell's main click still cycles the status,
+// so the board's existing rhythm is untouched.
+function CellSchedule({
+  projectId,
+  projectName,
+  taskId,
+  taskName,
+  details,
+  owners,
+  defaultOwnerId,
+  todayKey,
+  tomorrowKey,
+}: {
+  projectId: string;
+  projectName: string;
+  taskId: string;
+  taskName: string;
+  details: CellDetails;
+  owners: { id: string; name: string }[];
+  defaultOwnerId: string | null;
+  todayKey: string;
+  tomorrowKey: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const scheduled = Boolean(details.scheduledFor);
+  const urgent = scheduled && details.priority === "HIGH";
+
+  return (
+    <span className="absolute right-0.5 top-0.5">
+      <Popover
+        open={open}
+        onOpenChange={setOpen}
+        align="end"
+        width={EDITOR_WIDTH}
+        triggerLabel={`Schedule ${taskName} on ${projectName}`}
+        triggerClassName={cn(
+          "flex h-4 w-4 items-center justify-center rounded text-ink/30 transition-opacity hover:bg-ink/10 hover:text-ink focus-visible:opacity-100",
+          scheduled ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"
+        )}
+        trigger={
+          scheduled ? (
+            <span className={cn("h-1.5 w-1.5 rounded-full", urgent ? "bg-pink" : "bg-cyan-strong")} aria-hidden />
+          ) : (
+            <CalendarPlus size={10} strokeWidth={2.25} />
+          )
+        }
+      >
+        <TaskScheduleEditor
+          projectId={projectId}
+          projectName={projectName}
+          taskId={taskId}
+          taskName={taskName}
+          details={details}
+          owners={owners}
+          defaultOwnerId={defaultOwnerId}
+          todayKey={todayKey}
+          tomorrowKey={tomorrowKey}
+          onClose={() => setOpen(false)}
+        />
+      </Popover>
+    </span>
   );
 }
 
@@ -624,6 +722,7 @@ function PopoverField({
 }
 
 const POPOVER_WIDTH = 224; // w-56
+const EDITOR_WIDTH = 272;
 
 // A header cell is only ~96px wide, so its editor floats above the table. The
 // board scrolls sideways, and a horizontal overflow container clips vertically
@@ -635,6 +734,8 @@ function Popover({
   trigger,
   triggerLabel,
   align = "start",
+  width = POPOVER_WIDTH,
+  triggerClassName,
   children,
 }: {
   open: boolean;
@@ -642,6 +743,8 @@ function Popover({
   trigger: React.ReactNode;
   triggerLabel: string;
   align?: "start" | "center" | "end";
+  width?: number;
+  triggerClassName?: string;
   children: React.ReactNode;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -656,10 +759,9 @@ function Popover({
       const panel = panelRef.current;
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!panel || !rect) return;
-      const offset =
-        align === "end" ? rect.width - POPOVER_WIDTH : align === "center" ? (rect.width - POPOVER_WIDTH) / 2 : 0;
+      const offset = align === "end" ? rect.width - width : align === "center" ? (rect.width - width) / 2 : 0;
       panel.style.top = `${rect.bottom + 4}px`;
-      panel.style.left = `${Math.max(8, Math.min(rect.left + offset, window.innerWidth - POPOVER_WIDTH - 8))}px`;
+      panel.style.left = `${Math.max(8, Math.min(rect.left + offset, window.innerWidth - width - 8))}px`;
       panel.style.visibility = "visible";
     }
 
@@ -684,7 +786,7 @@ function Popover({
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, align, onOpenChange]);
+  }, [open, align, width, onOpenChange]);
 
   return (
     <>
@@ -695,7 +797,10 @@ function Popover({
         aria-expanded={open}
         title={triggerLabel}
         onClick={() => onOpenChange(!open)}
-        className="block w-full cursor-pointer rounded-md text-left transition-colors hover:bg-ink/[0.06]"
+        className={
+          triggerClassName ??
+          "block w-full cursor-pointer rounded-md text-left transition-colors hover:bg-ink/[0.06]"
+        }
       >
         {trigger}
       </button>
@@ -704,7 +809,7 @@ function Popover({
         createPortal(
           <div
             ref={panelRef}
-            style={{ width: POPOVER_WIDTH, visibility: "hidden" }}
+            style={{ width, visibility: "hidden" }}
             className="glass-strong fixed z-50 rounded-xl p-3 text-left text-sm font-normal normal-case tracking-normal text-ink"
           >
             <button

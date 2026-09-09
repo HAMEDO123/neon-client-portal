@@ -1,10 +1,13 @@
 import { FolderKanban } from "lucide-react";
 import { getTaskBoard } from "@/lib/queries";
+import { getTimezone } from "@/lib/settings";
+import { todayKey, tomorrowKey } from "@/lib/time";
 import { TaskBoard } from "@/components/admin/task-board";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function TasksPage() {
   const board = await getTaskBoard();
+  const timezone = await getTimezone();
 
   return (
     <div>
@@ -23,7 +26,7 @@ export default async function TasksPage() {
         />
       ) : (
         <div className="mt-6">
-          <TaskBoard board={board} />
+          <TaskBoard board={board} todayKey={todayKey(timezone)} tomorrowKey={tomorrowKey(timezone)} />
         </div>
       )}
     </div>

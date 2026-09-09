@@ -55,16 +55,47 @@ enum CommentStatus {
 }
 
 // State of one cell in the daily task board (project x process task).
+// TODO / IN_PROGRESS / DONE are the employee-facing execution statuses
+// (Pending / In Progress / Completed); TOMORROW is the admin board's existing
+// "deferred to tomorrow" marker and doubles as a scheduling signal.
 enum TaskState {
   TODO
+  IN_PROGRESS
   DONE
   TOMORROW
 }
 
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  TASK_TODAY_SCHEDULE
+  TASK_TOMORROW_SCHEDULE
+  TASK_DEADLINE_REMINDER
+  SYSTEM_NOTIFICATION
+}
+
+enum DeliveryChannel {
+  IN_APP
+  WEB_PUSH
+}
+
+enum DeliveryStatus {
+  CREATED
+  SENT
+  FAILED
+  EXPIRED
+}
+
 model Project {
-  id       String @id @default(cuid())
-  token    String @unique
-  name     String
+  id          String  @id @default(cuid())
+  token       String  @unique
+  name        String
   clientName  String
   clientEmail String?
   clientPhone String?
@@ -79,7 +110,7 @@ model Project {
 
   publishState      PublishState   @default(DRAFT)
   pipelineStatus    PipelineStatus @default(DRAFT)
-  currentStage       ProjectStage  @default(CONCEPT)
+  currentStage      ProjectStage   @default(CONCEPT)
   completionPercent Int            @default(0)
 
   // Client-visibility settings (item 13 / 47 / 26 of the spec).
@@ -124,9 +155,9 @@ model GalleryImage {
 
   imageUrl       String
   caption        String?
-  isBeforeAfter  Boolean @default(false)
+  isBeforeAfter  Boolean  @default(false)
   beforeImageUrl String?
-  order          Int     @default(0)
+  order          Int      @default(0)
   createdAt      DateTime @default(now())
 
   hotspots ImageHotspot[]
@@ -190,7 +221,7 @@ model Document {
   fileType  String
   fileSize  Int?
   version   String?
-  order     Int     @default(0)
+  order     Int      @default(0)
   createdAt DateTime @default(now())
 }
 
@@ -308,15 +339,33 @@ model ProjectActivity {
 model Employee {
   id     String  @id @default(cuid())
   name   String
+  // Job title shown on the board ("3D Visualizer") — not an access role.
   role   String?
   // Accent used for this employee's column group on the board.
   color  String  @default("cyan")
   order  Int     @default(0)
+  // Doubles as the account status: a disabled employee cannot sign in.
   active Boolean @default(true)
 
-  createdAt DateTime @default(now())
+  // Sign-in details. Null until the admin gives this person an account, so
+  // people added to the board before employee accounts existed still work.
+  email        String?   @unique
+  passwordHash String?
+  phone        String?
+  employeeCode String?   @unique
+  // Only one access role exists today; the column keeps the check explicit
+  // and leaves room for another role later.
+  accessRole   String    @default("EMPLOYEE")
+  lastLoginAt  DateTime?
 
-  tasks ProcessTask[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tasks           ProcessTask[]
+  assignedEntries ProjectTaskEntry[]      @relation("EntryAssignee")
+  notifications   Notification[]
+  subscriptions   PushSubscription[]
+  preference      NotificationPreference?
 }
 
 // One step of the delivery process. The process is identical for every project,
@@ -344,8 +393,125 @@ model ProjectTaskEntry {
 
   state       TaskState @default(TODO)
   completedAt DateTime?
+  startedAt   DateTime?
+  createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  // An entry is normally worked by whoever owns the step; assigning one here
+  // overrides that for this project without moving the whole column.
+  assigneeId String?
+  assignee   Employee? @relation("EntryAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  // Scheduling and detail the employee portal needs. A day, not a timestamp:
+  // "which day is this on" is a calendar question in the company timezone.
+  scheduledFor DateTime?    @db.Date
+  dueAt        DateTime?
+  priority     TaskPriority @default(MEDIUM)
+  adminNote    String?      @db.Text
+  employeeNote String?      @db.Text
+
+  notifications Notification[]
 
   @@unique([projectId, taskId])
   @@index([taskId])
+  @@index([assigneeId])
+  @@index([scheduledFor])
+}
+
+// One notification for one employee. Everything an employee is told goes
+// through here first, so the in-app centre and push are always consistent.
+model Notification {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  title   String
+  message String           @db.Text
+
+  entryId String?
+  entry   ProjectTaskEntry? @relation(fields: [entryId], references: [id], onDelete: SetNull)
+
+  // Where a click should land, resolved when the notification is created so
+  // the service worker never has to know the routing rules.
+  url      String?
+  metadata Json?
+
+  // Deterministic per logical event, so a job that runs twice writes once.
+  dedupeKey String @unique
+
+  readAt      DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  deliveries NotificationDelivery[]
+
+  @@index([employeeId, readAt])
+  @@index([employeeId, createdAt])
+}
+
+// Per-employee switches the engine consults before sending anything.
+model NotificationPreference {
+  id         String   @id @default(cuid())
+  employeeId String   @unique
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  pushEnabled         Boolean @default(true)
+  taskAssigned        Boolean @default(true)
+  taskUpdated         Boolean @default(true)
+  todaySchedule       Boolean @default(true)
+  tomorrowSchedule    Boolean @default(true)
+  deadlineReminders   Boolean @default(true)
+  // How far ahead of dueAt a reminder fires — configurable, not hardcoded.
+  deadlineLeadMinutes Int     @default(120)
+
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+// One row per device an employee has enabled push on.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  endpoint     String  @unique
+  p256dh       String
+  auth         String
+  userAgent    String?
+  // Deactivated rather than deleted when the push service rejects it, so the
+  // delivery log still points at something.
+  active       Boolean @default(true)
+  failureCount Int     @default(0)
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  deliveries NotificationDelivery[]
+
+  @@index([employeeId, active])
+}
+
+// Delivery attempts, kept so push failures are debuggable after the fact.
+model NotificationDelivery {
+  id             String       @id @default(cuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  subscriptionId String?
+  subscription   PushSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  channel DeliveryChannel
+  status  DeliveryStatus
+  detail  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([notificationId])
+}
+
+// Small key/value store for platform settings such as the company timezone.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
 }

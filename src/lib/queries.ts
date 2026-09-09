@@ -128,7 +128,18 @@ export async function getTaskBoard() {
     getEmployees(),
     getProcessTasks(),
     prisma.projectTaskEntry.findMany({
-      select: { projectId: true, taskId: true, state: true, completedAt: true },
+      select: {
+        id: true,
+        projectId: true,
+        taskId: true,
+        state: true,
+        completedAt: true,
+        priority: true,
+        scheduledFor: true,
+        dueAt: true,
+        adminNote: true,
+        assigneeId: true,
+      },
     }),
   ]);
 
@@ -160,14 +171,24 @@ export async function getTaskBoard() {
     });
   }
 
-  const stateByCell = new Map(entries.map((e) => [`${e.projectId}:${e.taskId}`, e.state]));
+  const entryByCell = new Map(entries.map((e) => [`${e.projectId}:${e.taskId}`, e]));
   const orderedTasks = groups.flatMap((g) => g.tasks);
 
   const rows = projects.map((project) => {
-    const cells = orderedTasks.map((task) => ({
-      taskId: task.id,
-      state: stateByCell.get(`${project.id}:${task.id}`) ?? ("TODO" as TaskState),
-    }));
+    const cells = orderedTasks.map((task) => {
+      const entry = entryByCell.get(`${project.id}:${task.id}`);
+      return {
+        taskId: task.id,
+        state: entry?.state ?? ("TODO" as TaskState),
+        // Scheduling detail the admin set on this cell. Absent until someone
+        // schedules it — the matrix stays sparse.
+        priority: entry?.priority ?? ("MEDIUM" as const),
+        scheduledFor: entry?.scheduledFor ? entry.scheduledFor.toISOString().slice(0, 10) : null,
+        dueAt: entry?.dueAt ? entry.dueAt.toISOString() : null,
+        adminNote: entry?.adminNote ?? null,
+        assigneeId: entry?.assigneeId ?? null,
+      };
+    });
     return {
       project,
       cells,

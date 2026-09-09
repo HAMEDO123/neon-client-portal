@@ -1,0 +1,47 @@
+name: Daily task notifier
+
+# Fires hourly; the endpoint itself decides whether the company's local clock
+# has reached the summary hour. Keeping the decision server-side means the
+# 4:00 PM run follows the configured timezone, and changing that timezone does
+# not mean editing this cron expression.
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Force one job (tomorrow | today | deadlines)"
+        required: false
+        type: string
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the notification jobs
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          FORCED_JOB: ${{ inputs.job }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_URL or CRON_SECRET secret is not set — nothing to call."
+            exit 1
+          fi
+
+          url="$APP_URL/api/cron/notifications"
+          if [ -n "$FORCED_JOB" ]; then
+            url="$url?job=$FORCED_JOB"
+          fi
+
+          # --max-time is generous: the deployment may be waking from idle.
+          status=$(curl -sS -o response.json -w "%{http_code}" --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" "$url")
+
+          echo "HTTP $status"
+          cat response.json
+          echo
+
+          if [ "$status" != "200" ]; then
+            exit 1
+          fi

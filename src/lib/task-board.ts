@@ -43,19 +43,42 @@ export function dotTone(color: string) {
   return DOT_TONES[asColor(color)];
 }
 
-// A click cycles a cell forward through the three states, so checking a task
-// off is a single click and deferring it is two.
+// A click cycles a cell forward, so checking a task off stays a single click
+// and deferring it is two. IN_PROGRESS is set by employees from their own
+// portal rather than by cycling, so the admin cycle skips past it to DONE and
+// the board's existing three-click rhythm is unchanged.
 export const NEXT_STATE: Record<TaskState, TaskState> = {
   TODO: "DONE",
+  IN_PROGRESS: "DONE",
   DONE: "TOMORROW",
   TOMORROW: "TODO",
 };
 
 export const STATE_LABEL: Record<TaskState, string> = {
   TODO: "To do",
+  IN_PROGRESS: "In progress",
   DONE: "Done",
   TOMORROW: "Tomorrow",
 };
+
+// The same states as an employee sees them (spec: Pending / In Progress /
+// Completed). TOMORROW stays an admin planning marker and reads as pending
+// work that is not for today.
+export const EMPLOYEE_STATE_LABEL: Record<TaskState, string> = {
+  TODO: "Pending",
+  IN_PROGRESS: "In progress",
+  DONE: "Completed",
+  TOMORROW: "Planned for tomorrow",
+};
+
+// The statuses an employee is allowed to set on their own task.
+export const EMPLOYEE_SETTABLE_STATES: TaskState[] = ["TODO", "IN_PROGRESS", "DONE"];
+
+export const PRIORITY_LABEL = {
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+} as const;
 
 // The unassigned bucket is a real column group on the board but has no
 // Employee row behind it, so it gets a reserved id instead.

@@ -25,3 +25,20 @@ services:
         sync: false
       - key: R2_PUBLIC_URL
         sync: false
+      # Company timezone for the daily notification jobs and task days.
+      - key: APP_TIMEZONE
+        value: Asia/Amman
+      # Web Push (VAPID). Generate a pair once with:
+      #   node -e "console.log(require('web-push').generateVAPIDKeys())"
+      # and use the same pair everywhere. Without them the portal still works;
+      # notifications simply stay in-app.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # Shared secret the scheduled notifier authenticates with. Must match the
+      # CRON_SECRET GitHub Actions secret.
+      - key: CRON_SECRET
+        generateValue: true

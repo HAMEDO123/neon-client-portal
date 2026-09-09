@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { SESSION_COOKIE_NAME } from "@/lib/session-cookie";
+import { EMPLOYEE_SESSION_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/session-cookie";
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
@@ -35,3 +35,38 @@ export function verifySessionToken(token: string | undefined | null): boolean {
 
 export { SESSION_COOKIE_NAME };
 export const SESSION_MAX_AGE_SECONDS = SESSION_TTL_MS / 1000;
+
+// --- Employee sessions -----------------------------------------------------
+// Same signing scheme as the admin session above, with the employee id inside
+// the signed payload and a distinct prefix. The prefix is what stops an admin
+// token from ever verifying as an employee token, or the reverse: the two
+// payloads can never collide even though they share a secret.
+
+export function createEmployeeSessionToken(employeeId: string) {
+  const expiresAt = Date.now() + SESSION_TTL_MS;
+  const payload = `employee.${employeeId}.${expiresAt}`;
+  return `${employeeId}.${expiresAt}.${sign(payload)}`;
+}
+
+// Returns the employee id the token was issued for, or null. Callers must
+// still check that the employee exists and is active — this only proves the
+// token was issued by us and has not expired.
+export function verifyEmployeeSessionToken(token: string | undefined | null): string | null {
+  if (!token) return null;
+
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [employeeId, expiresAtRaw, signature] = parts;
+  if (!employeeId || !expiresAtRaw || !signature) return null;
+
+  const expiresAt = Number(expiresAtRaw);
+  if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) return null;
+
+  const expected = sign(`employee.${employeeId}.${expiresAt}`);
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return null;
+  return crypto.timingSafeEqual(a, b) ? employeeId : null;
+}
+
+export { EMPLOYEE_SESSION_COOKIE_NAME };
