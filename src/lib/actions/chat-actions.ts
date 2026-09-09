@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/storage";
 import { getTeamChannel, recordChatRead, requireChatViewer, type ChatViewer } from "@/lib/chat";
 import { askAssistant } from "@/lib/ai/assistant";
+import { dispatchNotification } from "@/lib/notifications/engine";
+import { chatCopy, chatKey, CHAT_PATH } from "@/lib/notifications/types";
 import type { ChatMessageKind } from "@/generated/prisma/enums";
 
 // Posting to the team conversation. Both portals call these; the author is
@@ -69,7 +71,7 @@ export async function sendChatMessage(formData: FormData) {
   // Nothing to say and nothing attached — do not write an empty row.
   if (kind === "TEXT" && !body) return;
 
-  await prisma.chatMessage.create({
+  const message = await prisma.chatMessage.create({
     data: {
       channelId: channel.id,
       ...(await authorFields(viewer)),
@@ -87,6 +89,50 @@ export async function sendChatMessage(formData: FormData) {
   // Posting counts as having read everything before it.
   await recordChatRead(viewer);
   refresh();
+
+  // Everyone else on the team hears about it. Awaiting this would make the
+  // sender wait on every device's push, so it runs on its own and a failure
+  // never costs the message.
+  void notifyTeamOfMessage(message.id, viewer, previewOf(kind, body));
+}
+
+function previewOf(kind: ChatMessageKind, body: string) {
+  if (kind === "VOICE") return body || "🎤 Voice message";
+  if (kind === "IMAGE") return body || "📷 Photo";
+  if (kind === "FILE") return body || "📎 File";
+  return body;
+}
+
+/** In-app and push, to every active employee except the sender. */
+async function notifyTeamOfMessage(messageId: string, sender: ChatViewer, preview: string) {
+  try {
+    const recipients = await prisma.employee.findMany({
+      where: {
+        active: true,
+        accessRole: "EMPLOYEE",
+        ...(sender.type === "EMPLOYEE" ? { NOT: { id: sender.id } } : {}),
+      },
+      select: { id: true },
+    });
+
+    const copy = chatCopy(sender.name, preview);
+
+    await Promise.all(
+      recipients.map((recipient) =>
+        dispatchNotification({
+          employeeId: recipient.id,
+          type: "CHAT_MESSAGE",
+          title: copy.title,
+          message: copy.message,
+          url: CHAT_PATH,
+          // One notification per message per person, so a retry cannot double it.
+          dedupeKey: chatKey(messageId, recipient.id),
+        }).catch(() => undefined)
+      )
+    );
+  } catch {
+    // A message that was sent is sent; telling people is best effort.
+  }
 }
 
 export async function markChatRead() {

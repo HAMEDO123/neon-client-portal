@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db";
 import { listMessages, recordChatRead, requireChatViewer } from "@/lib/chat";
-import { ChatMessageList } from "@/components/chat/message-list";
-import { ChatComposer } from "@/components/chat/composer";
+import { ChatRoom } from "@/components/chat/chat-room";
 
 export default async function EmployeeChatPage() {
   const viewer = await requireChatViewer();
@@ -24,14 +23,14 @@ export default async function EmployeeChatPage() {
   return (
     // Fills the space between the app header and the tab bar, so the composer
     // sits just above the thumb rather than below the fold.
-    <div className="-mx-4 -mt-5 flex h-[calc(100vh-9.5rem)] flex-col overflow-hidden">
-      <ChatMessageList
-        messages={messages}
+    <div className="-mx-4 -mt-5 flex h-[calc(100dvh-9.5rem)] flex-col overflow-hidden">
+      <ChatRoom
+        initialMessages={messages}
         viewerType="EMPLOYEE"
         viewerId={viewer.id}
         canDeleteAny={false}
+        projects={projects}
       />
-      <ChatComposer projects={projects} />
     </div>
   );
 }

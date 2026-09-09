@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 // submits the whole form, so an unchecked box is genuinely "off" rather than
 // absent.
 const SWITCHES: { name: keyof PreferenceFlags; label: string; hint: string }[] = [
+  { name: "chatMessages", label: "Team messages", hint: "When someone writes in the team chat" },
   { name: "taskAssigned", label: "Task assigned", hint: "When an admin gives you a new task" },
   { name: "taskUpdated", label: "Task updated", hint: "When one of your tasks changes" },
   { name: "todaySchedule", label: "Today's schedule", hint: "A morning summary of today's work" },

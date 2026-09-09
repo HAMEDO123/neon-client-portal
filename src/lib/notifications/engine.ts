@@ -41,6 +41,7 @@ export async function getPreferences(employeeId: string): Promise<PreferenceFlag
   if (!stored) return { ...DEFAULT_PREFERENCES };
   return {
     pushEnabled: stored.pushEnabled,
+    chatMessages: stored.chatMessages,
     taskAssigned: stored.taskAssigned,
     taskUpdated: stored.taskUpdated,
     todaySchedule: stored.todaySchedule,

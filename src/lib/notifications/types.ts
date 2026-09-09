@@ -7,6 +7,7 @@ import type { NotificationType, TaskPriority } from "@/generated/prisma/enums";
 
 export type PreferenceFlags = {
   pushEnabled: boolean;
+  chatMessages: boolean;
   taskAssigned: boolean;
   taskUpdated: boolean;
   todaySchedule: boolean;
@@ -17,6 +18,7 @@ export type PreferenceFlags = {
 
 export const DEFAULT_PREFERENCES: PreferenceFlags = {
   pushEnabled: true,
+  chatMessages: true,
   taskAssigned: true,
   taskUpdated: true,
   todaySchedule: true,
@@ -33,6 +35,7 @@ const PREFERENCE_BY_TYPE: Record<NotificationType, keyof PreferenceFlags | null>
   TASK_TODAY_SCHEDULE: "todaySchedule",
   TASK_TOMORROW_SCHEDULE: "tomorrowSchedule",
   TASK_DEADLINE_REMINDER: "deadlineReminders",
+  CHAT_MESSAGE: "chatMessages",
   SYSTEM_NOTIFICATION: null,
 };
 
@@ -48,6 +51,7 @@ export function isPushEnabled(type: NotificationType, preferences: PreferenceFla
 
 // --- Where a notification click lands --------------------------------------
 
+export const CHAT_PATH = "/employee/chat";
 export const TASK_PATH = "/employee/tasks";
 export const DASHBOARD_PATH = "/employee";
 
@@ -196,5 +200,20 @@ export function pushPayload(input: {
     // rather than stacking duplicates.
     tag: `${input.type}:${input.notificationId}`,
     notificationId: input.notificationId,
+  };
+}
+
+// --- chat ------------------------------------------------------------------
+
+export function chatKey(messageId: string, employeeId: string) {
+  return `CHAT_MESSAGE:${messageId}:${employeeId}`;
+}
+
+export function chatCopy(author: string, preview: string) {
+  return {
+    title: author,
+    // The message itself, so the notification is worth reading on a lock
+    // screen rather than only telling you to go and look.
+    message: preview.length > 140 ? `${preview.slice(0, 137)}…` : preview,
   };
 }

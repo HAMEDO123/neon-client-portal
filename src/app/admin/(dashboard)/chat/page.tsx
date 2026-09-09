@@ -1,8 +1,7 @@
 import { prisma } from "@/lib/db";
 import { listMessages, recordChatRead, requireChatViewer } from "@/lib/chat";
 import { isAiConfigured } from "@/lib/ai/client";
-import { ChatMessageList } from "@/components/chat/message-list";
-import { ChatComposer } from "@/components/chat/composer";
+import { ChatRoom } from "@/components/chat/chat-room";
 import { AssistantPanel } from "@/components/chat/assistant-panel";
 
 export default async function AdminChatPage() {
@@ -26,10 +25,15 @@ export default async function AdminChatPage() {
         Everyone on the team is in here. Send updates, photos from site and voice notes.
       </p>
 
-      <div className="glass mt-6 flex h-[calc(100vh-16rem)] min-h-96 flex-col overflow-hidden rounded-2xl">
-        <ChatMessageList messages={messages} viewerType="ADMIN" viewerId={null} canDeleteAny />
+      <div className="mt-6 flex h-[calc(100dvh-16rem)] min-h-96 flex-col overflow-hidden rounded-2xl border border-ink/10">
+        <ChatRoom
+          initialMessages={messages}
+          viewerType="ADMIN"
+          viewerId={null}
+          canDeleteAny
+          projects={projects}
+        />
         <AssistantPanel configured={isAiConfigured()} />
-        <ChatComposer projects={projects} />
       </div>
     </div>
   );

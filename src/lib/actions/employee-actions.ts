@@ -95,6 +95,7 @@ export async function saveNotificationPreferences(formData: FormData) {
 
   const data = {
     pushEnabled: flag("pushEnabled"),
+    chatMessages: flag("chatMessages"),
     taskAssigned: flag("taskAssigned"),
     taskUpdated: flag("taskUpdated"),
     todaySchedule: flag("todaySchedule"),

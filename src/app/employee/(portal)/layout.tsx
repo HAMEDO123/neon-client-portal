@@ -2,9 +2,8 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Bell } from "lucide-react";
-import { prisma } from "@/lib/db";
 import { getSessionEmployee } from "@/lib/employee-session";
-import { unreadCount } from "@/lib/chat";
+import { getEmployeeBadges } from "@/lib/employee-badges";
 import { EmployeeNav } from "@/components/employee/employee-nav";
 
 // Server-side gate for the whole portal. Anything under this layout has an
@@ -14,17 +13,15 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
   const employee = await getSessionEmployee();
   if (!employee) redirect("/employee/login");
 
-  // Sequential on purpose: these are two small counts, and running them
-  // concurrently on one pooled connection has proven fragile against the
-  // local Postgres proxy.
-  const unread = await prisma.notification.count({
-    where: { employeeId: employee.id, readAt: null },
-  });
-  const unreadChat = await unreadCount({ type: "EMPLOYEE", id: employee.id, name: employee.name });
+  // One query for both badges — this runs on every navigation.
+  const { unread, unreadChat } = await getEmployeeBadges(employee.id);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="sticky top-0 z-30 border-b border-ink/8 bg-bg/85 backdrop-blur-lg">
+      {/* pt-[safe-area-inset-top]: the app draws under the status bar on a
+          notched phone, so the header reserves that height itself rather than
+          letting the title sit beneath the clock. */}
+      <header className="sticky top-0 z-30 border-b border-ink/8 bg-bg/85 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
         <div className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 py-3">
           <Link href="/employee" className="flex items-baseline gap-1.5">
             <span className="text-gradient-neon text-base font-bold">NEON</span>

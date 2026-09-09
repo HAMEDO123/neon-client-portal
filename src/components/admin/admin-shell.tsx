@@ -25,7 +25,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-ink/8 bg-white/60 px-4 py-3 lg:hidden">
+        <div className="flex items-center justify-between border-b border-ink/8 bg-white/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
           <span className="text-base font-bold">
             <span className="text-gradient-neon">NEON</span>
             <span className="ml-1.5 text-sm font-medium text-ink/60">Admin</span>
