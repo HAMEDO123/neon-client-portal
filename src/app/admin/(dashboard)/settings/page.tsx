@@ -1,4 +1,4 @@
-import { Clock, MessageCircle, Sparkles } from "lucide-react";
+import { AtSign, Camera, Clock, Send, Sparkles } from "lucide-react";
 import { saveTimezone } from "@/lib/actions/whatsapp-actions";
 import { getTimezone } from "@/lib/settings";
 import { isAiConfigured } from "@/lib/ai/client";
@@ -6,6 +6,8 @@ import { isPushConfigured } from "@/lib/notifications/push";
 import { activeTransport, checkWhatsAppConnection, getCloudCredentials } from "@/lib/whatsapp";
 import { getWhatsAppConfig as getWorkerConfig } from "@/lib/whatsapp/worker";
 import { WhatsAppTest } from "@/components/admin/whatsapp-test";
+import { ComingSoonChannelCard, WhatsAppChannelCard } from "@/components/admin/channel-cards";
+import { lineStatus } from "@/lib/whatsapp/worker";
 import { SaveButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
 
@@ -32,6 +34,19 @@ export default async function AdminSettingsPage() {
   // a request that was never going to arrive.
   const connection = transport === "none" ? null : await checkWhatsAppConnection();
 
+  // The linked-number card asks the worker directly, since a QR session has
+  // states the transport check does not describe.
+  const line = worker ? await lineStatus() : null;
+  const linkState = line?.ok
+    ? {
+        status: line.data.status,
+        qrDataUrl: line.data.qrDataUrl,
+        pairingCode: line.data.pairingCode,
+        phoneNumber: line.data.phoneNumber,
+        error: line.data.error ?? null,
+      }
+    : null;
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -39,12 +54,43 @@ export default async function AdminSettingsPage() {
         <p className="mt-1 text-sm text-ink/50">Integrations and the values the daily jobs run on.</p>
       </div>
 
-      {/* --- WhatsApp ----------------------------------------------------- */}
+      {/* --- Channels ------------------------------------------------------ */}
+      <section>
+        <h2 className="text-sm font-semibold text-ink">Company channels</h2>
+        <p className="mt-1 text-sm text-ink/50">
+          Link a number once here, and the portal sends from it — project links, updates and the gallery PDF.
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <WhatsAppChannelCard workerConfigured={Boolean(worker)} initial={linkState} />
+
+          <ComingSoonChannelCard
+            name="Instagram"
+            description="Reach the studio's Instagram messages from the same place."
+            icon={<Camera size={20} strokeWidth={2} />}
+            tint="bg-pink/10 text-pink-strong"
+          />
+          <ComingSoonChannelCard
+            name="Email"
+            description="Send the client link and updates by email as well as WhatsApp."
+            icon={<AtSign size={20} strokeWidth={2} />}
+            tint="bg-cyan/10 text-cyan-strong"
+          />
+          <ComingSoonChannelCard
+            name="Telegram"
+            description="For clients who prefer Telegram."
+            icon={<Send size={20} strokeWidth={2} />}
+            tint="bg-purple/10 text-purple-strong"
+          />
+        </div>
+      </section>
+
+      {/* --- WhatsApp detail ------------------------------------------------ */}
       <section className="glass rounded-2xl p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-            <MessageCircle size={16} strokeWidth={2} />
-            WhatsApp
+            <Send size={16} strokeWidth={2} />
+            Sending
           </h2>
           {transport === "none" ? (
             <Badge tone="neutral">Not configured</Badge>

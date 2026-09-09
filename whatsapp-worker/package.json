@@ -1,0 +1,16 @@
+{
+  "name": "neon-whatsapp-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Holds the NEON WhatsApp session and exposes the portal's send API.",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "nexora-whatsapp": "file:./vendor/nexora-whatsapp"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

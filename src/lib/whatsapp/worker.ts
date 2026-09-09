@@ -161,3 +161,58 @@ export async function checkWhatsAppNumber(phone: string): Promise<WhatsAppResult
     timeoutMs: 15_000,
   });
 }
+
+// --- Linking a number ------------------------------------------------------
+// The worker holds the session; these drive it from the portal's Settings.
+
+export type LineSnapshot = {
+  status: "disconnected" | "pending" | "connected" | "error" | string;
+  qrDataUrl: string | null;
+  pairingCode: string | null;
+  phoneNumber: string | null;
+  error?: string | null;
+};
+
+/**
+ * Starts linking and returns the QR to show. The caller polls `lineStatus`
+ * until it reads "connected" — the scan happens on the phone, so there is
+ * nothing to await here.
+ */
+export function startWhatsAppLink(linkPhoneNumber?: string) {
+  const config = getWhatsAppConfig();
+  if (!config) {
+    return Promise.resolve<WhatsAppResult<LineSnapshot>>({
+      ok: false,
+      error: "No WhatsApp worker is configured.",
+    });
+  }
+
+  return call<LineSnapshot>(`/lines/${encodeURIComponent(config.line)}/start`, {
+    method: "POST",
+    body: linkPhoneNumber ? { linkPhoneNumber } : {},
+    // Launching a browser and producing the first QR is not instant.
+    timeoutMs: 90_000,
+  });
+}
+
+export function lineStatus() {
+  const config = getWhatsAppConfig();
+  if (!config) {
+    return Promise.resolve<WhatsAppResult<LineSnapshot>>({
+      ok: false,
+      error: "No WhatsApp worker is configured.",
+    });
+  }
+  return call<LineSnapshot>(`/lines/${encodeURIComponent(config.line)}/status`, {
+    method: "GET",
+    timeoutMs: 10_000,
+  });
+}
+
+export function stopWhatsAppLink() {
+  const config = getWhatsAppConfig();
+  if (!config) {
+    return Promise.resolve<WhatsAppResult>({ ok: false, error: "No WhatsApp worker is configured." });
+  }
+  return call(`/lines/${encodeURIComponent(config.line)}/stop`, { method: "POST", timeoutMs: 30_000 });
+}

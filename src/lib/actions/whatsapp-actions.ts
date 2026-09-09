@@ -8,6 +8,7 @@ import { logActivity } from "@/lib/activity";
 import { setSetting, TIMEZONE_SETTING_KEY } from "@/lib/settings";
 import { resolveTimezone } from "@/lib/time";
 import { sendWhatsApp, sendWhatsAppFile } from "@/lib/whatsapp";
+import { lineStatus, startWhatsAppLink, stopWhatsAppLink } from "@/lib/whatsapp/worker";
 
 // Sending through the shared WhatsApp worker, plus the platform settings that
 // live beside it. Admin only — these send real messages to real clients.
@@ -116,4 +117,62 @@ export async function sendGalleryPdfWhatsApp(projectId: string): Promise<SendOut
 
   await logActivity(projectId, "sent_update", "Gallery PDF sent on WhatsApp");
   return { ok: true, message: `Gallery sent to ${project.clientPhone}.` };
+}
+
+// --- Linking the company's number ------------------------------------------
+
+export type LinkState = {
+  status: string;
+  qrDataUrl: string | null;
+  pairingCode: string | null;
+  phoneNumber: string | null;
+  error: string | null;
+};
+
+/** Starts the QR flow. The panel then polls `readLinkStatus`. */
+export async function startWhatsAppLinking(formData?: FormData): Promise<LinkState> {
+  await requireAdmin();
+
+  const phone = String(formData?.get("phone") ?? "").replace(/\D/g, "");
+  const result = await startWhatsAppLink(phone || undefined);
+
+  if (!result.ok) {
+    return { status: "error", qrDataUrl: null, pairingCode: null, phoneNumber: null, error: result.error };
+  }
+
+  return {
+    status: result.data.status,
+    qrDataUrl: result.data.qrDataUrl,
+    pairingCode: result.data.pairingCode,
+    phoneNumber: result.data.phoneNumber,
+    error: result.data.error ?? null,
+  };
+}
+
+export async function readLinkStatus(): Promise<LinkState> {
+  await requireAdmin();
+
+  const result = await lineStatus();
+  if (!result.ok) {
+    return { status: "error", qrDataUrl: null, pairingCode: null, phoneNumber: null, error: result.error };
+  }
+
+  return {
+    status: result.data.status,
+    qrDataUrl: result.data.qrDataUrl,
+    pairingCode: result.data.pairingCode,
+    phoneNumber: result.data.phoneNumber,
+    error: result.data.error ?? null,
+  };
+}
+
+export async function unlinkWhatsApp(): Promise<SendOutcome> {
+  await requireAdmin();
+
+  const result = await stopWhatsAppLink();
+  revalidatePath("/admin/settings");
+
+  return result.ok
+    ? { ok: true, message: "The number has been unlinked." }
+    : { ok: false, message: result.error };
 }
