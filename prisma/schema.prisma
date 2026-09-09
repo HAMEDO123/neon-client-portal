@@ -80,6 +80,19 @@ enum NotificationType {
   SYSTEM_NOTIFICATION
 }
 
+enum ChatAuthorType {
+  ADMIN
+  EMPLOYEE
+  AGENT
+}
+
+enum ChatMessageKind {
+  TEXT
+  IMAGE
+  FILE
+  VOICE
+}
+
 enum DeliveryChannel {
   IN_APP
   WEB_PUSH
@@ -135,6 +148,7 @@ model Project {
   comments     Comment[]
   activities   ProjectActivity[]
   taskEntries  ProjectTaskEntry[]
+  chatMessages ChatMessage[]
 }
 
 model GallerySpace {
@@ -366,6 +380,8 @@ model Employee {
   notifications   Notification[]
   subscriptions   PushSubscription[]
   preference      NotificationPreference?
+  chatMessages    ChatMessage[]
+  chatReads       ChatRead[]
 }
 
 // One step of the delivery process. The process is identical for every project,
@@ -514,4 +530,73 @@ model AppSetting {
   key       String   @id
   value     String
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+// The team conversation. One channel today — the whole team plus the manager —
+// but modelled as a channel so a second one (per project, say) needs no
+// migration later.
+model ChatChannel {
+  id   String @id @default(cuid())
+  key  String @unique
+  name String
+
+  createdAt DateTime @default(now())
+
+  messages ChatMessage[]
+  reads    ChatRead[]
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  authorType ChatAuthorType
+  // Set for employee messages; the manager and the agent have no Employee row.
+  authorId   String?
+  author     Employee?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String
+
+  kind ChatMessageKind @default(TEXT)
+  body String?         @db.Text
+
+  attachmentUrl   String?
+  attachmentName  String?
+  attachmentType  String?
+  attachmentSize  Int?
+  // Voice notes only, so the player can show a length before loading.
+  durationSeconds Int?
+
+  // Optional context: which project this message is about.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  // The assistant is the manager's tool, so its questions and answers stay out
+  // of the team's view entirely rather than being hidden in the client.
+  managerOnly Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([channelId, createdAt])
+  @@index([channelId, managerOnly, createdAt])
+}
+
+// How far each person has read, for the unread badge.
+model ChatRead {
+  id        String      @id @default(cuid())
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  // The employee id, or "admin" for the manager, who has no Employee row.
+  // A plain string rather than a nullable id because Postgres treats NULLs as
+  // distinct — a nullable column in this unique would let duplicate rows
+  // accumulate, and Prisma cannot address a null through a compound unique.
+  readerKey String
+
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  lastReadAt DateTime @default(now())
+
+  @@unique([channelId, readerKey])
 }

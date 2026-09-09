@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Bell } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSessionEmployee } from "@/lib/employee-session";
+import { unreadCount } from "@/lib/chat";
 import { EmployeeNav } from "@/components/employee/employee-nav";
 
 // Server-side gate for the whole portal. Anything under this layout has an
@@ -13,9 +14,13 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
   const employee = await getSessionEmployee();
   if (!employee) redirect("/employee/login");
 
+  // Sequential on purpose: these are two small counts, and running them
+  // concurrently on one pooled connection has proven fragile against the
+  // local Postgres proxy.
   const unread = await prisma.notification.count({
     where: { employeeId: employee.id, readAt: null },
   });
+  const unreadChat = await unreadCount({ type: "EMPLOYEE", id: employee.id, name: employee.name });
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -44,7 +49,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
       {/* Bottom padding clears the fixed tab bar, including the iPhone home indicator. */}
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-32 pt-5">{children}</main>
 
-      <EmployeeNav unread={unread} />
+      <EmployeeNav unread={unread} unreadChat={unreadChat} />
     </div>
   );
 }

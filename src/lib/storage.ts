@@ -6,7 +6,7 @@ import sharp from "sharp";
 
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
 
-type UploadKind = "image" | "document";
+type UploadKind = "image" | "document" | "audio";
 
 const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: string }> = {
   image: {
@@ -15,6 +15,22 @@ const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: stri
     // original — a high-res camera photo or 4K render export easily clears 12MB.
     maxBytes: 40 * 1024 * 1024,
     label: "JPEG, PNG, WebP, GIF, or AVIF (max 40MB)",
+  },
+  audio: {
+    // Voice notes recorded in the browser. Chrome/Android produce webm/ogg,
+    // iOS Safari mp4/aac — all of them arrive here.
+    types: [
+      "audio/webm",
+      "audio/ogg",
+      "audio/mp4",
+      "audio/mpeg",
+      "audio/aac",
+      "audio/wav",
+      "audio/x-m4a",
+      "video/webm", // MediaRecorder labels an audio-only webm this way
+    ],
+    maxBytes: 15 * 1024 * 1024,
+    label: "a voice recording (max 15MB)",
   },
   document: {
     types: [
@@ -82,6 +98,11 @@ const CONTENT_TYPES: Record<string, string> = {
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   zip: "application/zip",
   mp4: "video/mp4",
+  webm: "audio/webm",
+  ogg: "audio/ogg",
+  m4a: "audio/mp4",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
 };
 
 // ---------- Cloudflare R2 (S3-compatible) ----------

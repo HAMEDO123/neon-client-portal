@@ -18,6 +18,7 @@
     "test:db": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx --test \"tests/**/*.db.test.ts\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@aws-sdk/client-s3": "^3.1121.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",

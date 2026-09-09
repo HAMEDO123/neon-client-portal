@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Home, ListChecks, User } from "lucide-react";
+import { Bell, Home, ListChecks, MessagesSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Four destinations, nothing else. An employee should never have to decide
@@ -10,11 +10,12 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/employee", label: "Home", icon: Home, exact: true },
   { href: "/employee/tasks", label: "Tasks", icon: ListChecks, exact: false },
+  { href: "/employee/chat", label: "Chat", icon: MessagesSquare, exact: false },
   { href: "/employee/notifications", label: "Alerts", icon: Bell, exact: false },
   { href: "/employee/profile", label: "Profile", icon: User, exact: false },
 ];
 
-export function EmployeeNav({ unread }: { unread: number }) {
+export function EmployeeNav({ unread, unreadChat = 0 }: { unread: number; unreadChat?: number }) {
   const pathname = usePathname();
 
   return (
@@ -34,6 +35,11 @@ export function EmployeeNav({ unread }: { unread: number }) {
             >
               <span className="relative">
                 <tab.icon size={21} strokeWidth={active ? 2.25 : 1.75} />
+                {tab.href === "/employee/chat" && unreadChat > 0 && (
+                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-strong px-1 text-[10px] font-semibold text-white">
+                    {unreadChat > 9 ? "9+" : unreadChat}
+                  </span>
+                )}
                 {tab.href === "/employee/notifications" && unread > 0 && (
                   <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink px-1 text-[10px] font-semibold text-white">
                     {unread > 9 ? "9+" : unread}
