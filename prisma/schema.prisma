@@ -186,6 +186,7 @@ model Project {
   activities   ProjectActivity[]
   taskEntries  ProjectTaskEntry[]
   chatMessages ChatMessage[]
+  sectionTeam  ProjectSectionAssignment[]
 }
 
 model GallerySpace {
@@ -418,7 +419,7 @@ model Employee {
   updatedAt DateTime @default(now()) @updatedAt
 
   tasks           ProcessTask[]
-  assignedEntries ProjectTaskEntry[]      @relation("EntryAssignee")
+  assignedEntries ProjectTaskEntry[]         @relation("EntryAssignee")
   notifications   Notification[]
   subscriptions   PushSubscription[]
   preference      NotificationPreference?
@@ -428,8 +429,10 @@ model Employee {
   submissions     TaskSubmission[]
   receipts        ExpenseReceipt[]
   attendance      AttendanceRecord[]
-  adminAlerts     AdminNotification[]     @relation("AdminNotificationSubject")
+  adminAlerts     AdminNotification[]        @relation("AdminNotificationSubject")
   adjustments     SalaryAdjustment[]
+  assignedTasks   AssignedTask[]
+  sectionWork     ProjectSectionAssignment[]
 }
 
 // One step of the delivery process. The process is identical for every project,
@@ -441,11 +444,15 @@ model ProcessTask {
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   order      Int       @default(0)
 
-  // How long this stage is allowed to take, in working days, once it starts.
-  // Null means the stage is untimed and nobody is chased about it. The stage
-  // starts when the one before it is approved, so the durations along a row
-  // chain into a schedule: "2D plan to site visit is five days" is the sum.
-  durationDays Int?
+  // The part of the process this step belongs to — Site & Procurement, 3D
+  // Visualization, Technical Drawings. Sections are what the board groups by
+  // and what work is handed out in: a person takes a section of a project, not
+  // sixteen separate steps.
+  sectionId String?
+  section   ProcessSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  periodsFrom StagePeriod[] @relation("PeriodFrom")
+  periodsTo   StagePeriod[] @relation("PeriodTo")
 
   createdAt DateTime @default(now())
 
@@ -808,4 +815,90 @@ model SalaryAdjustment {
 
   @@unique([employeeId, periodKey, kind])
   @@index([periodKey])
+}
+
+// A part of the delivery process, and the unit work is handed out in.
+model ProcessSection {
+  id    String @id @default(cuid())
+  name  String
+  order Int    @default(0)
+  color String @default("cyan")
+
+  createdAt DateTime @default(now())
+
+  tasks       ProcessTask[]
+  assignments ProjectSectionAssignment[]
+}
+
+// How long a run of steps is allowed to take.
+//
+// Deliberately a range rather than a number per step: nobody times a process
+// one box at a time. "Site visit through BOQ is four days" is one decision, and
+// every step inside the range shares the deadline it produces. Ranges chain —
+// the next one starts when this one is finished — so the whole process has
+// dates without anyone typing a date.
+model StagePeriod {
+  id String @id @default(cuid())
+
+  fromTaskId String
+  fromTask   ProcessTask @relation("PeriodFrom", fields: [fromTaskId], references: [id], onDelete: Cascade)
+  toTaskId   String
+  toTask     ProcessTask @relation("PeriodTo", fields: [toTaskId], references: [id], onDelete: Cascade)
+
+  days Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([fromTaskId, toTaskId])
+}
+
+// Who does a section of one project. The same section goes to different people
+// on different jobs, which is why this hangs off the pair rather than off the
+// section alone.
+model ProjectSectionAssignment {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sectionId String
+  section   ProcessSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([projectId, sectionId])
+  @@index([employeeId])
+}
+
+// Work the manager hands out directly, outside the project process.
+//
+// "Go and negotiate with the supplier, two days" is not a stage of any project
+// and has no cell on the board — it is a job for a person over a span of days,
+// which is what the week view shows.
+model AssignedTask {
+  id String @id @default(cuid())
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  title String
+  note  String? @db.Text
+
+  // Days, not timestamps: "Tuesday to Wednesday" is a calendar question in the
+  // company timezone.
+  startDay DateTime @db.Date
+  endDay   DateTime @db.Date
+
+  state       TaskState    @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([employeeId, startDay])
+  @@index([startDay, endDay])
 }

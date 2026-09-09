@@ -89,59 +89,70 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
 }
 
 /**
- * Who does what on one project.
+ * Who does what on one project, a section at a time.
  *
- * The board's columns are departments, not people — the same step goes to
- * different people on different jobs — so assignment is a decision made per
- * project, here, in one pass. A step left blank falls back to its standing
- * owner, and only the people whose work actually changed hear about it.
+ * Handing somebody "3D Visualization" is one decision covering every step in
+ * it, and it is the decision a manager actually makes — so the assignment is
+ * recorded against the section, and the cells inside it follow. A cell where
+ * somebody was named individually keeps that person: a deliberate exception
+ * should survive a bulk change.
+ *
+ * Only the people whose work actually changed hear about it.
  */
 export async function assignProjectTeam(projectId: string, formData: FormData) {
   await requireAdmin();
 
-  const steps = await prisma.processTask.findMany({ select: { id: true, employeeId: true } });
-  const existing = await prisma.projectTaskEntry.findMany({
-    where: { projectId },
-    select: { id: true, taskId: true, assigneeId: true },
+  const sections = await prisma.processSection.findMany({
+    select: { id: true, name: true, tasks: { select: { id: true } } },
   });
-  const entryByTask = new Map(existing.map((entry) => [entry.taskId, entry]));
 
-  const assigned: string[] = [];
+  const existing = await prisma.projectSectionAssignment.findMany({
+    where: { projectId },
+    select: { sectionId: true, employeeId: true },
+  });
+  const heldBy = new Map(existing.map((row) => [row.sectionId, row.employeeId]));
 
-  for (const step of steps) {
+  const newlyAssigned: string[] = [];
+
+  for (const section of sections) {
+    const field = `section:${section.id}`;
     // Absent from the form means "not offered", which is different from
     // "cleared" — only act on the fields that were actually submitted.
-    if (!formData.has(`assignee:${step.id}`)) continue;
+    if (!formData.has(field)) continue;
 
-    const chosen = String(formData.get(`assignee:${step.id}`) ?? "") || null;
-    const entry = entryByTask.get(step.id);
+    const chosen = String(formData.get(field) ?? "") || null;
+    if ((heldBy.get(section.id) ?? null) === chosen) continue;
 
-    if (entry) {
-      if ((entry.assigneeId ?? null) === chosen) continue;
-      await prisma.projectTaskEntry.update({ where: { id: entry.id }, data: { assigneeId: chosen } });
-      if (chosen) assigned.push(entry.id);
-      continue;
-    }
-
-    // Nothing to record for a cell that has no row and is being left to its
-    // standing owner anyway.
-    if (!chosen || chosen === step.employeeId) continue;
-
-    const created = await prisma.projectTaskEntry.create({
-      data: { projectId, taskId: step.id, assigneeId: chosen },
+    await prisma.projectSectionAssignment.upsert({
+      where: { projectId_sectionId: { projectId, sectionId: section.id } },
+      create: { projectId, sectionId: section.id, employeeId: chosen },
+      update: { employeeId: chosen },
     });
-    assigned.push(created.id);
+
+    if (!chosen) continue;
+
+    // Give the section's work to them on this project. Cells that already name
+    // somebody are left alone; the rest now resolve to the new holder, and the
+    // ones that exist get told.
+    const taskIds = section.tasks.map((task) => task.id);
+    if (taskIds.length === 0) continue;
+
+    const cells = await prisma.projectTaskEntry.findMany({
+      where: { projectId, taskId: { in: taskIds }, assigneeId: null },
+      select: { id: true },
+    });
+    newlyAssigned.push(...cells.map((cell) => cell.id));
   }
 
   // The engine decides who hears about it and how; this never sends anything
   // by hand.
-  for (const entryId of assigned) {
+  for (const entryId of newlyAssigned) {
     await notifyTaskAssigned(entryId);
   }
 
   revalidatePath("/admin/tasks");
   revalidatePath("/employee", "layout");
-  return { assigned: assigned.length };
+  return { assigned: newlyAssigned.length };
 }
 
 /** Clears scheduling without deleting the tick history. */

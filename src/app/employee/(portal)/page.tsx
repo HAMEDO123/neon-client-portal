@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { CalendarClock, CheckCircle2, Sun } from "lucide-react";
+import { CalendarClock, CheckCircle2, ClipboardList, Sun } from "lucide-react";
 import { requireEmployee } from "@/lib/employee-session";
 import { tasksForDay } from "@/lib/employee-tasks";
 import { getTimezone } from "@/lib/settings";
 import { hourIn, todayKey, tomorrowKey } from "@/lib/time";
 import { TaskCard } from "@/components/employee/task-card";
 import { planForTasks } from "@/lib/stage-deadlines";
+import { myAssignedTasks } from "@/lib/assigned-tasks";
+import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +38,9 @@ export default async function EmployeeDashboard({
   // same way for today's work and tomorrow's.
   const plan = await planForTasks([...today, ...tomorrow]);
 
+  // Work handed out by hand, which belongs to no project and no board cell.
+  const assigned = await myAssignedTasks(employee.id);
+
   const openToday = today.filter((t) => t.state !== "DONE").length;
   const firstName = employee.name.split(" ")[0];
 
@@ -51,6 +56,22 @@ export default async function EmployeeDashboard({
             : `${openToday} task${openToday === 1 ? "" : "s"} still open today.`}
         </p>
       </div>
+
+      {assigned.length > 0 && (
+        <section>
+          <SectionHeading
+            icon={ClipboardList}
+            label="Asked of you"
+            count={assigned.length}
+            tone="text-ink"
+          />
+          <div className="mt-3 flex flex-col gap-3">
+            {assigned.map((task) => (
+              <AssignedTaskCard key={task.id} task={task} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section id="today" className={cn(focus === "tomorrow" && "order-2")}>
         <SectionHeading icon={Sun} label="Today" count={today.length} tone="text-ink" />

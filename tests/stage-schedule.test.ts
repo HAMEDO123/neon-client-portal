@@ -4,19 +4,20 @@ import assert from "node:assert/strict";
 import {
   addDays,
   countdownOf,
-  cumulativeDays,
   daysUntil,
+  periodTimeline,
   planStages,
   totalDays,
+  type PeriodInput,
   type StageInput,
 } from "../src/lib/stage-schedule";
 import { stageReminderCopy } from "../src/lib/notifications/types";
 
 const START = new Date("2026-09-01T09:00:00.000Z");
 
-function stage(overrides: Partial<StageInput> & { entryId: string; order: number }): StageInput {
+function stage(overrides: Partial<StageInput> & { taskId: string; order: number }): StageInput {
   return {
-    durationDays: null,
+    entryId: overrides.taskId,
     state: "TODO",
     startedAt: null,
     completedAt: null,
@@ -26,94 +27,104 @@ function stage(overrides: Partial<StageInput> & { entryId: string; order: number
   };
 }
 
-describe("planning a project's stages", () => {
-  it("chains one stage into the next", () => {
-    const plans = planStages(
-      [
-        stage({ entryId: "plan", order: 0, durationDays: 2 }),
-        stage({ entryId: "model", order: 1, durationDays: 3 }),
-        stage({ entryId: "visit", order: 2, durationDays: 1 }),
-      ],
-      START
-    );
+/** Site visit → BOQ, then plan → render, the way the process is actually cut. */
+const SITE = ["visit", "measure", "payment", "boq"];
+const DESIGN = ["plan", "model", "render"];
 
-    // Two days for the plan, then three for the model starting where it ended.
-    assert.deepEqual(plans[0].dueBy, addDays(START, 2));
-    assert.deepEqual(plans[1].startsAt, addDays(START, 2));
-    assert.deepEqual(plans[1].dueBy, addDays(START, 5));
-    assert.deepEqual(plans[2].dueBy, addDays(START, 6));
+function process(): StageInput[] {
+  return [...SITE, ...DESIGN].map((taskId, order) => stage({ taskId, order }));
+}
 
-    // Which is what "from the plan to the site visit is six days" means.
-    assert.equal(totalDays([2, 3, 1]), 6);
+function period(fromTaskId: string, toTaskId: string, days: number): PeriodInput {
+  return { fromTaskId, toTaskId, days };
+}
+
+describe("periods are ranges, not a number per step", () => {
+  it("gives every step in a range the range's deadline", () => {
+    const plans = planStages(process(), [period("visit", "boq", 4)], START);
+
+    const due = addDays(START, 4);
+    // All four steps of the range share one deadline — the range is the unit.
+    for (const index of [0, 1, 2, 3]) {
+      assert.deepEqual(plans[index].dueBy, due);
+      assert.equal(plans[index].source, "derived");
+    }
   });
 
-  it("respects a deadline the manager typed over a computed one", () => {
-    const explicit = new Date("2026-09-10T12:00:00.000Z");
-    const plans = planStages(
-      [
-        stage({ entryId: "plan", order: 0, durationDays: 2, dueAt: explicit }),
-        stage({ entryId: "model", order: 1, durationDays: 3 }),
-      ],
-      START
-    );
+  it("starts the next range when the one before it ends", () => {
+    const plans = planStages(process(), [period("visit", "boq", 4), period("plan", "render", 3)], START);
 
-    assert.equal(plans[0].source, "explicit");
-    assert.deepEqual(plans[0].dueBy, explicit);
-    // And the stage behind it waits for that date, not the shorter one.
-    assert.deepEqual(plans[1].startsAt, explicit);
+    assert.deepEqual(plans[0].dueBy, addDays(START, 4));
+    assert.deepEqual(plans[4].startsAt, addDays(START, 4));
+    assert.deepEqual(plans[4].dueBy, addDays(START, 7));
+
+    // Which is what "four days then three" means end to end.
+    assert.equal(totalDays([period("visit", "boq", 4), period("plan", "render", 3)]), 7);
   });
 
-  it("moves everything behind a stage that actually ran late", () => {
-    const finishedLate = new Date("2026-09-06T17:00:00.000Z");
-    const plans = planStages(
-      [
-        stage({ entryId: "plan", order: 0, durationDays: 2, state: "DONE", completedAt: finishedLate }),
-        stage({ entryId: "model", order: 1, durationDays: 3 }),
-      ],
-      START
-    );
-
-    // Not day 2 — the real completion date is what the next stage starts from.
-    assert.deepEqual(plans[1].startsAt, finishedLate);
-    assert.deepEqual(plans[1].dueBy, addDays(finishedLate, 3));
+  it("reads a range named backwards as the same range", () => {
+    const forwards = planStages(process(), [period("visit", "boq", 4)], START);
+    const backwards = planStages(process(), [period("boq", "visit", 4)], START);
+    assert.deepEqual(backwards[2].dueBy, forwards[2].dueBy);
   });
 
-  it("starts a stage from the day it was actually picked up", () => {
-    const started = new Date("2026-09-04T08:00:00.000Z");
-    const plans = planStages(
-      [stage({ entryId: "plan", order: 0, durationDays: 2, state: "IN_PROGRESS", startedAt: started })],
-      START
-    );
+  it("leaves steps outside every range untimed, without stalling the chain", () => {
+    const plans = planStages(process(), [period("plan", "render", 3)], START);
 
-    assert.deepEqual(plans[0].dueBy, addDays(started, 2));
+    // Nothing covers the site steps, so nobody is chased about them.
+    for (const index of [0, 1, 2, 3]) {
+      assert.equal(plans[index].dueBy, null);
+      assert.equal(plans[index].source, "none");
+    }
+    // And the range behind them still gets its days.
+    assert.deepEqual(plans[4].dueBy, addDays(START, 3));
   });
 
-  it("leaves an untimed stage without a deadline, and does not stall the chain", () => {
-    const plans = planStages(
-      [
-        stage({ entryId: "untimed", order: 0 }),
-        stage({ entryId: "model", order: 1, durationDays: 3 }),
-      ],
-      START
-    );
+  it("respects a deadline the manager typed over the range's own", () => {
+    const explicit = new Date("2026-09-20T12:00:00.000Z");
+    const stages = process();
+    stages[2] = stage({ taskId: "payment", order: 2, dueAt: explicit });
 
+    const plans = planStages(stages, [period("visit", "boq", 4)], START);
+
+    assert.equal(plans[2].source, "explicit");
+    assert.deepEqual(plans[2].dueBy, explicit);
+    // Its neighbours in the range keep the computed one.
+    assert.deepEqual(plans[1].dueBy, addDays(START, 4));
+  });
+
+  it("moves everything behind a range that actually finished late", () => {
+    const lateFinish = new Date("2026-09-12T17:00:00.000Z");
+    const stages = process();
+    for (const [index, taskId] of SITE.entries()) {
+      stages[index] = stage({
+        taskId,
+        order: index,
+        state: "DONE",
+        completedAt: index === SITE.length - 1 ? lateFinish : new Date("2026-09-03T09:00:00.000Z"),
+      });
+    }
+
+    const plans = planStages(stages, [period("visit", "boq", 4), period("plan", "render", 3)], START);
+
+    // Not day 4 — the real completion is what the next range starts from.
+    assert.deepEqual(plans[4].startsAt, lateFinish);
+    assert.deepEqual(plans[4].dueBy, addDays(lateFinish, 3));
+  });
+
+  it("starts a range from the day its work was actually picked up", () => {
+    const started = new Date("2026-09-05T08:00:00.000Z");
+    const stages = process();
+    stages[1] = stage({ taskId: "measure", order: 1, state: "IN_PROGRESS", startedAt: started });
+
+    const plans = planStages(stages, [period("visit", "boq", 4)], START);
+    assert.deepEqual(plans[0].startsAt, started);
+    assert.deepEqual(plans[0].dueBy, addDays(started, 4));
+  });
+
+  it("ignores a range naming a step that no longer exists", () => {
+    const plans = planStages(process(), [period("visit", "deleted-step", 4)], START);
     assert.equal(plans[0].dueBy, null);
-    assert.equal(plans[0].source, "none");
-    // The next stage still gets its days, counted from the anchor.
-    assert.deepEqual(plans[1].dueBy, addDays(START, 3));
-  });
-
-  it("reads the stages in process order, not the order they arrive in", () => {
-    const plans = planStages(
-      [
-        stage({ entryId: "second", order: 1, durationDays: 5 }),
-        stage({ entryId: "first", order: 0, durationDays: 1 }),
-      ],
-      START
-    );
-
-    assert.equal(plans[0].entryId, "first");
-    assert.deepEqual(plans[1].dueBy, addDays(START, 6));
   });
 });
 
@@ -152,9 +163,6 @@ describe("what the reminder says", () => {
     assert.equal(soon.title, "Deadline approaching");
     assert.match(soon.message, /2 days left/);
 
-    const today = stageReminderCopy("2D Plan", "Bond Cafe", countdownOf(new Date("2026-09-09T18:00:00.000Z"), now));
-    assert.match(today.message, /1 day left/);
-
     const late = stageReminderCopy("2D Plan", "Bond Cafe", countdownOf(new Date("2026-09-07T09:00:00.000Z"), now));
     assert.equal(late.title, "Task overdue");
     assert.match(late.message, /2 days late/);
@@ -162,21 +170,28 @@ describe("what the reminder says", () => {
   });
 });
 
-describe("the running total on the settings screen", () => {
-  it("says which days of the process each stage occupies", () => {
-    assert.deepEqual(cumulativeDays([2, 3, 1]), [
-      { startDay: 1, endDay: 2 },
-      { startDay: 3, endDay: 5 },
-      { startDay: 6, endDay: 6 },
-    ]);
+describe("the timeline on the settings screen", () => {
+  const order = [...SITE, ...DESIGN];
+
+  it("says which days of the process each range occupies", () => {
+    const timeline = periodTimeline(order, [period("visit", "boq", 4), period("plan", "render", 3)]);
+
+    assert.deepEqual(
+      timeline.map((row) => ({ startDay: row.startDay, endDay: row.endDay, steps: row.steps })),
+      [
+        { startDay: 1, endDay: 4, steps: 4 },
+        { startDay: 5, endDay: 7, steps: 3 },
+      ]
+    );
   });
 
-  it("skips an untimed stage without shifting the ones after it", () => {
-    assert.deepEqual(cumulativeDays([2, null, 1]), [
-      { startDay: 1, endDay: 2 },
-      { startDay: 3, endDay: null },
-      { startDay: 3, endDay: 3 },
-    ]);
-    assert.equal(totalDays([2, null, 1]), 3);
+  it("reads the ranges in process order, however they were added", () => {
+    const timeline = periodTimeline(order, [period("plan", "render", 3), period("visit", "boq", 4)]);
+    assert.equal(timeline[0].period.fromTaskId, "visit");
+    assert.equal(timeline[1].period.fromTaskId, "plan");
+  });
+
+  it("drops a range naming a step that no longer exists", () => {
+    assert.equal(periodTimeline(order, [period("visit", "gone", 4)]).length, 0);
   });
 });

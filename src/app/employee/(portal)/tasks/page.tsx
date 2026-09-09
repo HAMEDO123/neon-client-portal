@@ -5,6 +5,8 @@ import { allTasks } from "@/lib/employee-tasks";
 import { getTimezone } from "@/lib/settings";
 import { TaskCard } from "@/components/employee/task-card";
 import { planForTasks } from "@/lib/stage-deadlines";
+import { myAssignedTasks } from "@/lib/assigned-tasks";
+import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +28,7 @@ export default async function EmployeeTasksPage({
   const active = FILTERS.find((f) => f.key === filter)?.key ?? "open";
   const tasks = await allTasks(employee.id, active === "all" ? undefined : active);
   const plan = await planForTasks(tasks);
+  const assigned = await myAssignedTasks(employee.id, { includeDone: active !== "open" });
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,7 +51,15 @@ export default async function EmployeeTasksPage({
         ))}
       </div>
 
-      {tasks.length === 0 ? (
+      {assigned.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {assigned.map((task) => (
+            <AssignedTaskCard key={task.id} task={task} />
+          ))}
+        </div>
+      )}
+
+      {tasks.length === 0 && assigned.length === 0 ? (
         <EmptyState
           className="mt-2"
           icon={ListChecks}

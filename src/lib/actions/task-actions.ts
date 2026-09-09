@@ -99,51 +99,146 @@ export async function moveEmployee(id: string, direction: "left" | "right") {
   refresh();
 }
 
-export async function createProcessTask(name: string, employeeId: string | null) {
+export async function createProcessTask(
+  name: string,
+  employeeId: string | null,
+  sectionId: string | null = null
+) {
   await requireAdmin();
   const trimmed = name.trim();
   if (!trimmed) throw new Error("A step name is required.");
 
   const count = await prisma.processTask.count();
   await prisma.processTask.create({
-    data: { name: trimmed, employeeId: employeeId || null, order: count },
+    data: { name: trimmed, employeeId: employeeId || null, sectionId: sectionId || null, order: count },
   });
 
   refresh();
 }
 
-export async function updateProcessTask(id: string, name: string, employeeId: string | null) {
+export async function updateProcessTask(
+  id: string,
+  name: string,
+  employeeId: string | null,
+  sectionId?: string | null
+) {
   await requireAdmin();
   const trimmed = name.trim();
   if (!trimmed) throw new Error("A step name is required.");
 
   await prisma.processTask.update({
     where: { id },
-    data: { name: trimmed, employeeId: employeeId || null },
+    data: {
+      name: trimmed,
+      employeeId: employeeId || null,
+      ...(sectionId === undefined ? {} : { sectionId: sectionId || null }),
+    },
   });
 
   refresh();
 }
 
 /**
- * How long a stage is allowed to take, in days.
+ * How long a run of steps is allowed to take.
  *
- * Setting it turns the process into a schedule: the step after this one starts
- * when it finishes and gets its own days, so the chain carries dates without
- * anyone typing a deadline per project. Blank means untimed — nobody is chased
- * about it.
+ * A range, not a number per step: "site visit through BOQ is four days" is one
+ * decision covering four boxes. Ranges chain into a schedule, so no project
+ * ever needs a date typed on it.
  */
-export async function setStageDuration(id: string, formData: FormData) {
+export async function saveStagePeriod(formData: FormData) {
   await requireAdmin();
 
-  const raw = String(formData.get("durationDays") ?? "").trim();
-  const parsed = Number(raw);
-  const durationDays =
-    raw === "" || !Number.isFinite(parsed) || parsed <= 0
-      ? null
-      : Math.min(Math.round(parsed), 365);
+  const fromTaskId = String(formData.get("fromTaskId") ?? "").trim();
+  const toTaskId = String(formData.get("toTaskId") ?? "").trim();
+  const days = Math.round(Number(formData.get("days")));
 
-  await prisma.processTask.update({ where: { id }, data: { durationDays } });
+  if (!fromTaskId || !toTaskId) throw new Error("Pick the first and last step of the range.");
+  if (!Number.isFinite(days) || days <= 0) throw new Error("Give the range a number of days.");
+
+  await prisma.stagePeriod.upsert({
+    where: { fromTaskId_toTaskId: { fromTaskId, toTaskId } },
+    create: { fromTaskId, toTaskId, days: Math.min(days, 365) },
+    update: { days: Math.min(days, 365) },
+  });
+
+  refresh();
+  revalidatePath("/admin/settings");
+}
+
+export async function deleteStagePeriod(id: string) {
+  await requireAdmin();
+  await prisma.stagePeriod.delete({ where: { id } }).catch(() => {});
+
+  refresh();
+  revalidatePath("/admin/settings");
+}
+
+// --- Sections ---------------------------------------------------------------
+// The parts of the process, and the unit work is handed out in.
+
+export async function createProcessSection(name: string) {
+  await requireAdmin();
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("A section name is required.");
+
+  const count = await prisma.processSection.count();
+  const colors = ["cyan", "purple", "pink", "orange"];
+  await prisma.processSection.create({
+    data: { name: trimmed, order: count, color: colors[count % colors.length] },
+  });
+
+  refresh();
+  revalidatePath("/admin/settings");
+}
+
+export async function updateProcessSection(id: string, name: string, color: string) {
+  await requireAdmin();
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("A section name is required.");
+
+  await prisma.processSection.update({
+    where: { id },
+    data: { name: trimmed, color: EMPLOYEE_COLORS.includes(color as never) ? color : "cyan" },
+  });
+
+  refresh();
+  revalidatePath("/admin/settings");
+}
+
+export async function deleteProcessSection(id: string) {
+  await requireAdmin();
+  // The steps survive; they simply stop belonging anywhere and gather under
+  // "Other" until they are put somewhere else.
+  await prisma.processSection.delete({ where: { id } });
+
+  refresh();
+  revalidatePath("/admin/settings");
+}
+
+export async function moveProcessSection(id: string, direction: "left" | "right") {
+  await requireAdmin();
+
+  const sections = await prisma.processSection.findMany({ orderBy: [{ order: "asc" }, { createdAt: "asc" }] });
+  const index = sections.findIndex((section) => section.id === id);
+  const target = index + (direction === "left" ? -1 : 1);
+  if (index === -1 || target < 0 || target >= sections.length) return;
+
+  const reordered = [...sections];
+  [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+
+  // Rewrite every position: earlier inserts can leave them duplicated or sparse.
+  for (const [position, section] of reordered.entries()) {
+    await prisma.processSection.update({ where: { id: section.id }, data: { order: position } });
+  }
+
+  refresh();
+  revalidatePath("/admin/settings");
+}
+
+/** Puts a step into a section, or takes it out of one. */
+export async function setTaskSection(taskId: string, sectionId: string | null) {
+  await requireAdmin();
+  await prisma.processTask.update({ where: { id: taskId }, data: { sectionId: sectionId || null } });
 
   refresh();
   revalidatePath("/admin/settings");

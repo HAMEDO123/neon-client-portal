@@ -2,12 +2,32 @@ import { FolderKanban } from "lucide-react";
 import { getTaskBoard } from "@/lib/queries";
 import { getTimezone } from "@/lib/settings";
 import { todayKey, tomorrowKey } from "@/lib/time";
+import { assignedTasksForWeek } from "@/lib/assigned-tasks";
+import { weekDayKeys, weekStartKey } from "@/lib/week";
 import { TaskBoard } from "@/components/admin/task-board";
+import { WeekView } from "@/components/admin/week-view";
 import { EmptyState } from "@/components/ui/empty-state";
 
-export default async function TasksPage() {
-  const board = await getTaskBoard();
+// Two tables, because the studio runs on two kinds of work.
+//
+// The board above is the delivery process: every project against the same
+// sections, ticked off as it moves. The week below is everything else — the
+// jobs the manager hands out by hand, over the days they run for.
+
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
+  const { week } = await searchParams;
   const timezone = await getTimezone();
+  const today = todayKey(timezone);
+
+  const anchor = /^\d{4}-\d{2}-\d{2}$/.test(week ?? "") ? week! : today;
+
+  // Sequential, like the rest of the multi-query pages here.
+  const board = await getTaskBoard();
+  const assigned = await assignedTasksForWeek(anchor);
 
   return (
     <div>
@@ -26,9 +46,19 @@ export default async function TasksPage() {
         />
       ) : (
         <div className="mt-6">
-          <TaskBoard board={board} todayKey={todayKey(timezone)} tomorrowKey={tomorrowKey(timezone)} />
+          <TaskBoard board={board} todayKey={today} tomorrowKey={tomorrowKey(timezone)} />
         </div>
       )}
+
+      <div className="mt-12">
+        <WeekView
+          team={board.team}
+          tasks={assigned}
+          weekKeys={weekDayKeys(anchor)}
+          todayKey={today}
+          weekStart={weekStartKey(anchor)}
+        />
+      </div>
     </div>
   );
 }

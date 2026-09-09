@@ -10,7 +10,9 @@ import { WhatsAppChannelCard } from "@/components/admin/channel-cards";
 import { lineStatus } from "@/lib/whatsapp/worker";
 import { SaveButton } from "@/components/admin/form-buttons";
 import { StagePeriods } from "@/components/admin/stage-periods";
-import { getProcessTasks } from "@/lib/queries";
+import { PushHealthCard } from "@/components/admin/push-health-card";
+import { getPushHealth } from "@/lib/push-health";
+import { getProcessSections, getProcessTasks, getStagePeriods } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
 
 // Integrations and the settings the platform reads at runtime, in one place
@@ -39,6 +41,9 @@ export default async function AdminSettingsPage() {
   // The linked-number card asks the worker directly, since a QR session has
   // states the transport check does not describe.
   const stages = await getProcessTasks();
+  const sections = await getProcessSections();
+  const periods = await getStagePeriods();
+  const pushHealth = await getPushHealth();
 
   const line = worker ? await lineStatus() : null;
   const linkState = line?.ok
@@ -58,12 +63,16 @@ export default async function AdminSettingsPage() {
         <p className="mt-1 text-sm text-ink/50">Integrations and the values the daily jobs run on.</p>
       </div>
 
+      <PushHealthCard health={pushHealth} timezone={timezone} />
+
       <StagePeriods
-        stages={stages.map((stage) => ({
-          id: stage.id,
-          name: stage.name,
-          durationDays: stage.durationDays,
-          employee: stage.employee ? { name: stage.employee.name, color: stage.employee.color } : null,
+        steps={stages.map((stage) => ({ id: stage.id, name: stage.name, sectionId: stage.sectionId }))}
+        sections={sections.map((section) => ({ id: section.id, name: section.name, color: section.color }))}
+        periods={periods.map((period) => ({
+          id: period.id,
+          fromTaskId: period.fromTaskId,
+          toTaskId: period.toTaskId,
+          days: period.days,
         }))}
       />
 

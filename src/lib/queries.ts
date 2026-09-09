@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/db";
+import { ownerOf } from "@/lib/stage-deadlines";
+import { UNSECTIONED_ID } from "@/lib/task-board";
 import type { TaskState } from "@/generated/prisma/enums";
 
 export function getProjects() {
@@ -103,15 +105,23 @@ export function getEmployees() {
 export function getProcessTasks() {
   return prisma.processTask.findMany({
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-    include: { employee: true },
+    include: { employee: true, section: true },
   });
+}
+
+export function getProcessSections() {
+  return prisma.processSection.findMany({ orderBy: [{ order: "asc" }, { createdAt: "asc" }] });
+}
+
+export function getStagePeriods() {
+  return prisma.stagePeriod.findMany({ orderBy: { createdAt: "asc" } });
 }
 
 // The daily task board: every project crossed with every step of the shared
 // process. Entries are sparse — a cell the team has never touched has no row,
 // so the board fills the gaps with TODO rather than pre-creating the matrix.
 export async function getTaskBoard() {
-  const [projects, employees, tasks, entries] = await Promise.all([
+  const [projects, employees, tasks, sectionRows, sectionTeam, entries] = await Promise.all([
     prisma.project.findMany({
       where: { publishState: { not: "ARCHIVED" } },
       orderBy: [{ pipelineStatus: "asc" }, { updatedAt: "desc" }],
@@ -126,6 +136,10 @@ export async function getTaskBoard() {
     }),
     getEmployees(),
     getProcessTasks(),
+    getProcessSections(),
+    prisma.projectSectionAssignment.findMany({
+      select: { projectId: true, sectionId: true, employeeId: true },
+    }),
     prisma.projectTaskEntry.findMany({
       select: {
         id: true,
@@ -143,17 +157,37 @@ export async function getTaskBoard() {
     }),
   ]);
 
-  // The columns are the departments — Site & Procurement, 3D Visualization,
-  // Technical Drawings — not the people. Who does a step is a per-project
-  // decision made on the project's own row, because the same step goes to
-  // different people on different jobs.
+  // The columns are the process itself, grouped into its sections — Site &
+  // Procurement, 3D Visualization, Technical Drawings — never into people.
+  // Work is handed out a section at a time, per project, because the same
+  // section goes to different people on different jobs.
   const steps = tasks.map((task) => ({
     id: task.id,
     name: task.name,
-    durationDays: task.durationDays,
-    // The standing owner: who gets a step when a project says nothing else.
+    sectionId: task.sectionId,
+    // The standing owner: who gets a step when nothing else has been said.
     defaultOwnerId: task.employeeId,
   }));
+
+  // Steps with no section of their own still need a home, or they would vanish
+  // from a board that groups by section.
+  const loose = steps.filter((step) => !step.sectionId);
+  const sections = [
+    ...sectionRows.map((section) => ({
+      id: section.id,
+      name: section.name,
+      color: section.color,
+      real: true,
+      steps: steps.filter((step) => step.sectionId === section.id),
+    })),
+    ...(loose.length > 0
+      ? [{ id: UNSECTIONED_ID, name: "Other", color: "neutral", real: false, steps: loose }]
+      : []),
+  ].filter((section) => section.steps.length > 0 || section.real);
+
+  const teamBy = new Map(
+    sectionTeam.map((row) => [`${row.projectId}:${row.sectionId}`, row.employeeId])
+  );
 
   const team = employees
     .filter((employee) => employee.active)
@@ -180,9 +214,13 @@ export async function getTaskBoard() {
         adminNote: entry?.adminNote ?? null,
         assigneeId: entry?.assigneeId ?? null,
         excludedFromProgress: entry?.excludedFromProgress ?? false,
-        // Who is actually on the hook for this cell: this project's choice,
-        // and the step's standing owner when it has not made one.
-        ownerId: entry?.assigneeId ?? step.defaultOwnerId,
+        // Who is actually on the hook: a person named on the cell, then
+        // whoever holds this section of this project, then the standing owner.
+        ownerId: ownerOf(
+          entry?.assigneeId ?? null,
+          { employeeId: step.defaultOwnerId },
+          step.sectionId ? teamBy.get(`${project.id}:${step.sectionId}`) : null
+        ),
       };
     });
     // Excluded cells are still on the board; they are just not part of anyone's
@@ -198,6 +236,9 @@ export async function getTaskBoard() {
 
   return {
     steps,
+    sections,
+    // Who holds each section of each project, for the row's assign popup.
+    sectionTeam: Object.fromEntries(teamBy),
     team,
     rows,
     totalTasks: steps.length,
@@ -209,6 +250,7 @@ export async function getTaskBoard() {
 
 export type TaskBoard = Awaited<ReturnType<typeof getTaskBoard>>;
 export type TaskBoardStep = TaskBoard["steps"][number];
+export type TaskBoardSection = TaskBoard["sections"][number];
 export type TaskBoardMember = TaskBoard["team"][number];
 export type TaskBoardRow = TaskBoard["rows"][number];
 export type TaskBoardCell = TaskBoardRow["cells"][number];

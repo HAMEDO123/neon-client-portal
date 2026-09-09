@@ -86,3 +86,7 @@ export const PRIORITY_LABEL = {
   MEDIUM: "Medium",
   HIGH: "High",
 } as const;
+
+// Steps that belong to no section still have to appear somewhere, so they are
+// grouped under a bucket with a reserved id rather than dropping off the board.
+export const UNSECTIONED_ID = "unsectioned";

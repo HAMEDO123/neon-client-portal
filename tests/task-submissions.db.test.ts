@@ -28,6 +28,7 @@ async function cleanup() {
   await prisma.adminNotification.deleteMany({ where: { createdAt: { gte: startedAt } } });
   await prisma.notification.deleteMany({ where: { createdAt: { gte: startedAt } } });
   await prisma.notificationDelivery.deleteMany({ where: { createdAt: { gte: startedAt } } });
+  await prisma.stagePeriod.deleteMany({ where: { fromTask: { name: { startsWith: PREFIX } } } });
   await prisma.salaryAdjustment.deleteMany({ where: { employee: { name: { startsWith: PREFIX } } } });
   await prisma.taskSubmission.deleteMany({ where: { employee: { name: { startsWith: PREFIX } } } });
   await prisma.projectTaskEntry.deleteMany({ where: { task: { name: { startsWith: PREFIX } } } });
@@ -57,16 +58,18 @@ before(async () => {
   });
   projectId = project.id;
 
-  // Three stages of two days each, owned by this employee.
+  // Three steps owned by this employee, covered by one two-day range.
   const steps = [];
   for (const [index, name] of [`${PREFIX}Plan`, `${PREFIX}Model`, `${PREFIX}Visit`].entries()) {
     steps.push(
-      await prisma.processTask.create({
-        data: { name, employeeId, order: 900 + index, durationDays: 2 },
-      })
+      await prisma.processTask.create({ data: { name, employeeId, order: 900 + index } })
     );
   }
   stepIds = steps.map((step) => step.id);
+
+  await prisma.stagePeriod.create({
+    data: { fromTaskId: stepIds[0], toTaskId: stepIds[2], days: 2 },
+  });
 
   const entry = await prisma.projectTaskEntry.create({
     data: { projectId, taskId: stepIds[0], state: "IN_PROGRESS" },
@@ -213,15 +216,10 @@ describe("stage periods against real rows", () => {
 
     const ordered = stepIds.map((id) => [...plan.values()].find((stage) => stage.taskId === id)!);
 
-    // The first stage was approved a moment ago, so the second starts from
-    // when it actually finished rather than from when it was predicted to.
-    const finishedAt = (await prisma.projectTaskEntry.findUniqueOrThrow({ where: { id: entryId } })).completedAt!;
-    assert.deepEqual(ordered[1].startsAt, finishedAt);
-    assert.deepEqual(ordered[1].dueBy, new Date(finishedAt.getTime() + 2 * 24 * 60 * 60 * 1000));
-
-    // And the third follows the second, two days behind it.
-    assert.ok(ordered[2].dueBy! > ordered[1].dueBy!);
-    assert.deepEqual(ordered[2].startsAt, ordered[1].dueBy);
+    // One range covers all three steps, so they share its deadline.
+    assert.deepEqual(ordered[1].dueBy, ordered[0].dueBy);
+    assert.deepEqual(ordered[2].dueBy, ordered[0].dueBy);
+    assert.ok(ordered.every((stage) => stage.source === "derived"));
   });
 });
 

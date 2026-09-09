@@ -25,13 +25,14 @@ import {
   setTaskState,
   updateProcessTask,
 } from "@/lib/actions/task-actions";
-import { NEXT_STATE, STATE_LABEL, dotTone } from "@/lib/task-board";
+import { NEXT_STATE, STATE_LABEL, dotTone, headerTone, columnTone } from "@/lib/task-board";
 import { TaskScheduleEditor, type CellDetails } from "@/components/admin/task-schedule-editor";
 import { ProjectTeamEditor, TeamDots } from "@/components/admin/project-team-editor";
 import type {
   TaskBoard as TaskBoardData,
   TaskBoardCell,
   TaskBoardMember,
+  TaskBoardSection,
   TaskBoardStep,
 } from "@/lib/queries";
 import type { TaskState } from "@/generated/prisma/enums";
@@ -140,39 +141,84 @@ export function TaskBoard({
       >
         <table className="w-full min-w-[46rem] table-fixed border-separate border-spacing-0 text-left text-sm">
           <thead>
+            {/* Sections on top, their steps beneath — the shape of the process,
+                never a list of people. Who takes a section is decided per
+                project, on the project's own row. */}
             <tr>
-              <th className="sticky left-0 z-20 w-[10rem] border-b border-ink/8 bg-bg-soft px-3 py-3 text-xs font-medium uppercase tracking-wider text-ink/40 sm:w-[11.5rem] sm:px-4">
+              <th
+                rowSpan={2}
+                className="sticky left-0 z-20 w-[10rem] border-b border-ink/8 bg-bg-soft px-3 py-3 text-xs font-medium uppercase tracking-wider text-ink/40 sm:w-[11.5rem] sm:px-4"
+              >
                 Project
               </th>
 
-              {/* The columns are the departments. Who does one is decided per
-                  project, on the project's own row. */}
-              {board.steps.map((step) => (
+              {board.sections.map((section) => (
                 <th
-                  key={step.id}
-                  className="relative border-b border-l border-ink/8 bg-bg-soft/60 p-0 align-bottom"
+                  key={section.id}
+                  colSpan={section.steps.length + 1}
+                  className={cn(
+                    "border-b border-l border-ink/8 px-2 py-2 text-center text-[13px] font-semibold",
+                    section.real ? headerTone(section.color) : "bg-ink/[0.03] text-ink/50"
+                  )}
                 >
-                  <StepHeader step={step} team={board.team} run={run} />
+                  <span className="block truncate">{section.name}</span>
                 </th>
               ))}
 
-              <th
-                className={cn(
-                  "border-b border-l border-ink/8 bg-bg-soft p-0 align-middle",
-                  empty ? "w-full" : "w-8"
-                )}
-              >
-                <InlineAdd
-                  title="Add a department"
-                  placeholder="Technical Drawings"
-                  label={empty ? "Add your first department" : undefined}
-                  onSubmit={(value) => run(() => createProcessTask(value, null))}
-                />
-              </th>
+              {board.sections.length === 0 && (
+                <th className="w-full border-b border-l border-ink/8 bg-bg-soft p-0 align-middle" />
+              )}
 
               {!empty && (
-                <th className="w-[5.5rem] border-b border-l border-ink/8 bg-bg-soft px-2 py-3 text-center text-xs font-medium uppercase tracking-wider text-ink/40">
+                <th
+                  rowSpan={2}
+                  className="w-[5.5rem] border-b border-l border-ink/8 bg-bg-soft px-2 py-3 text-center text-xs font-medium uppercase tracking-wider text-ink/40"
+                >
                   Progress
+                </th>
+              )}
+            </tr>
+
+            <tr>
+              {board.sections.flatMap((section) => [
+                ...section.steps.map((step) => (
+                  <th
+                    key={step.id}
+                    className={cn(
+                      "relative border-b border-l border-ink/8 p-0 align-bottom",
+                      section.real ? columnTone(section.color) : "bg-bg-soft/60"
+                    )}
+                  >
+                    <StepHeader step={step} team={board.team} run={run} />
+                  </th>
+                )),
+                <th
+                  key={`${section.id}-add`}
+                  className={cn(
+                    "border-b border-l border-ink/8 p-0 align-middle",
+                    section.steps.length === 0 ? "w-24" : "w-8",
+                    section.real ? columnTone(section.color) : "bg-bg-soft/60"
+                  )}
+                >
+                  <InlineAdd
+                    title={`Add a step to ${section.name}`}
+                    placeholder="Step"
+                    label={section.steps.length === 0 ? "First step" : undefined}
+                    onSubmit={(value) =>
+                      run(() => createProcessTask(value, null, section.real ? section.id : null))
+                    }
+                  />
+                </th>,
+              ])}
+
+              {board.sections.length === 0 && (
+                <th className="border-b border-l border-ink/8 bg-bg-soft p-0 align-middle">
+                  <InlineAdd
+                    title="Add a step"
+                    placeholder="Site visit"
+                    label="Add your first step"
+                    onSubmit={(value) => run(() => createProcessTask(value, null))}
+                  />
                 </th>
               )}
             </tr>
@@ -183,6 +229,7 @@ export function TaskBoard({
               // "Not counted" cells drop out of the fraction entirely, and so
               // does everyone else's work while the board is filtered to one
               // person.
+              const cellByTask = new Map(row.cells.map((cell) => [cell.taskId, cell]));
               const counted = row.cells.filter((cell) => !cell.excludedFromProgress && owned(cell));
               const done = counted.filter((cell) => cell.state === "DONE").length;
               const tomorrow = counted.filter((cell) => cell.state === "TOMORROW").length;
@@ -195,63 +242,74 @@ export function TaskBoard({
                   >
                     <ProjectRowHeader
                       project={row.project}
-                      steps={board.steps}
+                      sections={board.sections}
                       cells={row.cells}
                       team={board.team}
+                      sectionTeam={board.sectionTeam}
                     />
                   </th>
 
-                  {row.cells.map((cell, index) => {
-                    const owner = cell.ownerId ? memberById.get(cell.ownerId) : undefined;
-                    return (
-                      <td
-                        key={cell.taskId}
-                        className={cn(
-                          "group/cell relative border-b border-l border-ink/6 p-0 text-center",
-                          index === 0 && "border-l-ink/8",
-                          // Somebody else's work, while the board is filtered.
-                          !owned(cell) && "opacity-30"
-                        )}
-                      >
-                        <TaskCell
-                          state={cell.state}
-                          label={`${board.steps[index]?.name ?? ""} · ${row.project.name}`}
-                          excluded={cell.excludedFromProgress}
-                          ownerColor={owner?.color ?? null}
-                          ownerName={owner?.name ?? null}
-                          onClick={() => cycle(row.project.id, cell.taskId, cell.state)}
-                        />
-                        <CellSchedule
-                          projectId={row.project.id}
-                          projectName={row.project.name}
-                          taskId={cell.taskId}
-                          taskName={board.steps[index]?.name ?? ""}
-                          details={{
-                            priority: cell.priority,
-                            scheduledFor: cell.scheduledFor,
-                            dueAt: cell.dueAt,
-                            adminNote: cell.adminNote,
-                            assigneeId: cell.assigneeId,
-                            excludedFromProgress: cell.excludedFromProgress,
-                          }}
-                          owners={board.team}
-                          defaultOwnerId={board.steps[index]?.defaultOwnerId ?? null}
-                          todayKey={todayKey}
-                          tomorrowKey={tomorrowKey}
-                          onSaved={(details) =>
-                            applyPatch({
-                              kind: "details",
-                              projectId: row.project.id,
-                              taskId: cell.taskId,
-                              details,
-                            })
-                          }
-                        />
-                      </td>
-                    );
-                  })}
+                  {board.sections.flatMap((section) => [
+                    ...section.steps.map((step) => {
+                      const cell = cellByTask.get(step.id);
+                      if (!cell) return null;
+                      const owner = cell.ownerId ? memberById.get(cell.ownerId) : undefined;
 
-                  <td className="border-b border-l border-ink/8 bg-bg-soft/40" />
+                      return (
+                        <td
+                          key={step.id}
+                          className={cn(
+                            "group/cell relative border-b border-l border-ink/6 p-0 text-center",
+                            section.real && columnTone(section.color),
+                            // Somebody else's work, while the board is filtered.
+                            !owned(cell) && "opacity-30"
+                          )}
+                        >
+                          <TaskCell
+                            state={cell.state}
+                            label={`${step.name} · ${row.project.name}`}
+                            excluded={cell.excludedFromProgress}
+                            ownerColor={owner?.color ?? null}
+                            ownerName={owner?.name ?? null}
+                            onClick={() => cycle(row.project.id, cell.taskId, cell.state)}
+                          />
+                          <CellSchedule
+                            projectId={row.project.id}
+                            projectName={row.project.name}
+                            taskId={cell.taskId}
+                            taskName={step.name}
+                            details={{
+                              priority: cell.priority,
+                              scheduledFor: cell.scheduledFor,
+                              dueAt: cell.dueAt,
+                              adminNote: cell.adminNote,
+                              assigneeId: cell.assigneeId,
+                              excludedFromProgress: cell.excludedFromProgress,
+                            }}
+                            owners={board.team}
+                            defaultOwnerId={step.defaultOwnerId}
+                            todayKey={todayKey}
+                            tomorrowKey={tomorrowKey}
+                            onSaved={(details) =>
+                              applyPatch({
+                                kind: "details",
+                                projectId: row.project.id,
+                                taskId: cell.taskId,
+                                details,
+                              })
+                            }
+                          />
+                        </td>
+                      );
+                    }),
+                    <td
+                      key={`${section.id}-pad`}
+                      className={cn(
+                        "border-b border-l border-ink/8",
+                        section.real ? columnTone(section.color) : "bg-bg-soft/40"
+                      )}
+                    />,
+                  ])}
 
                   {!empty && (
                     <td className="border-b border-l border-ink/8 px-1.5 py-2.5 text-center">
@@ -283,13 +341,13 @@ export function TaskBoard({
       <p className="text-xs text-ink/40">
         {empty ? (
           <>
-            Add the departments every project passes through — site &amp; procurement, 3D visualization, technical
-            drawings. Each project below gets the same ones.
+            Add the steps every project passes through, then group them into sections in Settings — site &amp;
+            procurement, 3D visualization, technical drawings.
           </>
         ) : (
           <>
             Click a box to cycle it: to do → done → tomorrow. Click a{" "}
-            <span className="font-medium text-ink/60">project name</span> to say who does which department on it — the
+            <span className="font-medium text-ink/60">project name</span> to say who takes which section on it — the
             answer can differ from project to project.
           </>
         )}
@@ -445,16 +503,23 @@ function ProgressPill({ done, total, tomorrow }: { done: number; total: number; 
 // which department on it.
 function ProjectRowHeader({
   project,
-  steps,
+  sections,
   cells,
   team,
+  sectionTeam,
 }: {
   project: { id: string; name: string; clientName: string };
-  steps: TaskBoardStep[];
+  sections: TaskBoardSection[];
   cells: TaskBoardCell[];
   team: TaskBoardMember[];
+  sectionTeam: Record<string, string | null>;
 }) {
   const [open, setOpen] = useState(false);
+
+  // Flatten this project's slice of the assignment map for the editor.
+  const assigned = Object.fromEntries(
+    sections.map((section) => [section.id, sectionTeam[`${project.id}:${section.id}`] ?? null])
+  );
 
   return (
     <Popover
@@ -473,9 +538,9 @@ function ProjectRowHeader({
     >
       <ProjectTeamEditor
         project={project}
-        steps={steps}
-        cells={cells}
+        sections={sections}
         team={team}
+        assigned={assigned}
         onClose={() => setOpen(false)}
       />
     </Popover>
@@ -511,11 +576,8 @@ function StepHeader({
         }
       }}
       trigger={
-        <span className="block hyphens-auto break-words px-1 py-2.5 text-center text-[11px] font-semibold leading-[1.25] tracking-tight text-ink/70">
+        <span className="block hyphens-auto break-words px-1 py-2.5 text-center text-[10px] font-medium leading-[1.25] tracking-tight text-ink/60">
           {step.name}
-          {step.durationDays != null && (
-            <span className="mt-0.5 block text-[9px] font-normal text-ink/35">{step.durationDays}d</span>
-          )}
         </span>
       }
       triggerLabel={`Edit ${step.name}`}

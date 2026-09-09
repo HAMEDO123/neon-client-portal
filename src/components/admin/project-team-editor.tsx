@@ -5,32 +5,35 @@ import Link from "next/link";
 import { ExternalLink, Loader2, Users } from "lucide-react";
 import { assignProjectTeam } from "@/lib/actions/task-detail-actions";
 import { dotTone } from "@/lib/task-board";
-import type { TaskBoardCell, TaskBoardMember, TaskBoardStep } from "@/lib/queries";
+import type { TaskBoardCell, TaskBoardMember, TaskBoardSection } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 // Who is doing what on this project.
 //
-// The board's columns are departments, so the people live here instead: one
-// row per department, a name against each, decided per project. Wael takes the
-// site visit on one job and somebody else takes it on the next, and both are
-// true at the same time.
+// A section at a time, not a step at a time: handing somebody "3D
+// Visualization" is one decision covering nine boxes, and it is the decision a
+// manager actually makes. Wael takes site & procurement on one job and somebody
+// else takes it on the next — both are true at once, which is why this lives on
+// the project's row rather than in the column header.
 
 export function ProjectTeamEditor({
   project,
-  steps,
-  cells,
+  sections,
   team,
+  assigned,
   onClose,
 }: {
   project: { id: string; name: string; clientName: string };
-  steps: TaskBoardStep[];
-  cells: TaskBoardCell[];
+  sections: TaskBoardSection[];
   team: TaskBoardMember[];
+  /** Who currently holds each section here, by section id. */
+  assigned: Record<string, string | null>;
   onClose: () => void;
 }) {
-  const cellByTask = new Map(cells.map((cell) => [cell.taskId, cell]));
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const assignable = sections.filter((section) => section.real);
 
   return (
     <form
@@ -54,44 +57,40 @@ export function ProjectTeamEditor({
 
       <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink/40">
         <Users size={11} strokeWidth={2} />
-        Who does what here
+        Who takes which section
       </p>
 
-      {steps.length === 0 ? (
-        <p className="text-xs text-ink/45">No departments on the board yet.</p>
+      {assignable.length === 0 ? (
+        <p className="text-xs text-ink/45">
+          No sections yet — add them in Settings and they appear here.
+        </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {steps.map((step) => {
-            const cell = cellByTask.get(step.id);
-            const standing = team.find((member) => member.id === step.defaultOwnerId);
-
-            return (
-              <li key={step.id}>
-                <label className="block">
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-xs font-medium text-ink/70">{step.name}</span>
-                    {step.durationDays != null && (
-                      <span className="shrink-0 text-[10px] text-ink/35">{step.durationDays}d</span>
-                    )}
+          {assignable.map((section) => (
+            <li key={section.id}>
+              <label className="block">
+                <span className="flex items-baseline gap-1.5">
+                  <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotTone(section.color))} />
+                  <span className="truncate text-xs font-medium text-ink/70">{section.name}</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-ink/35">
+                    {section.steps.length} {section.steps.length === 1 ? "step" : "steps"}
                   </span>
-                  <select
-                    name={`assignee:${step.id}`}
-                    defaultValue={cell?.assigneeId ?? ""}
-                    className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-cyan-strong"
-                  >
-                    <option value="">
-                      {standing ? `Usually ${standing.name}` : "Nobody yet"}
+                </span>
+                <select
+                  name={`section:${section.id}`}
+                  defaultValue={assigned[section.id] ?? ""}
+                  className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-cyan-strong"
+                >
+                  <option value="">Nobody yet</option>
+                  {team.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name}
                     </option>
-                    {team.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </li>
-            );
-          })}
+                  ))}
+                </select>
+              </label>
+            </li>
+          ))}
         </ul>
       )}
 
@@ -107,7 +106,7 @@ export function ProjectTeamEditor({
         </Link>
         <button
           type="submit"
-          disabled={pending || steps.length === 0}
+          disabled={pending || assignable.length === 0}
           className={cn(
             "ml-auto inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-bg hover:bg-ink/85",
             pending && "opacity-70"
@@ -119,13 +118,13 @@ export function ProjectTeamEditor({
       </div>
 
       <p className="text-[10px] leading-tight text-ink/35">
-        Anyone newly given a step is notified — in the app and, if they have it on, on their devices.
+        Anyone newly given a section is notified — in the app and, if they have it on, on their devices.
       </p>
     </form>
   );
 }
 
-/** The people currently on a project, as coloured initials for the row. */
+/** The people currently on a project, as coloured dots for the row. */
 export function TeamDots({ cells, team }: { cells: TaskBoardCell[]; team: TaskBoardMember[] }) {
   const owners = new Map<string, TaskBoardMember>();
   for (const cell of cells) {
