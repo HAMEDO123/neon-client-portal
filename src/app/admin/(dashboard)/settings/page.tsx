@@ -210,7 +210,7 @@ WHATSAPP_LINE_ID      "main" for the company line (default)`}
           />
           <Integration
             name="Push notifications"
-            configured={isPushConfigured()}
+            configured={await isPushConfigured()}
             hint="VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY — without them, notifications stay in-app."
           />
         </dl>

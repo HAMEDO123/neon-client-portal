@@ -230,3 +230,22 @@ body[data-keyboard="open"] .employee-tabbar {
     display: none !important;
   }
 }
+
+/* Board column labels.
+
+   Nineteen departments across a page leaves each column about two characters
+   wide, which turned "Furnishing and Decoration" into "Furnishin g and
+   Decoratio n". Turning the label on its side gives it the row's height to
+   run in instead of the column's width, so every name reads in full, in one
+   piece, and the columns can stay narrow enough that the whole board fits
+   without scrolling sideways. */
+.board-step-label {
+  writing-mode: vertical-rl;
+  /* vertical-rl reads top-to-bottom on its right edge; rotating puts the text
+     the way a person tilts their head to read a spine. */
+  transform: rotate(180deg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 8.5rem;
+}

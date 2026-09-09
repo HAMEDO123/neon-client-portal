@@ -1,15 +1,25 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, Loader2, Trash2, X } from "lucide-react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import {
+  CalendarPlus,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  Loader2,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   createAssignedTask,
   deleteAssignedTask,
+  moveAssignedTask,
   setAssignedTaskState,
   updateAssignedTask,
 } from "@/lib/actions/assigned-task-actions";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
-import { dayLabel, placeInWeek, stackRows, weekLabel } from "@/lib/week";
+import { daysBetween, dayLabel, moveSpanTo, placeInWeek, stackRows, weekLabel } from "@/lib/week";
 import { dotTone } from "@/lib/task-board";
 import { cn } from "@/lib/utils";
 
@@ -19,8 +29,30 @@ import { cn } from "@/lib/utils";
 // runs over — so "two days to go and negotiate" is two filled cells, and what
 // somebody's week already looks like is the first thing you see before adding
 // to it. Overlapping jobs stack rather than hiding each other.
+//
+// Bars are draggable, sideways to another day and up or down onto somebody
+// else. Rescheduling is the thing that happens most and it should cost one
+// gesture, not a dialog. Pointer events rather than HTML drag-and-drop, because
+// the manager is as likely to be doing this on a phone as at a desk.
 
 type Member = { id: string; name: string; color: string; role: string | null };
+
+type Drag = {
+  task: AssignedTaskView;
+  origin: { x: number; y: number };
+  dx: number;
+  dy: number;
+  target: { dayKey: string; employeeId: string } | null;
+  /** False until the pointer has moved far enough to mean it. */
+  started: boolean;
+};
+
+/** Whether `key` falls inside where the dragged job would land. */
+function isWithin(key: string, dropKey: string, task: AssignedTaskView) {
+  const length = daysBetween(task.startKey, task.endKey);
+  const offset = daysBetween(dropKey, key);
+  return offset >= 0 && offset <= length;
+}
 
 const PRIORITY_BAR = {
   HIGH: "bg-pink/15 border-pink/30 text-pink-strong",
@@ -46,15 +78,136 @@ export function WeekBoard({
   const [adding, setAdding] = useState<{ employeeId: string; dayKey: string } | null>(null);
   const [pending, start] = useTransition();
 
+  // What is being dragged, and where it would land. Kept in state so the bar
+  // can follow the finger; the drop is what actually writes anything.
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // Overlaid on the server's answer while a drop is in flight, so the bar
+  // stays where it was put rather than snapping back and jumping again.
+  const [moved, setMoved] = useState<Record<string, { days: number; employeeId: string }>>({});
+
+  // The tasks as they should look right now: what the server said, plus any
+  // drop that has not come back yet.
+  const shown = useMemo(
+    () =>
+      tasks.map((task) => {
+        const pendingMove = moved[task.id];
+        if (!pendingMove) return task;
+        return {
+          ...task,
+          employeeId: pendingMove.employeeId,
+          startKey: shift(task.startKey, pendingMove.days),
+          endKey: shift(task.endKey, pendingMove.days),
+        };
+      }),
+    [tasks, moved]
+  );
+
   const byEmployee = useMemo(() => {
     const map = new Map<string, AssignedTaskView[]>();
-    for (const task of tasks) {
+    for (const task of shown) {
       const list = map.get(task.employeeId) ?? [];
       list.push(task);
       map.set(task.employeeId, list);
     }
     return map;
-  }, [tasks]);
+  }, [shown]);
+
+  /** Which day column and which row the pointer is over. */
+  const dropTarget = useCallback(
+    (clientX: number, clientY: number) => {
+      const grid = gridRef.current;
+      if (!grid) return null;
+
+      const columns = grid.querySelectorAll<HTMLElement>("[data-day-column]");
+      let dayKey: string | null = null;
+      for (const column of columns) {
+        const box = column.getBoundingClientRect();
+        if (clientX >= box.left && clientX <= box.right) {
+          dayKey = column.dataset.dayColumn ?? null;
+          break;
+        }
+      }
+
+      let employeeId: string | null = null;
+      for (const row of grid.querySelectorAll<HTMLElement>("[data-employee-row]")) {
+        const box = row.getBoundingClientRect();
+        if (clientY >= box.top && clientY <= box.bottom) {
+          employeeId = row.dataset.employeeRow ?? null;
+          break;
+        }
+      }
+
+      return dayKey && employeeId ? { dayKey, employeeId } : null;
+    },
+    []
+  );
+
+  function beginDrag(task: AssignedTaskView, event: React.PointerEvent) {
+    // Left button only, and never on a scrollbar or a modifier-click.
+    if (event.button !== 0) return;
+
+    const origin = { x: event.clientX, y: event.clientY };
+    const element = event.currentTarget as HTMLElement;
+    element.setPointerCapture(event.pointerId);
+
+    let live: Drag = { task, origin, dx: 0, dy: 0, target: null, started: false };
+    setDrag(live);
+
+    const move = (moveEvent: PointerEvent) => {
+      const dx = moveEvent.clientX - origin.x;
+      const dy = moveEvent.clientY - origin.y;
+      // A few pixels of slop, so a tap to open the dialog is still a tap.
+      const started = live.started || Math.abs(dx) > 4 || Math.abs(dy) > 4;
+      live = { ...live, dx, dy, started, target: started ? dropTarget(moveEvent.clientX, moveEvent.clientY) : null };
+      setDrag(live);
+    };
+
+    const finish = () => {
+      element.releasePointerCapture?.(event.pointerId);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+
+      const dropped = live;
+      setDrag(null);
+
+      if (!dropped.started) {
+        // Not a drag after all: open it.
+        setEditing(dropped.task);
+        return;
+      }
+
+      const target = dropped.target;
+      if (!target) return;
+
+      const { days } = moveSpanTo(dropped.task, target.dayKey);
+      if (days === 0 && target.employeeId === dropped.task.employeeId) return;
+
+      setMoved((current) => ({
+        ...current,
+        [dropped.task.id]: { days, employeeId: target.employeeId },
+      }));
+
+      start(async () => {
+        try {
+          await moveAssignedTask(dropped.task.id, { days, employeeId: target.employeeId });
+        } finally {
+          // The server's answer is authoritative from here.
+          setMoved((current) => {
+            const next = { ...current };
+            delete next[dropped.task.id];
+            return next;
+          });
+        }
+      });
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  }
 
   function run(action: () => Promise<unknown>) {
     start(async () => {
@@ -96,9 +249,11 @@ export function WeekBoard({
       </div>
 
       <div
+        ref={gridRef}
         className={cn(
           "overflow-x-auto rounded-2xl border border-ink/8 bg-white/50 transition-opacity",
-          pending && "opacity-95"
+          pending && "opacity-95",
+          drag?.started && "cursor-grabbing select-none"
         )}
       >
         <div className="min-w-[46rem]">
@@ -140,6 +295,7 @@ export function WeekBoard({
               return (
                 <div
                   key={member.id}
+                  data-employee-row={member.id}
                   className="grid grid-cols-[11.5rem_repeat(7,1fr)] border-b border-ink/6 last:border-b-0"
                 >
                   <div className="flex items-start gap-2 px-4 py-3">
@@ -156,11 +312,17 @@ export function WeekBoard({
                       <button
                         key={key}
                         type="button"
+                        data-day-column={key}
                         onClick={() => setAdding({ employeeId: member.id, dayKey: key })}
                         aria-label={`Add a task for ${member.name} on ${key}`}
                         className={cn(
                           "group/day border-l border-ink/6 transition-colors hover:bg-cyan/[0.06]",
-                          key === todayKey && "bg-cyan/[0.04]"
+                          key === todayKey && "bg-cyan/[0.04]",
+                          // Where the bar being dragged would land.
+                          drag?.started &&
+                            drag.target?.employeeId === member.id &&
+                            isWithin(key, drag.target.dayKey, drag.task) &&
+                            "bg-cyan/20"
                         )}
                         style={{ minHeight: `${rows * 2.25 + 1.25}rem` }}
                       >
@@ -176,27 +338,33 @@ export function WeekBoard({
                       const place = placeInWeek(item, weekKeys);
                       if (!place) return null;
                       const done = item.state === "DONE";
+                      const dragging = drag?.started && drag.task.id === item.id;
 
                       return (
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => setEditing(item)}
-                          title={item.note ?? item.title}
+                          onPointerDown={(event) => beginDrag(item, event)}
+                          title={item.note ?? `${item.title} — drag to another day or person`}
                           className={cn(
-                            "absolute flex items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-left text-[11px] font-medium transition-transform active:scale-[0.99]",
+                            "absolute flex touch-none items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-left text-[11px] font-medium",
                             PRIORITY_BAR[item.priority],
                             done && "opacity-55",
                             place.continuesBefore && "rounded-l-none",
-                            place.continuesAfter && "rounded-r-none"
+                            place.continuesAfter && "rounded-r-none",
+                            dragging
+                              ? "z-20 cursor-grabbing shadow-lg ring-2 ring-cyan/40"
+                              : "cursor-grab transition-transform active:scale-[0.99]"
                           )}
                           style={{
                             left: `calc(${(place.startColumn / 7) * 100}% + 3px)`,
                             width: `calc(${(place.span / 7) * 100}% - 6px)`,
                             top: `${row * 2.25 + 0.375}rem`,
                             height: "1.875rem",
+                            transform: dragging ? `translate(${drag!.dx}px, ${drag!.dy}px)` : undefined,
                           }}
                         >
+                          <GripVertical size={11} strokeWidth={2} className="-ml-1 shrink-0 opacity-40" />
                           {done && <Check size={11} strokeWidth={3} className="shrink-0" />}
                           <span className={cn("truncate", done && "line-through")}>{item.title}</span>
                         </button>
@@ -211,8 +379,8 @@ export function WeekBoard({
       </div>
 
       <p className="text-xs text-ink/40">
-        Click any day to give someone a job, and drag the dates to cover more than one — two days to go and negotiate
-        fills two cells. Click a bar to change it.
+        Click any day to give someone a job. Drag a bar sideways to move it to another day, or up and down to hand it
+        to somebody else — the job keeps its length. Click one to change it.
       </p>
 
       {(adding || editing) && (

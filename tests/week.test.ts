@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   daysBetween,
+  moveSpanTo,
   placeInWeek,
   stackRows,
   weekDayKeys,
@@ -120,5 +121,46 @@ describe("stacking overlapping jobs", () => {
     ]);
 
     assert.deepEqual([...new Set(rows.map((row) => row.row))].sort(), [0, 1, 2]);
+  });
+});
+
+describe("dragging a job to another day", () => {
+  const twoDay = { startKey: "2026-09-07", endKey: "2026-09-08" };
+
+  it("keeps its length — picking it up says when, not how long", () => {
+    const moved = moveSpanTo(twoDay, "2026-09-10");
+    assert.equal(moved.startKey, "2026-09-10");
+    assert.equal(moved.endKey, "2026-09-11");
+    assert.equal(daysBetween(moved.startKey, moved.endKey), daysBetween(twoDay.startKey, twoDay.endKey));
+  });
+
+  it("moves backwards as readily as forwards", () => {
+    const moved = moveSpanTo(twoDay, "2026-09-06");
+    assert.equal(moved.days, -1);
+    assert.deepEqual([moved.startKey, moved.endKey], ["2026-09-06", "2026-09-07"]);
+  });
+
+  it("is a no-op when dropped where it already was", () => {
+    const moved = moveSpanTo(twoDay, twoDay.startKey);
+    assert.equal(moved.days, 0);
+    assert.deepEqual([moved.startKey, moved.endKey], [twoDay.startKey, twoDay.endKey]);
+  });
+
+  it("carries a one-day job to exactly one day", () => {
+    const moved = moveSpanTo({ startKey: "2026-09-09", endKey: "2026-09-09" }, "2026-09-12");
+    assert.equal(moved.startKey, moved.endKey);
+    assert.equal(moved.startKey, "2026-09-12");
+  });
+
+  it("crosses a month end without losing a day", () => {
+    const moved = moveSpanTo({ startKey: "2026-09-29", endKey: "2026-09-30" }, "2026-10-01");
+    assert.deepEqual([moved.startKey, moved.endKey], ["2026-10-01", "2026-10-02"]);
+  });
+
+  it("lands where the week view will draw it", () => {
+    const moved = moveSpanTo(twoDay, "2026-09-11");
+    const place = placeInWeek(moved, WEEK);
+    assert.equal(place?.startColumn, 5);
+    assert.equal(place?.span, 2);
   });
 });

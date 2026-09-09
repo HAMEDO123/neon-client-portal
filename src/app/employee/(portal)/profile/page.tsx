@@ -36,7 +36,7 @@ export default async function EmployeeProfilePage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">Notifications</h2>
-        <PushToggle publicKey={getPublicKey()} configured={isPushConfigured()} />
+        <PushToggle publicKey={await getPublicKey()} configured={await isPushConfigured()} />
         <PreferencesForm preferences={preferences} />
       </section>
 

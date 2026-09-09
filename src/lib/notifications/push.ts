@@ -1,8 +1,14 @@
 import webpush from "web-push";
 import type { PushPayload } from "@/lib/notifications/types";
+import { getVapidKeys } from "@/lib/notifications/vapid";
 
 // Thin wrapper over web-push. The only thing the rest of the app needs to know
 // is whether a send succeeded and whether the subscription is gone for good.
+//
+// Where the signing keys come from is vapid.ts's problem: the environment when
+// somebody has set it, and a pair the platform made for itself otherwise. Push
+// therefore works out of the box rather than waiting on two variables nobody
+// was told to set.
 
 export type PushTarget = {
   endpoint: string;
@@ -14,42 +20,32 @@ export type PushResult =
   | { ok: true; statusCode: number }
   | { ok: false; statusCode: number | null; error: string; gone: boolean };
 
-let configured: boolean | null = null;
-
-export function getPublicKey() {
-  return process.env.VAPID_PUBLIC_KEY ?? "";
+/** The key a browser subscribes with. Empty only if the database is unreachable. */
+export async function getPublicKey() {
+  const keys = await getVapidKeys();
+  return keys?.publicKey ?? "";
 }
 
 /**
- * Push is optional: without VAPID keys the platform still works, it just does
- * not send to devices. In-app notifications are unaffected.
+ * Readies web-push and says whether it can send. False now means something is
+ * genuinely wrong — the database is down — rather than a setup step nobody
+ * knew about. In-app notifications are unaffected either way.
  */
-export function isPushConfigured() {
-  if (configured !== null) return configured;
-
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!publicKey || !privateKey) {
-    configured = false;
-    return configured;
-  }
+export async function isPushConfigured() {
+  const keys = await getVapidKeys();
+  if (!keys) return false;
 
   try {
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || "mailto:admin@neon.local",
-      publicKey,
-      privateKey
-    );
-    configured = true;
+    webpush.setVapidDetails(keys.subject, keys.publicKey, keys.privateKey);
+    return true;
   } catch {
-    configured = false;
+    return false;
   }
-  return configured;
 }
 
 export async function sendPush(target: PushTarget, payload: PushPayload): Promise<PushResult> {
-  if (!isPushConfigured()) {
-    return { ok: false, statusCode: null, error: "Push is not configured (missing VAPID keys)", gone: false };
+  if (!(await isPushConfigured())) {
+    return { ok: false, statusCode: null, error: "Push keys are unavailable", gone: false };
   }
 
   try {

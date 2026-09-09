@@ -29,13 +29,13 @@ export function PushHealthCard({ health, timezone }: { health: PushHealth; timez
       <div className="mt-4 flex flex-col gap-2">
         <Check
           ok={health.configured}
-          label="Server keys"
-          okText="VAPID keys are set on this server."
-          badText={
-            health.missing.length > 0
-              ? `Missing ${health.missing.join(" and ")} in the environment. Until they are set, nothing is sent to any device.`
-              : "The keys are present but were rejected as invalid."
+          label="Signing keys"
+          okText={
+            health.source === "environment"
+              ? "Set from the environment (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)."
+              : "This platform made its own pair and keeps it in the database. Nothing to set up."
           }
+          badText="The keys could not be read or generated — usually the database being unreachable. Nothing is sent to any device until it is back."
         />
 
         <Check

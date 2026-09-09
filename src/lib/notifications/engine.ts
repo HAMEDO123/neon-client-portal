@@ -98,7 +98,7 @@ async function deliverPush(
   input: DispatchInput,
   preferences: PreferenceFlags
 ): Promise<{ pushed: number; failed: number }> {
-  if (!isPushEnabled(input.type, preferences) || !isPushConfigured()) {
+  if (!isPushEnabled(input.type, preferences) || !(await isPushConfigured())) {
     return { pushed: 0, failed: 0 };
   }
 

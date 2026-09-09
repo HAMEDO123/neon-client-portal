@@ -139,7 +139,7 @@ export function TaskBoard({
           pending && "opacity-95"
         )}
       >
-        <table className="w-full min-w-[46rem] table-fixed border-separate border-spacing-0 text-left text-sm">
+        <table className="w-full min-w-[52rem] table-fixed border-separate border-spacing-0 text-left text-sm">
           <thead>
             {/* Sections on top, their steps beneath — the shape of the process,
                 never a list of people. Who takes a section is decided per
@@ -576,8 +576,10 @@ function StepHeader({
         }
       }}
       trigger={
-        <span className="block hyphens-auto break-words px-1 py-2.5 text-center text-[10px] font-medium leading-[1.25] tracking-tight text-ink/60">
-          {step.name}
+        <span className="flex items-end justify-center py-2">
+          <span className="board-step-label text-[11px] font-medium tracking-tight text-ink/65" title={step.name}>
+            {step.name}
+          </span>
         </span>
       }
       triggerLabel={`Edit ${step.name}`}

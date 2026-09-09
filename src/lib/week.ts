@@ -65,6 +65,23 @@ export function placeInWeek(span: DaySpan, weekKeys: string[]) {
   };
 }
 
+/**
+ * Where a job lands when it is dropped on a day.
+ *
+ * The span moves whole — a two-day job dropped on Wednesday runs Wednesday and
+ * Thursday — because picking a job up says when it happens, not how long it
+ * takes. The day it was dropped on becomes its first day, whichever part of the
+ * bar the pointer was over.
+ */
+export function moveSpanTo(span: DaySpan, dropKey: string) {
+  const days = daysBetween(span.startKey, dropKey);
+  return {
+    days,
+    startKey: dropKey,
+    endKey: shiftDayKey(span.endKey, days),
+  };
+}
+
 /** Lays out overlapping jobs so none of them sit on top of another. */
 export function stackRows<T extends DaySpan>(spans: T[]): { item: T; row: number }[] {
   const ordered = [...spans].sort(

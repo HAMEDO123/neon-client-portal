@@ -2,22 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { BellOff, BellRing, Loader } from "lucide-react";
-import { removePushSubscription, savePushSubscription } from "@/lib/actions/employee-actions";
+import { removePushSubscription } from "@/lib/actions/employee-actions";
+import { currentSubscription, enablePush, pushSupported, SW_SCOPE } from "@/lib/push-client";
 import { cn } from "@/lib/utils";
 
-// Turning on push has four ways to fail before it can succeed: no support, no
-// permission, no service worker, no subscription. Each one gets a specific
-// message, because "something went wrong" leaves an employee with no idea
-// whether to check their phone settings or call someone.
+// The switch itself. The work of turning push on lives in push-client, shared
+// with the prompt on the dashboard so the two cannot drift apart.
 
 type Status = "loading" | "unsupported" | "blocked" | "off" | "on" | "working";
-
-function urlBase64ToUint8Array(base64: string) {
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const normalized = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(normalized);
-  return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
-}
 
 export function PushToggle({ publicKey, configured }: { publicKey: string; configured: boolean }) {
   const [status, setStatus] = useState<Status>("loading");
@@ -30,7 +22,7 @@ export function PushToggle({ publicKey, configured }: { publicKey: string; confi
         setMessage("Push is not configured on the server yet. In-app notifications still work.");
         return;
       }
-      if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+      if (!pushSupported()) {
         setStatus("unsupported");
         // The usual cause on an iPhone: Safari only allows push once the app
         // has been added to the Home Screen.
@@ -43,9 +35,7 @@ export function PushToggle({ publicKey, configured }: { publicKey: string; confi
         return;
       }
 
-      const registration = await navigator.serviceWorker.getRegistration("/employee");
-      const existing = await registration?.pushManager.getSubscription();
-      setStatus(existing ? "on" : "off");
+      setStatus((await currentSubscription()) ? "on" : "off");
     }
 
     check().catch(() => {
@@ -58,39 +48,12 @@ export function PushToggle({ publicKey, configured }: { publicKey: string; confi
     setStatus("working");
     setMessage(null);
     try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setStatus(permission === "denied" ? "blocked" : "off");
-        setMessage("Notification permission was not granted.");
-        return;
-      }
-
-      const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/employee" });
-      await navigator.serviceWorker.ready;
-
-      const subscription =
-        (await registration.pushManager.getSubscription()) ??
-        (await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
-        }));
-
-      const json = subscription.toJSON();
-      if (!json.keys?.p256dh || !json.keys?.auth || !json.endpoint) {
-        throw new Error("The browser returned an incomplete subscription.");
-      }
-
-      await savePushSubscription({
-        endpoint: json.endpoint,
-        p256dh: json.keys.p256dh,
-        auth: json.keys.auth,
-        userAgent: navigator.userAgent,
-      });
-
+      await enablePush(publicKey);
       setStatus("on");
       setMessage("This device will now receive notifications.");
     } catch (error) {
-      setStatus("off");
+      const denied = error instanceof Error && error.message.includes("blocked");
+      setStatus(denied ? "blocked" : "off");
       setMessage(error instanceof Error ? error.message : "Could not enable push on this device.");
     }
   }
@@ -99,8 +62,7 @@ export function PushToggle({ publicKey, configured }: { publicKey: string; confi
     setStatus("working");
     setMessage(null);
     try {
-      const registration = await navigator.serviceWorker.getRegistration("/employee");
-      const subscription = await registration?.pushManager.getSubscription();
+      const subscription = await currentSubscription();
 
       if (subscription) {
         // Tell the server first: if the browser unsubscribes but the row

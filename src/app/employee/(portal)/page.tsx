@@ -8,6 +8,8 @@ import { TaskCard } from "@/components/employee/task-card";
 import { planForTasks } from "@/lib/stage-deadlines";
 import { myAssignedTasks } from "@/lib/assigned-tasks";
 import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
+import { PushPrompt } from "@/components/employee/push-prompt";
+import { getPublicKey } from "@/lib/notifications/push";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +42,7 @@ export default async function EmployeeDashboard({
 
   // Work handed out by hand, which belongs to no project and no board cell.
   const assigned = await myAssignedTasks(employee.id);
+  const pushKey = await getPublicKey();
 
   const openToday = today.filter((t) => t.state !== "DONE").length;
   const firstName = employee.name.split(" ")[0];
@@ -56,6 +59,8 @@ export default async function EmployeeDashboard({
             : `${openToday} task${openToday === 1 ? "" : "s"} still open today.`}
         </p>
       </div>
+
+      <PushPrompt publicKey={pushKey} />
 
       {assigned.length > 0 && (
         <section>

@@ -25,6 +25,7 @@ async function requireAdmin() {
 }
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH"];
 
 function refresh() {
@@ -156,6 +157,60 @@ export async function updateAssignedTask(id: string, formData: FormData) {
 export async function deleteAssignedTask(id: string) {
   await requireAdmin();
   await prisma.assignedTask.delete({ where: { id } }).catch(() => {});
+  refresh();
+}
+
+/**
+ * Dragging a job to another day, or onto somebody else.
+ *
+ * The span moves whole: a two-day job dropped on Wednesday runs Wednesday and
+ * Thursday, because the point of picking it up is to say when it happens, not
+ * how long it takes. Duration is changed by editing it.
+ */
+export async function moveAssignedTask(id: string, input: { days: number; employeeId?: string }) {
+  await requireAdmin();
+
+  const task = await prisma.assignedTask.findUnique({
+    where: { id },
+    select: { employeeId: true, title: true, startDay: true, endDay: true },
+  });
+  if (!task) throw new Error("That task no longer exists.");
+
+  const shift = Math.round(input.days);
+  const employeeId = input.employeeId ?? task.employeeId;
+
+  if (shift === 0 && employeeId === task.employeeId) return;
+
+  if (employeeId !== task.employeeId) {
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, active: true },
+      select: { id: true },
+    });
+    if (!employee) throw new Error("That employee is not available.");
+  }
+
+  const startDay = new Date(task.startDay.getTime() + shift * DAY_MS);
+  const endDay = new Date(task.endDay.getTime() + shift * DAY_MS);
+
+  await prisma.assignedTask.update({
+    where: { id },
+    data: { employeeId, startDay, endDay },
+  });
+
+  const days = Math.round((endDay.getTime() - startDay.getTime()) / DAY_MS) + 1;
+
+  await dispatchNotification({
+    employeeId,
+    type: employeeId === task.employeeId ? "TASK_UPDATED" : "TASK_ASSIGNED",
+    title: employeeId === task.employeeId ? "Task moved" : "New Task Assigned",
+    message:
+      employeeId === task.employeeId
+        ? `"${task.title}" moved to ${startDay.toISOString().slice(0, 10)}.`
+        : `${task.title} — ${days} ${days === 1 ? "day" : "days"}.`,
+    url: DASHBOARD_PATH,
+    dedupeKey: `ASSIGNED_TASK_MOVE:${id}:${employeeId}:${startDay.toISOString()}`,
+  }).catch(() => {});
+
   refresh();
 }
 

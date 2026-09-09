@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { isPushConfigured } from "@/lib/notifications/push";
+import { getVapidKeys } from "@/lib/notifications/vapid";
 
 // Why push is or is not arriving.
 //
@@ -10,7 +11,8 @@ import { isPushConfigured } from "@/lib/notifications/push";
 
 export type PushHealth = {
   configured: boolean;
-  missing: string[];
+  /** Where the signing keys came from, so the card can say so plainly. */
+  source: "environment" | "database" | null;
   devices: { employeeId: string; name: string; active: number; retired: number; lastUsedAt: Date | null }[];
   activeTotal: number;
   recent: {
@@ -23,12 +25,8 @@ export type PushHealth = {
 };
 
 export async function getPushHealth(): Promise<PushHealth> {
-  const missing = [
-    !process.env.VAPID_PUBLIC_KEY && "VAPID_PUBLIC_KEY",
-    !process.env.VAPID_PRIVATE_KEY && "VAPID_PRIVATE_KEY",
-  ].filter((value): value is string => Boolean(value));
-
-  const configured = isPushConfigured();
+  const keys = await getVapidKeys();
+  const configured = await isPushConfigured();
 
   // Sequential, like the rest of the multi-query reads here.
   const employees = await prisma.employee.findMany({
@@ -67,7 +65,7 @@ export async function getPushHealth(): Promise<PushHealth> {
 
   return {
     configured,
-    missing,
+    source: keys?.source ?? null,
     devices,
     activeTotal: devices.reduce((sum, row) => sum + row.active, 0),
     recent: deliveries.map((row) => ({
