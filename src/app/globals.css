@@ -157,22 +157,52 @@ h1, h2, h3, h4 {
   padding-inline: clamp(1.25rem, 5vw, 5rem);
 }
 
-/* The employee portal's chrome, as numbers the layout can do sums with.
-   --keyboard-inset is written by KeyboardInset from the visual viewport;
-   the tab bar takes no height while the keyboard is open, because it is
-   hidden then. */
+/* The employee portal is an app frame, not a document.
+   --app-height is the visible height, written by AppViewport from the visual
+   viewport: on iOS the page does not shrink when the keyboard opens, so this
+   is the only honest measure of what can be seen. Sizing the frame against it
+   means nothing exists underneath the keyboard to scroll. */
 :root {
+  --app-height: 100dvh;
   --keyboard-inset: 0px;
-  --employee-header: calc(3.25rem + env(safe-area-inset-top));
-  --employee-nav: calc(3.5rem + env(safe-area-inset-bottom));
 }
 
-body[data-keyboard="open"] {
-  --employee-nav: 0px;
+.employee-shell {
+  position: fixed;
+  inset: 0;
+  height: var(--app-height);
+  /* Older iOS, before dvh and before the variable is set on first paint. */
+  height: -webkit-fill-available;
+  height: var(--app-height);
 }
 
-/* Typing is a full-screen activity: the tab bar would otherwise sit on top
-   of the keyboard, which is what pushed the whole page up. */
+/* Nothing outside the frame scrolls, and a scroll that reaches the end of a
+   list does not drag the page behind it. */
+body:has(.employee-shell) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.employee-main {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* A page that fills the frame — the chat — takes the padding and the
+   scrolling off the shell and manages both itself. Better than the page
+   guessing the shell's padding back out with negative margins. */
+.employee-main:has(> .fills-frame) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.fills-frame {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Typing is a full-screen activity, and five destinations are not worth the
+   room mid-word. */
 body[data-keyboard="open"] .employee-tabbar {
   display: none;
 }

@@ -10,7 +10,13 @@ import { cn } from "@/lib/utils";
 // sideload wrapper, or just Safari) a fixed 256px sidebar eats most of the
 // screen and crushes the content next to it. Below lg, swap it for a top bar
 // + slide-in drawer instead.
-export function AdminShell({ children }: { children: ReactNode }) {
+export function AdminShell({
+  children,
+  badges,
+}: {
+  children: ReactNode;
+  badges?: { chat: number; requests: number };
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -18,13 +24,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
   // matrix — it gets the whole window so it fits without sideways scrolling.
   const wide = pathname.startsWith("/admin/tasks");
 
+  // The sidebar is part of the window, not part of the page: it stays put
+  // while the content scrolls, the way a desktop app behaves.
   return (
-    <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-64 shrink-0 border-r border-ink/8 bg-white/40 lg:block">
-        <AdminNav />
+    <div className="flex h-screen overflow-hidden bg-background">
+      <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-ink/8 bg-white/40 lg:block">
+        <AdminNav badges={badges} />
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-ink/8 bg-white/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
           <span className="text-base font-bold">
             <span className="text-gradient-neon">NEON</span>
@@ -64,7 +72,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 <X size={20} />
               </button>
             </div>
-            <AdminNav />
+            <AdminNav badges={badges} />
           </div>
         </div>
       )}

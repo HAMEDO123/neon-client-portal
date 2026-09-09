@@ -24,16 +24,15 @@ export default async function AdminPayrollPage({
 
   const period = /^\d{4}-\d{2}$/.test(requested ?? "") ? requested! : thisMonth;
 
-  const [rows, attendance, receipts, employees] = await Promise.all([
-    getPayrollForPeriod(period),
-    getAttendanceForPeriod(period),
-    getReceiptsForPeriod(period),
-    prisma.employee.findMany({
-      where: { active: true, accessRole: "EMPLOYEE" },
-      orderBy: { order: "asc" },
-      select: { id: true, name: true },
-    }),
-  ]);
+  // Sequential for the same reason as the aggregates behind them.
+  const rows = await getPayrollForPeriod(period);
+  const attendance = await getAttendanceForPeriod(period);
+  const receipts = await getReceiptsForPeriod(period);
+  const employees = await prisma.employee.findMany({
+    where: { active: true, accessRole: "EMPLOYEE" },
+    orderBy: { order: "asc" },
+    select: { id: true, name: true },
+  });
 
   const totals = rows.reduce(
     (sum, row) => ({

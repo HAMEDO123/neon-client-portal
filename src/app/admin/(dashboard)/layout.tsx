@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { getAdminBadges } from "@/lib/admin-badges";
 
 export default async function AdminDashboardLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
@@ -12,5 +13,7 @@ export default async function AdminDashboardLayout({ children }: { children: Rea
     redirect("/admin/login");
   }
 
-  return <AdminShell>{children}</AdminShell>;
+  const badges = await getAdminBadges();
+
+  return <AdminShell badges={badges}>{children}</AdminShell>;
 }

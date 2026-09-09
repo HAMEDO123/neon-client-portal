@@ -21,18 +21,9 @@ export default async function EmployeeChatPage() {
   await recordChatRead(viewer);
 
   return (
-    // Pinned rather than laid out in the page: the screen itself must not
-    // scroll, or the keyboard opening drags the whole conversation upward and
-    // leaves the tab bar floating. Only the message list inside moves. The
-    // bottom sits above the tab bar, or above the keyboard when it is open —
-    // both are variables the layout keeps up to date.
-    <div
-      className="fixed inset-x-0 z-20 flex flex-col overflow-hidden"
-      style={{
-        top: "var(--employee-header)",
-        bottom: "calc(var(--employee-nav) + var(--keyboard-inset))",
-      }}
-    >
+    // Fills the frame the layout gives it and scrolls inside itself, so the
+    // composer sits on the keyboard and the conversation stays put.
+    <div className="fills-frame flex flex-col overflow-hidden">
       <ChatRoom
         initialMessages={messages}
         viewerType="EMPLOYEE"

@@ -5,11 +5,16 @@ import { Bell } from "lucide-react";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { getEmployeeBadges } from "@/lib/employee-badges";
 import { EmployeeNav } from "@/components/employee/employee-nav";
-import { KeyboardInset } from "@/components/employee/keyboard-inset";
+import { AppViewport } from "@/components/employee/app-viewport";
 
 // Server-side gate for the whole portal. Anything under this layout has an
 // authenticated, enabled employee behind it — and every action it can reach
 // re-checks the session for itself.
+//
+// The shell is an app frame, not a document: it is exactly as tall as the
+// visible screen, the header and tab bar are parts of that frame, and only the
+// middle scrolls. That is what stops the tab bar riding up with the keyboard —
+// there is no page left to scroll underneath it.
 export default async function EmployeePortalLayout({ children }: { children: ReactNode }) {
   const employee = await getSessionEmployee();
   if (!employee) redirect("/employee/login");
@@ -18,11 +23,11 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
   const { unread, unreadChat } = await getEmployeeBadges(employee.id);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="employee-shell flex flex-col overflow-hidden bg-background">
       {/* pt-[safe-area-inset-top]: the app draws under the status bar on a
           notched phone, so the header reserves that height itself rather than
           letting the title sit beneath the clock. */}
-      <header className="sticky top-0 z-30 border-b border-ink/8 bg-bg/85 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
+      <header className="shrink-0 border-b border-ink/8 bg-bg/85 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
         <div className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 py-3">
           <Link href="/employee" className="flex items-baseline gap-1.5">
             <span className="text-gradient-neon text-base font-bold">NEON</span>
@@ -44,11 +49,14 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
         </div>
       </header>
 
-      {/* Bottom padding clears the fixed tab bar, including the iPhone home indicator. */}
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-32 pt-5">{children}</main>
+      {/* The only part that scrolls. A page that fills the frame — the chat —
+          turns this off and manages its own scrolling. */}
+      <main className="employee-main mx-auto w-full max-w-2xl flex-1 overflow-y-auto px-4 pb-6 pt-5">
+        {children}
+      </main>
 
       <EmployeeNav unreadChat={unreadChat} />
-      <KeyboardInset />
+      <AppViewport />
     </div>
   );
 }

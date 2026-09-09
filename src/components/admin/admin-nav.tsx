@@ -17,7 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/actions/auth-actions";
 
-export function AdminNav() {
+export function AdminNav({ badges }: { badges?: { chat: number; requests: number } }) {
   const pathname = usePathname();
   const isDashboard = pathname === "/admin";
   const isTasks = pathname.startsWith("/admin/tasks");
@@ -70,6 +70,7 @@ export function AdminNav() {
       >
         <MessagesSquare size={16} strokeWidth={1.75} />
         Team Chat
+        <Badge count={badges?.chat ?? 0} active={isChat} />
       </Link>
       <Link
         href="/admin/employees"
@@ -90,6 +91,7 @@ export function AdminNav() {
       >
         <ShoppingBag size={16} strokeWidth={1.75} />
         Requests
+        <Badge count={badges?.requests ?? 0} active={isRequests} />
       </Link>
       <Link
         href="/admin/payroll"
@@ -131,5 +133,23 @@ export function AdminNav() {
         </form>
       </div>
     </nav>
+  );
+}
+
+/** The count beside a link: how many are waiting, and nothing when none are. */
+function Badge({ count, active }: { count: number; active: boolean }) {
+  if (count <= 0) return null;
+
+  return (
+    <span
+      className={cn(
+        "ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold",
+        // On the selected row the pill sits on a dark background, so it
+        // inverts rather than disappearing into it.
+        active ? "bg-bg/20 text-bg" : "bg-pink text-white"
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }

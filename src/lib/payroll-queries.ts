@@ -27,22 +27,23 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
     select: { id: true, name: true, role: true, salaryAmount: true, payBasis: true },
   });
 
-  // Two grouped queries rather than one per employee, together rather than in
-  // turn: on a hosted database each one is a round trip.
-  const [attendance, receipts] = await Promise.all([
-    prisma.attendanceRecord.groupBy({
-      by: ["employeeId"],
-      where: { day: { gte: start, lt: end } },
-      _sum: { delayHours: true },
-      _count: { _all: true },
-    }),
-    prisma.expenseReceipt.groupBy({
-      by: ["employeeId"],
-      where: { periodMonth: period },
-      _sum: { countedAmount: true },
-      _count: { _all: true },
-    }),
-  ]);
+  // Two grouped queries rather than one per employee, and deliberately one
+  // after the other. Running them together is a round trip faster and kills
+  // the connection on the local Postgres proxy — a 500 on the machine this is
+  // developed on costs more than the millisecond it saves.
+  const attendance = await prisma.attendanceRecord.groupBy({
+    by: ["employeeId"],
+    where: { day: { gte: start, lt: end } },
+    _sum: { delayHours: true },
+    _count: { _all: true },
+  });
+
+  const receipts = await prisma.expenseReceipt.groupBy({
+    by: ["employeeId"],
+    where: { periodMonth: period },
+    _sum: { countedAmount: true },
+    _count: { _all: true },
+  });
 
   const delayBy = new Map(attendance.map((row) => [row.employeeId, row]));
   const receiptBy = new Map(receipts.map((row) => [row.employeeId, row]));
