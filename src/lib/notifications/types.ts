@@ -1,4 +1,5 @@
 import type { NotificationType, TaskPriority } from "@/generated/prisma/enums";
+import type { Countdown } from "@/lib/stage-schedule";
 
 // Pure notification rules: which preference gates which type, what a
 // notification says, where a click lands, and the idempotency key for each
@@ -216,4 +217,34 @@ export function chatCopy(author: string, preview: string) {
     // screen rather than only telling you to go and look.
     message: preview.length > 140 ? `${preview.slice(0, 137)}…` : preview,
   };
+}
+
+// --- stage periods ---------------------------------------------------------
+// Chasing work against the length its stage was given. The copy leads with the
+// time left rather than the date, because that is the thing being decided on.
+
+export function stageReminderCopy(taskName: string, projectName: string, countdown: Countdown) {
+  if (countdown.overdue) {
+    return {
+      title: "Task overdue",
+      message: `"${taskName}" (${projectName}) is ${countdown.label.toLowerCase()}. Finish it and send a photo for review.`,
+    };
+  }
+
+  if (countdown.days === 0) {
+    return {
+      title: "Due today",
+      message: `"${taskName}" (${projectName}) is due today.`,
+    };
+  }
+
+  return {
+    title: "Deadline approaching",
+    message: `"${taskName}" (${projectName}) has ${countdown.label.toLowerCase()}.`,
+  };
+}
+
+/** One reminder per task per day: chasing is daily, not hourly. */
+export function stageReminderKey(entryId: string, employeeId: string, dayKey: string) {
+  return `STAGE_REMINDER:${entryId}:${employeeId}:${dayKey}`;
 }

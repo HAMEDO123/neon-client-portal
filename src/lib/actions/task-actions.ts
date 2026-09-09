@@ -125,6 +125,30 @@ export async function updateProcessTask(id: string, name: string, employeeId: st
   refresh();
 }
 
+/**
+ * How long a stage is allowed to take, in days.
+ *
+ * Setting it turns the process into a schedule: the step after this one starts
+ * when it finishes and gets its own days, so the chain carries dates without
+ * anyone typing a deadline per project. Blank means untimed — nobody is chased
+ * about it.
+ */
+export async function setStageDuration(id: string, formData: FormData) {
+  await requireAdmin();
+
+  const raw = String(formData.get("durationDays") ?? "").trim();
+  const parsed = Number(raw);
+  const durationDays =
+    raw === "" || !Number.isFinite(parsed) || parsed <= 0
+      ? null
+      : Math.min(Math.round(parsed), 365);
+
+  await prisma.processTask.update({ where: { id }, data: { durationDays } });
+
+  refresh();
+  revalidatePath("/admin/settings");
+}
+
 export async function deleteProcessTask(id: string) {
   await requireAdmin();
   await prisma.processTask.delete({ where: { id } });

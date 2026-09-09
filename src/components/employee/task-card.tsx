@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarClock, ChevronRight, Clock, Sparkles } from "lucide-react";
 import type { EmployeeTask } from "@/lib/employee-tasks";
 import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
+import { Countdown } from "@/components/employee/countdown";
 import { formatTimeIn } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +26,16 @@ function recentlyUpdated(task: EmployeeTask) {
   return Date.now() - task.updatedAt.getTime() < sixHours && task.state !== "DONE";
 }
 
-export function TaskCard({ task, timezone }: { task: EmployeeTask; timezone: string }) {
+export function TaskCard({
+  task,
+  timezone,
+  dueBy,
+}: {
+  task: EmployeeTask;
+  timezone: string;
+  /** The stage deadline, explicit or worked out from the stage's period. */
+  dueBy?: Date | null;
+}) {
   const due = formatTimeIn(timezone, task.dueAt);
   const done = task.state === "DONE";
 
@@ -72,6 +82,8 @@ export function TaskCard({ task, timezone }: { task: EmployeeTask; timezone: str
             >
               {EMPLOYEE_STATE_LABEL[task.state]}
             </span>
+            {/* Finished work has no time left to run. */}
+            {dueBy && !done && <Countdown dueBy={dueBy.toISOString()} />}
             {due && (
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/50">
                 <Clock size={12} strokeWidth={2} />

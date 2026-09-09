@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runDeadlineReminders, runScheduleNotifier } from "@/lib/notifications/events";
+import { runDeadlineReminders, runScheduleNotifier, runStageReminders } from "@/lib/notifications/events";
 import { getTimezone } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
 
@@ -53,6 +53,12 @@ async function handle(request: Request) {
   // run rather than at a fixed hour.
   if (forced === "deadlines" || !forced) {
     ran.deadlines = await runDeadlineReminders();
+  }
+
+  // Chasing against the stage periods is a daily conversation, not an hourly
+  // one, so it goes out with the morning summary.
+  if (forced === "stages" || (!forced && hour === TODAY_SUMMARY_HOUR)) {
+    ran.stages = await runStageReminders();
   }
 
   return NextResponse.json({

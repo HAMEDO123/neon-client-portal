@@ -10,6 +10,8 @@ import { EMPLOYEE_STATE_LABEL, PRIORITY_LABEL } from "@/lib/task-board";
 import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
 import { submissionsForEntry } from "@/lib/submissions";
+import { planForTasks } from "@/lib/stage-deadlines";
+import { Countdown } from "@/components/employee/countdown";
 import { SaveButton } from "@/components/admin/form-buttons";
 
 export default async function EmployeeTaskDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +24,7 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
 
   const timezone = await getTimezone();
   const submissions = await submissionsForEntry(task.id);
+  const dueBy = (await planForTasks([task])).get(task.id)?.dueBy ?? null;
   const due = formatTimeIn(timezone, task.dueAt);
   const dueDay = formatDayIn(timezone, task.dueAt);
   const scheduled = formatDayIn(timezone, task.scheduledFor);
@@ -44,6 +47,12 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
           {task.project.clientName ? ` · ${task.project.clientName}` : ""}
         </p>
       </div>
+
+      {/* The time left is the thing to act on, so it sits above the detail
+          rather than inside it. */}
+      {dueBy && task.state !== "DONE" && (
+        <Countdown dueBy={dueBy.toISOString()} size="large" className="self-start" />
+      )}
 
       <div className="glass grid grid-cols-2 gap-3 rounded-2xl p-4">
         <Detail icon={Flag} label="Priority" value={PRIORITY_LABEL[task.priority]} />

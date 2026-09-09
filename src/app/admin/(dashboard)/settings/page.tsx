@@ -9,6 +9,8 @@ import { WhatsAppTest } from "@/components/admin/whatsapp-test";
 import { WhatsAppChannelCard } from "@/components/admin/channel-cards";
 import { lineStatus } from "@/lib/whatsapp/worker";
 import { SaveButton } from "@/components/admin/form-buttons";
+import { StagePeriods } from "@/components/admin/stage-periods";
+import { getProcessTasks } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
 
 // Integrations and the settings the platform reads at runtime, in one place
@@ -36,6 +38,8 @@ export default async function AdminSettingsPage() {
 
   // The linked-number card asks the worker directly, since a QR session has
   // states the transport check does not describe.
+  const stages = await getProcessTasks();
+
   const line = worker ? await lineStatus() : null;
   const linkState = line?.ok
     ? {
@@ -53,6 +57,15 @@ export default async function AdminSettingsPage() {
         <h1 className="text-2xl font-semibold text-ink">Settings</h1>
         <p className="mt-1 text-sm text-ink/50">Integrations and the values the daily jobs run on.</p>
       </div>
+
+      <StagePeriods
+        stages={stages.map((stage) => ({
+          id: stage.id,
+          name: stage.name,
+          durationDays: stage.durationDays,
+          employee: stage.employee ? { name: stage.employee.name, color: stage.employee.color } : null,
+        }))}
+      />
 
       {/* --- Channels ------------------------------------------------------ */}
       <section>

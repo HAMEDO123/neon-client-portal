@@ -5,6 +5,7 @@ import { tasksForDay } from "@/lib/employee-tasks";
 import { getTimezone } from "@/lib/settings";
 import { hourIn, todayKey, tomorrowKey } from "@/lib/time";
 import { TaskCard } from "@/components/employee/task-card";
+import { planForTasks } from "@/lib/stage-deadlines";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,10 @@ export default async function EmployeeDashboard({
     tasksForDay(employee.id, todayKey(timezone)),
     tasksForDay(employee.id, tomorrowKey(timezone), "tomorrow"),
   ]);
+
+  // One plan covering both lists: the stage periods turn into real dates the
+  // same way for today's work and tomorrow's.
+  const plan = await planForTasks([...today, ...tomorrow]);
 
   const openToday = today.filter((t) => t.state !== "DONE").length;
   const firstName = employee.name.split(" ")[0];
@@ -59,7 +64,7 @@ export default async function EmployeeDashboard({
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {today.map((task) => (
-              <TaskCard key={task.id} task={task} timezone={timezone} />
+              <TaskCard key={task.id} task={task} timezone={timezone} dueBy={plan.get(task.id)?.dueBy} />
             ))}
           </div>
         )}
@@ -74,7 +79,7 @@ export default async function EmployeeDashboard({
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {tomorrow.map((task) => (
-              <TaskCard key={task.id} task={task} timezone={timezone} />
+              <TaskCard key={task.id} task={task} timezone={timezone} dueBy={plan.get(task.id)?.dueBy} />
             ))}
           </div>
         )}

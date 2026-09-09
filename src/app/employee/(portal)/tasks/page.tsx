@@ -4,6 +4,7 @@ import { requireEmployee } from "@/lib/employee-session";
 import { allTasks } from "@/lib/employee-tasks";
 import { getTimezone } from "@/lib/settings";
 import { TaskCard } from "@/components/employee/task-card";
+import { planForTasks } from "@/lib/stage-deadlines";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ export default async function EmployeeTasksPage({
 
   const active = FILTERS.find((f) => f.key === filter)?.key ?? "open";
   const tasks = await allTasks(employee.id, active === "all" ? undefined : active);
+  const plan = await planForTasks(tasks);
 
   return (
     <div className="flex flex-col gap-4">
@@ -60,7 +62,7 @@ export default async function EmployeeTasksPage({
       ) : (
         <div className="flex flex-col gap-3">
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} timezone={timezone} />
+            <TaskCard key={task.id} task={task} timezone={timezone} dueBy={plan.get(task.id)?.dueBy} />
           ))}
         </div>
       )}
