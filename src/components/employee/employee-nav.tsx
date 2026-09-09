@@ -2,20 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Home, ListChecks, MessagesSquare, User } from "lucide-react";
+import { Home, ListChecks, MessagesSquare, ShoppingBag, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Four destinations, nothing else. An employee should never have to decide
-// which part of the platform they are supposed to be in.
+// Five destinations, nothing else. Notifications are not among them: the bell
+// in the header already carries the unread count, so a tab for it would be a
+// second door to the same room.
 const TABS = [
   { href: "/employee", label: "Home", icon: Home, exact: true },
   { href: "/employee/tasks", label: "Tasks", icon: ListChecks, exact: false },
   { href: "/employee/chat", label: "Chat", icon: MessagesSquare, exact: false },
-  { href: "/employee/notifications", label: "Alerts", icon: Bell, exact: false },
+  { href: "/employee/requests", label: "Requests", icon: ShoppingBag, exact: false },
   { href: "/employee/profile", label: "Profile", icon: User, exact: false },
 ];
 
-export function EmployeeNav({ unread, unreadChat = 0 }: { unread: number; unreadChat?: number }) {
+export function EmployeeNav({ unreadChat = 0 }: { unreadChat?: number }) {
   const pathname = usePathname();
 
   return (
@@ -38,11 +39,6 @@ export function EmployeeNav({ unread, unreadChat = 0 }: { unread: number; unread
                 {tab.href === "/employee/chat" && unreadChat > 0 && (
                   <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-strong px-1 text-[10px] font-semibold text-white">
                     {unreadChat > 9 ? "9+" : unreadChat}
-                  </span>
-                )}
-                {tab.href === "/employee/notifications" && unread > 0 && (
-                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink px-1 text-[10px] font-semibold text-white">
-                    {unread > 9 ? "9+" : unread}
                   </span>
                 )}
               </span>

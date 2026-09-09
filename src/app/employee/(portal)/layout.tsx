@@ -49,7 +49,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
       {/* Bottom padding clears the fixed tab bar, including the iPhone home indicator. */}
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-32 pt-5">{children}</main>
 
-      <EmployeeNav unread={unread} unreadChat={unreadChat} />
+      <EmployeeNav unreadChat={unreadChat} />
     </div>
   );
 }

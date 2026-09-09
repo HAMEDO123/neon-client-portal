@@ -80,6 +80,24 @@ enum NotificationType {
   SYSTEM_NOTIFICATION
 }
 
+enum PayBasis {
+  MONTHLY
+  WEEKLY
+}
+
+enum SupplyRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PURCHASED
+}
+
+enum ReceiptStatus {
+  PENDING
+  ANALYZED
+  FAILED
+}
+
 enum ChatAuthorType {
   ADMIN
   EMPLOYEE
@@ -372,6 +390,11 @@ model Employee {
   accessRole   String    @default("EMPLOYEE")
   lastLoginAt  DateTime?
 
+  // Payroll. The amount is per pay period: a month for monthly staff, a week
+  // for weekly staff, which is what decides the hourly divisor.
+  salaryAmount Float?
+  payBasis     PayBasis @default(MONTHLY)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -382,6 +405,9 @@ model Employee {
   preference      NotificationPreference?
   chatMessages    ChatMessage[]
   chatReads       ChatRead[]
+  supplyRequests  SupplyRequest[]
+  receipts        ExpenseReceipt[]
+  attendance      AttendanceRecord[]
 }
 
 // One step of the delivery process. The process is identical for every project,
@@ -599,4 +625,80 @@ model ChatRead {
   lastReadAt DateTime @default(now())
 
   @@unique([channelId, readerKey])
+}
+
+// An employee asking for something to be bought for the office. The manager
+// decides; nothing is ordered on an employee's say-so.
+model SupplyRequest {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  item          String
+  quantity      String?
+  note          String? @db.Text
+  estimatedCost Float?
+  urgent        Boolean @default(false)
+
+  status       SupplyRequestStatus @default(PENDING)
+  decisionNote String?
+  decidedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([status, createdAt])
+  @@index([employeeId, createdAt])
+}
+
+// A receipt photo an employee spent their own money on ("salary++"). The
+// amount the receipt shows and the amount that counts are stored separately:
+// the company rule caps any single receipt at 2 JOD, and keeping the original
+// means a disputed total can always be traced back to what was actually paid.
+model ExpenseReceipt {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  imageUrl String
+  status   ReceiptStatus @default(PENDING)
+
+  // Filled in by the vision pass, and editable by the manager afterwards.
+  vendor        String?
+  receiptDate   DateTime?
+  rawAmount     Float?
+  countedAmount Float?
+  currency      String    @default("JOD")
+  summary       String?   @db.Text
+  aiNotes       String?   @db.Text
+
+  // The payroll month this belongs to, as YYYY-MM in the company timezone.
+  periodMonth String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([employeeId, periodMonth])
+  @@index([periodMonth, status])
+}
+
+// One day's lateness for one employee. Entered by the manager today; the
+// attendance device can write the same rows later without changing anything
+// downstream.
+model AttendanceRecord {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  day        DateTime @db.Date
+  delayHours Float    @default(0)
+  note       String?
+  // MANUAL for now; DEVICE once the attendance machine feeds this table.
+  source     String   @default("MANUAL")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([employeeId, day])
+  @@index([day])
 }

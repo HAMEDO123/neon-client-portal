@@ -6,6 +6,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   downloaded_document: "Downloaded a document",
   downloaded_image: "Downloaded an image",
   downloaded_package: "Downloaded the full project package",
+  downloaded_gallery_pdf: "Downloaded the gallery PDF",
   viewed_boq: "Viewed the BOQ",
   viewed_pricing: "Viewed pricing",
   approved: "Approved a design",

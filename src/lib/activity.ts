@@ -8,6 +8,7 @@ export type ActivityType =
   | "downloaded_document"
   | "downloaded_image"
   | "downloaded_package"
+  | "downloaded_gallery_pdf"
   | "viewed_boq"
   | "viewed_pricing"
   | "approved"

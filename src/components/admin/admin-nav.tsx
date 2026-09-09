@@ -2,7 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderKanban, ListChecks, Users, MessagesSquare, Plus, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  FolderKanban,
+  ListChecks,
+  Users,
+  MessagesSquare,
+  ShoppingBag,
+  Wallet,
+  Plus,
+  LogOut,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/actions/auth-actions";
 
@@ -12,6 +22,8 @@ export function AdminNav() {
   const isTasks = pathname.startsWith("/admin/tasks");
   const isEmployees = pathname.startsWith("/admin/employees");
   const isChat = pathname.startsWith("/admin/chat");
+  const isRequests = pathname.startsWith("/admin/requests");
+  const isPayroll = pathname.startsWith("/admin/payroll");
 
   return (
     <nav className="flex h-full flex-col gap-1 p-4">
@@ -66,6 +78,26 @@ export function AdminNav() {
       >
         <Users size={16} strokeWidth={1.75} />
         Employees
+      </Link>
+      <Link
+        href="/admin/requests"
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          isRequests ? "bg-ink text-bg" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
+        )}
+      >
+        <ShoppingBag size={16} strokeWidth={1.75} />
+        Requests
+      </Link>
+      <Link
+        href="/admin/payroll"
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          isPayroll ? "bg-ink text-bg" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
+        )}
+      >
+        <Wallet size={16} strokeWidth={1.75} />
+        Payroll
       </Link>
       <Link
         href="/admin/projects/new"

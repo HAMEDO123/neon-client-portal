@@ -5,7 +5,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { GalleryGrid } from "@/components/client/gallery-grid";
 import { BeforeAfterSlider } from "@/components/client/before-after-slider";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Images } from "lucide-react";
+import { Images, FileDown } from "lucide-react";
 import type { FullProject } from "@/lib/queries";
 import { useI18n } from "@/lib/client-i18n";
 
@@ -35,6 +35,18 @@ export function GallerySection({
         <EmptyState className="mt-8" icon={Images} title={t("Renders coming soon")} description={t("The design gallery will appear here once NEON uploads the first renders.")} />
       ) : (
         <>
+          {allowDownloads && (
+            <div className="mt-6 flex justify-center sm:justify-start">
+              <a
+                href={`/p/${token}/gallery.pdf`}
+                className="inline-flex items-center gap-2 rounded-full border border-ink/15 bg-white/70 px-5 py-2.5 text-sm font-medium text-ink/70 transition-colors hover:border-cyan-strong hover:text-cyan-strong"
+              >
+                <FileDown size={16} strokeWidth={1.75} />
+                {t("Download the gallery as PDF")}
+              </a>
+            </div>
+          )}
+
           <div className="scrollbar-none mt-8 flex gap-2 overflow-x-auto">
             {nonEmptySpaces.map((space) => (
               <a
