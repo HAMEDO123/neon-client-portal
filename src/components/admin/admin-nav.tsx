@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderKanban, Plus, LogOut } from "lucide-react";
+import { LayoutDashboard, FolderKanban, ListChecks, Plus, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/actions/auth-actions";
 
 export function AdminNav() {
   const pathname = usePathname();
   const isDashboard = pathname === "/admin";
+  const isTasks = pathname.startsWith("/admin/tasks");
 
   return (
     <nav className="flex h-full flex-col gap-1 p-4">
@@ -33,6 +34,16 @@ export function AdminNav() {
       >
         <FolderKanban size={16} strokeWidth={1.75} />
         All Projects
+      </Link>
+      <Link
+        href="/admin/tasks"
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          isTasks ? "bg-ink text-bg" : "text-ink/60 hover:bg-ink/5 hover:text-ink"
+        )}
+      >
+        <ListChecks size={16} strokeWidth={1.75} />
+        Tasks
       </Link>
       <Link
         href="/admin/projects/new"

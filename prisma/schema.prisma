@@ -54,6 +54,13 @@ enum CommentStatus {
   RESOLVED
 }
 
+// State of one cell in the daily task board (project x process task).
+enum TaskState {
+  TODO
+  DONE
+  TOMORROW
+}
+
 model Project {
   id       String @id @default(cuid())
   token    String @unique
@@ -96,6 +103,7 @@ model Project {
   approvals    Approval[]
   comments     Comment[]
   activities   ProjectActivity[]
+  taskEntries  ProjectTaskEntry[]
 }
 
 model GallerySpace {
@@ -293,4 +301,51 @@ model ProjectActivity {
   type      String
   detail    String?
   createdAt DateTime @default(now())
+}
+
+// A member of the NEON team. Owns a slice of the shared delivery process, and
+// gets one column group on the task board.
+model Employee {
+  id     String  @id @default(cuid())
+  name   String
+  role   String?
+  // Accent used for this employee's column group on the board.
+  color  String  @default("cyan")
+  order  Int     @default(0)
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  tasks ProcessTask[]
+}
+
+// One step of the delivery process. The process is identical for every project,
+// so these are defined once and every project inherits the whole list.
+model ProcessTask {
+  id         String    @id @default(cuid())
+  name       String
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  order      Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  entries ProjectTaskEntry[]
+}
+
+// The state of one process task on one project — a single cell of the board.
+// Rows are created lazily: an untouched cell simply has no entry and reads TODO.
+model ProjectTaskEntry {
+  id        String      @id @default(cuid())
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      ProcessTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  state       TaskState @default(TODO)
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([projectId, taskId])
+  @@index([taskId])
 }
