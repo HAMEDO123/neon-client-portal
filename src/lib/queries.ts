@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db";
-import { UNASSIGNED_ID } from "@/lib/task-board";
 import type { TaskState } from "@/generated/prisma/enums";
 
 export function getProjects() {
@@ -144,42 +143,34 @@ export async function getTaskBoard() {
     }),
   ]);
 
-  // Columns are grouped by employee so each person owns a contiguous block of
-  // the header, with anything unassigned collected at the far right. A person
-  // with no steps yet keeps an empty group — that is where you add their first.
-  const groups = employees
-    .filter((e) => e.active)
-    .map((e) => ({
-      id: e.id,
-      name: e.name,
-      role: e.role,
-      color: e.color,
-      editable: true,
-      tasks: tasks.filter((t) => t.employeeId === e.id).map((t) => ({ id: t.id, name: t.name })),
+  // The columns are the departments — Site & Procurement, 3D Visualization,
+  // Technical Drawings — not the people. Who does a step is a per-project
+  // decision made on the project's own row, because the same step goes to
+  // different people on different jobs.
+  const steps = tasks.map((task) => ({
+    id: task.id,
+    name: task.name,
+    durationDays: task.durationDays,
+    // The standing owner: who gets a step when a project says nothing else.
+    defaultOwnerId: task.employeeId,
+  }));
+
+  const team = employees
+    .filter((employee) => employee.active)
+    .map((employee) => ({
+      id: employee.id,
+      name: employee.name,
+      role: employee.role,
+      color: employee.color,
     }));
 
-  const unassigned = tasks
-    .filter((t) => !t.employeeId || !groups.some((g) => g.id === t.employeeId))
-    .map((t) => ({ id: t.id, name: t.name }));
-  if (unassigned.length > 0) {
-    groups.push({
-      id: UNASSIGNED_ID,
-      name: "Unassigned",
-      role: null,
-      color: "neutral",
-      editable: false,
-      tasks: unassigned,
-    });
-  }
-
   const entryByCell = new Map(entries.map((e) => [`${e.projectId}:${e.taskId}`, e]));
-  const orderedTasks = groups.flatMap((g) => g.tasks);
 
   const rows = projects.map((project) => {
-    const cells = orderedTasks.map((task) => {
-      const entry = entryByCell.get(`${project.id}:${task.id}`);
+    const cells = steps.map((step) => {
+      const entry = entryByCell.get(`${project.id}:${step.id}`);
       return {
-        taskId: task.id,
+        taskId: step.id,
         state: entry?.state ?? ("TODO" as TaskState),
         // Scheduling detail the admin set on this cell. Absent until someone
         // schedules it — the matrix stays sparse.
@@ -189,6 +180,9 @@ export async function getTaskBoard() {
         adminNote: entry?.adminNote ?? null,
         assigneeId: entry?.assigneeId ?? null,
         excludedFromProgress: entry?.excludedFromProgress ?? false,
+        // Who is actually on the hook for this cell: this project's choice,
+        // and the step's standing owner when it has not made one.
+        ownerId: entry?.assigneeId ?? step.defaultOwnerId,
       };
     });
     // Excluded cells are still on the board; they are just not part of anyone's
@@ -203,15 +197,18 @@ export async function getTaskBoard() {
   });
 
   return {
-    groups,
+    steps,
+    team,
     rows,
-    totalTasks: orderedTasks.length,
-    hasEmployees: employees.length > 0,
+    totalTasks: steps.length,
+    hasEmployees: team.length > 0,
     doneCount: rows.reduce((sum, r) => sum + r.done, 0),
     tomorrowCount: rows.reduce((sum, r) => sum + r.tomorrow, 0),
   };
 }
 
 export type TaskBoard = Awaited<ReturnType<typeof getTaskBoard>>;
-export type TaskBoardGroup = TaskBoard["groups"][number];
+export type TaskBoardStep = TaskBoard["steps"][number];
+export type TaskBoardMember = TaskBoard["team"][number];
 export type TaskBoardRow = TaskBoard["rows"][number];
+export type TaskBoardCell = TaskBoardRow["cells"][number];

@@ -212,28 +212,19 @@ export async function runStageReminders(now = new Date()) {
     where: { publishState: { not: "ARCHIVED" } },
     select: { id: true },
   });
-  if (projects.length === 0) return { timezone, ranAt: now.toISOString(), reminders: [] };
+  if (projects.length === 0) return { timezone, day, ranAt: now.toISOString(), reminders: [] };
 
   const plan = await planForProjects(projects.map((project) => project.id));
 
-  const entries = await prisma.projectTaskEntry.findMany({
-    where: {
-      projectId: { in: projects.map((project) => project.id) },
-      state: { notIn: ["DONE", "SUBMITTED"] },
-      // A step nobody is counting is a step nobody is chased about.
-      excludedFromProgress: false,
-    },
-    include: entryInclude,
-  });
-
   const reminders: { entryId: string; days: number; created: boolean; skipped?: string }[] = [];
 
-  for (const entry of entries) {
-    const stage = plan.get(entry.id);
-    if (!stage?.dueBy) continue;
-
-    const recipient = assigneeOf(entry);
-    if (!recipient) continue;
+  for (const stage of plan.values()) {
+    if (!stage.dueBy) continue;
+    // A step nobody is counting is a step nobody is chased about, and finished
+    // work has nothing left to run.
+    if (stage.excludedFromProgress) continue;
+    if (stage.state === "DONE" || stage.state === "SUBMITTED") continue;
+    if (!stage.ownerId) continue;
 
     const countdown = countdownOf(stage.dueBy, now);
 
@@ -244,34 +235,46 @@ export async function runStageReminders(now = new Date()) {
     // reminders above; chasing it here as well would say it twice.
     if (stage.source === "explicit" && !countdown.overdue) continue;
 
-    const copy = stageReminderCopy(entry.task.name, entry.project.name, countdown);
+    // A stage nobody has touched is the one most worth chasing, and it has no
+    // row yet — so being chased is what makes it one. The notification needs
+    // something to link to, and the board needs to show the work exists.
+    let entryId = stage.entryId;
+    if (!entryId) {
+      const created = await prisma.projectTaskEntry.create({
+        data: { projectId: stage.projectId, taskId: stage.taskId },
+        select: { id: true },
+      });
+      entryId = created.id;
+    }
+
+    const copy = stageReminderCopy(stage.taskName, stage.projectName, countdown);
     const outcome = await dispatchNotification({
-      employeeId: recipient,
+      employeeId: stage.ownerId,
       // Being late is a company matter rather than a convenience, so it is not
       // something a preference can silence. A deadline merely approaching is.
       type: countdown.overdue ? "SYSTEM_NOTIFICATION" : "TASK_DEADLINE_REMINDER",
       title: copy.title,
       message: copy.message,
-      url: taskUrl(entry.id),
-      entryId: entry.id,
-      dedupeKey: stageReminderKey(entry.id, recipient, day),
+      url: taskUrl(entryId),
+      entryId,
+      dedupeKey: stageReminderKey(entryId, stage.ownerId, day),
       metadata: { dueBy: stage.dueBy.toISOString(), days: countdown.days, source: stage.source },
     });
 
     if (countdown.overdue) {
       await notifyAdmin({
         type: "TASK_OVERDUE",
-        title: `Overdue: ${entry.task.name}`,
-        message: `${entry.project.name} — ${countdown.label.toLowerCase()}. Everything after this stage is waiting on it.`,
+        title: `Overdue: ${stage.taskName}`,
+        message: `${stage.projectName} — ${countdown.label.toLowerCase()}. Everything after this stage is waiting on it.`,
         url: "/admin/tasks",
-        dedupeKey: `TASK_OVERDUE:${entry.id}:${day}`,
-        entryId: entry.id,
-        employeeId: recipient,
+        dedupeKey: `TASK_OVERDUE:${entryId}:${day}`,
+        entryId,
+        employeeId: stage.ownerId,
       });
     }
 
     reminders.push({
-      entryId: entry.id,
+      entryId,
       days: countdown.days,
       created: outcome.created,
       skipped: outcome.skipped,

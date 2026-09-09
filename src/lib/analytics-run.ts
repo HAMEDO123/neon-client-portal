@@ -49,8 +49,10 @@ export async function runPerformanceReview(period: string) {
         },
       });
     } catch (error) {
-      if (!isUniqueViolation(error)) throw error;
-      // Already applied for this period — say so rather than doing it again.
+      // Already applied for this period, or the account was removed between
+      // reading the numbers and writing the deduction. Neither is a reason to
+      // abandon everyone else's payroll.
+      if (!isUniqueViolation(error) && !isMissingEmployee(error)) throw error;
       deducted = false;
     }
 
@@ -82,5 +84,14 @@ export async function runPerformanceReview(period: string) {
 }
 
 function isUniqueViolation(error: unknown) {
-  return typeof error === "object" && error !== null && (error as { code?: string }).code === "P2002";
+  return code(error) === "P2002";
+}
+
+/** The employee row went away underneath us. */
+function isMissingEmployee(error: unknown) {
+  return code(error) === "P2003" || code(error) === "P2025";
+}
+
+function code(error: unknown) {
+  return typeof error === "object" && error !== null ? (error as { code?: string }).code : undefined;
 }

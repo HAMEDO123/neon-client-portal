@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
 import {
   Check,
   CalendarCheck,
@@ -19,20 +18,22 @@ import {
   X,
 } from "lucide-react";
 import {
-  createEmployee,
   createProcessTask,
-  deleteEmployee,
   deleteProcessTask,
-  moveEmployee,
   moveProcessTask,
   resetProjectTasks,
   setTaskState,
-  updateEmployee,
   updateProcessTask,
 } from "@/lib/actions/task-actions";
-import { NEXT_STATE, STATE_LABEL, columnTone, dotTone, headerTone } from "@/lib/task-board";
+import { NEXT_STATE, STATE_LABEL, dotTone } from "@/lib/task-board";
 import { TaskScheduleEditor, type CellDetails } from "@/components/admin/task-schedule-editor";
-import type { TaskBoard as TaskBoardData, TaskBoardGroup } from "@/lib/queries";
+import { ProjectTeamEditor, TeamDots } from "@/components/admin/project-team-editor";
+import type {
+  TaskBoard as TaskBoardData,
+  TaskBoardCell,
+  TaskBoardMember,
+  TaskBoardStep,
+} from "@/lib/queries";
 import type { TaskState } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
@@ -70,30 +71,24 @@ export function TaskBoard({
     })
   );
 
-  const owners = useMemo(
-    () => board.groups.filter((g) => g.editable).map((g) => ({ id: g.id, name: g.name })),
-    [board.groups]
+  // Filtering by a person no longer hides columns — a department is not one
+  // person's — so it narrows what counts instead: their cells stay lit, the
+  // rest go quiet, and a row's percentage is theirs alone.
+  const owned = useMemo(
+    () =>
+      employeeFilter
+        ? (cell: TaskBoardCell) => cell.ownerId === employeeFilter
+        : () => true,
+    [employeeFilter]
   );
 
-  // Column indices come from the unfiltered task order, so a filtered view
-  // still reads the right cell out of each row's full-width array.
-  const columns = useMemo(() => {
-    const indexByTask = new Map(board.groups.flatMap((g) => g.tasks).map((t, i) => [t.id, i]));
-    return board.groups
-      .filter((g) => !employeeFilter || g.id === employeeFilter)
-      .map((group) => ({
-        group,
-        tasks: group.tasks.map((task) => ({ task, index: indexByTask.get(task.id)! })),
-      }));
-  }, [board.groups, employeeFilter]);
+  const memberById = useMemo(
+    () => new Map(board.team.map((member) => [member.id, member])),
+    [board.team]
+  );
 
-  // Filtering narrows what progress means: looking at one person's columns,
-  // a row's total counts their steps only.
-  const visibleIndices = useMemo(() => columns.flatMap((c) => c.tasks.map((t) => t.index)), [columns]);
-
-  // Before anyone has been added the board is just a project list, so the one
-  // thing to do next gets a labelled column instead of a bare "+".
-  const empty = board.groups.length === 0;
+  // Before anyone has been added the board is just a project list.
+  const empty = board.steps.length === 0;
 
   function run(action: () => Promise<unknown>) {
     startTransition(async () => {
@@ -119,14 +114,14 @@ export function TaskBoard({
         <FilterChip active={employeeFilter === null} onClick={() => setEmployeeFilter(null)}>
           Everyone
         </FilterChip>
-        {board.groups.map((g) => (
+        {board.team.map((member) => (
           <FilterChip
-            key={g.id}
-            active={employeeFilter === g.id}
-            color={g.editable ? g.color : undefined}
-            onClick={() => setEmployeeFilter(employeeFilter === g.id ? null : g.id)}
+            key={member.id}
+            active={employeeFilter === member.id}
+            color={member.color}
+            onClick={() => setEmployeeFilter(employeeFilter === member.id ? null : member.id)}
           >
-            {g.name}
+            {member.name}
           </FilterChip>
         ))}
         <span className="ml-auto hidden items-center gap-3 text-xs text-ink/40 md:flex">
@@ -146,196 +141,137 @@ export function TaskBoard({
         <table className="w-full min-w-[46rem] table-fixed border-separate border-spacing-0 text-left text-sm">
           <thead>
             <tr>
-              <th
-                rowSpan={2}
-                className="sticky left-0 z-20 w-[10rem] border-b border-ink/8 bg-bg-soft px-3 py-3 text-xs font-medium uppercase tracking-wider text-ink/40 sm:w-[11.5rem] sm:px-4"
-              >
+              <th className="sticky left-0 z-20 w-[10rem] border-b border-ink/8 bg-bg-soft px-3 py-3 text-xs font-medium uppercase tracking-wider text-ink/40 sm:w-[11.5rem] sm:px-4">
                 Project
               </th>
 
-              {columns.map(({ group, tasks }) => (
+              {/* The columns are the departments. Who does one is decided per
+                  project, on the project's own row. */}
+              {board.steps.map((step) => (
                 <th
-                  key={group.id}
-                  colSpan={tasks.length + (group.editable ? 1 : 0)}
-                  className={cn(
-                    "relative border-b border-l border-ink/8 px-2 py-2",
-                    group.editable ? headerTone(group.color) : "bg-ink/[0.03] text-ink/50"
-                  )}
+                  key={step.id}
+                  className="relative border-b border-l border-ink/8 bg-bg-soft/60 p-0 align-bottom"
                 >
-                  {group.editable ? (
-                    <EmployeeHeader group={group} run={run} />
-                  ) : (
-                    <span className="block truncate text-center text-[13px] font-semibold">{group.name}</span>
-                  )}
+                  <StepHeader step={step} team={board.team} run={run} />
                 </th>
               ))}
 
-              {!employeeFilter && (
-                <th
-                  rowSpan={2}
-                  className={cn(
-                    "border-b border-l border-ink/8 bg-bg-soft p-0 align-middle",
-                    empty ? "w-full" : "w-8"
-                  )}
-                >
-                  <InlineAdd
-                    title="Add a team member"
-                    placeholder="Name"
-                    label={empty ? "Add your first team member" : undefined}
-                    onSubmit={(value) => run(() => createEmployee(value))}
-                  />
-                </th>
-              )}
+              <th
+                className={cn(
+                  "border-b border-l border-ink/8 bg-bg-soft p-0 align-middle",
+                  empty ? "w-full" : "w-8"
+                )}
+              >
+                <InlineAdd
+                  title="Add a department"
+                  placeholder="Technical Drawings"
+                  label={empty ? "Add your first department" : undefined}
+                  onSubmit={(value) => run(() => createProcessTask(value, null))}
+                />
+              </th>
 
               {!empty && (
-                <th
-                  rowSpan={2}
-                  className="w-[5.5rem] border-b border-l border-ink/8 bg-bg-soft px-2 py-3 text-center text-xs font-medium uppercase tracking-wider text-ink/40"
-                >
+                <th className="w-[5.5rem] border-b border-l border-ink/8 bg-bg-soft px-2 py-3 text-center text-xs font-medium uppercase tracking-wider text-ink/40">
                   Progress
                 </th>
               )}
-            </tr>
-
-            <tr>
-              {columns.flatMap(({ group, tasks }) => [
-                ...tasks.map(({ task }, i) => (
-                  <th
-                    key={task.id}
-                    className={cn(
-                      "relative min-w-[3.25rem] border-b border-ink/8 p-0 align-bottom",
-                      i === 0 && "border-l border-ink/8",
-                      group.editable && columnTone(group.color)
-                    )}
-                  >
-                    <TaskHeader task={task} ownerId={group.editable ? group.id : ""} owners={owners} run={run} />
-                  </th>
-                )),
-                ...(group.editable
-                  ? [
-                      <th
-                        key={`${group.id}-add`}
-                        className={cn(
-                          "border-b border-ink/8 p-0 align-bottom",
-                          // A person with no steps yet has only this column to
-                          // carry their name, so it gets room to show it.
-                          tasks.length === 0 ? "w-24 border-l border-ink/8" : "w-8",
-                          columnTone(group.color)
-                        )}
-                      >
-                        <InlineAdd
-                          title={`Add a step for ${group.name}`}
-                          placeholder="Step"
-                          onSubmit={(value) => run(() => createProcessTask(value, group.id))}
-                        />
-                      </th>,
-                    ]
-                  : []),
-              ])}
             </tr>
           </thead>
 
           <tbody>
             {rows.map((row) => {
-              // "Not counted" cells drop out of the fraction entirely, so a
-              // step that never applied to this project cannot hold the row
-              // below 100%.
-              const counted = visibleIndices
-                .map((i) => row.cells[i])
-                .filter((cell) => !cell?.excludedFromProgress);
-              const done = counted.filter((cell) => cell?.state === "DONE").length;
-              const tomorrow = counted.filter((cell) => cell?.state === "TOMORROW").length;
+              // "Not counted" cells drop out of the fraction entirely, and so
+              // does everyone else's work while the board is filtered to one
+              // person.
+              const counted = row.cells.filter((cell) => !cell.excludedFromProgress && owned(cell));
+              const done = counted.filter((cell) => cell.state === "DONE").length;
+              const tomorrow = counted.filter((cell) => cell.state === "TOMORROW").length;
 
               return (
                 <tr key={row.project.id} className="group/row">
                   <th
                     scope="row"
-                    className="sticky left-0 z-10 border-b border-ink/6 bg-white px-3 py-2.5 text-left font-normal group-hover/row:bg-bg-soft/80 sm:px-4"
+                    className="sticky left-0 z-10 border-b border-ink/6 bg-white p-0 text-left font-normal group-hover/row:bg-bg-soft/80"
                   >
-                    <Link href={`/admin/projects/${row.project.id}`} className="block min-w-0">
-                      <span className="block truncate text-sm font-medium text-ink">{row.project.name}</span>
-                      <span className="block truncate text-xs text-ink/45">{row.project.clientName}</span>
-                    </Link>
+                    <ProjectRowHeader
+                      project={row.project}
+                      steps={board.steps}
+                      cells={row.cells}
+                      team={board.team}
+                    />
                   </th>
 
-                  {columns.flatMap(({ group, tasks }) => [
-                    ...tasks.map(({ task, index }, i) => {
-                      const cell = row.cells[index];
-                      const state = cell?.state ?? "TODO";
-                      return (
-                        <td
-                          key={task.id}
-                          className={cn(
-                            "group/cell relative border-b border-ink/6 p-0 text-center",
-                            i === 0 && "border-l border-ink/8",
-                            group.editable && columnTone(group.color)
-                          )}
-                        >
-                          <TaskCell
-                            state={state}
-                            excluded={cell?.excludedFromProgress ?? false}
-                            label={`${task.name} · ${row.project.name}`}
-                            onClick={() => cycle(row.project.id, task.id, state)}
-                          />
-                          <CellSchedule
-                            projectId={row.project.id}
-                            projectName={row.project.name}
-                            taskId={task.id}
-                            taskName={task.name}
-                            details={{
-                              priority: cell?.priority ?? "MEDIUM",
-                              scheduledFor: cell?.scheduledFor ?? null,
-                              dueAt: cell?.dueAt ?? null,
-                              adminNote: cell?.adminNote ?? null,
-                              assigneeId: cell?.assigneeId ?? null,
-                              excludedFromProgress: cell?.excludedFromProgress ?? false,
-                            }}
-                            onSaved={(details) =>
-                              applyPatch({ kind: "details", projectId: row.project.id, taskId: task.id, details })
-                            }
-                            owners={owners}
-                            defaultOwnerId={group.editable ? group.id : null}
-                            todayKey={todayKey}
-                            tomorrowKey={tomorrowKey}
-                          />
-                        </td>
-                      );
-                    }),
-                    ...(group.editable
-                      ? [
-                          <td
-                            key={`${group.id}-add`}
-                            className={cn(
-                              "border-b border-ink/6",
-                              tasks.length === 0 && "border-l border-ink/8",
-                              columnTone(group.color)
-                            )}
-                          />,
-                        ]
-                      : []),
-                  ])}
+                  {row.cells.map((cell, index) => {
+                    const owner = cell.ownerId ? memberById.get(cell.ownerId) : undefined;
+                    return (
+                      <td
+                        key={cell.taskId}
+                        className={cn(
+                          "group/cell relative border-b border-l border-ink/6 p-0 text-center",
+                          index === 0 && "border-l-ink/8",
+                          // Somebody else's work, while the board is filtered.
+                          !owned(cell) && "opacity-30"
+                        )}
+                      >
+                        <TaskCell
+                          state={cell.state}
+                          label={`${board.steps[index]?.name ?? ""} · ${row.project.name}`}
+                          excluded={cell.excludedFromProgress}
+                          ownerColor={owner?.color ?? null}
+                          ownerName={owner?.name ?? null}
+                          onClick={() => cycle(row.project.id, cell.taskId, cell.state)}
+                        />
+                        <CellSchedule
+                          projectId={row.project.id}
+                          projectName={row.project.name}
+                          taskId={cell.taskId}
+                          taskName={board.steps[index]?.name ?? ""}
+                          details={{
+                            priority: cell.priority,
+                            scheduledFor: cell.scheduledFor,
+                            dueAt: cell.dueAt,
+                            adminNote: cell.adminNote,
+                            assigneeId: cell.assigneeId,
+                            excludedFromProgress: cell.excludedFromProgress,
+                          }}
+                          owners={board.team}
+                          defaultOwnerId={board.steps[index]?.defaultOwnerId ?? null}
+                          todayKey={todayKey}
+                          tomorrowKey={tomorrowKey}
+                          onSaved={(details) =>
+                            applyPatch({
+                              kind: "details",
+                              projectId: row.project.id,
+                              taskId: cell.taskId,
+                              details,
+                            })
+                          }
+                        />
+                      </td>
+                    );
+                  })}
 
-                  {!employeeFilter && <td className="border-b border-l border-ink/8 bg-bg-soft/40" />}
+                  <td className="border-b border-l border-ink/8 bg-bg-soft/40" />
 
                   {!empty && (
-                  <td className="border-b border-l border-ink/8 px-1.5 py-2.5 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <ProgressPill done={done} total={counted.length} tomorrow={tomorrow} />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm(`Clear every tick on “${row.project.name}”?`)) {
-                            run(() => resetProjectTasks(row.project.id));
-                          }
-                        }}
-                        aria-label={`Clear all ticks on ${row.project.name}`}
-                        title="Clear this row"
-                        className="rounded-md p-1 text-ink/25 opacity-0 transition-opacity hover:bg-ink/5 hover:text-ink/60 focus-visible:opacity-100 group-hover/row:opacity-100"
-                      >
-                        <RotateCcw size={13} strokeWidth={1.75} />
-                      </button>
-                    </div>
-                  </td>
+                    <td className="border-b border-l border-ink/8 px-1.5 py-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <ProgressPill done={done} total={counted.length} tomorrow={tomorrow} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Clear every tick on “${row.project.name}”?`)) {
+                              run(() => resetProjectTasks(row.project.id));
+                            }
+                          }}
+                          aria-label={`Clear all ticks on ${row.project.name}`}
+                          title="Clear this row"
+                          className="rounded-md p-1 text-ink/25 opacity-0 transition-opacity hover:bg-ink/5 hover:text-ink/60 focus-visible:opacity-100 group-hover/row:opacity-100"
+                        >
+                          <RotateCcw size={13} strokeWidth={1.75} />
+                        </button>
+                      </div>
+                    </td>
                   )}
                 </tr>
               );
@@ -347,14 +283,14 @@ export function TaskBoard({
       <p className="text-xs text-ink/40">
         {empty ? (
           <>
-            Add each person on the team, then the steps they own. Every project above gets the same steps, and everyone
-            ticks off their own column.
+            Add the departments every project passes through — site &amp; procurement, 3D visualization, technical
+            drawings. Each project below gets the same ones.
           </>
         ) : (
           <>
-            Click a box to cycle it: to do → done → tomorrow. Use{" "}
-            <span className="font-medium text-ink/60">+</span> in the header to add a person or one of their steps, and
-            click any header to rename, reassign or remove it.
+            Click a box to cycle it: to do → done → tomorrow. Click a{" "}
+            <span className="font-medium text-ink/60">project name</span> to say who does which department on it — the
+            answer can differ from project to project.
           </>
         )}
       </p>
@@ -366,18 +302,22 @@ function TaskCell({
   state,
   label,
   excluded,
+  ownerColor,
+  ownerName,
   onClick,
 }: {
   state: TaskState;
   label: string;
   excluded: boolean;
+  ownerColor: string | null;
+  ownerName: string | null;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${label} — ${STATE_LABEL[state]}${excluded ? ", not counted" : ""}. Click to change.`}
+      aria-label={`${label} — ${STATE_LABEL[state]}${ownerName ? `, ${ownerName}` : ""}${excluded ? ", not counted" : ""}. Click to change.`}
       title={`${label}\n${STATE_LABEL[state]}${excluded ? " · not counted towards progress" : ""} — click to change`}
       className={cn(
         "flex h-11 w-full items-center justify-center transition-colors hover:bg-ink/[0.05]",
@@ -401,6 +341,15 @@ function TaskCell({
         {state === "SUBMITTED" && <Camera size={13} strokeWidth={2.25} />}
         {state === "TOMORROW" && <CalendarClock size={13} strokeWidth={2.25} />}
       </span>
+
+      {/* Whose cell this is, in their colour — small, because the department
+          is the column and the person is a detail of this project. */}
+      {ownerColor && (
+        <span
+          className={cn("absolute bottom-1 left-1 h-1.5 w-1.5 rounded-full", dotTone(ownerColor))}
+          aria-hidden
+        />
+      )}
     </button>
   );
 }
@@ -492,99 +441,64 @@ function ProgressPill({ done, total, tomorrow }: { done: number; total: number; 
   );
 }
 
-// Both header editors open in place, so adding and fixing columns never leaves
-// the board.
-function EmployeeHeader({ group, run }: { group: TaskBoardGroup; run: (action: () => Promise<unknown>) => void }) {
+// The project's own row opens the one thing that is per project: who does
+// which department on it.
+function ProjectRowHeader({
+  project,
+  steps,
+  cells,
+  team,
+}: {
+  project: { id: string; name: string; clientName: string };
+  steps: TaskBoardStep[];
+  cells: TaskBoardCell[];
+  team: TaskBoardMember[];
+}) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState(group.name);
-  const [role, setRole] = useState(group.role ?? "");
 
   return (
     <Popover
       open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) {
-          setName(group.name);
-          setRole(group.role ?? "");
-        }
-      }}
+      onOpenChange={setOpen}
+      width={EDITOR_WIDTH}
+      triggerLabel={`Assign the team on ${project.name}`}
+      triggerClassName="block w-full cursor-pointer px-3 py-2.5 text-left transition-colors hover:bg-ink/[0.04] sm:px-4"
       trigger={
-        <span className="block w-full px-1">
-          <span className="block break-words text-center text-[13px] font-semibold">{group.name}</span>
-          {group.role && (
-            <span className="block truncate text-center text-[11px] font-normal opacity-70">{group.role}</span>
-          )}
+        <span className="block min-w-0">
+          <span className="block truncate text-sm font-medium text-ink">{project.name}</span>
+          <span className="block truncate text-xs text-ink/45">{project.clientName}</span>
+          <TeamDots cells={cells} team={team} />
         </span>
       }
-      triggerLabel={`Edit ${group.name}`}
     >
-      <PopoverField label="Name" value={name} onChange={setName} autoFocus />
-      <PopoverField label="Role" value={role} onChange={setRole} placeholder="3D Visualizer" />
-
-      <div className="mt-3 flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => run(() => moveEmployee(group.id, "left"))}
-          aria-label="Move left"
-          className="rounded-md p-1.5 text-ink/40 hover:bg-ink/5 hover:text-ink"
-        >
-          <ChevronLeft size={14} strokeWidth={2} />
-        </button>
-        <button
-          type="button"
-          onClick={() => run(() => moveEmployee(group.id, "right"))}
-          aria-label="Move right"
-          className="rounded-md p-1.5 text-ink/40 hover:bg-ink/5 hover:text-ink"
-        >
-          <ChevronRight size={14} strokeWidth={2} />
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm(`Remove ${group.name}? Their steps stay on the board as unassigned.`)) {
-              setOpen(false);
-              run(() => deleteEmployee(group.id));
-            }
-          }}
-          aria-label={`Remove ${group.name}`}
-          className="rounded-md p-1.5 text-red-500/70 hover:bg-red-50 hover:text-red-600"
-        >
-          <Trash2 size={14} strokeWidth={1.75} />
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (!name.trim()) return;
-            setOpen(false);
-            run(() => updateEmployee(group.id, name, role));
-          }}
-          className="ml-auto rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-bg hover:bg-ink/85"
-        >
-          Save
-        </button>
-      </div>
+      <ProjectTeamEditor
+        project={project}
+        steps={steps}
+        cells={cells}
+        team={team}
+        onClose={() => setOpen(false)}
+      />
     </Popover>
   );
 }
 
-// Hyphenate first, break as a last resort: a long step name should read as
+// One column of the board: a department every project passes through.
+//
+// Hyphenate first, break as a last resort — a long name should read as
 // "Require-ments", but it must never overflow into the neighbouring column,
 // which is what happens if nothing can break it at all.
-function TaskHeader({
-  task,
-  ownerId,
-  owners,
+function StepHeader({
+  step,
+  team,
   run,
 }: {
-  task: { id: string; name: string };
-  ownerId: string;
-  owners: { id: string; name: string }[];
+  step: TaskBoardStep;
+  team: TaskBoardMember[];
   run: (action: () => Promise<unknown>) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState(task.name);
-  const [owner, setOwner] = useState(ownerId);
+  const [name, setName] = useState(step.name);
+  const [owner, setOwner] = useState(step.defaultOwnerId ?? "");
 
   return (
     <Popover
@@ -592,38 +506,46 @@ function TaskHeader({
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
-          setName(task.name);
-          setOwner(ownerId);
+          setName(step.name);
+          setOwner(step.defaultOwnerId ?? "");
         }
       }}
       trigger={
-        <span className="block hyphens-auto break-words px-0.5 py-2 text-center text-[10px] font-medium leading-[1.25] tracking-tight text-ink/60">
-          {task.name}
+        <span className="block hyphens-auto break-words px-1 py-2.5 text-center text-[11px] font-semibold leading-[1.25] tracking-tight text-ink/70">
+          {step.name}
+          {step.durationDays != null && (
+            <span className="mt-0.5 block text-[9px] font-normal text-ink/35">{step.durationDays}d</span>
+          )}
         </span>
       }
-      triggerLabel={`Edit ${task.name}`}
+      triggerLabel={`Edit ${step.name}`}
       align="center"
     >
-      <PopoverField label="Step" value={name} onChange={setName} autoFocus />
+      <PopoverField label="Department" value={name} onChange={setName} autoFocus />
 
-      <label className="mt-2 block text-[11px] font-medium uppercase tracking-wider text-ink/40">Owner</label>
+      <label className="mt-2 block text-[11px] font-medium uppercase tracking-wider text-ink/40">
+        Usually done by
+      </label>
       <select
         value={owner}
         onChange={(e) => setOwner(e.target.value)}
         className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-cyan-strong"
       >
-        <option value="">Unassigned</option>
-        {owners.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.name}
+        <option value="">Nobody by default</option>
+        {team.map((member) => (
+          <option key={member.id} value={member.id}>
+            {member.name}
           </option>
         ))}
       </select>
+      <p className="mt-1 text-[10px] leading-tight text-ink/35">
+        The fallback when a project has not said otherwise. Change it for one project from that project&apos;s row.
+      </p>
 
       <div className="mt-3 flex items-center gap-1">
         <button
           type="button"
-          onClick={() => run(() => moveProcessTask(task.id, "left"))}
+          onClick={() => run(() => moveProcessTask(step.id, "left"))}
           aria-label="Move left"
           className="rounded-md p-1.5 text-ink/40 hover:bg-ink/5 hover:text-ink"
         >
@@ -631,7 +553,7 @@ function TaskHeader({
         </button>
         <button
           type="button"
-          onClick={() => run(() => moveProcessTask(task.id, "right"))}
+          onClick={() => run(() => moveProcessTask(step.id, "right"))}
           aria-label="Move right"
           className="rounded-md p-1.5 text-ink/40 hover:bg-ink/5 hover:text-ink"
         >
@@ -640,12 +562,12 @@ function TaskHeader({
         <button
           type="button"
           onClick={() => {
-            if (confirm(`Delete “${task.name}”? Its ticks on every project go with it.`)) {
+            if (confirm(`Delete “${step.name}”? Its ticks on every project go with it.`)) {
               setOpen(false);
-              run(() => deleteProcessTask(task.id));
+              run(() => deleteProcessTask(step.id));
             }
           }}
-          aria-label={`Delete ${task.name}`}
+          aria-label={`Delete ${step.name}`}
           className="rounded-md p-1.5 text-red-500/70 hover:bg-red-50 hover:text-red-600"
         >
           <Trash2 size={14} strokeWidth={1.75} />
@@ -655,7 +577,7 @@ function TaskHeader({
           onClick={() => {
             if (!name.trim()) return;
             setOpen(false);
-            run(() => updateProcessTask(task.id, name, owner || null));
+            run(() => updateProcessTask(step.id, name, owner || null));
           }}
           className="ml-auto rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-bg hover:bg-ink/85"
         >

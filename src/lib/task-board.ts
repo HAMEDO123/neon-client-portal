@@ -86,7 +86,3 @@ export const PRIORITY_LABEL = {
   MEDIUM: "Medium",
   HIGH: "High",
 } as const;
-
-// The unassigned bucket is a real column group on the board but has no
-// Employee row behind it, so it gets a reserved id instead.
-export const UNASSIGNED_ID = "unassigned";

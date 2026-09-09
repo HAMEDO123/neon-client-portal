@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { periodRange } from "@/lib/payroll";
+import { planForProjects } from "@/lib/stage-deadlines";
 import {
   isShortfall,
   progressOf,
@@ -47,7 +48,10 @@ export type EmployeeProgress = {
   deduction: { amount: number; reason: string } | null;
 };
 
-export async function getEmployeeProgress(period: string): Promise<EmployeeProgress[]> {
+export async function getEmployeeProgress(
+  period: string,
+  now = new Date()
+): Promise<EmployeeProgress[]> {
   const { start, end } = periodRange(period);
 
   const employees = await prisma.employee.findMany({
@@ -93,6 +97,28 @@ export async function getEmployeeProgress(period: string): Promise<EmployeeProgr
     select: { employeeId: true, amount: true, reason: true },
   });
 
+  // Being late is a present-tense fact, and most deadlines are worked out from
+  // the stage periods rather than typed onto a cell — so the SQL above, which
+  // only sees a stored dueAt, undercounts. Overlay the real answer while the
+  // period being looked at is the one running; a past month keeps whatever it
+  // counted at the time.
+  const overdueBy = new Map<string, number>();
+  if (now >= start && now < end) {
+    const projects = await prisma.project.findMany({
+      where: { publishState: { not: "ARCHIVED" } },
+      select: { id: true },
+    });
+    const plan = await planForProjects(projects.map((project) => project.id));
+
+    for (const stage of plan.values()) {
+      if (!stage.ownerId || !stage.dueBy) continue;
+      if (stage.excludedFromProgress) continue;
+      if (stage.state === "DONE" || stage.state === "SUBMITTED") continue;
+      if (stage.dueBy >= now) continue;
+      overdueBy.set(stage.ownerId, (overdueBy.get(stage.ownerId) ?? 0) + 1);
+    }
+  }
+
   const countsBy = new Map(rows.map((row) => [row.employeeId, row]));
   const deductionBy = new Map(adjustments.map((row) => [row.employeeId, row]));
 
@@ -104,7 +130,7 @@ export async function getEmployeeProgress(period: string): Promise<EmployeeProgr
       awaitingReview: Number(row?.awaiting_review ?? 0),
       inProgress: Number(row?.in_progress ?? 0),
       pending: Number(row?.pending ?? 0),
-      overdue: Number(row?.overdue ?? 0),
+      overdue: overdueBy.get(employee.id) ?? Number(row?.overdue ?? 0),
       onTime: Number(row?.on_time ?? 0),
     };
     const deduction = deductionBy.get(employee.id);

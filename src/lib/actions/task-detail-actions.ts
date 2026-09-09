@@ -88,6 +88,62 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
   revalidatePath("/employee", "layout");
 }
 
+/**
+ * Who does what on one project.
+ *
+ * The board's columns are departments, not people — the same step goes to
+ * different people on different jobs — so assignment is a decision made per
+ * project, here, in one pass. A step left blank falls back to its standing
+ * owner, and only the people whose work actually changed hear about it.
+ */
+export async function assignProjectTeam(projectId: string, formData: FormData) {
+  await requireAdmin();
+
+  const steps = await prisma.processTask.findMany({ select: { id: true, employeeId: true } });
+  const existing = await prisma.projectTaskEntry.findMany({
+    where: { projectId },
+    select: { id: true, taskId: true, assigneeId: true },
+  });
+  const entryByTask = new Map(existing.map((entry) => [entry.taskId, entry]));
+
+  const assigned: string[] = [];
+
+  for (const step of steps) {
+    // Absent from the form means "not offered", which is different from
+    // "cleared" — only act on the fields that were actually submitted.
+    if (!formData.has(`assignee:${step.id}`)) continue;
+
+    const chosen = String(formData.get(`assignee:${step.id}`) ?? "") || null;
+    const entry = entryByTask.get(step.id);
+
+    if (entry) {
+      if ((entry.assigneeId ?? null) === chosen) continue;
+      await prisma.projectTaskEntry.update({ where: { id: entry.id }, data: { assigneeId: chosen } });
+      if (chosen) assigned.push(entry.id);
+      continue;
+    }
+
+    // Nothing to record for a cell that has no row and is being left to its
+    // standing owner anyway.
+    if (!chosen || chosen === step.employeeId) continue;
+
+    const created = await prisma.projectTaskEntry.create({
+      data: { projectId, taskId: step.id, assigneeId: chosen },
+    });
+    assigned.push(created.id);
+  }
+
+  // The engine decides who hears about it and how; this never sends anything
+  // by hand.
+  for (const entryId of assigned) {
+    await notifyTaskAssigned(entryId);
+  }
+
+  revalidatePath("/admin/tasks");
+  revalidatePath("/employee", "layout");
+  return { assigned: assigned.length };
+}
+
 /** Clears scheduling without deleting the tick history. */
 export async function clearTaskEntryDetails(projectId: string, taskId: string) {
   await requireAdmin();
