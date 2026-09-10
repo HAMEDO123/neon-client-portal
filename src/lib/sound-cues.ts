@@ -11,19 +11,30 @@
 
 export type Cue = "message" | "update";
 
-export type Note = { frequency: number; start: number; duration: number; wave: OscillatorType; level: number };
+export type Note = {
+  frequency: number;
+  start: number;
+  duration: number;
+  wave: OscillatorType;
+  level: number;
+  /** A second voice an octave up, this loud relative to the note: the ring that makes it carry. */
+  shimmer?: number;
+};
 
 /** The notes of each sound, in seconds from its start. */
 export const CUES: Record<Cue, Note[]> = {
-  // A quick rising pair, like a bubble landing.
+  // Three quick notes climbing to a ringing top one — "ba-da-bing". Pitched
+  // where a phone's speaker is loudest, with a bright ring an octave up, so it
+  // carries across a room and is not mistaken for anything else on the phone.
   message: [
-    { frequency: 880, start: 0, duration: 0.09, wave: "sine", level: 0.22 },
-    { frequency: 1318.5, start: 0.085, duration: 0.16, wave: "sine", level: 0.2 },
+    { frequency: 783.99, start: 0, duration: 0.11, wave: "triangle", level: 0.55, shimmer: 0.35 },
+    { frequency: 1046.5, start: 0.09, duration: 0.11, wave: "triangle", level: 0.55, shimmer: 0.35 },
+    { frequency: 1567.98, start: 0.18, duration: 0.42, wave: "triangle", level: 0.65, shimmer: 0.45 },
   ],
   // Lower, softer and longer: a two-tone chime, for everything that is not a message.
   update: [
-    { frequency: 659.25, start: 0, duration: 0.45, wave: "triangle", level: 0.22 },
-    { frequency: 987.77, start: 0.15, duration: 0.6, wave: "triangle", level: 0.18 },
+    { frequency: 659.25, start: 0, duration: 0.45, wave: "triangle", level: 0.3 },
+    { frequency: 987.77, start: 0.15, duration: 0.6, wave: "triangle", level: 0.26 },
   ],
 };
 
@@ -105,23 +116,39 @@ export function previewCue(cue: Cue) {
 }
 
 function sound(cue: Cue) {
-  if (!context || context.state !== "running") return;
-  const now = context.currentTime + 0.02;
+  const ctx = context;
+  if (!ctx || ctx.state !== "running") return;
+  const now = ctx.currentTime + 0.02;
 
-  for (const note of CUES[cue]) {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
+  // Loud without distorting: the notes go through a limiter that catches the
+  // peaks where they overlap, so each can sit close to full volume.
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -10;
+  limiter.knee.value = 6;
+  limiter.ratio.value = 12;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.12;
+  limiter.connect(ctx.destination);
+
+  const voice = (note: Note, frequency: number, wave: OscillatorType, level: number) => {
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
     const start = now + note.start;
 
-    oscillator.type = note.wave;
-    oscillator.frequency.setValueAtTime(note.frequency, start);
+    oscillator.type = wave;
+    oscillator.frequency.setValueAtTime(frequency, start);
     // A fast rise and an even fall, so each note sounds struck, not switched on.
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(note.level, start + 0.015);
+    gain.gain.exponentialRampToValueAtTime(level, start + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + note.duration);
 
-    oscillator.connect(gain).connect(context.destination);
+    oscillator.connect(gain).connect(limiter);
     oscillator.start(start);
     oscillator.stop(start + note.duration + 0.05);
+  };
+
+  for (const note of CUES[cue]) {
+    voice(note, note.frequency, note.wave, note.level);
+    if (note.shimmer) voice(note, note.frequency * 2, "sine", note.level * note.shimmer);
   }
 }

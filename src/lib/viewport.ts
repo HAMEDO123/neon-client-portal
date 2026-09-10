@@ -11,7 +11,9 @@
 // by exactly the status bar, and a frame that trusts it ends that far above
 // the bottom of the screen — the empty band under the tab bar. The shortfall
 // is the full screen's height less the tallest the window has been, and it is
-// added back everywhere, keyboard or not.
+// added back while the keyboard is down. With the keyboard up, the window
+// above it is reported as it is; adding the status bar there as well put the
+// bottom of the frame — the message box — that far under the keyboard.
 //
 // Pure: the component that listens to the browser feeds it readings, the
 // tests feed it numbers.
@@ -31,7 +33,7 @@ export type ViewportReading = {
 export type ViewportState = {
   /** The tallest the visible area has been in this orientation. */
   baseline: number;
-  /** How much the window under-reports, added back to the frame. */
+  /** How much the window under-reports with the keyboard down. */
   deficit: number;
   appHeight: number;
   appTop: number;
@@ -59,7 +61,9 @@ export function measureViewport(reading: ViewportReading, previousBaseline: numb
   return {
     baseline,
     deficit,
-    appHeight: height + deficit,
+    // The frame ends at the top of the keyboard when it is up, and at the
+    // bottom of the screen when it is down.
+    appHeight: keyboardOpen ? height : height + deficit,
     // Followed whether or not the keyboard is up: when iOS slides the window
     // and forgets to slide it back, following it keeps the frame's bottom — the
     // tab bar — at the bottom of the screen.

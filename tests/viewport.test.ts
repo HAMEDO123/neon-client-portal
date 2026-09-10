@@ -19,16 +19,26 @@ describe("the frame fills the screen in a Home Screen app", () => {
   it("ends the frame exactly at the top of the keyboard", () => {
     const keyboard = 336;
     const closed = measureViewport({ height: SCREEN - STATUS_BAR, offsetTop: 0, fullHeight: SCREEN }, 0);
-    const open = measureViewport(
-      { height: SCREEN - STATUS_BAR - keyboard, offsetTop: 0, fullHeight: SCREEN },
-      closed.baseline
-    );
+    // With the keyboard up, iOS measures the window above it as it is — the
+    // status bar is not left out a second time.
+    const open = measureViewport({ height: SCREEN - keyboard, offsetTop: 0, fullHeight: SCREEN }, closed.baseline);
 
     assert.equal(open.keyboardOpen, true);
-    assert.equal(open.keyboardHeight, keyboard);
-    // The same shortfall is added back, so the text box sits on the keyboard
-    // rather than a status bar's height above it.
+    // Nothing is added, so the message box sits on the keyboard rather than a
+    // status bar's height below its top edge, where it could not be seen.
     assert.equal(open.appHeight, SCREEN - keyboard);
+  });
+
+  it("never lets the frame run under the keyboard", () => {
+    const keyboard = 336;
+    const closed = measureViewport({ height: SCREEN - STATUS_BAR, offsetTop: 0, fullHeight: SCREEN }, 0);
+    // Were the window ever short with the keyboard up as well, the frame would
+    // stop a little above the keyboard — a gap, never the box hidden under it.
+    const reported = SCREEN - STATUS_BAR - keyboard;
+    const open = measureViewport({ height: reported, offsetTop: 0, fullHeight: SCREEN }, closed.baseline);
+
+    assert.equal(open.keyboardOpen, true);
+    assert.equal(open.appHeight, reported);
   });
 
   it("changes nothing where the window reports honestly", () => {
