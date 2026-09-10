@@ -1,42 +1,76 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { KEYBOARD_THRESHOLD, measureViewport } from "../src/lib/viewport";
+import { KEYBOARD_THRESHOLD, MAX_DEFICIT, measureViewport } from "../src/lib/viewport";
 
-// An iPhone 14-sized screen: 844 points tall with nothing covering it.
-const SCREEN = 844;
+// An iPhone 15-sized screen: 852 points tall, a 54-point status bar.
+const SCREEN = 852;
+const STATUS_BAR = 54;
 
-describe("the frame follows the window you can see", () => {
-  it("fills the screen when nothing covers it", () => {
-    const state = measureViewport({ height: SCREEN, offsetTop: 0 }, SCREEN);
+describe("the frame fills the screen in a Home Screen app", () => {
+  it("adds back the status bar iOS leaves out of the window's height", () => {
+    // The gap under the tab bar: the window says 798 on an 852-point screen.
+    const state = measureViewport({ height: SCREEN - STATUS_BAR, offsetTop: 0, fullHeight: SCREEN }, 0);
+    assert.equal(state.deficit, STATUS_BAR);
     assert.equal(state.appHeight, SCREEN);
-    assert.equal(state.appTop, 0);
     assert.equal(state.keyboardOpen, false);
   });
 
-  it("shrinks to what is left above the keyboard", () => {
-    const state = measureViewport({ height: 508, offsetTop: 0 }, SCREEN);
-    assert.equal(state.keyboardOpen, true);
-    assert.equal(state.keyboardHeight, SCREEN - 508);
-    // The bottom of the frame is the top of the keyboard — where the text box sits.
-    assert.equal(state.appHeight, 508);
+  it("ends the frame exactly at the top of the keyboard", () => {
+    const keyboard = 336;
+    const closed = measureViewport({ height: SCREEN - STATUS_BAR, offsetTop: 0, fullHeight: SCREEN }, 0);
+    const open = measureViewport(
+      { height: SCREEN - STATUS_BAR - keyboard, offsetTop: 0, fullHeight: SCREEN },
+      closed.baseline
+    );
+
+    assert.equal(open.keyboardOpen, true);
+    assert.equal(open.keyboardHeight, keyboard);
+    // The same shortfall is added back, so the text box sits on the keyboard
+    // rather than a status bar's height above it.
+    assert.equal(open.appHeight, SCREEN - keyboard);
   });
 
+  it("changes nothing where the window reports honestly", () => {
+    const state = measureViewport({ height: SCREEN, offsetTop: 0, fullHeight: SCREEN }, 0);
+    assert.equal(state.deficit, 0);
+    assert.equal(state.appHeight, SCREEN);
+  });
+
+  it("changes nothing in a browser tab, whose toolbars really do cover the screen", () => {
+    const state = measureViewport({ height: 700, offsetTop: 0 }, 0);
+    assert.equal(state.deficit, 0);
+    assert.equal(state.appHeight, 700);
+  });
+
+  it("does not mistake a keyboard that shrinks the page for a shortfall", () => {
+    // Android can resize the page itself; the full height then tracks the
+    // window, and nothing may be added.
+    const closed = measureViewport({ height: 800, offsetTop: 0, fullHeight: 800 }, 0);
+    const open = measureViewport({ height: 500, offsetTop: 0, fullHeight: 500 }, closed.baseline);
+    assert.equal(open.deficit, 0);
+    assert.equal(open.keyboardOpen, true);
+    assert.equal(open.appHeight, 500);
+  });
+
+  it("never adds back more than a status bar could be", () => {
+    // Opened with the keyboard already up, before the full height is known.
+    const state = measureViewport({ height: 500, offsetTop: 0, fullHeight: SCREEN }, 0);
+    assert.equal(state.deficit, MAX_DEFICIT);
+  });
+});
+
+describe("the frame follows the window you can see", () => {
   it("slides with the window when iOS scrolls a focused field into view", () => {
-    // The case that sent the chat's text box up and out of sight: the frame
-    // stayed at the top of the page while the window slid 280 points down.
     const state = measureViewport({ height: 508, offsetTop: 280 }, SCREEN);
     assert.equal(state.appTop, 280);
     assert.equal(state.appHeight, 508);
   });
 
   it("keeps the tab bar at the bottom when iOS forgets to slide back", () => {
-    // Keyboard gone, window still slid down: pinned to the page, the tab bar
-    // would float up the screen by exactly this much.
     const state = measureViewport({ height: SCREEN, offsetTop: 210 }, SCREEN);
     assert.equal(state.keyboardOpen, false);
     assert.equal(state.appTop, 210);
-    assert.equal(state.appHeight, SCREEN);
   });
 });
 
@@ -48,8 +82,6 @@ describe("telling a keyboard from a toolbar", () => {
   });
 
   it("learns the full height from the tallest the window has been", () => {
-    // A Home Screen app can open slightly short and grow; the first reading
-    // must not become the yardstick for what "no keyboard" looks like.
     const first = measureViewport({ height: 800, offsetTop: 0 }, 0);
     const grown = measureViewport({ height: SCREEN, offsetTop: 0 }, first.baseline);
     assert.equal(grown.baseline, SCREEN);
@@ -57,8 +89,7 @@ describe("telling a keyboard from a toolbar", () => {
   });
 
   it("never lowers the full height while the keyboard is up", () => {
-    const state = measureViewport({ height: 508, offsetTop: 0 }, SCREEN);
-    assert.equal(state.baseline, SCREEN);
+    assert.equal(measureViewport({ height: 508, offsetTop: 0 }, SCREEN).baseline, SCREEN);
   });
 
   it("measures whole points, and never a negative top", () => {

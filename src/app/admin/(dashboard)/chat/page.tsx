@@ -1,19 +1,26 @@
 import { prisma } from "@/lib/db";
-import { listMessages, recordChatRead, requireChatViewer } from "@/lib/chat";
+import { getTeamChannel, listMessages, recordChatRead, requireChatViewer } from "@/lib/chat";
 import { isAiConfigured } from "@/lib/ai/client";
+import { memberLine } from "@/lib/group-members";
 import { ChatRoom } from "@/components/chat/chat-room";
 import { AssistantPanel } from "@/components/chat/assistant-panel";
 
 export default async function AdminChatPage() {
   const viewer = await requireChatViewer();
-  const [messages, projects] = await Promise.all([
-    listMessages(viewer),
-    prisma.project.findMany({
-      where: { publishState: { not: "ARCHIVED" } },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true, name: true },
-    }),
-  ]);
+
+  // One after the other, like the other multi-query pages here.
+  const messages = await listMessages(viewer);
+  const projects = await prisma.project.findMany({
+    where: { publishState: { not: "ARCHIVED" } },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, name: true },
+  });
+  const channel = await getTeamChannel();
+  const team = await prisma.employee.findMany({
+    where: { active: true, accessRole: "EMPLOYEE" },
+    orderBy: { order: "asc" },
+    select: { name: true },
+  });
 
   // Opening the page is reading it.
   await recordChatRead(viewer);
@@ -32,6 +39,10 @@ export default async function AdminChatPage() {
           viewerId={null}
           canDeleteAny
           projects={projects}
+          group={{
+            name: channel.name,
+            members: memberLine(["Manager", ...team.map((member) => member.name)], "Manager"),
+          }}
         />
         <AssistantPanel configured={isAiConfigured()} />
       </div>

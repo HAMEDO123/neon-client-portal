@@ -3,14 +3,15 @@
 // iOS never shrinks the page for the keyboard. It keeps the page full height
 // and moves a window over it — the visual viewport — which gets shorter when
 // the keyboard comes up and slides down (offsetTop) when iOS scrolls a focused
-// field into view. Anything positioned against the page is positioned against
-// the wrong thing: the chat's text box went up and out of sight because the
-// frame stayed where the page was while the window slid away beneath it.
+// field into view. So the app frame takes its height and its top from that
+// window, always.
 //
-// So the app frame takes its height *and* its top from that window, always.
-// And the keyboard is judged against the tallest the window has been in this
-// orientation — the screen with nothing covering it — rather than against
-// window.innerHeight, which a Home Screen app on iOS reports inconsistently.
+// One correction on top. A Home Screen app on an iPhone draws under the status
+// bar, yet reports the window's height as if it did not: it comes back short
+// by exactly the status bar, and a frame that trusts it ends that far above
+// the bottom of the screen — the empty band under the tab bar. The shortfall
+// is the full screen's height less the tallest the window has been, and it is
+// added back everywhere, keyboard or not.
 //
 // Pure: the component that listens to the browser feeds it readings, the
 // tests feed it numbers.
@@ -20,11 +21,18 @@ export type ViewportReading = {
   height: number;
   /** visualViewport.offsetTop — how far iOS has slid the window down the page. */
   offsetTop: number;
+  /**
+   * The whole screen's height, measured with CSS, in a Home Screen app only.
+   * Omitted in a browser tab, whose toolbars really do cover part of it.
+   */
+  fullHeight?: number;
 };
 
 export type ViewportState = {
   /** The tallest the visible area has been in this orientation. */
   baseline: number;
+  /** How much the window under-reports, added back to the frame. */
+  deficit: number;
   appHeight: number;
   appTop: number;
   keyboardOpen: boolean;
@@ -34,19 +42,27 @@ export type ViewportState = {
 /** Anything less than this is a toolbar collapsing, not a keyboard. */
 export const KEYBOARD_THRESHOLD = 150;
 
+/** Taller than any status bar. A gap larger than this is not the one being corrected. */
+export const MAX_DEFICIT = 120;
+
 export function measureViewport(reading: ViewportReading, previousBaseline: number): ViewportState {
   const height = Math.max(0, Math.round(reading.height));
   const baseline = Math.max(previousBaseline, height);
   const covered = baseline - height;
   const keyboardOpen = covered > KEYBOARD_THRESHOLD;
 
+  // Measured against the tallest the window has been, not against its current
+  // height, so a keyboard opening never looks like a bigger shortfall.
+  const full = reading.fullHeight ? Math.round(reading.fullHeight) : 0;
+  const deficit = full ? Math.min(MAX_DEFICIT, Math.max(0, full - baseline)) : 0;
+
   return {
     baseline,
-    appHeight: height,
-    // Followed whether or not the keyboard is up. When iOS slides the window
-    // and then forgets to slide it back, a frame pinned to the top of the page
-    // is left with its bottom — the tab bar — floating up the screen by
-    // exactly that much. Following the window keeps the bottom at the bottom.
+    deficit,
+    appHeight: height + deficit,
+    // Followed whether or not the keyboard is up: when iOS slides the window
+    // and forgets to slide it back, following it keeps the frame's bottom — the
+    // tab bar — at the bottom of the screen.
     appTop: Math.max(0, Math.round(reading.offsetTop)),
     keyboardOpen,
     keyboardHeight: keyboardOpen ? covered : 0,

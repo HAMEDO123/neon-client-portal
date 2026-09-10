@@ -57,8 +57,12 @@ const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: stri
 const COMPRESS_THRESHOLD_BYTES = 1 * 1024 * 1024;
 const MAX_DIMENSION = 2400;
 
-async function compressImage(buffer: Buffer): Promise<{ buffer: Buffer; ext: string }> {
-  const resized = sharp(buffer).resize({
+export async function compressImage(buffer: Buffer): Promise<{ buffer: Buffer; ext: string }> {
+  // Upright first. A phone stores a portrait photo as landscape pixels plus a
+  // tag saying "turn me"; re-encoding drops the tag, so unless the pixels are
+  // turned first the photo comes out on its side. rotate() with no angle reads
+  // the tag and turns the pixels to match it.
+  const resized = sharp(buffer).rotate().resize({
     width: MAX_DIMENSION,
     height: MAX_DIMENSION,
     fit: "inside",
@@ -131,6 +135,16 @@ function getR2Client(accountId: string, accessKeyId: string, secretAccessKey: st
   return r2Client;
 }
 
+/** Whether a photo carries a "turn me" tag rather than being upright already. */
+async function needsTurning(buffer: Buffer) {
+  try {
+    const { orientation } = await sharp(buffer).metadata();
+    return typeof orientation === "number" && orientation !== 1;
+  } catch {
+    return false;
+  }
+}
+
 export interface SavedFile {
   url: string;
   fileType: string;
@@ -154,7 +168,10 @@ export async function saveFile(
   let buffer: Buffer = Buffer.from(await file.arrayBuffer());
   let ext = extFromFile(file);
 
-  if (kind === "image" && compress && buffer.length > COMPRESS_THRESHOLD_BYTES) {
+  // Re-encoded when it is big, and also when it is sideways: a small photo with
+  // a "turn me" tag looks right in a browser but not in everything that reads
+  // the file afterwards, the gallery PDF for one.
+  if (kind === "image" && compress && (buffer.length > COMPRESS_THRESHOLD_BYTES || (await needsTurning(buffer)))) {
     const compressed = await compressImage(buffer);
     buffer = compressed.buffer;
     ext = compressed.ext;

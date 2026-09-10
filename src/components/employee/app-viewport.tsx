@@ -6,32 +6,49 @@ import { measureViewport } from "@/lib/viewport";
 // Keeps the portal's frame exactly over the part of the screen you can see.
 //
 // iOS does not shrink the page for the keyboard: it slides a window over a
-// full-height page, and when a text field is tapped it slides that window down
-// to show it. A frame positioned against the page therefore ends up somewhere
-// the eye is not — the chat's text box went up and out of view, and the tab bar
-// was left floating up the screen when iOS forgot to slide back. The window's
-// height and its top both go into variables the frame is laid out against, so
-// the bottom of the frame is always the top of the keyboard, or the bottom of
-// the screen.
+// full-height page. The frame takes that window's height and top, so its
+// bottom is always the top of the keyboard or the bottom of the screen.
+//
+// And in a Home Screen app iOS reports the window a status bar short, which
+// left a band of empty screen under the tab bar. So the full screen is measured
+// too — with CSS, the one thing that gets it right there — and the shortfall is
+// added back. Only in a Home Screen app: in a browser tab the toolbars really
+// do cover part of the screen, and there is nothing to add.
 //
 // The arithmetic lives in lib/viewport.ts, where it is tested; this only
 // listens to the browser and writes the answer down.
+
+function standalone() {
+  const displayMode = window.matchMedia?.("(display-mode: standalone)").matches === true;
+  const legacy = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return displayMode || legacy;
+}
 
 export function AppViewport() {
   useEffect(() => {
     const root = document.documentElement;
     const viewport = window.visualViewport;
 
+    // A box exactly the height of the whole screen, as CSS sees it.
+    const probe = document.createElement("div");
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.cssText =
+      "position:fixed;top:0;left:0;width:0;height:100vh;visibility:hidden;pointer-events:none;";
+    document.body.appendChild(probe);
+
     // The tallest the visible area has been in this orientation: what the
-    // screen looks like with no keyboard. Learnt, rather than read from
-    // window.innerHeight, which iOS reports inconsistently in Home Screen apps.
+    // screen looks like with no keyboard.
     let baseline = 0;
     let frame = 0;
 
     function apply() {
       frame = 0;
       const state = measureViewport(
-        { height: viewport?.height ?? window.innerHeight, offsetTop: viewport?.offsetTop ?? 0 },
+        {
+          height: viewport?.height ?? window.innerHeight,
+          offsetTop: viewport?.offsetTop ?? 0,
+          fullHeight: standalone() ? probe.getBoundingClientRect().height : undefined,
+        },
         baseline
       );
       baseline = state.baseline;
@@ -95,6 +112,7 @@ export function AppViewport() {
       document.removeEventListener("visibilitychange", schedule);
       window.clearTimeout(settleTimer);
       if (frame) cancelAnimationFrame(frame);
+      probe.remove();
       root.style.removeProperty("--app-height");
       root.style.removeProperty("--app-top");
       root.style.removeProperty("--keyboard-inset");

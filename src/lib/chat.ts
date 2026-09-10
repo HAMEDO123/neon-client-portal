@@ -51,7 +51,7 @@ export async function getTeamChannel() {
   if (existing) return existing;
 
   try {
-    return await prisma.chatChannel.create({ data: { key: TEAM_CHANNEL_KEY, name: "Team" } });
+    return await prisma.chatChannel.create({ data: { key: TEAM_CHANNEL_KEY, name: "NEON Team" } });
   } catch {
     // Two first-ever requests raced; the other one won.
     return prisma.chatChannel.findUniqueOrThrow({ where: { key: TEAM_CHANNEL_KEY } });

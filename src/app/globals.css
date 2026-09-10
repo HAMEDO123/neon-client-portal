@@ -211,11 +211,15 @@ body[data-keyboard="open"] .employee-tabbar {
   display: none;
 }
 
-/* On the keyboard, the text box sits flush on it the way a messaging app's
-   does. The gap it keeps otherwise is for the home indicator at the bottom of
-   the screen, which the keyboard is now covering. */
-body[data-keyboard="open"] .chat-composer {
-  padding-bottom: 0.5rem;
+/* The chat is its own screen, WhatsApp-style: the group's header takes the
+   place of the portal's instead of sitting underneath it, and so it carries
+   the status-bar space the portal's header would have. */
+body:has(.chat-screen) .employee-header {
+  display: none;
+}
+
+.chat-screen .chat-header {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
 }
 
 /* Scoped scrollbar hide for horizontal chip/tab rails. */

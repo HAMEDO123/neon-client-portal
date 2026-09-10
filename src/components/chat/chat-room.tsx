@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { deleteChatMessage, sendChatMessage } from "@/lib/actions/chat-actions";
+import { ChatHeader } from "@/components/chat/chat-header";
 import type { ChatMessageView } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
@@ -60,12 +61,15 @@ export function ChatRoom({
   viewerId,
   canDeleteAny,
   projects,
+  group,
 }: {
   initialMessages: Message[];
   viewerType: "ADMIN" | "EMPLOYEE";
   viewerId: string | null;
   canDeleteAny: boolean;
   projects: { id: string; name: string }[];
+  /** The group's name and members, for a WhatsApp-style header on top. */
+  group?: { name: string; members: string; backHref?: string };
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -138,6 +142,7 @@ export function ChatRoom({
 
   return (
     <div className="flex h-full flex-col bg-[#efeae2]">
+      {group && <ChatHeader name={group.name} members={group.members} backHref={group.backHref} />}
       <div
         ref={scrollerRef}
         onScroll={onScroll}
@@ -446,7 +451,7 @@ function Composer({ projects }: { projects: { id: string; name: string }[] }) {
   }
 
   return (
-    <div className="chat-composer border-t border-ink/10 bg-[#f0f2f5] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+    <div className="chat-composer border-t border-ink/10 bg-[#f0f2f5] px-2 py-2">
       {error && <p className="px-2 pb-1.5 text-xs text-red-600">{error}</p>}
 
       {showAttach && !recording && (

@@ -29,7 +29,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
       {/* pt-[safe-area-inset-top]: the app draws under the status bar on a
           notched phone, so the header reserves that height itself rather than
           letting the title sit beneath the clock. */}
-      <header className="shrink-0 border-b border-ink/8 bg-bg/85 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
+      <header className="employee-header shrink-0 border-b border-ink/8 bg-bg/85 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
         <div className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 py-3">
           <Link href="/employee" className="flex items-baseline gap-1.5">
             <span className="text-gradient-neon text-base font-bold">NEON</span>
