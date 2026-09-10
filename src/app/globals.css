@@ -166,12 +166,14 @@ h1, h2, h3, h4 {
   --app-height: 100dvh;
   --app-top: 0px;
   --keyboard-inset: 0px;
+  /* How far above the bottom of the screen the frame stops (see AppViewport). */
+  --screen-shortfall: 0px;
 }
 
 /* Glued to the visible window rather than the page: its top follows the
    window when iOS slides it down over a focused field, and its height is the
    window's height — so the bottom of the frame is always the top of the
-   keyboard, or the bottom of the screen, and never somewhere in between. */
+   keyboard, or the bottom of what can be seen, and never underneath either. */
 .employee-shell {
   position: fixed;
   left: 0;
@@ -230,14 +232,30 @@ body:has(.chat-screen) .employee-tabbar {
 }
 
 /* With the tab bar gone from a conversation, nothing under the message box
-   keeps it clear of the home indicator, so it does that itself — until the
-   keyboard is up and covers that edge anyway. */
+   keeps it clear of the home indicator, so it does that itself — less however
+   far above the indicator the frame already stops (a Home Screen app on iOS 26
+   stops it a status bar short), and not at all once the keyboard is up and
+   covers that edge anyway. */
 .chat-screen .chat-composer {
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom) - var(--screen-shortfall));
 }
 
 body[data-keyboard="open"] .chat-screen .chat-composer {
   padding-bottom: 0.5rem;
+}
+
+/* Where the frame stops short of the bottom of the screen, the strip below it
+   shows the page behind. In a conversation that is painted the message box's
+   grey, so the box reads as running to the bottom edge rather than floating
+   over a band; everywhere else the page's colour already matches the tab bar. */
+html:has(.chat-screen),
+body:has(.chat-screen) {
+  background: #f0f2f5;
+}
+
+/* The tab bar keeps clear of the home indicator the same way. */
+.employee-tabbar-row {
+  padding-bottom: max(0px, env(safe-area-inset-bottom) - var(--screen-shortfall));
 }
 
 /* The admin is the same kind of frame, for the same reason: glued to the

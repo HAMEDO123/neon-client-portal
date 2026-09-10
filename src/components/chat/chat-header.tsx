@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { GROUP_AVATAR } from "@/lib/chat-conversations";
+import { ReadoutTaps } from "@/components/viewport-readout";
 
 // The top of a conversation, the way WhatsApp draws it: back, a picture, the
 // name, and a line underneath — who is in the group, or that a private chat is
@@ -34,8 +35,11 @@ export function ChatHeader({
         </Link>
       )}
 
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={avatar} alt="" className="h-10 w-10 shrink-0 rounded-full border border-ink/10 object-cover" />
+      {/* Five quick taps on the picture show this phone's screen measurements. */}
+      <ReadoutTaps>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={avatar} alt="" className="h-10 w-10 shrink-0 rounded-full border border-ink/10 object-cover" />
+      </ReadoutTaps>
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold leading-tight text-ink">{name}</p>

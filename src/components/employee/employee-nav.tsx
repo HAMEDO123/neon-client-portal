@@ -22,7 +22,8 @@ export function EmployeeNav({ unreadChat = 0 }: { unreadChat?: number }) {
 
   return (
     <nav className="employee-tabbar shrink-0 border-t border-ink/8 bg-bg/95 backdrop-blur-lg">
-      <div className="mx-auto flex w-full max-w-2xl items-stretch justify-around px-2 pb-[env(safe-area-inset-bottom)]">
+      {/* .employee-tabbar-row keeps it clear of the home indicator (globals.css). */}
+      <div className="employee-tabbar-row mx-auto flex w-full max-w-2xl items-stretch justify-around px-2">
         {TABS.map((tab) => {
           const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
           return (

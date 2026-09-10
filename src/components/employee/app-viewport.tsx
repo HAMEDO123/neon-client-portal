@@ -2,18 +2,20 @@
 
 import { useEffect } from "react";
 import { measureViewport } from "@/lib/viewport";
+import { ViewportReadout } from "@/components/viewport-readout";
 
 // Keeps the portal's frame exactly over the part of the screen you can see.
 //
 // iOS does not shrink the page for the keyboard: it slides a window over a
 // full-height page. The frame takes that window's height and top, so its
-// bottom is always the top of the keyboard or the bottom of the screen.
+// bottom is always the top of the keyboard or the bottom of what can be seen.
 //
-// And in a Home Screen app iOS reports the window a status bar short, which
-// left a band of empty screen under the tab bar. So the full screen is measured
-// too — with CSS, the one thing that gets it right there — and the shortfall is
-// added back. Only in a Home Screen app: in a browser tab the toolbars really
-// do cover part of the screen, and there is nothing to add.
+// In a Home Screen app that window can stop short of the bottom of the screen,
+// and nothing fixed is drawn below it — so the frame stops there too. The full
+// screen is measured as well, with CSS, only to know how far short: the
+// frame's last row then keeps no room for a home indicator it does not reach
+// (--screen-shortfall). Only in a Home Screen app: in a browser tab the
+// toolbars cover the bottom, and the window's end is the end.
 //
 // The arithmetic lives in lib/viewport.ts, where it is tested; this only
 // listens to the browser and writes the answer down.
@@ -56,6 +58,7 @@ export function AppViewport() {
       root.style.setProperty("--app-height", `${state.appHeight}px`);
       root.style.setProperty("--app-top", `${state.appTop}px`);
       root.style.setProperty("--keyboard-inset", `${state.keyboardHeight}px`);
+      root.style.setProperty("--screen-shortfall", `${state.shortfall}px`);
       document.body.dataset.keyboard = state.keyboardOpen ? "open" : "closed";
     }
 
@@ -116,9 +119,11 @@ export function AppViewport() {
       root.style.removeProperty("--app-height");
       root.style.removeProperty("--app-top");
       root.style.removeProperty("--keyboard-inset");
+      root.style.removeProperty("--screen-shortfall");
       delete document.body.dataset.keyboard;
     };
   }, []);
 
-  return null;
+  // The numbers this works from, on screen, when switched on for this device.
+  return <ViewportReadout />;
 }
