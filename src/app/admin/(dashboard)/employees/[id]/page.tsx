@@ -13,6 +13,8 @@ import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/buttons";
 import { formatDate } from "@/lib/format";
+import { getTimezone } from "@/lib/settings";
+import { EmployeeWarnings } from "@/components/admin/employee-warnings";
 
 export default async function AdminEmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,10 +23,12 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
     where: { id },
     include: {
       subscriptions: { where: { active: true }, orderBy: { createdAt: "desc" } },
+      warnings: { orderBy: { createdAt: "asc" }, select: { id: true, reason: true, createdAt: true } },
       _count: { select: { notifications: true, assignedEntries: true } },
     },
   });
   if (!employee) notFound();
+  const timezone = await getTimezone();
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,6 +75,14 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           <SaveButton label="Save details" />
         </div>
       </form>
+
+      <EmployeeWarnings
+        employeeId={employee.id}
+        name={employee.name}
+        active={employee.active}
+        warnings={employee.warnings}
+        timezone={timezone}
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <form action={resetEmployeePassword.bind(null, employee.id)} className="glass rounded-2xl p-6">

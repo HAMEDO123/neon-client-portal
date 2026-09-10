@@ -28,8 +28,9 @@ export const DEFAULT_PREFERENCES: PreferenceFlags = {
   deadlineLeadMinutes: 120,
 };
 
-// SYSTEM_NOTIFICATION has no switch: it is how the platform reaches an
-// employee about the account itself, so it is never silenced by preferences.
+// SYSTEM_NOTIFICATION and WARNING have no switch: they are how the platform
+// and the manager reach an employee about the account itself, so preferences
+// never silence them.
 const PREFERENCE_BY_TYPE: Record<NotificationType, keyof PreferenceFlags | null> = {
   TASK_ASSIGNED: "taskAssigned",
   TASK_UPDATED: "taskUpdated",
@@ -38,6 +39,7 @@ const PREFERENCE_BY_TYPE: Record<NotificationType, keyof PreferenceFlags | null>
   TASK_DEADLINE_REMINDER: "deadlineReminders",
   CHAT_MESSAGE: "chatMessages",
   SYSTEM_NOTIFICATION: null,
+  WARNING: null,
 };
 
 export function isTypeEnabled(type: NotificationType, preferences: PreferenceFlags): boolean {

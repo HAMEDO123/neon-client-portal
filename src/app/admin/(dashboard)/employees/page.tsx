@@ -7,12 +7,13 @@ import { SaveButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/format";
+import { WARNING_LIMIT } from "@/lib/warnings";
 
 export default async function AdminEmployeesPage() {
   const employees = await prisma.employee.findMany({
     orderBy: [{ active: "desc" }, { order: "asc" }],
     include: {
-      _count: { select: { tasks: true, assignedEntries: true, subscriptions: true } },
+      _count: { select: { tasks: true, assignedEntries: true, subscriptions: true, warnings: true } },
     },
   });
 
@@ -74,6 +75,7 @@ export default async function AdminEmployeesPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-ink">{employee.name}</p>
                       <AccountBadge email={employee.email} active={employee.active} />
+                      <WarningsBadge count={employee._count.warnings} />
                     </div>
                     {employee.role && <p className="mt-0.5 text-xs text-ink/45">{employee.role}</p>}
                     <p className="mt-1 truncate text-xs text-ink/50">{employee.email ?? "Board only — no login"}</p>
@@ -114,7 +116,10 @@ export default async function AdminEmployeesPage() {
                       {employee.email ?? <span className="text-ink/30">Board only — no login</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <AccountBadge email={employee.email} active={employee.active} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <AccountBadge email={employee.email} active={employee.active} />
+                        <WarningsBadge count={employee._count.warnings} />
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-ink/50">
                       {employee._count.tasks} step{employee._count.tasks === 1 ? "" : "s"}
@@ -153,4 +158,14 @@ export default async function AdminEmployeesPage() {
 function AccountBadge({ email, active }: { email: string | null; active: boolean }) {
   if (!email) return <Badge tone="warning">No account</Badge>;
   return <Badge tone={active ? "success" : "neutral"}>{active ? "Active" : "Disabled"}</Badge>;
+}
+
+/** Warnings on record, when there are any. The third closes the account. */
+function WarningsBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <Badge tone="warning">
+      {count}/{WARNING_LIMIT} warnings
+    </Badge>
+  );
 }

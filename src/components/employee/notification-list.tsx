@@ -2,7 +2,16 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BellRing, CalendarClock, CheckCheck, ClipboardList, Info, MessageSquare, RefreshCw } from "lucide-react";
+import {
+  BellRing,
+  CalendarClock,
+  CheckCheck,
+  ClipboardList,
+  Info,
+  MessageSquare,
+  RefreshCw,
+  TriangleAlert,
+} from "lucide-react";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions/employee-actions";
 import type { NotificationType } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
@@ -25,6 +34,7 @@ const ICONS: Record<NotificationType, typeof BellRing> = {
   TASK_DEADLINE_REMINDER: BellRing,
   CHAT_MESSAGE: MessageSquare,
   SYSTEM_NOTIFICATION: Info,
+  WARNING: TriangleAlert,
 };
 
 function ago(date: Date) {

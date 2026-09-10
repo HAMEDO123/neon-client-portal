@@ -154,6 +154,10 @@ The domain vocabulary, as the code defines it:
 - **Progress:** daily counts come from `lib/daily-progress.ts` (`dayCounts`) and are used by the employee home and `/admin/analytics`. Monthly progress covers non-excluded board cells only; week jobs don't count.
 - **Deductions:** progress below 90% costs 1 JOD, stored as a `SalaryAdjustment` of kind PERFORMANCE. It runs only from the Analytics button.
 - **Payroll** (`lib/payroll.ts`): hourly rate = salary ÷ (26 monthly or 6 weekly) ÷ 8. Lateness is deducted, and receipts are capped at 2 JOD each.
+- **Warnings** (`EmployeeWarning`): the manager gives one, with a reason, on `/admin/employees/[id]`.
+  - The employee is notified at once (type `WARNING`, which preferences can't silence) and sees every warning pinned to the top of `/employee` until the manager removes it.
+  - Warning `WARNING_LIMIT` (3) tells them first, then disables the account and its devices. Reopening the account is the existing Enable button.
+  - Rules are in `lib/warnings.ts`, data in `lib/employee-warnings.ts`, and the admin actions in `lib/actions/warning-actions.ts`.
 - **Days** are calendar days in the company timezone: AppSetting `timezone`, else `APP_TIMEZONE`, else `Asia/Amman` (`lib/time.ts`). `@db.Date` columns store UTC midnight of that day. Convert with `dayKeyToDate` / `dateToDayKey`.
 
 **Pages:**
@@ -221,8 +225,8 @@ The domain vocabulary, as the code defines it:
 
 ### Tests
 - `npm test` runs `node --test` over `tests/**/*.test.ts` through tsx, loading `.env` and `.env.local`.
-- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`.
-- Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`. A run showing `pass 0 … skipped N` with exit 0 means **the database is down**, not that the tests passed.
+- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`.
+- Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`. A run showing `pass 0 … skipped N` with exit 0 means **the database is down**, not that the tests passed.
 
 ---
 

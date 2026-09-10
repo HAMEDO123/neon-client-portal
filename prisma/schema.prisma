@@ -97,6 +97,8 @@ enum NotificationType {
   TASK_DEADLINE_REMINDER
   CHAT_MESSAGE
   SYSTEM_NOTIFICATION
+  // A formal warning from the manager. Preferences never silence it.
+  WARNING
 }
 
 enum PayBasis {
@@ -433,6 +435,21 @@ model Employee {
   adjustments     SalaryAdjustment[]
   assignedTasks   AssignedTask[]
   sectionWork     ProjectSectionAssignment[]
+  warnings        EmployeeWarning[]
+}
+
+// A formal warning from the manager, with the reason the employee is shown at
+// the top of their home screen. The third closes the account (lib/warnings.ts);
+// one given by mistake is removed by deleting it.
+model EmployeeWarning {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  reason    String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([employeeId, createdAt])
 }
 
 // One step of the delivery process. The process is identical for every project,

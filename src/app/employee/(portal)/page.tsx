@@ -13,6 +13,8 @@ import { planForTasks } from "@/lib/stage-deadlines";
 import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { getPublicKey } from "@/lib/notifications/push";
 import { EmptyState } from "@/components/ui/empty-state";
+import { WarningsCard } from "@/components/employee/warnings-card";
+import { warningsFor } from "@/lib/employee-warnings";
 import { cn } from "@/lib/utils";
 
 function greeting(hour: number) {
@@ -65,6 +67,9 @@ export default async function EmployeeDashboard({
   const assigned = assignedAll.filter((task) => task.state !== "DONE");
   const pushKey = await getPublicKey();
 
+  // Warnings stay pinned above everything until the manager removes them.
+  const warnings = await warningsFor(employee.id);
+
   // A job handed out by hand belongs to the first of today and tomorrow it
   // touches. One that started on or before today is today's — including one
   // whose days have run out, because unfinished work does not stop being
@@ -111,6 +116,8 @@ export default async function EmployeeDashboard({
             : `${openToday} task${openToday === 1 ? "" : "s"} still open today.`}
         </p>
       </div>
+
+      <WarningsCard warnings={warnings} timezone={timezone} />
 
       <TodaySummary counts={todayCounts} />
 

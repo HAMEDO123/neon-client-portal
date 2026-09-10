@@ -41,6 +41,7 @@ export function TextArea({
   defaultValue,
   rows = 3,
   required = false,
+  maxLength,
   className,
 }: {
   label: string;
@@ -48,12 +49,22 @@ export function TextArea({
   defaultValue?: string;
   rows?: number;
   required?: boolean;
+  maxLength?: number;
   className?: string;
 }) {
   return (
     <div className={className}>
       <label className="mb-1 block text-xs font-medium text-ink/50">{label}</label>
-      <textarea name={name} defaultValue={defaultValue} rows={rows} required={required} className={inputClass} />
+      {/* dir="auto": the manager often writes in Arabic. */}
+      <textarea
+        name={name}
+        defaultValue={defaultValue}
+        rows={rows}
+        required={required}
+        maxLength={maxLength}
+        dir="auto"
+        className={inputClass}
+      />
     </div>
   );
 }

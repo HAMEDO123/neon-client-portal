@@ -33,7 +33,10 @@ export async function liveSignature(): Promise<string> {
       (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("updatedAt")) * 1000), 0)::bigint FROM "AssignedTask"),
       (SELECT COUNT(*) FROM "AssignedTask"),
       (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("updatedAt")) * 1000), 0)::bigint FROM "ProjectSectionAssignment"),
-      (SELECT COUNT(*) FROM "ProjectSectionAssignment")
+      (SELECT COUNT(*) FROM "ProjectSectionAssignment"),
+      -- Warnings, pinned to the top of the employee's home screen.
+      (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("createdAt")) * 1000), 0)::bigint FROM "EmployeeWarning"),
+      (SELECT COUNT(*) FROM "EmployeeWarning")
     ) AS sig
   `;
 
