@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { LiveSync } from "@/components/live-sync";
+import { SoundCues } from "@/components/sound-cues";
+import { isConversationPath } from "@/lib/chat-conversations";
 import type { AdminBadges } from "@/lib/admin-badges";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +28,10 @@ export function AdminShell({
   // matrix — it gets the whole window so it fits without sideways scrolling.
   const wide = pathname.startsWith("/admin/tasks");
 
+  // An open conversation fills the window and scrolls inside itself, the way
+  // a messaging app does; every other page scrolls as a page.
+  const fill = isConversationPath(pathname);
+
   // On a phone the counts sit inside the closed menu, so the menu button
   // carries a dot when anything is waiting.
   const waiting =
@@ -39,6 +45,8 @@ export function AdminShell({
     <div className="flex h-dvh overflow-hidden bg-background">
       {/* Board, badges and review queue stay current on their own. */}
       <LiveSync />
+      {/* One sound for a message, another for everything else. */}
+      <SoundCues side="ADMIN" />
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-ink/8 bg-white/40 lg:block">
         <AdminNav badges={badges} />
       </aside>
@@ -65,8 +73,15 @@ export function AdminShell({
           </button>
         </div>
 
-        <main className="flex-1 overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 lg:px-8 lg:pb-10 lg:pt-10">
-          <div className={cn("mx-auto", wide ? "max-w-none" : "max-w-5xl")}>{children}</div>
+        <main
+          className={cn(
+            "flex-1",
+            fill
+              ? "min-h-0 overflow-hidden"
+              : "overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 lg:px-8 lg:pb-10 lg:pt-10"
+          )}
+        >
+          <div className={cn("mx-auto", fill ? "h-full" : wide ? "max-w-none" : "max-w-5xl")}>{children}</div>
         </main>
       </div>
 

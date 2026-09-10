@@ -11,6 +11,7 @@ import { lineStatus } from "@/lib/whatsapp/worker";
 import { SaveButton } from "@/components/admin/form-buttons";
 import { StagePeriods } from "@/components/admin/stage-periods";
 import { PushHealthCard } from "@/components/admin/push-health-card";
+import { SoundToggle } from "@/components/sound-toggle";
 import { getPushHealth } from "@/lib/push-health";
 import { getProcessSections, getProcessTasks, getStagePeriods } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,8 @@ export default async function AdminSettingsPage() {
       </div>
 
       <PushHealthCard health={pushHealth} timezone={timezone} />
+
+      <SoundToggle />
 
       <StagePeriods
         steps={stages.map((stage) => ({ id: stage.id, name: stage.name, sectionId: stage.sectionId }))}

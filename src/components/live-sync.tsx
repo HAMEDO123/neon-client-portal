@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { isConversationPath } from "@/lib/chat-conversations";
+
+/** Fired on window whenever the heartbeat says something changed. The sounds listen for it. */
+export const LIVE_CHANGED = "neon:live-changed";
 
 // Keeps whatever page it is mounted on current.
 //
@@ -22,10 +26,11 @@ export function LiveSync() {
     const source = new EventSource("/api/live");
 
     const refresh = () => {
-      // The chat has its own live connection that delivers each message as it
-      // arrives. Redrawing the whole page on top of that, for every message
-      // from anyone, was a second full render nobody needed.
-      if (window.location.pathname.endsWith("/chat")) return;
+      // An open conversation has its own live connection that delivers each
+      // message as it arrives. Redrawing the whole page on top of that, for
+      // every change from anyone, was a second full render nobody needed. The
+      // list of conversations is a page like any other and keeps up.
+      if (isConversationPath(window.location.pathname)) return;
 
       if (document.visibilityState === "hidden") {
         stale.current = true;
@@ -35,7 +40,13 @@ export function LiveSync() {
       startTransition(() => router.refresh());
     };
 
-    source.addEventListener("changed", refresh);
+    const onChanged = () => {
+      // Whatever else is listening hears about every change, on every screen.
+      window.dispatchEvent(new Event(LIVE_CHANGED));
+      refresh();
+    };
+
+    source.addEventListener("changed", onChanged);
 
     const onVisible = () => {
       if (document.visibilityState === "visible" && stale.current) refresh();

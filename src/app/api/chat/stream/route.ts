@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/db";
-import { getChatViewer, getTeamChannel, type ChatViewer } from "@/lib/chat";
+import {
+  channelFor,
+  chatSide,
+  getChatViewer,
+  messageSelect,
+  parseConversation,
+  type ChatViewer,
+} from "@/lib/chat";
 
 // Live chat, over Server-Sent Events.
 //
@@ -9,9 +16,10 @@ import { getChatViewer, getTeamChannel, type ChatViewer } from "@/lib/chat";
 // nothing extra to host, it survives the proxies in front of the app, and the
 // browser reconnects on its own if the connection drops.
 //
-// The connection is per viewer and the query is scoped the same way the page
-// is, so an employee's stream can never carry the manager's private exchanges
-// with the assistant.
+// One connection per open conversation, opened through channelFor like every
+// other read: an employee's stream can carry the team and their own private
+// chat, never somebody else's, and never the manager's private exchanges with
+// the assistant.
 
 export const dynamic = "force-dynamic";
 // Streaming responses must not be buffered or collapsed by any cache.
@@ -27,11 +35,15 @@ function visibility(viewer: ChatViewer) {
 }
 
 export async function GET(request: Request) {
-  const viewer = await getChatViewer();
+  const url = new URL(request.url);
+  // The portal the chat is open in says whose session this is.
+  const viewer = await getChatViewer(chatSide(url.searchParams.get("as")));
   if (!viewer) return new Response("Unauthorized", { status: 401 });
 
-  const channel = await getTeamChannel();
-  const url = new URL(request.url);
+  // A tab opened before private chats existed names no conversation, and means the team.
+  const conversation = parseConversation(url.searchParams.get("with") || "team", viewer);
+  const channel = conversation ? await channelFor(viewer, conversation) : null;
+  if (!channel) return new Response("Forbidden", { status: 403 });
 
   // Everything after this instant is new. The client sends the timestamp of
   // the newest message it already has, so a reconnect never repeats or skips.
@@ -74,22 +86,7 @@ export async function GET(request: Request) {
             },
             orderBy: { createdAt: "asc" },
             take: 50,
-            select: {
-              id: true,
-              authorType: true,
-              authorId: true,
-              authorName: true,
-              kind: true,
-              body: true,
-              attachmentUrl: true,
-              attachmentName: true,
-              attachmentType: true,
-              attachmentSize: true,
-              durationSeconds: true,
-              managerOnly: true,
-              createdAt: true,
-              project: { select: { id: true, name: true } },
-            },
+            select: messageSelect,
           });
 
           if (messages.length > 0) {

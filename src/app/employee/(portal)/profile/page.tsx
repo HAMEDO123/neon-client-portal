@@ -4,6 +4,7 @@ import { requireEmployee } from "@/lib/employee-session";
 import { getPreferences } from "@/lib/notifications/engine";
 import { getPublicKey, isPushConfigured } from "@/lib/notifications/push";
 import { PushToggle } from "@/components/employee/push-toggle";
+import { SoundToggle } from "@/components/sound-toggle";
 import { PreferencesForm } from "@/components/employee/preferences-form";
 import { DeviceList } from "@/components/employee/device-list";
 import { SignOutButton } from "@/components/employee/sign-out-button";
@@ -48,6 +49,7 @@ export default async function EmployeeProfilePage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">Notifications</h2>
         <PushToggle publicKey={await getPublicKey()} configured={await isPushConfigured()} />
+        <SoundToggle />
         <DeviceList
           devices={devices.map((device) => ({
             id: device.id,

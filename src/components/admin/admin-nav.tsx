@@ -108,7 +108,7 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
         )}
       >
         <MessagesSquare size={16} strokeWidth={1.75} />
-        Team Chat
+        Chat
         <Badge count={badges?.chat ?? 0} active={isChat} />
       </Link>
       <Link

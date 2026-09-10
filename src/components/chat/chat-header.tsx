@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { GROUP_AVATAR } from "@/lib/chat-conversations";
 
-// The top of a group chat, the way WhatsApp draws it: back, the group's photo,
-// its name, and who is in it underneath.
+// The top of a conversation, the way WhatsApp draws it: back, a picture, the
+// name, and a line underneath — who is in the group, or that a private chat is
+// private.
 //
 // On the employee's phone this replaces the portal's own header rather than
 // sitting under it (see .chat-screen in globals.css), so it is the one that
@@ -10,11 +12,14 @@ import { ChevronLeft } from "lucide-react";
 
 export function ChatHeader({
   name,
-  members,
+  subtitle,
+  avatar = GROUP_AVATAR,
   backHref,
 }: {
   name: string;
-  members: string;
+  subtitle: string;
+  /** The group's mark by default; a person's initials for a private chat. */
+  avatar?: string;
   backHref?: string;
 }) {
   return (
@@ -29,17 +34,12 @@ export function ChatHeader({
         </Link>
       )}
 
-      {/* The group's photo: the studio's own mark, in a circle like any group's. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/admin-icon-192.png"
-        alt=""
-        className="h-10 w-10 shrink-0 rounded-full border border-ink/10 object-cover"
-      />
+      <img src={avatar} alt="" className="h-10 w-10 shrink-0 rounded-full border border-ink/10 object-cover" />
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-base font-semibold leading-tight text-ink">{name}</p>
-        <p className="mt-0.5 truncate text-xs text-ink/50">{members}</p>
+        <p className="mt-0.5 truncate text-xs text-ink/50">{subtitle}</p>
       </div>
     </div>
   );

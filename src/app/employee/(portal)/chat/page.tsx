@@ -1,48 +1,32 @@
-import { prisma } from "@/lib/db";
-import { getTeamChannel, listMessages, recordChatRead, requireChatViewer } from "@/lib/chat";
-import { memberLine } from "@/lib/group-members";
-import { ChatRoom } from "@/components/chat/chat-room";
+import { conversationsFor, requireChatViewer } from "@/lib/chat";
+import { getTimezone } from "@/lib/settings";
+import { ConversationList } from "@/components/chat/conversation-list";
 
-export default async function EmployeeChatPage() {
-  const viewer = await requireChatViewer();
+// The employee's chats: the team's group, and their private conversation with
+// the manager — the only two they have.
+
+export default async function EmployeeChatsPage() {
+  const viewer = await requireChatViewer("EMPLOYEE");
   if (viewer.type !== "EMPLOYEE") {
-    // The admin has their own chat page; this one is the employee's.
+    // The admin has their own chat pages; these are the employee's.
     throw new Error("Unauthorized");
   }
 
   // One after the other, like the other multi-query pages here.
-  const messages = await listMessages(viewer);
-  const projects = await prisma.project.findMany({
-    where: { publishState: { not: "ARCHIVED" } },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true },
-  });
-  const channel = await getTeamChannel();
-  const team = await prisma.employee.findMany({
-    where: { active: true, accessRole: "EMPLOYEE" },
-    orderBy: { order: "asc" },
-    select: { name: true },
-  });
-
-  await recordChatRead(viewer);
+  const conversations = await conversationsFor(viewer);
+  const timezone = await getTimezone();
 
   return (
-    // Its own screen, WhatsApp-style: the group's header replaces the portal's
-    // (.chat-screen in globals.css), and the conversation scrolls inside the
-    // frame so the text box sits on the keyboard.
-    <div className="chat-screen fills-frame flex flex-col overflow-hidden">
-      <ChatRoom
-        initialMessages={messages}
-        viewerType="EMPLOYEE"
-        viewerId={viewer.id}
-        canDeleteAny={false}
-        projects={projects}
-        group={{
-          name: channel.name,
-          members: memberLine(["Manager", ...team.map((member) => member.name)], viewer.name),
-          backHref: "/employee",
-        }}
-      />
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold text-ink">Chats</h1>
+
+      <div className="glass overflow-hidden rounded-2xl">
+        <ConversationList items={conversations} basePath="/employee/chat" timeZone={timezone} />
+      </div>
+
+      <p className="px-4 text-center text-xs text-ink/40">
+        Your chat with the manager is private: only the two of you can see it.
+      </p>
     </div>
   );
 }

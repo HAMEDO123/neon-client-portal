@@ -7,6 +7,7 @@ import { getEmployeeBadges } from "@/lib/employee-badges";
 import { EmployeeNav } from "@/components/employee/employee-nav";
 import { AppViewport } from "@/components/employee/app-viewport";
 import { LiveSync } from "@/components/live-sync";
+import { SoundCues } from "@/components/sound-cues";
 import { DeviceGuard } from "@/components/employee/device-guard";
 
 // Server-side gate for the whole portal. Anything under this layout has an
@@ -61,6 +62,8 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
       <AppViewport />
       {/* Badges, task states and review outcomes arrive without a reload. */}
       <LiveSync />
+      {/* One sound for a message, another for everything else. */}
+      <SoundCues side="EMPLOYEE" />
       {/* This phone belongs to whoever is signed in on it, not to whoever
           enabled push on it first. */}
       <DeviceGuard />

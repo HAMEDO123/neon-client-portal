@@ -19,6 +19,7 @@ import { deleteChatMessage, sendChatMessage } from "@/lib/actions/chat-actions";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { shrinkPhoto } from "@/lib/client-image";
 import { mergeIncoming, pendingId, reconcile } from "@/lib/chat-sync";
+import { playCue } from "@/lib/sound-cues";
 import {
   SLIDE_TO_CANCEL_PX,
   audioExtension,
@@ -30,9 +31,10 @@ import {
 import type { ChatMessageView } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
-// The team conversation, laid out the way a messaging app is: a scrolling
-// column of bubbles, your own on the right, everyone else's on the left with
-// their name above in their own colour, and a composer pinned to the bottom.
+// A conversation — the team's, or a private one with the manager — laid out
+// the way a messaging app is: a scrolling column of bubbles, your own on the
+// right, everyone else's on the left (in the group with their name above, in
+// their own colour), and a composer pinned to the bottom.
 //
 // Messages arrive over an event stream, so one person sending is visible to
 // everyone else without a refresh.
@@ -82,15 +84,23 @@ export function ChatRoom({
   viewerId,
   canDeleteAny,
   projects,
-  group,
+  conversation,
+  header,
+  showNames = true,
+  emptyText,
 }: {
   initialMessages: Message[];
   viewerType: "ADMIN" | "EMPLOYEE";
   viewerId: string | null;
   canDeleteAny: boolean;
   projects: { id: string; name: string }[];
-  /** The group's name and members, for a WhatsApp-style header on top. */
-  group?: { name: string; members: string; backHref?: string };
+  /** Which conversation, as its URL names it: "team", or a private chat. */
+  conversation: string;
+  /** The WhatsApp-style header on top: the group's, or the person's. */
+  header?: { name: string; subtitle: string; avatar?: string; backHref?: string };
+  /** A private chat has two people in it, so its bubbles need no names. */
+  showNames?: boolean;
+  emptyText?: string;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -108,7 +118,9 @@ export function ChatRoom({
   // --- live updates --------------------------------------------------------
   useEffect(() => {
     const since = newest ? new Date(newest).toISOString() : new Date().toISOString();
-    const source = new EventSource(`/api/chat/stream?since=${encodeURIComponent(since)}`);
+    const source = new EventSource(
+      `/api/chat/stream?as=${viewerType}&with=${encodeURIComponent(conversation)}&since=${encodeURIComponent(since)}`
+    );
 
     source.addEventListener("messages", (event) => {
       const incoming = JSON.parse((event as MessageEvent).data) as (Omit<Message, "createdAt"> & {
@@ -121,6 +133,13 @@ export function ChatRoom({
       // Our own message may come back over the stream before its send has
       // finished; it takes the place of the pending copy instead of doubling.
       setMessages((current) => mergeIncoming(current, arrived, isMine));
+
+      // Somebody else's message sounds the moment it lands; the heartbeat's
+      // check then finds it already heard.
+      const fromOthers = arrived.filter((message) => !isMine(message));
+      if (fromOthers.length > 0) {
+        playCue("message", Math.max(...fromOthers.map((message) => message.createdAt.getTime())));
+      }
     });
 
     // The browser reconnects on its own; the next connection carries the
@@ -189,6 +208,8 @@ export function ChatRoom({
       setMessages((current) => [...current, pending]);
 
       const formData = new FormData();
+      formData.set("conversation", conversation);
+      formData.set("as", viewerType);
       if (draft.kind !== "VOICE" && draft.body) formData.set("body", draft.body);
       if (draft.projectId) formData.set("projectId", draft.projectId);
 
@@ -213,7 +234,7 @@ export function ChatRoom({
         throw error;
       }
     },
-    [projects, viewerType, viewerId]
+    [conversation, projects, viewerType, viewerId]
   );
 
   const dayHeadings = useMemo(
@@ -228,7 +249,9 @@ export function ChatRoom({
 
   return (
     <div className="flex h-full flex-col bg-[#efeae2]">
-      {group && <ChatHeader name={group.name} members={group.members} backHref={group.backHref} />}
+      {header && (
+        <ChatHeader name={header.name} subtitle={header.subtitle} avatar={header.avatar} backHref={header.backHref} />
+      )}
       <div
         ref={scrollerRef}
         onScroll={onScroll}
@@ -242,7 +265,7 @@ export function ChatRoom({
       >
         {messages.length === 0 && (
           <p className="mt-12 text-center text-sm text-ink/40">
-            No messages yet. Send an update, a photo from site, or a voice note.
+            {emptyText ?? "No messages yet. Send an update, a photo from site, or a voice note."}
           </p>
         )}
 
@@ -252,6 +275,7 @@ export function ChatRoom({
             message={message}
             day={dayHeadings[index]}
             mine={isMine(message)}
+            showName={showNames}
             canDelete={canDeleteAny}
             onDiscard={
               message.status
@@ -273,12 +297,15 @@ function Bubble({
   message,
   day,
   mine,
+  showName,
   canDelete,
   onDiscard,
 }: {
   message: Message;
   day: string | null;
   mine: boolean;
+  /** In the group, whose message it is; in a private chat that goes without saying. */
+  showName: boolean;
   canDelete: boolean;
   /** Removes one of our own copies that never made it. */
   onDiscard?: () => void;
@@ -308,7 +335,7 @@ function Bubble({
                 : "bg-white"
           )}
         >
-          {!mine && (
+          {!mine && (showName || isAgent) && (
             <p className={cn("mb-0.5 text-[13px] font-semibold", isAgent ? "text-purple-strong" : nameColour(message.authorName))}>
               {isAgent && <Bot size={12} strokeWidth={2.5} className="mr-1 inline" />}
               {message.authorName}

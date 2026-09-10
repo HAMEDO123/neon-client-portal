@@ -3,23 +3,35 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/storage";
-import { getTeamChannel, messageSelect, recordChatRead, requireChatViewer, type ChatViewer } from "@/lib/chat";
+import {
+  channelFor,
+  chatSide,
+  getTeamChannel,
+  messageSelect,
+  parseConversation,
+  recordChatRead,
+  requireChatViewer,
+  type ChatViewer,
+  type Conversation,
+} from "@/lib/chat";
+import { employeeChatUrl } from "@/lib/chat-conversations";
 import { askAssistant } from "@/lib/ai/assistant";
 import { dispatchNotification } from "@/lib/notifications/engine";
-import { chatCopy, chatKey, chatPreview, CHAT_PATH } from "@/lib/notifications/types";
+import { chatCopy, chatKey, chatPreview } from "@/lib/notifications/types";
 import { avatarUrl } from "@/lib/avatar";
 import type { ChatMessageKind } from "@/generated/prisma/enums";
 
-// Posting to the team conversation. Both portals call these; the author is
-// always taken from the session, never from the form.
+// Posting to a conversation: the team's, or a private one between the manager
+// and an employee. Both portals call these. The author is always taken from
+// the session, never from the form, and the conversation the form names is
+// only ever opened through channelFor, which refuses anyone it is not theirs.
 
 function refresh() {
-  revalidatePath("/admin/chat");
-  revalidatePath("/employee/chat");
+  revalidatePath("/admin/chat", "layout");
   revalidatePath("/employee", "layout");
 }
 
-async function authorFields(viewer: ChatViewer) {
+function authorFields(viewer: ChatViewer) {
   return {
     authorType: viewer.type,
     authorId: viewer.type === "EMPLOYEE" ? viewer.id : null,
@@ -27,9 +39,21 @@ async function authorFields(viewer: ChatViewer) {
   };
 }
 
+/**
+ * The conversation a form names, opened for this viewer. A page opened before
+ * private chats existed names none, and means the team.
+ */
+async function openConversation(viewer: ChatViewer, named: FormDataEntryValue | string | null) {
+  const conversation = parseConversation(typeof named === "string" && named ? named : "team", viewer);
+  const channel = conversation ? await channelFor(viewer, conversation) : null;
+  if (!conversation || !channel) throw new Error("That conversation is not yours to post in.");
+  return { conversation, channel };
+}
+
 export async function sendChatMessage(formData: FormData) {
-  const viewer = await requireChatViewer();
-  const channel = await getTeamChannel();
+  // The portal the message is sent from says whose session this is.
+  const viewer = await requireChatViewer(chatSide(String(formData.get("as") ?? "")));
+  const { conversation, channel } = await openConversation(viewer, formData.get("conversation"));
 
   const body = String(formData.get("body") ?? "").trim().slice(0, 4000);
   const projectId = String(formData.get("projectId") ?? "") || null;
@@ -76,7 +100,7 @@ export async function sendChatMessage(formData: FormData) {
     select: messageSelect,
     data: {
       channelId: channel.id,
-      ...(await authorFields(viewer)),
+      ...authorFields(viewer),
       kind,
       body: body || null,
       attachmentUrl,
@@ -89,15 +113,14 @@ export async function sendChatMessage(formData: FormData) {
   });
 
   // Posting counts as having read everything before it.
-  await recordChatRead(viewer);
+  await recordChatRead(viewer, channel.id);
   // No page redraw. Every open chat receives this over its live stream, and
   // the sender's screen already shows it; redrawing the whole conversation on
   // the server before replying is what made sending feel slow.
 
-  // Everyone else on the team hears about it. Awaiting this would make the
-  // sender wait on every device's push, so it runs on its own and a failure
-  // never costs the message.
-  void notifyTeamOfMessage(message.id, viewer, chatPreview(kind, body, durationSeconds, attachmentName));
+  // Telling people runs on its own: awaiting it would make the sender wait on
+  // every device's push, and a failure must never cost the message.
+  void notifyOfMessage(message.id, viewer, conversation, chatPreview(kind, body, durationSeconds, attachmentName));
 
   // The sender's screen swaps its pending copy for this.
   return message;
@@ -116,17 +139,28 @@ async function senderIcon(sender: ChatViewer) {
   return avatarUrl(sender.name, "ink");
 }
 
-/** In-app and push, to every active employee except the sender. */
-async function notifyTeamOfMessage(messageId: string, sender: ChatViewer, preview: string) {
+/**
+ * In-app and push, to whoever the conversation is for: the rest of the team
+ * for the group; the employee, for the manager's private message to them. The
+ * manager has no phone registered to push to, so a private message for them
+ * waits in their chat list, with its sound, instead.
+ */
+async function notifyOfMessage(messageId: string, sender: ChatViewer, conversation: Conversation, preview: string) {
   try {
-    const recipients = await prisma.employee.findMany({
-      where: {
-        active: true,
-        accessRole: "EMPLOYEE",
-        ...(sender.type === "EMPLOYEE" ? { NOT: { id: sender.id } } : {}),
-      },
-      select: { id: true },
-    });
+    const recipients =
+      conversation.kind === "team"
+        ? await prisma.employee.findMany({
+            where: {
+              active: true,
+              accessRole: "EMPLOYEE",
+              ...(sender.type === "EMPLOYEE" ? { NOT: { id: sender.id } } : {}),
+            },
+            select: { id: true },
+          })
+        : sender.type === "ADMIN"
+          ? [{ id: conversation.employeeId }]
+          : [];
+    if (recipients.length === 0) return;
 
     const copy = chatCopy(sender.name, preview);
     const icon = await senderIcon(sender);
@@ -138,7 +172,7 @@ async function notifyTeamOfMessage(messageId: string, sender: ChatViewer, previe
           type: "CHAT_MESSAGE",
           title: copy.title,
           message: copy.message,
-          url: CHAT_PATH,
+          url: employeeChatUrl(conversation),
           icon,
           // One notification per message per person, so a retry cannot double it.
           dedupeKey: chatKey(messageId, recipient.id),
@@ -150,8 +184,10 @@ async function notifyTeamOfMessage(messageId: string, sender: ChatViewer, previe
   }
 }
 
-export async function markChatRead() {
-  await recordChatRead(await requireChatViewer());
+export async function markChatRead(conversation = "team") {
+  const viewer = await requireChatViewer();
+  const { channel } = await openConversation(viewer, conversation);
+  await recordChatRead(viewer, channel.id);
   refresh();
 }
 
@@ -172,11 +208,12 @@ export async function deleteChatMessage(messageId: string) {
 
 /**
  * Only the manager may use the assistant. The question and the answer are both
- * written into the channel as manager-only messages, so the manager keeps a
- * history of what they asked while the team sees none of it.
+ * written into the team channel as manager-only messages, so the manager keeps
+ * a history of what they asked while the team sees none of it. The assistant
+ * reads the team conversation only — never a private one.
  */
 export async function askChatAssistant(formData: FormData) {
-  const viewer = await requireChatViewer();
+  const viewer = await requireChatViewer("ADMIN");
   if (viewer.type !== "ADMIN") throw new Error("The assistant is available to the manager only.");
 
   const question = String(formData.get("question") ?? "").trim().slice(0, 2000);
