@@ -6,6 +6,7 @@ import { Menu, X } from "lucide-react";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { LiveSync } from "@/components/live-sync";
 import { SoundCues } from "@/components/sound-cues";
+import { AppViewport } from "@/components/employee/app-viewport";
 import { isConversationPath } from "@/lib/chat-conversations";
 import type { AdminBadges } from "@/lib/admin-badges";
 import { cn } from "@/lib/utils";
@@ -39,14 +40,17 @@ export function AdminShell({
 
   // The sidebar is part of the window, not part of the page: it stays put
   // while the content scrolls, the way a desktop app behaves. The window is
-  // 100dvh, not 100vh: on an iPhone 100vh is the height with Safari's bars
-  // hidden, which put the bottom of every page under the toolbar.
+  // the part of the screen you can see (.admin-shell, sized by AppViewport),
+  // not 100vh: on an iPhone 100vh runs on under Safari's toolbar and under the
+  // keyboard, which is where the message box went the moment you typed.
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
+    <div className="admin-shell flex overflow-hidden bg-background">
       {/* Board, badges and review queue stay current on their own. */}
       <LiveSync />
       {/* One sound for a message, another for everything else. */}
       <SoundCues side="ADMIN" />
+      {/* Sizes the frame to what is visible, so the keyboard never covers a message box. */}
+      <AppViewport />
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-ink/8 bg-white/40 lg:block">
         <AdminNav badges={badges} />
       </aside>
@@ -55,7 +59,7 @@ export function AdminShell({
           it one wide table stretched the column past the screen, and the right
           side of the page — the menu button with it — was cut off. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-ink/8 bg-white/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
+        <div className="admin-topbar flex items-center justify-between border-b border-ink/8 bg-white/60 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
           <span className="text-base font-bold">
             <span className="text-gradient-neon">NEON</span>
             <span className="ml-1.5 text-sm font-medium text-ink/60">Admin</span>

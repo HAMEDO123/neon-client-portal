@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  // Which deploy this build is. A page left open across an update would
+  // otherwise call the server with the old build's actions and fail — the
+  // chat's send, for one. With an id, Next.js sees the mismatch and reloads
+  // the page instead. Render sets RENDER_GIT_COMMIT at build time and at run
+  // time; locally it is unset and nothing changes.
+  deploymentId: process.env.RENDER_GIT_COMMIT || undefined,
   turbopack: {
     root: path.join(__dirname),
   },

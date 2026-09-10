@@ -63,7 +63,9 @@ export default async function AdminConversationPage({
   const personName = person?.name ?? channel.name;
 
   return (
-    <div className="flex h-full gap-4 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:p-6">
+    // On a phone it is the whole screen, edge to edge, as a messaging app's is
+    // (.chat-screen in globals.css); on a computer it sits in the page beside the list.
+    <div className="chat-screen flex h-full gap-4 lg:p-6">
       <aside className="hidden w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-white/60 lg:flex">
         <p className="border-b border-ink/8 px-4 py-3 text-sm font-semibold text-ink">Chats</p>
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -71,7 +73,7 @@ export default async function AdminConversationPage({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-ink/10">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden lg:rounded-2xl lg:border lg:border-ink/10">
         <ChatRoom
           initialMessages={messages}
           viewerType="ADMIN"

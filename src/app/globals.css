@@ -229,6 +229,42 @@ body:has(.chat-screen) .employee-tabbar {
   display: none;
 }
 
+/* With the tab bar gone from a conversation, nothing under the message box
+   keeps it clear of the home indicator, so it does that itself — until the
+   keyboard is up and covers that edge anyway. */
+.chat-screen .chat-composer {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+body[data-keyboard="open"] .chat-screen .chat-composer {
+  padding-bottom: 0.5rem;
+}
+
+/* The admin is the same kind of frame, for the same reason: glued to the
+   visible window, so on a phone the keyboard comes up under the page rather
+   than over the message box. */
+.admin-shell {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--app-top);
+  height: var(--app-height);
+}
+
+body:has(.admin-shell) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* On a phone, typing gets the room the top bar had, and an open conversation
+   is a screen of its own whose header carries the way back. */
+@media (max-width: 1023.98px) {
+  body[data-keyboard="open"] .admin-topbar,
+  body:has(.chat-screen) .admin-topbar {
+    display: none;
+  }
+}
+
 /* Scoped scrollbar hide for horizontal chip/tab rails. */
 .scrollbar-none {
   scrollbar-width: none;
