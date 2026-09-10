@@ -43,6 +43,8 @@ next-env.d.ts
 # database
 /prisma/*.db
 /prisma/*.db-journal
+# a copy of the local database's rows (employees, password hashes): never committed
+/local-backup/
 
 # user-uploaded content
 /public/uploads
