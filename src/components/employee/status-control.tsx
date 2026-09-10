@@ -3,6 +3,7 @@
 import { useOptimistic, useTransition } from "react";
 import { Circle, Loader } from "lucide-react";
 import { setMyTaskStatus } from "@/lib/actions/employee-actions";
+import { setMyAssignedTaskStatus } from "@/lib/actions/my-assigned-actions";
 import type { TaskState } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +17,16 @@ const OPTIONS: { state: TaskState; label: string; icon: typeof Circle; active: s
   { state: "IN_PROGRESS", label: "In Progress", icon: Loader, active: "bg-cyan-strong text-white border-cyan-strong" },
 ];
 
-export function StatusControl({ entryId, state }: { entryId: string; state: TaskState }) {
+export function StatusControl({
+  entryId,
+  state,
+  kind = "entry",
+}: {
+  entryId: string;
+  state: TaskState;
+  /** A cell on the project board, or a job the manager handed out by hand. */
+  kind?: "entry" | "assigned";
+}) {
   const [pending, startTransition] = useTransition();
   const [shown, setShown] = useOptimistic(state);
 
@@ -28,7 +38,8 @@ export function StatusControl({ entryId, state }: { entryId: string; state: Task
     if (next === shown || locked) return;
     startTransition(async () => {
       setShown(next);
-      await setMyTaskStatus(entryId, next);
+      if (kind === "assigned") await setMyAssignedTaskStatus(entryId, next);
+      else await setMyTaskStatus(entryId, next);
     });
   }
 

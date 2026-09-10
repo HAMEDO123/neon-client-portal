@@ -28,16 +28,50 @@ export type VapidKeys = {
 // changes on a deploy or the first generation.
 let cached: VapidKeys | null = null;
 
+// Where the app lives when nothing else says so. The subject is the contact a
+// push service is given for the sender, and Apple's is the strict one: it
+// checks the signature's claims where Chrome's service accepts anything that
+// parses. A made-up address like mailto:admin@neon.local is exactly the kind
+// of thing that works on Android and fails on an iPhone, so the last resort is
+// the real public address rather than a placeholder.
+const PUBLIC_SITE = "https://neon-client-portal.onrender.com";
+
 function subjectOf() {
   const configured = process.env.VAPID_SUBJECT?.trim();
-  if (configured) return configured;
+  if (configured && isUsableSubject(configured)) return configured;
 
-  // web-push insists on a mailto: or https: subject. The app's own URL is the
-  // most honest thing to point a push service at.
-  const url = process.env.PUBLIC_APP_URL?.trim();
-  if (url?.startsWith("https://")) return url;
+  // The app's own address, as the host knows it: PUBLIC_APP_URL if somebody
+  // set it, and RENDER_EXTERNAL_URL, which Render sets on every web service.
+  for (const candidate of [process.env.PUBLIC_APP_URL, process.env.RENDER_EXTERNAL_URL]) {
+    const url = candidate?.trim();
+    if (url && isUsableSubject(url)) return url;
+  }
 
-  return "mailto:admin@neon.local";
+  return PUBLIC_SITE;
+}
+
+/**
+ * An https: address or a mailto: on a real domain. Not localhost, not an IP,
+ * not a reserved suffix like .local or .test — the things a push service has
+ * every reason to refuse.
+ */
+export function isUsableSubject(subject: string) {
+  const value = subject.trim();
+
+  let host = "";
+  if (value.startsWith("https://")) {
+    try {
+      host = new URL(value).hostname;
+    } catch {
+      return false;
+    }
+  } else if (value.startsWith("mailto:")) {
+    host = value.slice("mailto:".length).split("@")[1] ?? "";
+  }
+
+  if (!host || !host.includes(".")) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false;
+  return !/(^|\.)(localhost|local|test|example|invalid|internal)$/i.test(host);
 }
 
 export async function getVapidKeys(): Promise<VapidKeys | null> {

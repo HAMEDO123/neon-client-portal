@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import {
   CalendarPlus,
+  Camera,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -366,6 +367,9 @@ export function WeekBoard({
                         >
                           <GripVertical size={11} strokeWidth={2} className="-ml-1 shrink-0 opacity-40" />
                           {done && <Check size={11} strokeWidth={3} className="shrink-0" />}
+                          {item.state === "SUBMITTED" && (
+                            <Camera size={11} strokeWidth={2.25} className="shrink-0" aria-label="Waiting for your review" />
+                          )}
                           <span className={cn("truncate", done && "line-through")}>{item.title}</span>
                         </button>
                       );

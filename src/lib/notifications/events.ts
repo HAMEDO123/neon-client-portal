@@ -226,7 +226,7 @@ export async function runStageReminders(now = new Date()) {
     if (stage.state === "DONE" || stage.state === "SUBMITTED") continue;
     if (!stage.ownerId) continue;
 
-    const countdown = countdownOf(stage.dueBy, now);
+    const countdown = countdownOf(stage.dueBy, now, timezone);
 
     // Nothing to say while there is still room.
     if (countdown.days > 2) continue;

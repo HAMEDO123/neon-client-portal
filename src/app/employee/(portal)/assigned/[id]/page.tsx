@@ -1,33 +1,40 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Building2, CalendarDays, Camera, Clock, FileText, Flag } from "lucide-react";
+import { ArrowLeft, CalendarRange, Camera, ClipboardList, FileText, Flag } from "lucide-react";
 import { requireEmployee } from "@/lib/employee-session";
-import { taskForEmployee } from "@/lib/employee-tasks";
-import { saveMyTaskNote } from "@/lib/actions/employee-actions";
+import { myAssignedTask } from "@/lib/assigned-tasks";
+import { submissionsForAssignedTask } from "@/lib/submissions";
 import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
+import { dayLabel, daysBetween } from "@/lib/week";
 import { EMPLOYEE_STATE_LABEL, PRIORITY_LABEL } from "@/lib/task-board";
 import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
-import { submissionsForEntry } from "@/lib/submissions";
-import { planForTasks } from "@/lib/stage-deadlines";
 import { Countdown } from "@/components/employee/countdown";
-import { SaveButton } from "@/components/admin/form-buttons";
 
-export default async function EmployeeTaskDetail({ params }: { params: Promise<{ id: string }> }) {
+// One job the manager handed out directly.
+//
+// Laid out like a task from the board, and working the same way — status,
+// proof, the manager's verdict — because the employee should not have to learn
+// two sets of rules for two kinds of work.
+export default async function AssignedTaskPage({ params }: { params: Promise<{ id: string }> }) {
   const employee = await requireEmployee();
   const { id } = await params;
 
-  // Scoped to this employee: another employee's task id is simply not found.
-  const task = await taskForEmployee(employee.id, id);
+  // Scoped to this employee: somebody else's job id is simply not found.
+  const task = await myAssignedTask(employee.id, id);
   if (!task) notFound();
 
   const timezone = await getTimezone();
-  const submissions = await submissionsForEntry(task.id);
-  const dueBy = (await planForTasks([task])).get(task.id)?.dueBy ?? null;
-  const due = formatTimeIn(timezone, task.dueAt);
-  const dueDay = formatDayIn(timezone, task.dueAt);
-  const scheduled = formatDayIn(timezone, task.scheduledFor);
+  const submissions = await submissionsForAssignedTask(task.id);
+
+  const days = daysBetween(task.startKey, task.endKey) + 1;
+  const from = dayLabel(task.startKey);
+  const to = dayLabel(task.endKey);
+  const when =
+    days === 1
+      ? `${from.weekday} ${from.day} ${from.month}`
+      : `${from.weekday} ${from.day} – ${to.weekday} ${to.day} ${to.month}`;
 
   return (
     <div className="flex flex-col gap-5">
@@ -40,39 +47,52 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
       </Link>
 
       <div>
-        <h1 className="text-xl font-semibold text-ink">{task.task.name}</h1>
-        <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-ink/50">
-          <Building2 size={14} strokeWidth={1.75} />
-          {task.project.name}
-          {task.project.clientName ? ` · ${task.project.clientName}` : ""}
-        </p>
+        <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
+          <ClipboardList size={10} strokeWidth={2.5} />
+          From the manager
+        </span>
+        <h1 dir="auto" className="mt-2 text-xl font-semibold text-ink">
+          {task.title}
+        </h1>
       </div>
 
-      {/* The time left is the thing to act on, so it sits above the detail
-          rather than inside it. */}
-      {dueBy && task.state !== "DONE" && (
-        <Countdown dueBy={dueBy.toISOString()} timeZone={timezone} size="large" className="self-start" />
+      {/* The time left is the thing to act on, so it sits above the detail. */}
+      {task.state !== "DONE" && (
+        <Countdown dueDay={task.endKey} timeZone={timezone} size="large" className="self-start" />
       )}
 
       <div className="glass grid grid-cols-2 gap-3 rounded-2xl p-4">
         <Detail icon={Flag} label="Priority" value={PRIORITY_LABEL[task.priority]} />
-        <Detail icon={CalendarDays} label="Status" value={EMPLOYEE_STATE_LABEL[task.state]} />
-        <Detail icon={CalendarDays} label="Scheduled" value={scheduled ?? "Not scheduled"} />
-        <Detail
-          icon={Clock}
-          label="Deadline"
-          value={due ? `${dueDay ?? ""} ${due}`.trim() : "No deadline"}
-        />
+        <Detail icon={ClipboardList} label="Status" value={EMPLOYEE_STATE_LABEL[task.state]} />
+        <div className="col-span-2">
+          <Detail
+            icon={CalendarRange}
+            label={days === 1 ? "Day" : `${days} days`}
+            value={when}
+          />
+        </div>
       </div>
 
       <section>
         <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">Update status</h2>
         <div className="mt-2">
-          <StatusControl entryId={task.id} state={task.state} />
+          <StatusControl entryId={task.id} state={task.state} kind="assigned" />
         </div>
       </section>
 
-      <CompletionForm entryId={task.id} state={task.state} />
+      <CompletionForm entryId={task.id} state={task.state} kind="assigned" />
+
+      {task.note && (
+        <section className="glass rounded-2xl p-4">
+          <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
+            <FileText size={13} strokeWidth={2} />
+            Notes from the manager
+          </h2>
+          <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm text-ink/70">
+            {task.note}
+          </p>
+        </section>
+      )}
 
       {submissions.length > 0 && (
         <section className="glass rounded-2xl p-4">
@@ -105,7 +125,9 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
                     {formatDayIn(timezone, submission.createdAt)} · {formatTimeIn(timezone, submission.createdAt)}
                   </p>
                   {submission.reviewNote && (
-                    <p className="mt-1 text-sm text-ink/70">{submission.reviewNote}</p>
+                    <p dir="auto" className="mt-1 text-sm text-ink/70">
+                      {submission.reviewNote}
+                    </p>
                   )}
                 </div>
               </li>
@@ -113,46 +135,11 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
           </ul>
         </section>
       )}
-
-      {task.adminNote && (
-        <section className="glass rounded-2xl p-4">
-          <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
-            <FileText size={13} strokeWidth={2} />
-            Notes from admin
-          </h2>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-ink/70">{task.adminNote}</p>
-        </section>
-      )}
-
-      <form action={saveMyTaskNote.bind(null, task.id)} className="glass rounded-2xl p-4">
-        <label htmlFor="employeeNote" className="text-xs font-semibold uppercase tracking-wider text-ink/40">
-          My notes
-        </label>
-        <textarea
-          id="employeeNote"
-          name="employeeNote"
-          rows={4}
-          defaultValue={task.employeeNote ?? ""}
-          placeholder="Anything worth recording about this task…"
-          className="mt-2 w-full rounded-lg border border-ink/12 bg-white/70 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
-        />
-        <div className="mt-3 flex justify-end">
-          <SaveButton label="Save note" />
-        </div>
-      </form>
     </div>
   );
 }
 
-function Detail({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Flag;
-  label: string;
-  value: string;
-}) {
+function Detail({ icon: Icon, label, value }: { icon: typeof Flag; label: string; value: string }) {
   return (
     <div>
       <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink/40">

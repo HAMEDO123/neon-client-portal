@@ -7,7 +7,6 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { dayKeyToDate } from "@/lib/time";
 import { daysBetween } from "@/lib/week";
 import { dispatchNotification } from "@/lib/notifications/engine";
-import { DASHBOARD_PATH } from "@/lib/notifications/types";
 import type { TaskPriority } from "@/generated/prisma/enums";
 
 // Handing out work that is not part of any project.
@@ -26,6 +25,9 @@ async function requireAdmin() {
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Where a notification about a job lands: the job itself, not the dashboard. */
+const jobUrl = (id: string) => `/employee/assigned/${id}`;
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH"];
 
 function refresh() {
@@ -99,7 +101,7 @@ export async function createAssignedTask(formData: FormData) {
       input.days > 1
         ? `${input.title} — ${input.days} days.`
         : `${input.title} — today's job.`,
-    url: DASHBOARD_PATH,
+    url: jobUrl(task.id),
     dedupeKey: `ASSIGNED_TASK:${task.id}`,
     metadata: { days: input.days },
   }).catch(() => {
@@ -144,7 +146,7 @@ export async function updateAssignedTask(id: string, formData: FormData) {
       type: movedPerson ? "TASK_ASSIGNED" : "TASK_UPDATED",
       title: movedPerson ? "New Task Assigned" : "Task Updated",
       message: movedPerson ? `${input.title} — ${input.days} days.` : `"${input.title}" has changed.`,
-      url: DASHBOARD_PATH,
+      url: jobUrl(id),
       // Keyed on what it became, so re-saving the same thing is silent and a
       // real second edit is not.
       dedupeKey: `ASSIGNED_TASK_UPDATE:${id}:${input.employeeId}:${input.title}:${input.startDay.toISOString()}:${input.endDay.toISOString()}`,
@@ -207,7 +209,7 @@ export async function moveAssignedTask(id: string, input: { days: number; employ
       employeeId === task.employeeId
         ? `"${task.title}" moved to ${startDay.toISOString().slice(0, 10)}.`
         : `${task.title} — ${days} ${days === 1 ? "day" : "days"}.`,
-    url: DASHBOARD_PATH,
+    url: jobUrl(id),
     dedupeKey: `ASSIGNED_TASK_MOVE:${id}:${employeeId}:${startDay.toISOString()}`,
   }).catch(() => {});
 

@@ -31,7 +31,13 @@ export default async function ReviewsPage() {
         />
       ) : (
         <ul className="mt-6 flex flex-col gap-4">
-          {submissions.map((submission) => (
+          {submissions.map((submission) => {
+            // A board cell names its step and project; a hand-assigned job
+            // has only its own title.
+            const name = submission.entry?.task.name ?? submission.assignedTask?.title ?? "Task";
+            const context = submission.entry?.project.name ?? "Handed out by you";
+
+            return (
             <li key={submission.id} className="glass rounded-2xl p-4">
               <div className="flex flex-col gap-4 sm:flex-row">
                 <a
@@ -43,23 +49,25 @@ export default async function ReviewsPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={submission.imageUrl}
-                    alt={`Proof for ${submission.entry.task.name}`}
+                    alt={`Proof for ${name}`}
                     className="h-44 w-full object-cover sm:h-40"
                   />
                 </a>
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-ink/40">
-                    {submission.entry.project.name}
-                  </p>
-                  <h2 className="mt-0.5 text-base font-semibold text-ink">{submission.entry.task.name}</h2>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-ink/40">{context}</p>
+                  <h2 dir="auto" className="mt-0.5 text-base font-semibold text-ink">
+                    {name}
+                  </h2>
                   <p className="mt-1 text-sm text-ink/55">
                     {submission.employee.name} · {formatDayIn(timezone, submission.createdAt)}{" "}
                     {formatTimeIn(timezone, submission.createdAt)}
                   </p>
 
                   {submission.note && (
-                    <p className="mt-2 rounded-lg bg-ink/[0.04] px-3 py-2 text-sm text-ink/70">{submission.note}</p>
+                    <p dir="auto" className="mt-2 rounded-lg bg-ink/[0.04] px-3 py-2 text-sm text-ink/70">
+                      {submission.note}
+                    </p>
                   )}
 
                   <div className="mt-3">
@@ -68,7 +76,8 @@ export default async function ReviewsPage() {
                 </div>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>

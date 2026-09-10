@@ -52,7 +52,7 @@ export function PushToggle({ publicKey, configured }: { publicKey: string; confi
       setStatus("on");
       setMessage("This device will now receive notifications.");
     } catch (error) {
-      const denied = error instanceof Error && error.message.includes("blocked");
+      const denied = error instanceof Error && /blocked|turned off/i.test(error.message);
       setStatus(denied ? "blocked" : "off");
       setMessage(error instanceof Error ? error.message : "Could not enable push on this device.");
     }

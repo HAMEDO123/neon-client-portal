@@ -12,7 +12,7 @@ const PRIORITY_STYLE = {
   LOW: "bg-ink/5 text-ink/50 border-ink/10",
 } as const;
 
-const STATE_STYLE = {
+export const STATE_STYLE = {
   DONE: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
   SUBMITTED: "bg-purple/10 text-purple-strong border-purple/20",
   IN_PROGRESS: "bg-cyan/10 text-cyan-strong border-cyan/20",
@@ -83,7 +83,7 @@ export function TaskCard({
               {EMPLOYEE_STATE_LABEL[task.state]}
             </span>
             {/* Finished work has no time left to run. */}
-            {dueBy && !done && <Countdown dueBy={dueBy.toISOString()} />}
+            {dueBy && !done && <Countdown dueBy={dueBy.toISOString()} timeZone={timezone} />}
             {due && (
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/50">
                 <Clock size={12} strokeWidth={2} />

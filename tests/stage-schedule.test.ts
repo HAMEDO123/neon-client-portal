@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   addDays,
   countdownOf,
+  countdownToDay,
   daysUntil,
   periodTimeline,
   planStages,
@@ -131,10 +132,21 @@ describe("periods are ranges, not a number per step", () => {
 describe("the countdown an employee sees", () => {
   const now = new Date("2026-09-09T10:00:00.000Z");
 
-  it("counts days the way a person does", () => {
-    assert.equal(daysUntil(new Date("2026-09-09T18:00:00.000Z"), now), 1);
-    assert.equal(countdownOf(new Date("2026-09-09T09:00:00.000Z"), now).label, "Due today");
+  it("counts calendar days, the way a person does", () => {
+    // Later the same day is today, however many hours remain.
+    assert.equal(daysUntil(new Date("2026-09-09T18:00:00.000Z"), now), 0);
+    assert.equal(countdownOf(new Date("2026-09-09T18:00:00.000Z"), now).label, "Due today");
+    // Just past midnight in Amman is tomorrow: 21:30 UTC is 00:30 on the 10th.
+    assert.equal(daysUntil(new Date("2026-09-09T21:30:00.000Z"), now), 1);
     assert.equal(countdownOf(new Date("2026-09-11T09:00:00.000Z"), now).label, "2 days left");
+  });
+
+  it("counts to a calendar day for a job due by the end of one", () => {
+    // Due today reads as due today — not as a day away, which is what it said.
+    assert.equal(countdownToDay("2026-09-09", now).label, "Due today");
+    assert.equal(countdownToDay("2026-09-10", now).label, "1 day left");
+    assert.equal(countdownToDay("2026-09-08", now).label, "1 day late");
+    assert.equal(countdownToDay("2026-09-08", now).overdue, true);
   });
 
   it("says how late, once it is late", () => {

@@ -11,6 +11,8 @@ export function pendingSubmissions(limit = 50) {
     take: limit,
     include: {
       employee: { select: { id: true, name: true, color: true } },
+      // Evidence is for a cell on the board or for a job handed out by hand —
+      // one of the two, never both.
       entry: {
         select: {
           id: true,
@@ -18,6 +20,7 @@ export function pendingSubmissions(limit = 50) {
           project: { select: { name: true } },
         },
       },
+      assignedTask: { select: { id: true, title: true } },
     },
   });
 }
@@ -28,10 +31,19 @@ export function countPendingSubmissions() {
   return prisma.taskSubmission.count({ where: { status: "PENDING" } });
 }
 
-/** The evidence sent for one task, newest first. */
+/** The evidence sent for one board cell, newest first. */
 export function submissionsForEntry(entryId: string) {
   return prisma.taskSubmission.findMany({
     where: { entryId },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+}
+
+/** The evidence sent for one hand-assigned job, newest first. */
+export function submissionsForAssignedTask(assignedTaskId: string) {
+  return prisma.taskSubmission.findMany({
+    where: { assignedTaskId },
     orderBy: { createdAt: "desc" },
     take: 10,
   });

@@ -17,6 +17,10 @@ import { notifyAdmin } from "@/lib/admin-notifications";
 // SUBMITTED until the manager looks at the photo and accepts or returns it.
 // Only the manager's approval writes DONE, so the board always reflects work
 // somebody has actually seen.
+//
+// The evidence is for one of two things — a cell on the project board, or a
+// job the manager handed out by hand — and the review settles whichever it is.
+// The employee's side of a hand-assigned job lives in my-assigned-actions.ts.
 
 async function requireAdmin() {
   const store = await cookies();
@@ -25,16 +29,19 @@ async function requireAdmin() {
   }
 }
 
-function refresh(entryId?: string) {
+type Subject = { entryId: string | null; assignedTaskId: string | null };
+
+function refresh(subject?: Subject) {
   revalidatePath("/employee");
   revalidatePath("/employee/tasks");
-  if (entryId) revalidatePath(`/employee/tasks/${entryId}`);
+  if (subject?.entryId) revalidatePath(`/employee/tasks/${subject.entryId}`);
+  if (subject?.assignedTaskId) revalidatePath(`/employee/assigned/${subject.assignedTaskId}`);
   revalidatePath("/admin/tasks");
   revalidatePath("/admin/reviews");
   revalidatePath("/admin/analytics");
 }
 
-/** The employee sends their evidence. */
+/** The employee sends their evidence for a cell on the board. */
 export async function submitTaskCompletion(entryId: string, formData: FormData) {
   const employee = await requireEmployee();
 
@@ -69,7 +76,38 @@ export async function submitTaskCompletion(entryId: string, formData: FormData) 
     employeeId: employee.id,
   });
 
-  refresh(entryId);
+  refresh({ entryId, assignedTaskId: null });
+}
+
+const reviewInclude = {
+  entry: { include: { task: { select: { name: true } } } },
+  assignedTask: { select: { title: true } },
+} as const;
+
+/** What a submission is evidence for: its name, and the page the employee reads it on. */
+function describe(submission: Subject & {
+  entry: { task: { name: string } } | null;
+  assignedTask: { title: string } | null;
+}) {
+  if (submission.entryId && submission.entry) {
+    return { name: submission.entry.task.name, url: taskUrl(submission.entryId), entryId: submission.entryId };
+  }
+  return {
+    name: submission.assignedTask?.title ?? "Your task",
+    url: `/employee/assigned/${submission.assignedTaskId}`,
+    entryId: null,
+  };
+}
+
+/** Moves the work the evidence was for into its next state. */
+async function settle(subject: Subject, state: "DONE" | "IN_PROGRESS") {
+  const data = { state, completedAt: state === "DONE" ? new Date() : null };
+
+  if (subject.entryId) {
+    await prisma.projectTaskEntry.update({ where: { id: subject.entryId }, data });
+  } else if (subject.assignedTaskId) {
+    await prisma.assignedTask.update({ where: { id: subject.assignedTaskId }, data });
+  }
 }
 
 /** The manager accepts it: now it is done. */
@@ -83,25 +121,23 @@ export async function approveSubmission(submissionId: string, formData?: FormDat
       reviewedAt: new Date(),
       reviewNote: String(formData?.get("reviewNote") ?? "").trim().slice(0, 500) || null,
     },
-    include: { entry: { include: { task: { select: { name: true } } } } },
+    include: reviewInclude,
   });
 
-  await prisma.projectTaskEntry.update({
-    where: { id: submission.entryId },
-    data: { state: "DONE", completedAt: new Date() },
-  });
+  await settle(submission, "DONE");
 
+  const subject = describe(submission);
   await dispatchNotification({
     employeeId: submission.employeeId,
     type: "SYSTEM_NOTIFICATION",
     title: "Work approved",
-    message: `${submission.entry.task.name} was approved.`,
-    url: taskUrl(submission.entryId),
-    entryId: submission.entryId,
+    message: `${subject.name} was approved.`,
+    url: subject.url,
+    entryId: subject.entryId,
     dedupeKey: `SUBMISSION_APPROVED:${submission.id}`,
   }).catch(() => {});
 
-  refresh(submission.entryId);
+  refresh(submission);
 }
 
 /** The manager sends it back, with a reason. */
@@ -113,27 +149,23 @@ export async function rejectSubmission(submissionId: string, formData?: FormData
   const submission = await prisma.taskSubmission.update({
     where: { id: submissionId },
     data: { status: "REJECTED", reviewedAt: new Date(), reviewNote: reason },
-    include: { entry: { include: { task: { select: { name: true } } } } },
+    include: reviewInclude,
   });
 
   // Back to being worked on, not back to untouched: the employee has already
   // done something, and the history of the attempt is kept.
-  await prisma.projectTaskEntry.update({
-    where: { id: submission.entryId },
-    data: { state: "IN_PROGRESS", completedAt: null },
-  });
+  await settle(submission, "IN_PROGRESS");
 
+  const subject = describe(submission);
   await dispatchNotification({
     employeeId: submission.employeeId,
     type: "SYSTEM_NOTIFICATION",
     title: "Work sent back",
-    message: reason
-      ? `${submission.entry.task.name} needs more work: ${reason}`
-      : `${submission.entry.task.name} was sent back for more work.`,
-    url: taskUrl(submission.entryId),
-    entryId: submission.entryId,
+    message: reason ? `${subject.name} needs more work: ${reason}` : `${subject.name} was sent back for more work.`,
+    url: subject.url,
+    entryId: subject.entryId,
     dedupeKey: `SUBMISSION_REJECTED:${submission.id}`,
   }).catch(() => {});
 
-  refresh(submission.entryId);
+  refresh(submission);
 }

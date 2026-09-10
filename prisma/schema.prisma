@@ -750,9 +750,15 @@ model AttendanceRecord {
 // about it. Kept as rows rather than fields on the task so a rejected attempt
 // and the resubmission that followed are both still there to look at.
 model TaskSubmission {
-  id      String           @id @default(cuid())
-  entryId String
-  entry   ProjectTaskEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  id      String            @id @default(cuid())
+  entryId String?
+  entry   ProjectTaskEntry? @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  // Or a job the manager handed out by hand. Exactly one of the two is set:
+  // evidence is always for something, and the review has to know what it is
+  // approving.
+  assignedTaskId String?
+  assignedTask   AssignedTask? @relation(fields: [assignedTaskId], references: [id], onDelete: Cascade)
 
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -769,6 +775,7 @@ model TaskSubmission {
 
   @@index([status, createdAt])
   @@index([entryId, createdAt])
+  @@index([assignedTaskId, createdAt])
 }
 
 // The manager's own notification feed.
@@ -895,6 +902,8 @@ model AssignedTask {
   state       TaskState    @default(TODO)
   priority    TaskPriority @default(MEDIUM)
   completedAt DateTime?
+
+  submissions TaskSubmission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt

@@ -1,13 +1,18 @@
-import { CalendarRange, ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { CalendarRange, ChevronRight, ClipboardList } from "lucide-react";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { Countdown } from "@/components/employee/countdown";
-import { dayKeyToDate } from "@/lib/time";
+import { STATE_STYLE } from "@/components/employee/task-card";
+import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { daysBetween, dayLabel } from "@/lib/week";
 import { cn } from "@/lib/utils";
 
-// A job the manager handed out directly — not a stage of any project, so it has
-// no board cell and no photo to send. It has a span of days and a countdown,
-// which is the part the employee acts on.
+// A job the manager handed out directly — not a stage of any project, but it
+// works the same way: tap it, set it going, send a photo when it is done. The
+// badge is the only thing that says it came from somewhere else.
+//
+// Titles are often Arabic, so they read in their own direction rather than
+// being forced left to right.
 
 const PRIORITY_STYLE = {
   HIGH: "bg-pink/10 text-pink-strong border-pink/20",
@@ -15,46 +20,63 @@ const PRIORITY_STYLE = {
   LOW: "bg-ink/5 text-ink/50 border-ink/10",
 } as const;
 
-export function AssignedTaskCard({ task }: { task: AssignedTaskView }) {
+export function AssignedTaskCard({ task, timezone }: { task: AssignedTaskView; timezone: string }) {
   const days = daysBetween(task.startKey, task.endKey) + 1;
   const from = dayLabel(task.startKey);
   const to = dayLabel(task.endKey);
   const done = task.state === "DONE";
 
-  // The deadline is the end of the last day, not its start — a job due today
-  // is not late at nine in the morning.
-  const dueBy = new Date(dayKeyToDate(task.endKey).getTime() + 24 * 60 * 60 * 1000 - 1);
-
   return (
-    <div className={cn("glass rounded-2xl p-4", done && "opacity-70")}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
-          <ClipboardList size={10} strokeWidth={2.5} />
-          From the manager
-        </span>
-        <span
-          className={cn(
-            "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-            PRIORITY_STYLE[task.priority]
+    <Link
+      href={`/employee/assigned/${task.id}`}
+      className={cn(
+        "glass block rounded-2xl p-4 transition-transform active:scale-[0.99]",
+        done && "opacity-70"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
+              <ClipboardList size={10} strokeWidth={2.5} />
+              From the manager
+            </span>
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                PRIORITY_STYLE[task.priority]
+              )}
+            >
+              {task.priority}
+            </span>
+          </div>
+
+          <h3 dir="auto" className={cn("mt-2 text-[15px] font-semibold text-ink", done && "line-through")}>
+            {task.title}
+          </h3>
+
+          {task.note && (
+            <p dir="auto" className="mt-1.5 line-clamp-2 text-sm text-ink/60">
+              {task.note}
+            </p>
           )}
-        >
-          {task.priority}
-        </span>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium", STATE_STYLE[task.state])}>
+              {EMPLOYEE_STATE_LABEL[task.state]}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/50">
+              <CalendarRange size={12} strokeWidth={2} />
+              {days === 1
+                ? `${from.weekday} ${from.day} ${from.month}`
+                : `${from.weekday} ${from.day} – ${to.weekday} ${to.day} ${to.month}`}
+            </span>
+            {!done && <Countdown dueDay={task.endKey} timeZone={timezone} />}
+          </div>
+        </div>
+
+        <ChevronRight size={18} className="mt-1 shrink-0 text-ink/25" />
       </div>
-
-      <h3 className={cn("mt-2 text-[15px] font-semibold text-ink", done && "line-through")}>{task.title}</h3>
-
-      {task.note && <p className="mt-1.5 text-sm text-ink/60">{task.note}</p>}
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/50">
-          <CalendarRange size={12} strokeWidth={2} />
-          {days === 1
-            ? `${from.weekday} ${from.day} ${from.month}`
-            : `${from.weekday} ${from.day} – ${to.weekday} ${to.day} ${to.month} · ${days} days`}
-        </span>
-        {!done && <Countdown dueBy={dueBy.toISOString()} />}
-      </div>
-    </div>
+    </Link>
   );
 }

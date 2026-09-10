@@ -1,4 +1,5 @@
 import type { TaskState } from "@/generated/prisma/enums";
+import { DEFAULT_TIMEZONE, dayKeyIn, dayKeyToDate } from "@/lib/time";
 
 // How long a run of steps gets, and what that means for the run after it.
 //
@@ -152,16 +153,32 @@ export type Countdown = {
 };
 
 /**
- * Days between now and a deadline, counted the way a person counts them: a
- * deadline later today is "today", and any part of tomorrow is "1 day".
+ * Calendar days from today to the day something is due, in the company's
+ * timezone — the way a person counts. Anything due later today is due today,
+ * however many hours are left; anything due tomorrow is one day away, even at
+ * eleven at night. Counting hours instead is what made a job due this
+ * afternoon read "1 day left".
  */
-export function daysUntil(dueBy: Date, now: Date) {
-  return Math.ceil((dueBy.getTime() - now.getTime()) / DAY_MS);
+export function daysUntil(dueBy: Date, now = new Date(), timeZone = DEFAULT_TIMEZONE) {
+  return daysUntilDay(dayKeyIn(timeZone, dueBy), now, timeZone);
 }
 
-export function countdownOf(dueBy: Date, now = new Date()): Countdown {
-  const days = daysUntil(dueBy, now);
+/** The same count for something due on a calendar day rather than at an instant. */
+export function daysUntilDay(dueDayKey: string, now = new Date(), timeZone = DEFAULT_TIMEZONE) {
+  const today = dayKeyToDate(dayKeyIn(timeZone, now)).getTime();
+  return Math.round((dayKeyToDate(dueDayKey).getTime() - today) / DAY_MS);
+}
 
+export function countdownOf(dueBy: Date, now = new Date(), timeZone = DEFAULT_TIMEZONE): Countdown {
+  return countdownFromDays(daysUntil(dueBy, now, timeZone));
+}
+
+/** A countdown to the end of a calendar day — a job due "by Thursday". */
+export function countdownToDay(dueDayKey: string, now = new Date(), timeZone = DEFAULT_TIMEZONE): Countdown {
+  return countdownFromDays(daysUntilDay(dueDayKey, now, timeZone));
+}
+
+function countdownFromDays(days: number): Countdown {
   if (days < 0) {
     const late = Math.abs(days);
     return {

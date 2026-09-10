@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { Camera, CheckCircle2, ImageUp, Loader2, X } from "lucide-react";
 import { submitTaskCompletion } from "@/lib/actions/submission-actions";
+import { submitAssignedTaskCompletion } from "@/lib/actions/my-assigned-actions";
 import { cn } from "@/lib/utils";
 
 // Finishing a task means showing it.
@@ -15,9 +16,12 @@ import { cn } from "@/lib/utils";
 export function CompletionForm({
   entryId,
   state,
+  kind = "entry",
 }: {
   entryId: string;
   state: "TODO" | "IN_PROGRESS" | "SUBMITTED" | "DONE" | "TOMORROW";
+  /** A cell on the project board, or a job the manager handed out by hand. */
+  kind?: "entry" | "assigned";
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -61,7 +65,8 @@ export function CompletionForm({
     formData.set("photo", file);
     start(async () => {
       try {
-        await submitTaskCompletion(entryId, formData);
+        if (kind === "assigned") await submitAssignedTaskCompletion(entryId, formData);
+        else await submitTaskCompletion(entryId, formData);
         clear();
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Could not send it. Try again.");

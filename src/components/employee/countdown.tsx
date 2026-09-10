@@ -2,17 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { AlarmClock, TimerReset } from "lucide-react";
-import { countdownOf } from "@/lib/stage-schedule";
+import { countdownOf, countdownToDay } from "@/lib/stage-schedule";
 import { cn } from "@/lib/utils";
 
-// How long is left on this stage.
+// How long is left.
 //
 // The number is what the employee actually acts on — "two days" is a decision,
 // "due 11 September" is a lookup — so it is the thing on the card, and it
 // recalculates itself rather than going stale in an app somebody left open
-// overnight. It renders nothing until mounted, because a countdown computed on
-// the server and one computed in the phone's timezone can disagree by a day
-// and React would call that a hydration error.
+// overnight. It counts calendar days in the company's timezone: a job due this
+// afternoon is due today, however many hours remain.
+//
+// It renders nothing until mounted, because a countdown computed on the server
+// and one computed on the phone can land either side of midnight and React
+// would call that a hydration error.
 
 const TONES = {
   calm: "border-ink/10 bg-ink/[0.04] text-ink/55",
@@ -22,11 +25,17 @@ const TONES = {
 
 export function Countdown({
   dueBy,
+  dueDay,
+  timeZone,
   size = "small",
   className,
 }: {
-  /** ISO string; the component owns the arithmetic. */
-  dueBy: string;
+  /** An instant, as ISO — a stage's deadline. */
+  dueBy?: string;
+  /** A calendar day, YYYY-MM-DD — a job due by the end of that day. */
+  dueDay?: string;
+  /** The company's timezone, so "today" is the same day for everyone. */
+  timeZone?: string;
   size?: "small" | "large";
   className?: string;
 }) {
@@ -41,10 +50,17 @@ export function Countdown({
 
   if (!now) return null;
 
-  const due = new Date(dueBy);
-  if (Number.isNaN(due.getTime())) return null;
+  let countdown;
+  if (dueDay) {
+    countdown = countdownToDay(dueDay, now, timeZone);
+  } else if (dueBy) {
+    const due = new Date(dueBy);
+    if (Number.isNaN(due.getTime())) return null;
+    countdown = countdownOf(due, now, timeZone);
+  } else {
+    return null;
+  }
 
-  const countdown = countdownOf(due, now);
   const Icon = countdown.overdue ? AlarmClock : TimerReset;
 
   return (
@@ -55,7 +71,6 @@ export function Countdown({
         TONES[countdown.tone],
         className
       )}
-      title={`Due ${due.toLocaleDateString()}`}
     >
       <Icon size={size === "large" ? 15 : 11} strokeWidth={2.25} />
       {countdown.label}

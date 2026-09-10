@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { CalendarClock, CheckCircle2, ClipboardList, Sun } from "lucide-react";
+import { CalendarClock, CheckCircle2, Sun } from "lucide-react";
 import { requireEmployee } from "@/lib/employee-session";
-import { tasksForDay } from "@/lib/employee-tasks";
+import { tasksForDay, type EmployeeTask } from "@/lib/employee-tasks";
 import { getTimezone } from "@/lib/settings";
 import { hourIn, todayKey, tomorrowKey } from "@/lib/time";
 import { TaskCard } from "@/components/employee/task-card";
-import { planForTasks } from "@/lib/stage-deadlines";
-import { myAssignedTasks } from "@/lib/assigned-tasks";
 import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
 import { PushPrompt } from "@/components/employee/push-prompt";
+import { planForTasks } from "@/lib/stage-deadlines";
+import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { getPublicKey } from "@/lib/notifications/push";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,20 @@ function greeting(hour: number) {
   if (hour < 12) return "Good Morning";
   if (hour < 17) return "Good Afternoon";
   return "Good Evening";
+}
+
+// One list per day, whatever kind of work is on it.
+//
+// A step on a project and a job the manager handed out are both things to do
+// today, and splitting them into separate sections made the manager's jobs
+// look like a different, lesser category. They share the day they belong to,
+// highest priority first.
+type DayItem = { kind: "board"; task: EmployeeTask } | { kind: "assigned"; task: AssignedTaskView };
+
+const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 } as const;
+
+function byPriority(a: DayItem, b: DayItem) {
+  return PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority];
 }
 
 export default async function EmployeeDashboard({
@@ -31,21 +45,46 @@ export default async function EmployeeDashboard({
   // Push notifications for tomorrow's schedule land here with ?day=tomorrow.
   const focus = day === "tomorrow" ? "tomorrow" : "today";
 
-  const [today, tomorrow] = await Promise.all([
-    tasksForDay(employee.id, todayKey(timezone)),
-    tasksForDay(employee.id, tomorrowKey(timezone), "tomorrow"),
-  ]);
+  const todayDay = todayKey(timezone);
+  const tomorrowDay = tomorrowKey(timezone);
+
+  // One after the other, like the other multi-query pages here: the local
+  // Postgres proxy drops the connection when a page fires queries at once, and
+  // the round trip saved is not worth a dashboard that fails to load.
+  const today = await tasksForDay(employee.id, todayDay);
+  const tomorrow = await tasksForDay(employee.id, tomorrowDay, "tomorrow");
 
   // One plan covering both lists: the stage periods turn into real dates the
   // same way for today's work and tomorrow's.
   const plan = await planForTasks([...today, ...tomorrow]);
 
-  // Work handed out by hand, which belongs to no project and no board cell.
+  // Completed jobs are not fetched; everything else is sorted into a day below.
   const assigned = await myAssignedTasks(employee.id);
   const pushKey = await getPublicKey();
 
-  const openToday = today.filter((t) => t.state !== "DONE").length;
+  // A job handed out by hand belongs to the first of today and tomorrow it
+  // touches. One that started on or before today is today's — including one
+  // whose days have run out, because unfinished work does not stop being
+  // today's problem by being late.
+  const todayItems: DayItem[] = [
+    ...assigned.filter((task) => task.startKey <= todayDay).map((task) => ({ kind: "assigned" as const, task })),
+    ...today.map((task) => ({ kind: "board" as const, task })),
+  ].sort(byPriority);
+
+  const tomorrowItems: DayItem[] = [
+    ...assigned.filter((task) => task.startKey === tomorrowDay).map((task) => ({ kind: "assigned" as const, task })),
+    ...tomorrow.map((task) => ({ kind: "board" as const, task })),
+  ].sort(byPriority);
+
+  const openToday = todayItems.filter((item) => item.task.state !== "DONE").length;
   const firstName = employee.name.split(" ")[0];
+
+  const card = (item: DayItem) =>
+    item.kind === "board" ? (
+      <TaskCard key={item.task.id} task={item.task} timezone={timezone} dueBy={plan.get(item.task.id)?.dueBy} />
+    ) : (
+      <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
+    );
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,25 +101,9 @@ export default async function EmployeeDashboard({
 
       <PushPrompt publicKey={pushKey} />
 
-      {assigned.length > 0 && (
-        <section>
-          <SectionHeading
-            icon={ClipboardList}
-            label="Asked of you"
-            count={assigned.length}
-            tone="text-ink"
-          />
-          <div className="mt-3 flex flex-col gap-3">
-            {assigned.map((task) => (
-              <AssignedTaskCard key={task.id} task={task} />
-            ))}
-          </div>
-        </section>
-      )}
-
       <section id="today" className={cn(focus === "tomorrow" && "order-2")}>
-        <SectionHeading icon={Sun} label="Today" count={today.length} tone="text-ink" />
-        {today.length === 0 ? (
+        <SectionHeading icon={Sun} label="Today" count={todayItems.length} tone="text-ink" />
+        {todayItems.length === 0 ? (
           <EmptyState
             className="mt-3 py-10"
             icon={CheckCircle2}
@@ -88,26 +111,18 @@ export default async function EmployeeDashboard({
             description="Anything scheduled for today will show up here."
           />
         ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {today.map((task) => (
-              <TaskCard key={task.id} task={task} timezone={timezone} dueBy={plan.get(task.id)?.dueBy} />
-            ))}
-          </div>
+          <div className="mt-3 flex flex-col gap-3">{todayItems.map(card)}</div>
         )}
       </section>
 
       <section id="tomorrow" className={cn(focus === "tomorrow" && "order-1")}>
-        <SectionHeading icon={CalendarClock} label="Tomorrow" count={tomorrow.length} tone="text-amber-700" />
-        {tomorrow.length === 0 ? (
+        <SectionHeading icon={CalendarClock} label="Tomorrow" count={tomorrowItems.length} tone="text-amber-700" />
+        {tomorrowItems.length === 0 ? (
           <p className="mt-3 rounded-2xl border border-dashed border-ink/12 bg-ink/[0.02] px-4 py-6 text-center text-sm text-ink/45">
             Nothing scheduled for tomorrow yet.
           </p>
         ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {tomorrow.map((task) => (
-              <TaskCard key={task.id} task={task} timezone={timezone} dueBy={plan.get(task.id)?.dueBy} />
-            ))}
-          </div>
+          <div className="mt-3 flex flex-col gap-3">{tomorrowItems.map(card)}</div>
         )}
       </section>
 
