@@ -5,6 +5,7 @@ import { Camera, CheckCircle2, ImageUp, Loader2, X } from "lucide-react";
 import { submitTaskCompletion } from "@/lib/actions/submission-actions";
 import { submitAssignedTaskCompletion } from "@/lib/actions/my-assigned-actions";
 import { cn } from "@/lib/utils";
+import { shrinkPhoto } from "@/lib/client-image";
 
 // Finishing a task means showing it.
 //
@@ -62,9 +63,10 @@ export function CompletionForm({
       setError("Take a photo or pick a screenshot first.");
       return;
     }
-    formData.set("photo", file);
     start(async () => {
       try {
+        // Shrunk on the phone first: uploading a 4MB photo was most of the wait.
+        formData.set("photo", await shrinkPhoto(file));
         if (kind === "assigned") await submitAssignedTaskCompletion(entryId, formData);
         else await submitTaskCompletion(entryId, formData);
         clear();

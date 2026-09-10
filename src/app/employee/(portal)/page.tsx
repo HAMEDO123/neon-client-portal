@@ -7,6 +7,8 @@ import { hourIn, todayKey, tomorrowKey } from "@/lib/time";
 import { TaskCard } from "@/components/employee/task-card";
 import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
 import { PushPrompt } from "@/components/employee/push-prompt";
+import { TodaySummary } from "@/components/employee/today-summary";
+import { countStates } from "@/lib/progress";
 import { planForTasks } from "@/lib/stage-deadlines";
 import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { getPublicKey } from "@/lib/notifications/push";
@@ -58,8 +60,9 @@ export default async function EmployeeDashboard({
   // same way for today's work and tomorrow's.
   const plan = await planForTasks([...today, ...tomorrow]);
 
-  // Completed jobs are not fetched; everything else is sorted into a day below.
-  const assigned = await myAssignedTasks(employee.id);
+  // Finished jobs are fetched for today's scorecard, and kept out of the lists.
+  const assignedAll = await myAssignedTasks(employee.id, { includeDone: true });
+  const assigned = assignedAll.filter((task) => task.state !== "DONE");
   const pushKey = await getPublicKey();
 
   // A job handed out by hand belongs to the first of today and tomorrow it
@@ -76,12 +79,26 @@ export default async function EmployeeDashboard({
     ...tomorrow.map((task) => ({ kind: "board" as const, task })),
   ].sort(byPriority);
 
+  // Today's scorecard counts finished work too, which the lists leave out.
+  const todayCounts = countStates([
+    ...today.map((task) => task.state),
+    ...assignedAll
+      .filter((task) => task.startKey <= todayDay && (task.state !== "DONE" || task.endKey >= todayDay))
+      .map((task) => task.state),
+  ]);
+
   const openToday = todayItems.filter((item) => item.task.state !== "DONE").length;
   const firstName = employee.name.split(" ")[0];
 
   const card = (item: DayItem) =>
     item.kind === "board" ? (
-      <TaskCard key={item.task.id} task={item.task} timezone={timezone} dueBy={plan.get(item.task.id)?.dueBy} />
+      <TaskCard
+        key={item.task.id}
+        task={item.task}
+        timezone={timezone}
+        dueBy={plan.get(item.task.id)?.dueBy}
+        startsAt={plan.get(item.task.id)?.startsAt}
+      />
     ) : (
       <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
     );
@@ -98,6 +115,8 @@ export default async function EmployeeDashboard({
             : `${openToday} task${openToday === 1 ? "" : "s"} still open today.`}
         </p>
       </div>
+
+      <TodaySummary counts={todayCounts} />
 
       <PushPrompt publicKey={pushKey} />
 

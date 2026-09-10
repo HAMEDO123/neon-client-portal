@@ -158,7 +158,10 @@ export async function saveFile(
   compress: boolean = true
 ): Promise<SavedFile> {
   const rule = RULES[kind];
-  if (!rule.types.includes(file.type)) {
+  // "audio/webm;codecs=opus" is audio/webm: Chrome names its voice notes that
+  // way, and matching the whole string rejected every one of them.
+  const baseType = file.type.split(";")[0].trim().toLowerCase();
+  if (!rule.types.includes(baseType)) {
     throw new Error(`Unsupported file type. Use: ${rule.label}.`);
   }
   if (file.size > rule.maxBytes) {

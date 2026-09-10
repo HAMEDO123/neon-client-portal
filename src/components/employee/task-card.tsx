@@ -3,7 +3,8 @@ import { CalendarClock, ChevronRight, Clock, Sparkles } from "lucide-react";
 import type { EmployeeTask } from "@/lib/employee-tasks";
 import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { Countdown } from "@/components/employee/countdown";
-import { formatTimeIn } from "@/lib/time";
+import { DeadlineMeter } from "@/components/employee/deadline-meter";
+import { dayKeyIn, formatTimeIn } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const PRIORITY_STYLE = {
@@ -30,14 +31,19 @@ export function TaskCard({
   task,
   timezone,
   dueBy,
+  startsAt,
 }: {
   task: EmployeeTask;
   timezone: string;
   /** The stage deadline, explicit or worked out from the stage's period. */
   dueBy?: Date | null;
+  /** When the stage began, or is planned to — the start of its time bar. */
+  startsAt?: Date | null;
 }) {
   const due = formatTimeIn(timezone, task.dueAt);
   const done = task.state === "DONE";
+  // The stage's days, for its time bar: from when it began to when it is due.
+  const window = dueBy && startsAt ? { startKey: dayKeyIn(timezone, startsAt), endKey: dayKeyIn(timezone, dueBy) } : null;
 
   return (
     <Link
@@ -97,6 +103,10 @@ export function TaskCard({
               </span>
             )}
           </div>
+
+          {window && !done && (
+            <DeadlineMeter startKey={window.startKey} endKey={window.endKey} timeZone={timezone} />
+          )}
         </div>
 
         <ChevronRight size={18} className="mt-1 shrink-0 text-ink/25" />

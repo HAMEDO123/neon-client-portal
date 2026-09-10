@@ -22,6 +22,11 @@ export function LiveSync() {
     const source = new EventSource("/api/live");
 
     const refresh = () => {
+      // The chat has its own live connection that delivers each message as it
+      // arrives. Redrawing the whole page on top of that, for every message
+      // from anyone, was a second full render nobody needed.
+      if (window.location.pathname.endsWith("/chat")) return;
+
       if (document.visibilityState === "hidden") {
         stale.current = true;
         return;

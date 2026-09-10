@@ -64,7 +64,7 @@ function visibilityFilter(viewer: ChatViewer) {
   return viewer.type === "ADMIN" ? {} : { managerOnly: false };
 }
 
-const messageSelect = {
+export const messageSelect = {
   id: true,
   authorType: true,
   authorId: true,

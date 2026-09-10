@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/storage";
-import { getTeamChannel, recordChatRead, requireChatViewer, type ChatViewer } from "@/lib/chat";
+import { getTeamChannel, messageSelect, recordChatRead, requireChatViewer, type ChatViewer } from "@/lib/chat";
 import { askAssistant } from "@/lib/ai/assistant";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { chatCopy, chatKey, chatPreview, CHAT_PATH } from "@/lib/notifications/types";
@@ -73,6 +73,7 @@ export async function sendChatMessage(formData: FormData) {
   if (kind === "TEXT" && !body) return;
 
   const message = await prisma.chatMessage.create({
+    select: messageSelect,
     data: {
       channelId: channel.id,
       ...(await authorFields(viewer)),
@@ -89,12 +90,17 @@ export async function sendChatMessage(formData: FormData) {
 
   // Posting counts as having read everything before it.
   await recordChatRead(viewer);
-  refresh();
+  // No page redraw. Every open chat receives this over its live stream, and
+  // the sender's screen already shows it; redrawing the whole conversation on
+  // the server before replying is what made sending feel slow.
 
   // Everyone else on the team hears about it. Awaiting this would make the
   // sender wait on every device's push, so it runs on its own and a failure
   // never costs the message.
   void notifyTeamOfMessage(message.id, viewer, chatPreview(kind, body, durationSeconds, attachmentName));
+
+  // The sender's screen swaps its pending copy for this.
+  return message;
 }
 
 /**

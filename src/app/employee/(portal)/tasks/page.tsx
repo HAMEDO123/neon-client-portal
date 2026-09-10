@@ -94,6 +94,7 @@ export default async function EmployeeTasksPage({
                 task={item.task}
                 timezone={timezone}
                 dueBy={plan.get(item.task.id)?.dueBy}
+                startsAt={plan.get(item.task.id)?.startsAt}
               />
             ) : (
               <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />

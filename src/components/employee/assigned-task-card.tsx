@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarRange, ChevronRight, ClipboardList } from "lucide-react";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { Countdown } from "@/components/employee/countdown";
+import { DeadlineMeter } from "@/components/employee/deadline-meter";
 import { STATE_STYLE } from "@/components/employee/task-card";
 import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { daysBetween, dayLabel } from "@/lib/week";
@@ -73,6 +74,8 @@ export function AssignedTaskCard({ task, timezone }: { task: AssignedTaskView; t
             </span>
             {!done && <Countdown dueDay={task.endKey} timeZone={timezone} />}
           </div>
+
+          {!done && <DeadlineMeter startKey={task.startKey} endKey={task.endKey} timeZone={timezone} />}
         </div>
 
         <ChevronRight size={18} className="mt-1 shrink-0 text-ink/25" />

@@ -8,12 +8,13 @@ import { cn } from "@/lib/utils";
 // Five destinations, nothing else. Notifications are not among them: the bell
 // in the header already carries the unread count, so a tab for it would be a
 // second door to the same room.
+// Chat sits at the right-hand end, under the thumb.
 const TABS = [
   { href: "/employee", label: "Home", icon: Home, exact: true },
   { href: "/employee/tasks", label: "Tasks", icon: ListChecks, exact: false },
-  { href: "/employee/chat", label: "Chat", icon: MessagesSquare, exact: false },
   { href: "/employee/requests", label: "Requests", icon: ShoppingBag, exact: false },
   { href: "/employee/profile", label: "Profile", icon: User, exact: false },
+  { href: "/employee/chat", label: "Chat", icon: MessagesSquare, exact: false },
 ];
 
 export function EmployeeNav({ unreadChat = 0 }: { unreadChat?: number }) {
