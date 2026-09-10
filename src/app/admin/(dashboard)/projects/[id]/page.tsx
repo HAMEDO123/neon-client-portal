@@ -23,16 +23,23 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
           action={updateProjectOverview.bind(null, project.id)}
           className="glass mt-4 flex flex-col gap-4 rounded-2xl p-6"
         >
-          <div className="flex gap-4">
+          {/* Side by side where there is room; stacked on a phone, where the
+              file picker will not shrink below its own text. */}
+          <div className="flex flex-col gap-4 sm:flex-row">
             <div
               className="h-24 w-36 shrink-0 rounded-xl bg-cover bg-center bg-ink/5"
               style={project.coverImageUrl ? { backgroundImage: `url(${project.coverImageUrl})` } : undefined}
             />
-            <div className="flex flex-1 flex-col gap-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
               <label className="mb-1 block text-xs font-medium text-ink/50">
                 {project.coverImageUrl ? "Replace cover image" : "Upload cover image"}
               </label>
-              <input type="file" name="coverImage" accept="image/jpeg,image/png,image/webp,image/avif" className="text-xs" />
+              <input
+                type="file"
+                name="coverImage"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="w-full max-w-full text-xs"
+              />
               {project.coverImageUrl && (
                 <label className="mt-1 flex items-center gap-2 text-xs text-ink/50">
                   <input type="checkbox" name="removeCoverImage" className="h-3.5 w-3.5" />

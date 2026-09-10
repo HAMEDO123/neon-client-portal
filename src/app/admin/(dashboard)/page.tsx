@@ -26,19 +26,22 @@ export default async function AdminDashboardPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-ink">Dashboard</h1>
           <p className="mt-1 text-sm text-ink/50">An overview of every client project delivery.</p>
         </div>
-        <Link href="/admin/projects/new" className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-bg transition-opacity hover:opacity-90">
+        <Link
+          href="/admin/projects/new"
+          className="shrink-0 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-bg transition-opacity hover:opacity-90"
+        >
           + New Project
         </Link>
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:grid-cols-4 sm:gap-4">
         {cards.map((c) => (
-          <div key={c.label} className="glass rounded-2xl p-5">
+          <div key={c.label} className="glass rounded-2xl p-4 sm:p-5">
             <c.icon size={18} strokeWidth={1.75} className="text-ink/40" />
             <p className="mt-3 text-2xl font-semibold text-ink">{c.value}</p>
             <p className="mt-1 text-xs text-ink/50">{c.label}</p>
@@ -60,27 +63,33 @@ export default async function AdminDashboardPage() {
             <Link
               key={p.id}
               href={`/admin/projects/${p.id}`}
-              className="glass group flex items-center gap-4 rounded-2xl p-4 transition-transform hover:-translate-y-0.5"
+              className="glass group flex items-center gap-3 rounded-2xl p-3 transition-transform hover:-translate-y-0.5 sm:gap-4 sm:p-4"
             >
               <div
-                className="h-16 w-24 shrink-0 rounded-xl bg-cover bg-center bg-ink/5"
+                className="h-14 w-16 shrink-0 rounded-xl bg-cover bg-center bg-ink/5 sm:h-16 sm:w-24"
                 style={p.coverImageUrl ? { backgroundImage: `url(${p.coverImageUrl})` } : undefined}
               />
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate font-medium text-ink">{p.name}</p>
-                  <Badge tone={publishTone(p.publishState)}>{p.publishState}</Badge>
-                  <Badge tone="neutral">{PIPELINE_LABEL.get(p.pipelineStatus) ?? p.pipelineStatus}</Badge>
+                {/* Name and state side by side where there is room; on a
+                    phone the state goes under the name, so the name keeps
+                    the width. */}
+                <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+                  <p className="max-w-full truncate font-medium text-ink">{p.name}</p>
+                  <div className="flex flex-wrap gap-1.5 sm:shrink-0">
+                    <Badge tone={publishTone(p.publishState)}>{p.publishState}</Badge>
+                    <Badge tone="neutral">{PIPELINE_LABEL.get(p.pipelineStatus) ?? p.pipelineStatus}</Badge>
+                  </div>
                 </div>
                 <p className="mt-1 truncate text-sm text-ink/50">
                   {p.clientName} {p.location ? `· ${p.location}` : ""}
                 </p>
+                <p className="mt-0.5 text-xs text-ink/40 sm:hidden">Updated {formatDate(p.updatedAt)}</p>
               </div>
               <div className="hidden shrink-0 text-right text-xs text-ink/40 sm:block">
                 <p>{p._count.approvals} approvals</p>
                 <p className="mt-0.5">{p._count.comments} comments</p>
               </div>
-              <div className="shrink-0 text-xs text-ink/40">Updated {formatDate(p.updatedAt)}</div>
+              <div className="hidden shrink-0 text-xs text-ink/40 sm:block">Updated {formatDate(p.updatedAt)}</div>
               <ArrowRight size={16} className="shrink-0 text-ink/25 transition-transform group-hover:translate-x-1" />
             </Link>
           ))}

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Coins, Wallet } from "lucide-react";
 import { prisma } from "@/lib/db";
@@ -9,6 +10,7 @@ import { periodLabel, periodOf, previousPeriod, RECEIPT_CAP } from "@/lib/payrol
 import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 // The month's pay sheet: what each person earns, how late they were, what
 // they are owed back, and what that leaves. The arithmetic is in payroll.ts.
@@ -73,66 +75,118 @@ export default async function AdminPayrollPage({
       {rows.length === 0 ? (
         <EmptyState className="mt-4" icon={Wallet} title="No employees yet" description="Add the team first." />
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-ink/8">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-ink/[0.03] text-xs uppercase tracking-wider text-ink/40">
-              <tr>
-                <th className="px-4 py-3">Employee</th>
-                <th className="px-4 py-3">Salary</th>
-                <th className="px-4 py-3">Per hour</th>
-                <th className="px-4 py-3">Late</th>
-                <th className="px-4 py-3">Cutoff</th>
-                <th className="px-4 py-3">Adjustments</th>
-                <th className="px-4 py-3">Receipts</th>
-                <th className="px-4 py-3">Final pay</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ employee, breakdown, delayDays, receiptCount, adjustments }) => (
-                <tr key={employee.id} className="border-t border-ink/6">
-                  <td className="px-4 py-3">
+        <>
+          {/* On a phone, a card per person: the table needs eight columns. */}
+          <ul className="mt-4 flex flex-col gap-3 sm:hidden">
+            {rows.map(({ employee, breakdown, delayDays, receiptCount, adjustments }) => (
+              <li key={employee.id} className="glass rounded-2xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="font-medium text-ink">{employee.name}</p>
                     {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
-                  </td>
-                  <td className="px-4 py-3">
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[11px] text-ink/45">Final pay</p>
+                    <p className="text-lg font-semibold tabular-nums text-ink">{breakdown.finalPay.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                <dl className="mt-3 grid grid-cols-2 gap-x-4">
+                  <Line label="Salary">
                     {employee.salaryAmount == null ? (
                       <span className="text-xs text-amber-700">Not set</span>
                     ) : (
-                      <>
-                        <span className="text-ink/70">{breakdown.salary.toFixed(2)}</span>
-                        <Badge tone="neutral" className="ml-2">
-                          {breakdown.basis === "WEEKLY" ? "Weekly" : "Monthly"}
-                        </Badge>
-                      </>
+                      `${breakdown.salary.toFixed(2)} · ${breakdown.basis === "WEEKLY" ? "Weekly" : "Monthly"}`
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-ink/60">{breakdown.hourlyRate.toFixed(3)}</td>
-                  <td className="px-4 py-3 text-ink/60">
-                    {breakdown.delayHours.toFixed(2)} h
-                    {delayDays > 0 && <span className="ml-1 text-xs text-ink/35">({delayDays}d)</span>}
-                  </td>
-                  <td className="px-4 py-3 text-red-600">−{breakdown.cutoff.toFixed(2)}</td>
-                  <td className="px-4 py-3">
-                    {breakdown.adjustmentTotal === 0 ? (
-                      <span className="text-ink/30">—</span>
-                    ) : (
-                      // The reason travels with the number: a deduction on a
-                      // payslip that nobody can explain is a dispute waiting.
-                      <span className="text-red-600" title={adjustments.map((a) => a.reason).join(" · ")}>
-                        −{breakdown.adjustmentTotal.toFixed(2)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-emerald-700">
+                  </Line>
+                  <Line label="Per hour">{breakdown.hourlyRate.toFixed(3)}</Line>
+                  <Line label="Late">
+                    {breakdown.delayHours.toFixed(2)} h{delayDays > 0 && ` (${delayDays}d)`}
+                  </Line>
+                  <Line label="Cutoff" className="text-red-600">
+                    −{breakdown.cutoff.toFixed(2)}
+                  </Line>
+                  <Line
+                    label="Adjustments"
+                    className={breakdown.adjustmentTotal === 0 ? "text-ink/30" : "text-red-600"}
+                  >
+                    {breakdown.adjustmentTotal === 0 ? "—" : `−${breakdown.adjustmentTotal.toFixed(2)}`}
+                  </Line>
+                  <Line label="Receipts" className="text-emerald-700">
                     +{breakdown.receiptTotal.toFixed(2)}
-                    {receiptCount > 0 && <span className="ml-1 text-xs text-ink/35">({receiptCount})</span>}
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-ink">{breakdown.finalPay.toFixed(2)}</td>
+                    {receiptCount > 0 && ` (${receiptCount})`}
+                  </Line>
+                </dl>
+
+                {/* No hovering on a phone, so the reasons behind an adjustment are written out. */}
+                {adjustments.length > 0 && (
+                  <p className="mt-2 text-xs text-ink/50">{adjustments.map((a) => a.reason).join(" · ")}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-4 hidden overflow-x-auto rounded-2xl border border-ink/8 sm:block">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink/[0.03] text-xs uppercase tracking-wider text-ink/40">
+                <tr>
+                  <th className="px-4 py-3">Employee</th>
+                  <th className="px-4 py-3">Salary</th>
+                  <th className="px-4 py-3">Per hour</th>
+                  <th className="px-4 py-3">Late</th>
+                  <th className="px-4 py-3">Cutoff</th>
+                  <th className="px-4 py-3">Adjustments</th>
+                  <th className="px-4 py-3">Receipts</th>
+                  <th className="px-4 py-3">Final pay</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map(({ employee, breakdown, delayDays, receiptCount, adjustments }) => (
+                  <tr key={employee.id} className="border-t border-ink/6">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-ink">{employee.name}</p>
+                      {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {employee.salaryAmount == null ? (
+                        <span className="text-xs text-amber-700">Not set</span>
+                      ) : (
+                        <>
+                          <span className="text-ink/70">{breakdown.salary.toFixed(2)}</span>
+                          <Badge tone="neutral" className="ml-2">
+                            {breakdown.basis === "WEEKLY" ? "Weekly" : "Monthly"}
+                          </Badge>
+                        </>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-ink/60">{breakdown.hourlyRate.toFixed(3)}</td>
+                    <td className="px-4 py-3 text-ink/60">
+                      {breakdown.delayHours.toFixed(2)} h
+                      {delayDays > 0 && <span className="ml-1 text-xs text-ink/35">({delayDays}d)</span>}
+                    </td>
+                    <td className="px-4 py-3 text-red-600">−{breakdown.cutoff.toFixed(2)}</td>
+                    <td className="px-4 py-3">
+                      {breakdown.adjustmentTotal === 0 ? (
+                        <span className="text-ink/30">—</span>
+                      ) : (
+                        // The reason travels with the number: a deduction on a
+                        // payslip that nobody can explain is a dispute waiting.
+                        <span className="text-red-600" title={adjustments.map((a) => a.reason).join(" · ")}>
+                          −{breakdown.adjustmentTotal.toFixed(2)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-emerald-700">
+                      +{breakdown.receiptTotal.toFixed(2)}
+                      {receiptCount > 0 && <span className="ml-1 text-xs text-ink/35">({receiptCount})</span>}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-ink">{breakdown.finalPay.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* --- Setting pay -------------------------------------------------- */}
@@ -344,5 +398,14 @@ function PeriodLink({ period, label }: { period: string; label: string }) {
     >
       {label}
     </Link>
+  );
+}
+
+function Line({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 border-b border-ink/6 py-1.5">
+      <dt className="text-xs text-ink/45">{label}</dt>
+      <dd className={cn("text-sm tabular-nums", className ?? "text-ink/70")}>{children}</dd>
+    </div>
   );
 }

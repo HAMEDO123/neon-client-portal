@@ -61,65 +61,96 @@ export default async function AdminEmployeesPage() {
           description="Create the first account above — they can then sign in to the employee portal."
         />
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-ink/8">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-ink/[0.03] text-xs uppercase tracking-wider text-ink/40">
-              <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Account</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Work</th>
-                <th className="px-4 py-3">Last sign-in</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {employees.map((employee) => (
-                <tr key={employee.id} className="border-t border-ink/6">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-ink">{employee.name}</p>
-                    {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-ink/60">
-                    {employee.email ?? <span className="text-ink/30">Board only — no login</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    {employee.email ? (
-                      <Badge tone={employee.active ? "success" : "neutral"}>
-                        {employee.active ? "Active" : "Disabled"}
-                      </Badge>
-                    ) : (
-                      <Badge tone="warning">No account</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-ink/50">
-                    {employee._count.tasks} step{employee._count.tasks === 1 ? "" : "s"}
-                    {employee._count.subscriptions > 0 && (
-                      <span className="ml-2 inline-flex items-center gap-1 text-ink/40">
-                        <ShieldCheck size={11} strokeWidth={2} />
-                        {employee._count.subscriptions} device
-                        {employee._count.subscriptions === 1 ? "" : "s"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-ink/50">
-                    {employee.lastLoginAt ? formatDate(employee.lastLoginAt) : "Never"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/employees/${employee.id}`}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-ink/50 hover:text-ink"
-                    >
-                      Manage
-                      <ArrowRight size={13} strokeWidth={2} />
-                    </Link>
-                  </td>
+        <>
+          {/* On a phone, a card per person that opens them: the table needs six columns. */}
+          <ul className="mt-4 flex flex-col gap-2 sm:hidden">
+            {employees.map((employee) => (
+              <li key={employee.id}>
+                <Link
+                  href={`/admin/employees/${employee.id}`}
+                  className="glass flex items-center gap-3 rounded-2xl p-4"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-ink">{employee.name}</p>
+                      <AccountBadge email={employee.email} active={employee.active} />
+                    </div>
+                    {employee.role && <p className="mt-0.5 text-xs text-ink/45">{employee.role}</p>}
+                    <p className="mt-1 truncate text-xs text-ink/50">{employee.email ?? "Board only — no login"}</p>
+                    <p className="mt-0.5 text-xs text-ink/40">
+                      {employee._count.tasks} step{employee._count.tasks === 1 ? "" : "s"}
+                      {employee._count.subscriptions > 0 &&
+                        ` · ${employee._count.subscriptions} device${employee._count.subscriptions === 1 ? "" : "s"}`}
+                      {" · "}
+                      {employee.lastLoginAt ? `Signed in ${formatDate(employee.lastLoginAt)}` : "Never signed in"}
+                    </p>
+                  </div>
+                  <ArrowRight size={16} strokeWidth={2} className="shrink-0 text-ink/25" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-4 hidden overflow-x-auto rounded-2xl border border-ink/8 sm:block">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink/[0.03] text-xs uppercase tracking-wider text-ink/40">
+                <tr>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Account</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Work</th>
+                  <th className="px-4 py-3">Last sign-in</th>
+                  <th className="px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {employees.map((employee) => (
+                  <tr key={employee.id} className="border-t border-ink/6">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-ink">{employee.name}</p>
+                      {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-ink/60">
+                      {employee.email ?? <span className="text-ink/30">Board only — no login</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <AccountBadge email={employee.email} active={employee.active} />
+                    </td>
+                    <td className="px-4 py-3 text-xs text-ink/50">
+                      {employee._count.tasks} step{employee._count.tasks === 1 ? "" : "s"}
+                      {employee._count.subscriptions > 0 && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-ink/40">
+                          <ShieldCheck size={11} strokeWidth={2} />
+                          {employee._count.subscriptions} device
+                          {employee._count.subscriptions === 1 ? "" : "s"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-ink/50">
+                      {employee.lastLoginAt ? formatDate(employee.lastLoginAt) : "Never"}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/admin/employees/${employee.id}`}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-ink/50 hover:text-ink"
+                      >
+                        Manage
+                        <ArrowRight size={13} strokeWidth={2} />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
+}
+
+/** Whether they can sign in: someone on the board without an email has no account. */
+function AccountBadge({ email, active }: { email: string | null; active: boolean }) {
+  if (!email) return <Badge tone="warning">No account</Badge>;
+  return <Badge tone={active ? "success" : "neutral"}>{active ? "Active" : "Disabled"}</Badge>;
 }

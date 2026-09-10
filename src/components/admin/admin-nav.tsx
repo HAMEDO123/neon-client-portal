@@ -35,7 +35,7 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
   const isSettings = pathname.startsWith("/admin/settings");
 
   return (
-    <nav className="flex h-full flex-col gap-1 p-4">
+    <nav className="flex min-h-full flex-col gap-1 p-4">
       <Link href="/admin" className="mb-6 px-2">
         <span className="text-gradient-neon text-base font-bold">NEON</span>
         <span className="ml-1.5 text-sm font-medium text-ink/60">Admin</span>
