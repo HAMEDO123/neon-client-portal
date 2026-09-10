@@ -6,7 +6,8 @@ import { saveFile } from "@/lib/storage";
 import { getTeamChannel, recordChatRead, requireChatViewer, type ChatViewer } from "@/lib/chat";
 import { askAssistant } from "@/lib/ai/assistant";
 import { dispatchNotification } from "@/lib/notifications/engine";
-import { chatCopy, chatKey, CHAT_PATH } from "@/lib/notifications/types";
+import { chatCopy, chatKey, chatPreview, CHAT_PATH } from "@/lib/notifications/types";
+import { avatarUrl } from "@/lib/avatar";
 import type { ChatMessageKind } from "@/generated/prisma/enums";
 
 // Posting to the team conversation. Both portals call these; the author is
@@ -93,14 +94,20 @@ export async function sendChatMessage(formData: FormData) {
   // Everyone else on the team hears about it. Awaiting this would make the
   // sender wait on every device's push, so it runs on its own and a failure
   // never costs the message.
-  void notifyTeamOfMessage(message.id, viewer, previewOf(kind, body));
+  void notifyTeamOfMessage(message.id, viewer, chatPreview(kind, body, durationSeconds, attachmentName));
 }
 
-function previewOf(kind: ChatMessageKind, body: string) {
-  if (kind === "VOICE") return body || "🎤 Voice message";
-  if (kind === "IMAGE") return body || "📷 Photo";
-  if (kind === "FILE") return body || "📎 File";
-  return body;
+/**
+ * The sender's face, as far as a notification can carry one: their initials on
+ * their colour. Android and desktop draw it where WhatsApp puts a photo; an
+ * iPhone draws the app's own icon on every web notification and ignores it.
+ */
+async function senderIcon(sender: ChatViewer) {
+  if (sender.type === "EMPLOYEE" && sender.id) {
+    const row = await prisma.employee.findUnique({ where: { id: sender.id }, select: { color: true } });
+    return avatarUrl(sender.name, row?.color);
+  }
+  return avatarUrl(sender.name, "ink");
 }
 
 /** In-app and push, to every active employee except the sender. */
@@ -116,6 +123,7 @@ async function notifyTeamOfMessage(messageId: string, sender: ChatViewer, previe
     });
 
     const copy = chatCopy(sender.name, preview);
+    const icon = await senderIcon(sender);
 
     await Promise.all(
       recipients.map((recipient) =>
@@ -125,6 +133,7 @@ async function notifyTeamOfMessage(messageId: string, sender: ChatViewer, previe
           title: copy.title,
           message: copy.message,
           url: CHAT_PATH,
+          icon,
           // One notification per message per person, so a retry cannot double it.
           dedupeKey: chatKey(messageId, recipient.id),
         }).catch(() => undefined)

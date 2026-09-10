@@ -1,4 +1,4 @@
-import type { NotificationType, TaskPriority } from "@/generated/prisma/enums";
+import type { ChatMessageKind, NotificationType, TaskPriority } from "@/generated/prisma/enums";
 import type { Countdown } from "@/lib/stage-schedule";
 
 // Pure notification rules: which preference gates which type, what a
@@ -184,6 +184,8 @@ export type PushPayload = {
   url: string;
   tag: string;
   notificationId: string;
+  /** A picture for the notification — the sender, for a chat message. */
+  icon?: string;
 };
 
 export function pushPayload(input: {
@@ -192,6 +194,7 @@ export function pushPayload(input: {
   url: string;
   type: NotificationType;
   notificationId: string;
+  icon?: string;
 }): PushPayload {
   return {
     title: input.title,
@@ -201,6 +204,7 @@ export function pushPayload(input: {
     // rather than stacking duplicates.
     tag: `${input.type}:${input.notificationId}`,
     notificationId: input.notificationId,
+    ...(input.icon ? { icon: input.icon } : {}),
   };
 }
 
@@ -247,4 +251,29 @@ export function stageReminderCopy(taskName: string, projectName: string, countdo
 /** One reminder per task per day: chasing is daily, not hourly. */
 export function stageReminderKey(entryId: string, employeeId: string, dayKey: string) {
   return `STAGE_REMINDER:${entryId}:${employeeId}:${dayKey}`;
+}
+
+/**
+ * What a chat message says on a lock screen, in the shorthand WhatsApp uses:
+ * the text as written, or what was sent — a photo with its caption, a voice
+ * note with its length, a file by its name.
+ */
+export function chatPreview(
+  kind: ChatMessageKind,
+  body: string | null,
+  durationSeconds?: number | null,
+  fileName?: string | null
+) {
+  const text = body?.trim() ?? "";
+
+  if (kind === "VOICE") {
+    if (!durationSeconds || durationSeconds <= 0) return "🎤 Voice message";
+    const minutes = Math.floor(durationSeconds / 60);
+    const seconds = String(Math.round(durationSeconds % 60)).padStart(2, "0");
+    return `🎤 Voice message (${minutes}:${seconds})`;
+  }
+
+  if (kind === "IMAGE") return text ? `📷 ${text}` : "📷 Photo";
+  if (kind === "FILE") return `📄 ${fileName?.trim() || text || "File"}`;
+  return text;
 }

@@ -26,6 +26,8 @@ export type DispatchInput = {
   dedupeKey: string;
   entryId?: string | null;
   metadata?: Record<string, unknown>;
+  /** A picture for the notification where the device shows one — the sender, for a chat. */
+  icon?: string;
 };
 
 export type DispatchResult = {
@@ -113,6 +115,7 @@ async function deliverPush(
     url: input.url,
     type: input.type,
     notificationId,
+    icon: input.icon,
   });
 
   let pushed = 0;

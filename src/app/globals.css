@@ -164,15 +164,19 @@ h1, h2, h3, h4 {
    means nothing exists underneath the keyboard to scroll. */
 :root {
   --app-height: 100dvh;
+  --app-top: 0px;
   --keyboard-inset: 0px;
 }
 
+/* Glued to the visible window rather than the page: its top follows the
+   window when iOS slides it down over a focused field, and its height is the
+   window's height — so the bottom of the frame is always the top of the
+   keyboard, or the bottom of the screen, and never somewhere in between. */
 .employee-shell {
   position: fixed;
-  inset: 0;
-  height: var(--app-height);
-  /* Older iOS, before dvh and before the variable is set on first paint. */
-  height: -webkit-fill-available;
+  left: 0;
+  right: 0;
+  top: var(--app-top);
   height: var(--app-height);
 }
 
@@ -205,6 +209,13 @@ body:has(.employee-shell) {
    room mid-word. */
 body[data-keyboard="open"] .employee-tabbar {
   display: none;
+}
+
+/* On the keyboard, the text box sits flush on it the way a messaging app's
+   does. The gap it keeps otherwise is for the home indicator at the bottom of
+   the screen, which the keyboard is now covering. */
+body[data-keyboard="open"] .chat-composer {
+  padding-bottom: 0.5rem;
 }
 
 /* Scoped scrollbar hide for horizontal chip/tab rails. */

@@ -30,7 +30,8 @@ self.addEventListener("push", (event) => {
     // stacking duplicates on the lock screen.
     tag: payload.tag || "neon-task",
     renotify: true,
-    icon: "/admin-icon-192.png",
+    // The sender's picture for a chat message, where the device shows one.
+    icon: payload.icon || "/admin-icon-192.png",
     badge: "/admin-icon-192.png",
     data: {
       url: payload.url || "/employee",

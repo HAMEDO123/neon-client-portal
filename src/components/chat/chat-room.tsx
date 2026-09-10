@@ -106,6 +106,20 @@ export function ChatRoom({
     if (pinnedToBottom.current) bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
+  // When the keyboard comes up the list gets shorter from the bottom. Somebody
+  // who was reading the latest message should still be looking at it, just
+  // above the keyboard, the way a messaging app keeps the last bubble in view.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      if (pinnedToBottom.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const onScroll = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -432,7 +446,7 @@ function Composer({ projects }: { projects: { id: string; name: string }[] }) {
   }
 
   return (
-    <div className="border-t border-ink/10 bg-[#f0f2f5] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+    <div className="chat-composer border-t border-ink/10 bg-[#f0f2f5] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       {error && <p className="px-2 pb-1.5 text-xs text-red-600">{error}</p>}
 
       {showAttach && !recording && (
@@ -548,7 +562,7 @@ function Composer({ projects }: { projects: { id: string; name: string }[] }) {
                   if (text.trim()) send();
                 }
               }}
-              className="max-h-30 min-h-6 w-full resize-none bg-transparent py-1 text-[15px] outline-none"
+              className="max-h-30 min-h-6 w-full resize-none bg-transparent py-1 text-base outline-none"
             />
             <button
               type="button"
