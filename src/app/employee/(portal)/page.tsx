@@ -8,7 +8,7 @@ import { TaskCard } from "@/components/employee/task-card";
 import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
 import { PushPrompt } from "@/components/employee/push-prompt";
 import { TodaySummary } from "@/components/employee/today-summary";
-import { countStates } from "@/lib/progress";
+import { dayCounts } from "@/lib/daily-progress";
 import { planForTasks } from "@/lib/stage-deadlines";
 import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { getPublicKey } from "@/lib/notifications/push";
@@ -79,13 +79,9 @@ export default async function EmployeeDashboard({
     ...tomorrow.map((task) => ({ kind: "board" as const, task })),
   ].sort(byPriority);
 
-  // Today's scorecard counts finished work too, which the lists leave out.
-  const todayCounts = countStates([
-    ...today.map((task) => task.state),
-    ...assignedAll
-      .filter((task) => task.startKey <= todayDay && (task.state !== "DONE" || task.endKey >= todayDay))
-      .map((task) => task.state),
-  ]);
+  // Today's scorecard counts finished work too, which the lists leave out —
+  // through the same rule as the manager's analytics, so the two agree.
+  const todayCounts = dayCounts(today, assignedAll, todayDay);
 
   const openToday = todayItems.filter((item) => item.task.state !== "DONE").length;
   const firstName = employee.name.split(" ")[0];

@@ -3,13 +3,9 @@
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
-  Check,
   CalendarCheck,
-  CalendarClock,
-  Camera,
   ChevronLeft,
   ChevronRight,
-  Loader,
   Plus,
   RotateCcw,
   CalendarPlus,
@@ -28,6 +24,8 @@ import {
 import { NEXT_STATE, STATE_LABEL, dotTone, headerTone, columnTone } from "@/lib/task-board";
 import { TaskScheduleEditor, type CellDetails } from "@/components/admin/task-schedule-editor";
 import { ProjectTeamEditor, TeamDots } from "@/components/admin/project-team-editor";
+import { LiveDot } from "@/components/ui/live-dot";
+import { StateBadge } from "@/components/ui/state-badge";
 import type {
   TaskBoard as TaskBoardData,
   TaskBoardCell,
@@ -127,6 +125,7 @@ export function TaskBoard({
         ))}
         <span className="ml-auto hidden items-center gap-3 text-xs text-ink/40 md:flex">
           <Legend state="DONE" />
+          <Legend state="IN_PROGRESS" />
           <Legend state="SUBMITTED" />
           <Legend state="TOMORROW" />
           <Legend state="TODO" />
@@ -233,6 +232,9 @@ export function TaskBoard({
               const counted = row.cells.filter((cell) => !cell.excludedFromProgress && owned(cell));
               const done = counted.filter((cell) => cell.state === "DONE").length;
               const tomorrow = counted.filter((cell) => cell.state === "TOMORROW").length;
+              // Being worked on right now is a fact about the row whether or
+              // not the cell counts towards the score.
+              const working = row.cells.filter((cell) => owned(cell) && cell.state === "IN_PROGRESS").length;
 
               return (
                 <tr key={row.project.id} className="group/row">
@@ -314,7 +316,7 @@ export function TaskBoard({
                   {!empty && (
                     <td className="border-b border-l border-ink/8 px-1.5 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <ProgressPill done={done} total={counted.length} tomorrow={tomorrow} />
+                        <ProgressPill done={done} total={counted.length} tomorrow={tomorrow} working={working} />
                         <button
                           type="button"
                           onClick={() => {
@@ -371,34 +373,23 @@ function TaskCell({
   ownerName: string | null;
   onClick: () => void;
 }) {
+  // In progress is something happening now, so it says who is doing it.
+  const status = state === "IN_PROGRESS" ? `${ownerName ?? "Someone"} is working on this now` : STATE_LABEL[state];
+  const owner = state !== "IN_PROGRESS" && ownerName ? `, ${ownerName}` : "";
+
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${label} — ${STATE_LABEL[state]}${ownerName ? `, ${ownerName}` : ""}${excluded ? ", not counted" : ""}. Click to change.`}
-      title={`${label}\n${STATE_LABEL[state]}${excluded ? " · not counted towards progress" : ""} — click to change`}
+      aria-label={`${label} — ${status}${owner}${excluded ? ", not counted" : ""}. Click to change.`}
+      title={`${label}\n${status}${excluded ? " · not counted towards progress" : ""} — click to change`}
       className={cn(
         "flex h-11 w-full items-center justify-center transition-colors hover:bg-ink/[0.05]",
         // Still tickable, just visibly out of the count.
         excluded && "opacity-40"
       )}
     >
-      <span
-        className={cn(
-          "flex h-6 w-6 items-center justify-center rounded-md border transition-colors",
-          state === "DONE" && "border-emerald-500/30 bg-emerald-500/15 text-emerald-700",
-          state === "IN_PROGRESS" && "border-cyan/40 bg-cyan/15 text-cyan-strong",
-          // Waiting on the manager: it looks unlike anything they set themselves.
-          state === "SUBMITTED" && "border-purple/40 bg-purple/15 text-purple-strong",
-          state === "TOMORROW" && "border-amber-500/30 bg-amber-500/15 text-amber-700",
-          state === "TODO" && "border-ink/15 bg-white/70"
-        )}
-      >
-        {state === "DONE" && <Check size={14} strokeWidth={3} />}
-        {state === "IN_PROGRESS" && <Loader size={13} strokeWidth={2.5} />}
-        {state === "SUBMITTED" && <Camera size={13} strokeWidth={2.25} />}
-        {state === "TOMORROW" && <CalendarClock size={13} strokeWidth={2.25} />}
-      </span>
+      <StateBadge state={state} />
 
       {/* Whose cell this is, in their colour — small, because the department
           is the column and the person is a detail of this project. */}
@@ -481,7 +472,17 @@ function CellSchedule({
   );
 }
 
-function ProgressPill({ done, total, tomorrow }: { done: number; total: number; tomorrow: number }) {
+function ProgressPill({
+  done,
+  total,
+  tomorrow,
+  working,
+}: {
+  done: number;
+  total: number;
+  tomorrow: number;
+  working: number;
+}) {
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
   return (
     <span
@@ -495,6 +496,12 @@ function ProgressPill({ done, total, tomorrow }: { done: number; total: number; 
         <span className="block h-full rounded-full bg-emerald-500/70 transition-all" style={{ width: `${percent}%` }} />
       </span>
       {tomorrow > 0 && <span className="text-[10px] leading-none text-amber-700">{tomorrow} tomorrow</span>}
+      {working > 0 && (
+        <span className="inline-flex items-center gap-1 text-[10px] leading-none text-cyan-strong">
+          <LiveDot size="sm" />
+          {working} working
+        </span>
+      )}
     </span>
   );
 }
@@ -912,19 +919,7 @@ function FilterChip({
 function Legend({ state }: { state: TaskState }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span
-        className={cn(
-          "flex h-4 w-4 items-center justify-center rounded border",
-          state === "DONE" && "border-emerald-500/30 bg-emerald-500/15 text-emerald-700",
-          state === "SUBMITTED" && "border-purple/40 bg-purple/15 text-purple-strong",
-          state === "TOMORROW" && "border-amber-500/30 bg-amber-500/15 text-amber-700",
-          state === "TODO" && "border-ink/15 bg-white/70"
-        )}
-      >
-        {state === "DONE" && <Check size={10} strokeWidth={3} />}
-        {state === "SUBMITTED" && <Camera size={9} strokeWidth={2.5} />}
-        {state === "TOMORROW" && <CalendarClock size={9} strokeWidth={2.5} />}
-      </span>
+      <StateBadge state={state} size="legend" />
       {STATE_LABEL[state]}
     </span>
   );

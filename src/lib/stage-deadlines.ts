@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { planStages, type PeriodInput, type StageInput, type StagePlan } from "@/lib/stage-schedule";
 import type { TaskState } from "@/generated/prisma/enums";
+import { ownerOf } from "@/lib/ownership";
 
 // Turning the stage periods into real dates for real projects.
 //
@@ -133,18 +134,10 @@ export async function planForProjects(projectIds: string[]): Promise<ProjectPlan
   return plan;
 }
 
-/**
- * Who a cell belongs to, in the order the platform decides it: a person named
- * on the cell itself, then whoever holds that section of this project, then the
- * step's standing owner.
- */
-export function ownerOf(
-  assigneeId: string | null,
-  task: { employeeId: string | null },
-  sectionOwnerId: string | null | undefined
-) {
-  return assigneeId ?? sectionOwnerId ?? task.employeeId ?? null;
-}
+// Who a cell belongs to is decided in ownership.ts, which has no database in
+// it, so pure code can use the one rule too. Re-exported for the callers that
+// import it from here.
+export { ownerOf };
 
 /** The plan for one set of tasks the employee portal is already holding. */
 export async function planForTasks(tasks: { id: string; project: { id: string } }[]) {

@@ -28,7 +28,12 @@ export async function liveSignature(): Promise<string> {
       (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("updatedAt")) * 1000), 0)::bigint FROM "ExpenseReceipt"),
       (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("updatedAt")) * 1000), 0)::bigint FROM "Employee"),
       (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("createdAt")) * 1000), 0)::bigint FROM "ProcessTask"),
-      (SELECT COUNT(*) FROM "ProcessTask")
+      (SELECT COUNT(*) FROM "ProcessTask"),
+      -- The week table's jobs, and who holds which section of which project.
+      (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("updatedAt")) * 1000), 0)::bigint FROM "AssignedTask"),
+      (SELECT COUNT(*) FROM "AssignedTask"),
+      (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("updatedAt")) * 1000), 0)::bigint FROM "ProjectSectionAssignment"),
+      (SELECT COUNT(*) FROM "ProjectSectionAssignment")
     ) AS sig
   `;
 

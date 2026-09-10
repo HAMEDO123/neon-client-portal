@@ -18,7 +18,7 @@ import {
   updatedKey,
   type TaskSnapshot,
 } from "@/lib/notifications/types";
-import { assigneeOf, countTasksForDay } from "@/lib/employee-tasks";
+import { countTasksForDay, ownerOfEntry } from "@/lib/employee-tasks";
 import { planForProjects } from "@/lib/stage-deadlines";
 import { countdownOf } from "@/lib/stage-schedule";
 import { notifyAdmin } from "@/lib/admin-notifications";
@@ -30,7 +30,7 @@ import { dayKeyToDate, formatTimeIn, todayKey, tomorrowKey } from "@/lib/time";
 // preferences.
 
 const entryInclude = {
-  task: { select: { id: true, name: true, employeeId: true } },
+  task: { select: { id: true, name: true, employeeId: true, sectionId: true } },
   project: { select: { name: true } },
 } as const;
 
@@ -57,7 +57,7 @@ export async function notifyTaskAssigned(entryId: string, employeeId?: string | 
   const entry = await prisma.projectTaskEntry.findUnique({ where: { id: entryId }, include: entryInclude });
   if (!entry) return { created: false as const, skipped: "missing-task" as const };
 
-  const recipient = employeeId ?? assigneeOf(entry);
+  const recipient = employeeId ?? (await ownerOfEntry(entry));
   if (!recipient) return { created: false as const, skipped: "unassigned" as const };
 
   const copy = assignedCopy(entry.task.name, entry.project.name);
@@ -84,7 +84,7 @@ export async function notifyTaskUpdated(entryId: string, before: TaskSnapshot, a
   const entry = await prisma.projectTaskEntry.findUnique({ where: { id: entryId }, include: entryInclude });
   if (!entry) return { created: false as const, skipped: "missing-task" as const };
 
-  const recipient = assigneeOf(entry);
+  const recipient = await ownerOfEntry(entry);
   if (!recipient) return { created: false as const, skipped: "unassigned" as const };
 
   // Reassignment is an assignment for the new owner, not an "updated" notice.
@@ -163,7 +163,7 @@ export async function runDeadlineReminders(now = new Date()) {
   const results: { entryId: string; created: boolean; skipped?: string }[] = [];
 
   for (const entry of candidates) {
-    const recipient = assigneeOf(entry);
+    const recipient = await ownerOfEntry(entry);
     if (!recipient || !entry.dueAt) continue;
 
     const preferences = await getPreferences(recipient);

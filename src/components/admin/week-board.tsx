@@ -3,8 +3,6 @@
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import {
   CalendarPlus,
-  Camera,
-  Check,
   ChevronLeft,
   ChevronRight,
   GripVertical,
@@ -21,7 +19,8 @@ import {
 } from "@/lib/actions/assigned-task-actions";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { daysBetween, dayLabel, moveSpanTo, placeInWeek, stackRows, weekLabel } from "@/lib/week";
-import { dotTone } from "@/lib/task-board";
+import { STATE_LABEL, dotTone } from "@/lib/task-board";
+import { StateBadge } from "@/components/ui/state-badge";
 import { cn } from "@/lib/utils";
 
 // The week of work the manager hands out by hand.
@@ -259,8 +258,13 @@ export function WeekBoard({
       >
         <div className="min-w-[46rem]">
           {/* Header: the seven days. */}
-          <div className="grid grid-cols-[11.5rem_repeat(7,1fr)] border-b border-ink/8 bg-bg-soft">
-            <div className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-ink/40">Employee</div>
+          {/* The names stay put while the days scroll under them, as on the
+              board above; on a phone the name column is narrower so more
+              days fit beside it. */}
+          <div className="grid grid-cols-[8rem_repeat(7,1fr)] border-b border-ink/8 bg-bg-soft sm:grid-cols-[11.5rem_repeat(7,1fr)]">
+            <div className="sticky left-0 z-20 bg-bg-soft px-3 py-3 text-xs font-medium uppercase tracking-wider text-ink/40 sm:px-4">
+              Employee
+            </div>
             {weekKeys.map((key) => {
               const label = dayLabel(key);
               const isToday = key === todayKey;
@@ -297,9 +301,9 @@ export function WeekBoard({
                 <div
                   key={member.id}
                   data-employee-row={member.id}
-                  className="grid grid-cols-[11.5rem_repeat(7,1fr)] border-b border-ink/6 last:border-b-0"
+                  className="grid grid-cols-[8rem_repeat(7,1fr)] border-b border-ink/6 last:border-b-0 sm:grid-cols-[11.5rem_repeat(7,1fr)]"
                 >
-                  <div className="flex items-start gap-2 px-4 py-3">
+                  <div className="sticky left-0 z-10 flex items-start gap-2 bg-white px-3 py-3 sm:px-4">
                     <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", dotTone(member.color))} />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-ink">{member.name}</span>
@@ -346,10 +350,18 @@ export function WeekBoard({
                           key={item.id}
                           type="button"
                           onPointerDown={(event) => beginDrag(item, event)}
-                          title={item.note ?? `${item.title} — drag to another day or person`}
+                          title={
+                            item.state === "IN_PROGRESS"
+                              ? `${item.title} — ${member.name} is working on this now`
+                              : item.state === "SUBMITTED"
+                                ? `${item.title} — ${member.name} sent a photo, waiting for your review`
+                                : (item.note ?? `${item.title} — drag to another day or person`)
+                          }
                           className={cn(
                             "absolute flex touch-none items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-left text-[11px] font-medium",
                             PRIORITY_BAR[item.priority],
+                            // Being worked on right now, whatever its priority.
+                            item.state === "IN_PROGRESS" && "ring-1 ring-cyan-strong/60",
                             done && "opacity-55",
                             place.continuesBefore && "rounded-l-none",
                             place.continuesAfter && "rounded-r-none",
@@ -366,9 +378,12 @@ export function WeekBoard({
                           }}
                         >
                           <GripVertical size={11} strokeWidth={2} className="-ml-1 shrink-0 opacity-40" />
-                          {done && <Check size={11} strokeWidth={3} className="shrink-0" />}
-                          {item.state === "SUBMITTED" && (
-                            <Camera size={11} strokeWidth={2.25} className="shrink-0" aria-label="Waiting for your review" />
+                          {/* Where the job stands, in the board's own marks; one not started carries none. */}
+                          {item.state !== "TODO" && (
+                            <>
+                              <StateBadge state={item.state} size="bar" />
+                              <span className="sr-only">{STATE_LABEL[item.state]}: </span>
+                            </>
                           )}
                           <span className={cn("truncate", done && "line-through")}>{item.title}</span>
                         </button>

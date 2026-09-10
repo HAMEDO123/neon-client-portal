@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { prisma } from "@/lib/db";
 import { allTasks, ownedBy, taskForEmployee } from "@/lib/employee-tasks";
+import { getDailyProgress, getEmployeeProgress } from "@/lib/analytics-queries";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { notifyTaskAssigned, notifyTaskUpdated, runScheduleNotifier } from "@/lib/notifications/events";
 import { snapshotOf } from "@/lib/notifications/events";
 import { assignedKey } from "@/lib/notifications/types";
+import { periodOf } from "@/lib/payroll";
 import { getTimezone } from "@/lib/settings";
-import { dayKeyToDate, tomorrowKey } from "@/lib/time";
+import { dayKeyToDate, todayKey, tomorrowKey } from "@/lib/time";
 
 // Integration tests against a real database — these are the guarantees that
 // cannot be proven with pure functions: that one employee's id genuinely
@@ -38,6 +40,8 @@ async function cleanup() {
   await prisma.notificationDelivery.deleteMany({ where: { createdAt: { gte: startedAt } } });
   await prisma.projectTaskEntry.deleteMany({ where: { task: { name: { startsWith: PREFIX } } } });
   await prisma.processTask.deleteMany({ where: { name: { startsWith: PREFIX } } });
+  // Section holders go with their section.
+  await prisma.processSection.deleteMany({ where: { name: { startsWith: PREFIX } } });
   await prisma.pushSubscription.deleteMany({ where: { endpoint: { startsWith: `https://push.example/${PREFIX}` } } });
   await prisma.employee.deleteMany({ where: { name: { startsWith: PREFIX } } });
   await prisma.project.deleteMany({ where: { name: { startsWith: PREFIX } } });
@@ -55,8 +59,12 @@ before(async () => {
   await cleanup();
 
   const [a, b, d] = await Promise.all([
-    prisma.employee.create({ data: { name: `${PREFIX}Alice`, email: `${PREFIX}alice@test.local`, active: true } }),
-    prisma.employee.create({ data: { name: `${PREFIX}Bob`, email: `${PREFIX}bob@test.local`, active: true } }),
+    prisma.employee.create({
+      data: { name: `${PREFIX}Alice`, email: `${PREFIX}alice@test.local`, active: true, accessRole: "EMPLOYEE" },
+    }),
+    prisma.employee.create({
+      data: { name: `${PREFIX}Bob`, email: `${PREFIX}bob@test.local`, active: true, accessRole: "EMPLOYEE" },
+    }),
     prisma.employee.create({ data: { name: `${PREFIX}Dana`, email: `${PREFIX}dana@test.local`, active: false } }),
   ]);
   alice = a.id;
@@ -130,7 +138,7 @@ describe("employee data isolation", () => {
     if (!reachable) return t.skip("no database");
     // Belt and braces: the raw filter used everywhere must never match a row
     // owned by someone else.
-    const rows = await prisma.projectTaskEntry.findMany({ where: ownedBy(bob), select: { id: true } });
+    const rows = await prisma.projectTaskEntry.findMany({ where: await ownedBy(bob), select: { id: true } });
     assert.equal(rows.some((row) => row.id === aliceEntryId), false);
   });
 });
@@ -270,5 +278,60 @@ describe("multiple devices", () => {
     assert.equal(alices.length, 3);
     // ...and none of Bob's.
     assert.equal(alices.some((s) => s.endpoint.includes("bob")), false);
+  });
+});
+
+describe("a section held on a project", () => {
+  // Giving someone a section of one project — from the project's row on the
+  // board — hands them every step of it there. The portal, the monthly figure
+  // and the day all have to agree on who that is, or somebody is shown, and
+  // scored on, work that is not theirs.
+  it("belongs to the holder, not to the step's standing owner", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    const timezone = await getTimezone();
+    const today = todayKey(timezone);
+    const period = periodOf(today);
+    type Row = { employee: { id: string }; counts: { total: number } };
+    const total = (rows: Row[], id: string) => rows.find((row) => row.employee.id === id)?.counts.total ?? 0;
+
+    const section = await prisma.processSection.create({ data: { name: `${PREFIX}Section`, order: 900 } });
+    const step = await prisma.processTask.create({
+      data: { name: `${PREFIX}Held step`, employeeId: alice, sectionId: section.id, order: 902 },
+    });
+    const entry = await prisma.projectTaskEntry.create({
+      data: { projectId, taskId: step.id, scheduledFor: dayKeyToDate(today) },
+    });
+
+    // Alice owns the step, so until the section is handed out it is hers.
+    assert.ok(await taskForEmployee(alice, entry.id));
+    const monthBefore = await getEmployeeProgress(period);
+    const dayBefore = await getDailyProgress(today);
+
+    await prisma.projectSectionAssignment.create({
+      data: { projectId, sectionId: section.id, employeeId: bob },
+    });
+
+    // The portal.
+    assert.ok(await taskForEmployee(bob, entry.id), "Bob holds the section here, so the step is his");
+    assert.equal(await taskForEmployee(alice, entry.id), null, "Alice only owns the step elsewhere");
+    assert.ok((await allTasks(bob)).some((task) => task.id === entry.id));
+    assert.ok((await allTasks(alice)).every((task) => task.id !== entry.id));
+
+    // The monthly figure moves with it.
+    const monthAfter = await getEmployeeProgress(period);
+    assert.equal(total(monthAfter, bob) - total(monthBefore, bob), 1);
+    assert.equal(total(monthAfter, alice) - total(monthBefore, alice), -1);
+
+    // And so does the day.
+    const dayAfter = await getDailyProgress(today);
+    assert.equal(total(dayAfter, bob) - total(dayBefore, bob), 1);
+    assert.equal(total(dayAfter, alice) - total(dayBefore, alice), -1);
+
+    // The notification about it goes to the holder too.
+    const told = await notifyTaskAssigned(entry.id);
+    assert.equal(told.created, true);
+    const notification = await prisma.notification.findUnique({ where: { dedupeKey: assignedKey(entry.id, bob) } });
+    assert.equal(notification?.employeeId, bob);
   });
 });

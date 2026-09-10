@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/db";
 import { periodRange } from "@/lib/payroll";
 import { planForProjects } from "@/lib/stage-deadlines";
+import { dateToDayKey, dayKeyToDate } from "@/lib/time";
+import { daysEnding, groupDaily, type PersonDay } from "@/lib/daily-progress";
+import { holderKey } from "@/lib/ownership";
 import {
   isShortfall,
   progressOf,
@@ -10,10 +13,11 @@ import {
 
 // Counting a period's work per employee, in one query.
 //
-// A task belongs to whoever it is assigned to, and to the owner of its process
-// step when it is not assigned to anyone — the same rule the employee portal
-// enforces, expressed here as COALESCE so the grouping matches exactly what
-// each person sees in their own list.
+// A task belongs to whoever the board says it does (ownerOf in ownership.ts):
+// a person named on the cell, then whoever holds the step's section on that
+// project, then the step's standing owner — expressed here as a COALESCE over
+// those three, so the grouping matches exactly what each person sees in their
+// own list.
 //
 // A task counts towards a period if it was scheduled in it, due in it, or —
 // having neither date — created in it. That covers how the board is actually
@@ -64,7 +68,7 @@ export async function getEmployeeProgress(
   // Postgres proxy.
   const rows = await prisma.$queryRaw<CountRow[]>`
     SELECT
-      COALESCE(e."assigneeId", pt."employeeId") AS "employeeId",
+      COALESCE(e."assigneeId", psa."employeeId", pt."employeeId") AS "employeeId",
       COUNT(*) AS total,
       COUNT(*) FILTER (WHERE e."state" = 'DONE') AS completed,
       COUNT(*) FILTER (WHERE e."state" = 'SUBMITTED') AS awaiting_review,
@@ -79,7 +83,9 @@ export async function getEmployeeProgress(
       ) AS on_time
     FROM "ProjectTaskEntry" e
     JOIN "ProcessTask" pt ON pt."id" = e."taskId"
-    WHERE COALESCE(e."assigneeId", pt."employeeId") IS NOT NULL
+    LEFT JOIN "ProjectSectionAssignment" psa
+      ON psa."projectId" = e."projectId" AND psa."sectionId" = pt."sectionId"
+    WHERE COALESCE(e."assigneeId", psa."employeeId", pt."employeeId") IS NOT NULL
       AND e."excludedFromProgress" = false
       AND (
         (e."scheduledFor" >= ${start} AND e."scheduledFor" < ${end})
@@ -144,4 +150,87 @@ export async function getEmployeeProgress(
       deduction: deduction ? { amount: deduction.amount, reason: deduction.reason } : null,
     };
   });
+}
+
+export type DailyProgress = PersonDay & {
+  employee: { id: string; name: string; role: string | null; color: string; active: boolean };
+};
+
+/**
+ * Everyone's day: the chosen one, and the `days` running up to it for the
+ * strip. What counts is decided in daily-progress.ts, the same code the
+ * employee's own "Today's progress" uses.
+ */
+export async function getDailyProgress(dayKey: string, days = 7): Promise<DailyProgress[]> {
+  const keys = daysEnding(dayKey, days);
+  const first = dayKeyToDate(keys[0]);
+  const last = dayKeyToDate(keys[keys.length - 1]);
+
+  // One after the other, for the same reason as above.
+  const employees = await prisma.employee.findMany({
+    where: { accessRole: "EMPLOYEE" },
+    orderBy: [{ active: "desc" }, { order: "asc" }],
+    select: { id: true, name: true, role: true, color: true, active: true },
+  });
+
+  const holders = await prisma.projectSectionAssignment.findMany({
+    where: { employeeId: { not: null } },
+    select: { projectId: true, sectionId: true, employeeId: true },
+  });
+
+  // Steps scheduled inside the strip, and anything being worked on now,
+  // whatever day it is on.
+  const entries = await prisma.projectTaskEntry.findMany({
+    where: { OR: [{ scheduledFor: { gte: first, lte: last } }, { state: "IN_PROGRESS" }] },
+    select: {
+      id: true,
+      state: true,
+      scheduledFor: true,
+      excludedFromProgress: true,
+      assigneeId: true,
+      projectId: true,
+      project: { select: { name: true } },
+      task: { select: { name: true, employeeId: true, sectionId: true } },
+    },
+  });
+
+  // Jobs that can be on a list inside the strip — including late ones still
+  // open — and any being worked on now.
+  const jobs = await prisma.assignedTask.findMany({
+    where: {
+      OR: [
+        { state: "IN_PROGRESS" },
+        { startDay: { lte: last }, OR: [{ endDay: { gte: first } }, { NOT: { state: "DONE" } }] },
+      ],
+    },
+    select: { id: true, employeeId: true, title: true, startDay: true, endDay: true, state: true },
+  });
+
+  const byPerson = groupDaily({
+    employeeIds: employees.map((employee) => employee.id),
+    steps: entries.map((entry) => ({
+      id: entry.id,
+      state: entry.state,
+      dayKey: dateToDayKey(entry.scheduledFor),
+      excludedFromProgress: entry.excludedFromProgress,
+      assigneeId: entry.assigneeId,
+      projectId: entry.projectId,
+      projectName: entry.project.name,
+      stepName: entry.task.name,
+      stepOwnerId: entry.task.employeeId,
+      sectionId: entry.task.sectionId,
+    })),
+    jobs: jobs.map((job) => ({
+      id: job.id,
+      employeeId: job.employeeId,
+      title: job.title,
+      startKey: dateToDayKey(job.startDay)!,
+      endKey: dateToDayKey(job.endDay)!,
+      state: job.state,
+    })),
+    sectionHolders: new Map(holders.map((row) => [holderKey(row.projectId, row.sectionId), row.employeeId!])),
+    days: keys,
+  });
+
+  return employees.map((employee) => ({ employee, ...byPerson.get(employee.id)! }));
 }
