@@ -1,7 +1,8 @@
-import { Clock, NotebookPen, Send, Sparkles } from "lucide-react";
+import { CalendarClock, Clock, NotebookPen, Send, Sparkles } from "lucide-react";
 import { saveTimezone } from "@/lib/actions/whatsapp-actions";
-import { savePlanningNotes } from "@/lib/actions/settings-actions";
-import { getPlanningNotes, getTimezone } from "@/lib/settings";
+import { savePlanningNotes, saveWorkHours } from "@/lib/actions/settings-actions";
+import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
+import { capacityMinutes, spanMinutes } from "@/lib/work-hours";
 import { TextArea } from "@/components/admin/fields";
 import { isAiConfigured } from "@/lib/ai/client";
 import { isPushConfigured } from "@/lib/notifications/push";
@@ -34,6 +35,7 @@ const TIMEZONES = [
 export default async function AdminSettingsPage() {
   const timezone = await getTimezone();
   const planningNotes = await getPlanningNotes();
+  const workHours = await getWorkHours();
   const transport = activeTransport();
   const cloud = getCloudCredentials();
   const worker = getWorkerConfig();
@@ -81,6 +83,67 @@ export default async function AdminSettingsPage() {
           days: period.days,
         }))}
       />
+
+      {/* --- The working day ----------------------------------------------- */}
+      <section className="glass rounded-2xl p-6">
+        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+          <CalendarClock size={16} strokeWidth={2} />
+          The working day
+        </h2>
+        <p className="mt-1 text-sm text-ink/50">
+          Everything that plans a day or chases somebody reads these: what a day can hold, which days are worked,
+          and when nobody should be messaged. Changing them affects days not yet planned — nothing already recorded
+          is rewritten.
+        </p>
+
+        <form action={saveWorkHours} className="mt-4 flex flex-col gap-4">
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-ink/50">Working days</span>
+            <div className="flex flex-wrap gap-1.5">
+              {DAY_NAMES.map((label, day) => (
+                <label
+                  key={day}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-ink/12 bg-white/70 px-2.5 py-1.5 text-xs text-ink/70 has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-bg"
+                >
+                  <input
+                    type="checkbox"
+                    name="days"
+                    value={day}
+                    defaultChecked={workHours.days.includes(day)}
+                    className="h-3 w-3 accent-ink"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <Field label="Starts" name="start" type="time" value={workHours.start} />
+            <Field label="Ends" name="end" type="time" value={workHours.end} />
+            <Field label="Lunch at" name="lunchAt" type="time" value={workHours.lunchAt} />
+            <Field label="Lunch (min)" name="lunchMinutes" type="number" value={String(workHours.lunchMinutes)} />
+            <Field
+              label="Margin (min)"
+              name="bufferMinutes"
+              type="number"
+              value={String(workHours.bufferMinutes)}
+            />
+          </div>
+
+          {/* The number that matters, worked out rather than typed: it is what
+              a plan is allowed to fill. */}
+          <p className="text-xs text-ink/50">
+            A day is <span className="font-medium text-ink/70">{describeMinutes(spanMinutes(workHours))}</span> long,
+            so <span className="font-semibold text-ink">{capacityMinutes(workHours)} minutes</span> (
+            {describeMinutes(capacityMinutes(workHours))}) can be planned after lunch and the margin.
+          </p>
+
+          <div>
+            <SaveButton label="Save the working day" />
+          </div>
+        </form>
+      </section>
 
       {/* --- How a day is planned ------------------------------------------ */}
       <section className="glass rounded-2xl p-6">
@@ -247,6 +310,42 @@ WHATSAPP_LINE_ID      "main" for the company line (default)`}
         </dl>
       </section>
     </div>
+  );
+}
+
+// Sunday first, the way the week runs here and the way the week board counts.
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Minutes as a person would say them: "7h 30m". */
+function describeMinutes(total: number) {
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  if (hours === 0) return `${minutes}m`;
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
+
+function Field({
+  label,
+  name,
+  type,
+  value,
+}: {
+  label: string;
+  name: string;
+  type: "time" | "number";
+  value: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-ink/50">{label}</span>
+      <input
+        type={type}
+        name={name}
+        defaultValue={value}
+        min={type === "number" ? 0 : undefined}
+        className="w-full rounded-lg border border-ink/12 bg-white/70 px-3 py-2 text-sm tabular-nums outline-none focus:border-cyan-strong"
+      />
+    </label>
   );
 }
 
