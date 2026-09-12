@@ -12,6 +12,7 @@ import { taskUrl } from "@/lib/notifications/types";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
+import { verifySubmission } from "@/lib/ai/verify-submission";
 
 // Finishing a task is a claim, not a fact.
 //
@@ -91,6 +92,12 @@ export async function submitTaskCompletion(entryId: string, formData: FormData) 
     entryId: task.id,
     employeeId: employee.id,
   });
+
+  // Checked against what was asked, in the background: reading a photo takes
+  // long enough that waiting for it would leave the employee looking at a
+  // spinner, and a check that fails must never undo work already handed in.
+  // It writes only its own verdicts — never the task's state.
+  void verifySubmission(submission.id).catch(() => null);
 
   refresh({ entryId, assignedTaskId: null });
 }

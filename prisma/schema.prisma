@@ -980,11 +980,47 @@ model TaskSubmission {
   reviewNote String?          @db.Text
   reviewedAt DateTime?
 
+  // What the check made of it, and when it was checked. Separate from `status`
+  // on purpose: the check is an opinion with reasons behind it, while the
+  // status is what a person decided. A check never writes the status.
+  outcome   String?
+  checkedAt DateTime?
+  checks    SubmissionCheck[]
+
   createdAt DateTime @default(now())
 
   @@index([status, createdAt])
   @@index([entryId, createdAt])
   @@index([assignedTaskId, createdAt])
+}
+
+// One thing that was asked for, and what the evidence said about it.
+//
+// A submission is checked criterion by criterion rather than as a whole, so
+// what comes back to the employee is the specific thing to fix rather than
+// "the work is incomplete" — and so the manager can see what the check
+// actually looked at before trusting it.
+//
+// The verdict is a string, like the other small vocabularies in this schema:
+// its five values live in lib/verification.ts, where they are tested. The one
+// that matters most is `cannot-tell`, which says the evidence does not settle
+// the question — never that the work was not done.
+model SubmissionCheck {
+  id           String         @id @default(cuid())
+  submissionId String
+  submission   TaskSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  // What was asked, in the manager's own words, as it stood when the work was
+  // handed in. Kept here rather than read live: changing the criteria later
+  // must not silently change what somebody was judged against.
+  required String  @db.Text
+  evidence String? @db.Text
+  verdict  String
+  gap      String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([submissionId, createdAt])
 }
 
 // The manager's own notification feed.

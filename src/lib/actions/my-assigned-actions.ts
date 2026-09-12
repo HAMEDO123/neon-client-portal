@@ -8,6 +8,7 @@ import { notifyAdmin } from "@/lib/admin-notifications";
 import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
+import { verifySubmission } from "@/lib/ai/verify-submission";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // What an employee can do with a job the manager handed to them directly.
@@ -112,6 +113,10 @@ export async function submitAssignedTaskCompletion(id: string, formData: FormDat
     dedupeKey: `TASK_SUBMITTED:${submission.id}`,
     employeeId: employee.id,
   });
+
+  // The same check as a cell on the board, in the background, writing only its
+  // own verdicts.
+  void verifySubmission(submission.id).catch(() => null);
 
   refresh(id);
 }
