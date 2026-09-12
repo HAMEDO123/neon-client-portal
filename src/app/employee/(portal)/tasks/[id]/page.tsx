@@ -21,6 +21,8 @@ import { EMPLOYEE_STATE_LABEL, PRIORITY_LABEL } from "@/lib/task-board";
 import { effortLabel, readinessLabel, readinessOf, readinessReason } from "@/lib/task-readiness";
 import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
+import { FollowUpReply } from "@/components/employee/follow-up-reply";
+import { openFollowUpForTask } from "@/lib/follow-up-queue";
 import { submissionsForEntry } from "@/lib/submissions";
 import { planForTasks } from "@/lib/stage-deadlines";
 import { Countdown } from "@/components/employee/countdown";
@@ -37,6 +39,9 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
   const timezone = await getTimezone();
   const submissions = await submissionsForEntry(task.id);
   const dueBy = (await planForTasks([task])).get(task.id)?.dueBy ?? null;
+  // A question the day has already asked about this task and is still waiting
+  // on. Answering it is the first thing on the page, above everything else.
+  const asking = await openFollowUpForTask(employee.id, task.id);
   const due = formatTimeIn(timezone, task.dueAt);
   const dueDay = formatDayIn(timezone, task.dueAt);
   const scheduled = formatDayIn(timezone, task.scheduledFor);
@@ -167,6 +172,8 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
           )}
         </section>
       )}
+
+      {asking && <FollowUpReply followUpId={asking.id} kind={asking.kind} />}
 
       <section>
         <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">Update status</h2>

@@ -133,6 +133,21 @@ export async function recordAnswer(id: string, answer: string, note?: string | n
   });
 }
 
+/**
+ * The question this person still owes an answer to about one task.
+ *
+ * Only one that has actually been asked: a question whose time has not come is
+ * not something to put in front of somebody. The most recent, because a block
+ * that ran long may have collected both a middle and an end.
+ */
+export async function openFollowUpForTask(employeeId: string, entryId: string) {
+  return prisma.scheduledFollowUp.findFirst({
+    where: { employeeId, entryId, answeredAt: null, askedAt: { not: null } },
+    orderBy: { dueAt: "desc" },
+    select: { id: true, kind: true, dueAt: true },
+  });
+}
+
 /** Everything owed about one person's day, for a screen that shows it. */
 export async function followUpsForDay(employeeId: string, dayKey: string) {
   return prisma.scheduledFollowUp.findMany({

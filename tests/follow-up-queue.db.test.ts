@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { prisma } from "@/lib/db";
-import { dueFollowUps, markAsked, recordAnswer, scheduleFollowUps } from "@/lib/follow-up-queue";
+import {
+  dueFollowUps,
+  markAsked,
+  openFollowUpForTask,
+  recordAnswer,
+  scheduleFollowUps,
+} from "@/lib/follow-up-queue";
 import { runFollowUps } from "@/lib/notifications/follow-up-events";
 import { DEFAULT_WORK_HOURS } from "@/lib/work-hours";
 import { dayKeyToDate } from "@/lib/time";
@@ -155,6 +161,79 @@ describe("asking what has come due", () => {
 
     const left = (await dueFollowUps(new Date())).filter((row) => row.employeeId === employeeId);
     assert.equal(left.length, 0, "a skipped question is still marked asked");
+  });
+});
+
+describe("the question a task is still waiting on", () => {
+  it("offers the one that has been asked and not yet answered", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // Start from a known state rather than from whatever the tests before this
+    // one left open: earlier runs deliberately leave a skipped question asked.
+    await prisma.scheduledFollowUp.updateMany({
+      where: { employeeId, entryId },
+      data: { askedAt: null, answeredAt: null, answer: null },
+    });
+
+    // Reopen one, as the poller would have left it after sending.
+    const row = await prisma.scheduledFollowUp.findFirst({ where: { employeeId, kind: "block-middle" } });
+    assert.ok(row);
+    await prisma.scheduledFollowUp.update({ where: { id: row.id }, data: { askedAt: new Date() } });
+
+    const open = await openFollowUpForTask(employeeId, entryId);
+    assert.equal(open?.id, row.id);
+    assert.equal(open?.kind, "block-middle");
+  });
+
+  it("offers the most recent one when a block left two open", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // A block that ran long collects a middle and an end; the end is the one
+    // worth putting in front of somebody.
+    await prisma.scheduledFollowUp.updateMany({
+      where: { employeeId, entryId },
+      data: { askedAt: new Date(), answeredAt: null, answer: null },
+    });
+
+    const open = await openFollowUpForTask(employeeId, entryId);
+    const latest = await prisma.scheduledFollowUp.findFirst({
+      where: { employeeId, entryId },
+      orderBy: { dueAt: "desc" },
+      select: { id: true },
+    });
+
+    assert.equal(open?.id, latest?.id);
+  });
+
+  it("offers nothing once it has been answered", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    const row = await prisma.scheduledFollowUp.findFirst({
+      where: { employeeId, entryId, answeredAt: null, askedAt: { not: null } },
+    });
+    assert.ok(row);
+    await recordAnswer(row.id, "started");
+
+    const open = await openFollowUpForTask(employeeId, entryId);
+    assert.notEqual(open?.id, row.id);
+  });
+
+  it("offers nothing to somebody else", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    assert.equal(await openFollowUpForTask("somebody-else", entryId), null);
+  });
+
+  it("never offers a question whose time has not come", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // Unasked rows are not something to put in front of anybody.
+    await prisma.scheduledFollowUp.updateMany({
+      where: { employeeId, entryId },
+      data: { askedAt: null, answeredAt: null, answer: null },
+    });
+
+    assert.equal(await openFollowUpForTask(employeeId, entryId), null);
   });
 });
 
