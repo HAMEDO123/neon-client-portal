@@ -6,7 +6,10 @@ name: Daily task notifier
 # not mean editing this cron expression.
 on:
   schedule:
-    - cron: "5 * * * *"
+    # Every ten minutes: the day's follow-ups are timed to the plan, and a
+    # question due at 11:30 is worth little at 12:05. The daily jobs inside the
+    # endpoint still run once, because each is keyed to the day it is about.
+    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       job:

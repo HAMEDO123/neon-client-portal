@@ -9,7 +9,8 @@ import { getDayPlan, markDayPlanApplied, saveDayPlan } from "@/lib/day-plan-stor
 import { ownedBy } from "@/lib/employee-tasks";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { notifyTaskUpdated, snapshotOf } from "@/lib/notifications/events";
-import { getTimezone } from "@/lib/settings";
+import { getTimezone, getWorkHours } from "@/lib/settings";
+import { scheduleFollowUps } from "@/lib/follow-up-queue";
 import { dayKeyToDate, instantAt } from "@/lib/time";
 import type { PlannedBlock } from "@/lib/day-plan";
 
@@ -186,6 +187,24 @@ export async function applyDayPlan(
   // Saving clears the applied stamp, so it is set after the blocks are written.
   await saveDayPlan(employeeId, dayKey, next, stored.notes);
   await markDayPlanApplied(employeeId, dayKey);
+
+  // Putting a day on the board is also what puts the day's questions in the
+  // queue: when each block starts, how it is going, and what happened. Failing
+  // to queue them must not undo work that is already on the board, so this is
+  // the last thing and it cannot throw the action away.
+  await scheduleFollowUps({
+    employeeId,
+    dayKey,
+    hours: await getWorkHours(),
+    timezone,
+    blocks: next.map((block) => ({
+      from: block.from,
+      to: block.to,
+      keep: block.keep,
+      entryId: block.entryId,
+      jobId: block.jobId,
+    })),
+  }).catch(() => null);
 
   revalidatePath("/admin/employees", "layout");
   revalidatePath("/admin/tasks");

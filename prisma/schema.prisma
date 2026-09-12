@@ -448,6 +448,7 @@ model Employee {
   submissions     TaskSubmission[]
   receipts        ExpenseReceipt[]
   dayPlans        DayPlan[]
+  followUps       ScheduledFollowUp[]
   attendance      AttendanceRecord[]
   adminAlerts     AdminNotification[]        @relation("AdminNotificationSubject")
   adjustments     SalaryAdjustment[]
@@ -615,6 +616,56 @@ model DayPlan {
   updatedAt DateTime  @default(now()) @updatedAt
 
   @@unique([employeeId, day])
+}
+
+// A question the platform owes somebody about their planned day, and the
+// answer when it comes.
+//
+// Nothing here could ask anything at a particular moment before this table:
+// there was no queue, no scheduled work of any kind, and the only timed job ran
+// once an hour over deadlines. A row is written when a plan is put on a day,
+// and a poller sends whatever has come due.
+//
+// `dedupeKey` is what makes that poller safe to run as often as we like: it is
+// derived from the event (who, which day, which block, at what time), never
+// from the clock, so running twice asks once — and a block that moves earns a
+// new key, because it is a new question about a new time.
+model ScheduledFollowUp {
+  id String @id @default(cuid())
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // The day being asked about, in the company timezone.
+  day DateTime @db.Date
+
+  // Which question: day-start, block-start, block-middle, block-end, day-end.
+  kind String
+  // Which block of that day's plan, and what it points at on the board. All
+  // null for a question about the day as a whole.
+  blockIndex Int?
+  entryId    String?
+  jobId      String?
+
+  // The instant it becomes askable, already moved out of lunch and out of the
+  // evening by lib/follow-ups.ts before it was written.
+  dueAt  DateTime
+  askedAt DateTime?
+
+  // What the employee said, and when. Nothing assumes an unanswered question
+  // means the work did not happen.
+  answeredAt DateTime?
+  answer     String?
+  answerNote String?   @db.Text
+
+  dedupeKey String @unique
+  attempts  Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([dueAt, askedAt])
+  @@index([employeeId, day])
 }
 
 // One notification for one employee. Everything an employee is told goes

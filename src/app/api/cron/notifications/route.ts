@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runDeadlineReminders, runScheduleNotifier, runStageReminders } from "@/lib/notifications/events";
+import { runFollowUps } from "@/lib/notifications/follow-up-events";
 import { getTimezone } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
 
@@ -53,6 +54,13 @@ async function handle(request: Request) {
   // run rather than at a fixed hour.
   if (forced === "deadlines" || !forced) {
     ran.deadlines = await runDeadlineReminders();
+  }
+
+  // The day's own follow-ups are the reason this endpoint is now called every
+  // few minutes rather than hourly: a question due at 11:30 is worth little at
+  // 12:05. Every one carries its own dedupe key, so overlapping runs ask once.
+  if (forced === "followups" || !forced) {
+    ran.followUps = await runFollowUps();
   }
 
   // Chasing against the stage periods is a daily conversation, not an hourly
