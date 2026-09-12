@@ -121,7 +121,7 @@ export function getStagePeriods() {
 // process. Entries are sparse — a cell the team has never touched has no row,
 // so the board fills the gaps with TODO rather than pre-creating the matrix.
 export async function getTaskBoard() {
-  const [projects, employees, tasks, sectionRows, sectionTeam, entries] = await Promise.all([
+  const [projects, employees, tasks, sectionRows, sectionTeam, entries, dependencies] = await Promise.all([
     prisma.project.findMany({
       where: { publishState: { not: "ARCHIVED" } },
       orderBy: [{ pipelineStatus: "asc" }, { updatedAt: "desc" }],
@@ -155,6 +155,9 @@ export async function getTaskBoard() {
         excludedFromProgress: true,
       },
     }),
+    // Which cell waits for which. Few rows, and the board needs them all to
+    // show a cell's list in the editor.
+    prisma.taskDependency.findMany({ select: { entryId: true, dependsOnEntryId: true } }),
   ]);
 
   // The columns are the process itself, grouped into its sections — Site &
@@ -200,11 +203,27 @@ export async function getTaskBoard() {
 
   const entryByCell = new Map(entries.map((e) => [`${e.projectId}:${e.taskId}`, e]));
 
+  // The editor thinks in steps, not in row ids: a cell may have no row yet, so
+  // its dependencies are shown and saved as the steps they point at.
+  const entryById = new Map(entries.map((e) => [e.id, e]));
+  const waitsByEntry = new Map<string, string[]>();
+  for (const edge of dependencies) {
+    const target = entryById.get(edge.dependsOnEntryId);
+    if (!target) continue;
+    const list = waitsByEntry.get(edge.entryId) ?? [];
+    list.push(target.taskId);
+    waitsByEntry.set(edge.entryId, list);
+  }
+
   const rows = projects.map((project) => {
     const cells = steps.map((step) => {
       const entry = entryByCell.get(`${project.id}:${step.id}`);
       return {
         taskId: step.id,
+        // Null until somebody touches the cell; dependencies point at rows, so
+        // saving one creates the row first.
+        entryId: entry?.id ?? null,
+        waitsForTaskIds: entry ? (waitsByEntry.get(entry.id) ?? []) : [],
         state: entry?.state ?? ("TODO" as TaskState),
         // Scheduling detail the admin set on this cell. Absent until someone
         // schedules it — the matrix stays sparse.

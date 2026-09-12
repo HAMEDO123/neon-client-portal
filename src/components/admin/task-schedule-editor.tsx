@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, EyeOff, OctagonAlert, PackageCheck, StickyNote, X } from "lucide-react";
+import { CalendarClock, EyeOff, Link2, OctagonAlert, PackageCheck, StickyNote, X } from "lucide-react";
 import { updateTaskEntryDetails } from "@/lib/actions/task-detail-actions";
 import { PRIORITY_LABEL } from "@/lib/task-board";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,8 @@ export function TaskScheduleEditor({
   details,
   owners,
   defaultOwnerId,
+  candidates,
+  dependsOnTaskIds,
   todayKey,
   tomorrowKey,
   onClose,
@@ -46,6 +48,10 @@ export function TaskScheduleEditor({
   details: CellDetails;
   owners: { id: string; name: string }[];
   defaultOwnerId: string | null;
+  /** The other steps of the process, to wait for one of them. */
+  candidates: { id: string; name: string }[];
+  /** Which of them this cell waits for today. */
+  dependsOnTaskIds: string[];
   todayKey: string;
   tomorrowKey: string;
   onClose: () => void;
@@ -55,6 +61,7 @@ export function TaskScheduleEditor({
   const [scheduled, setScheduled] = useState(details.scheduledFor ?? "");
   const [excluded, setExcluded] = useState(details.excludedFromProgress);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // The stored deadline is an instant; the input wants local wall-clock time.
   const dueTime = details.dueAt
@@ -88,6 +95,10 @@ export function TaskScheduleEditor({
         try {
           await updateTaskEntryDetails(projectId, taskId, formData);
           onClose();
+        } catch (cause) {
+          // A refused loop is the expected failure here, and it has to say so
+          // rather than closing as though it saved.
+          setError(cause instanceof Error ? cause.message : "That did not save.");
         } finally {
           setPending(false);
         }
@@ -265,6 +276,40 @@ export function TaskScheduleEditor({
           ))}
         </select>
       </label>
+
+      {/* What has to finish first. Sent whole, so unticking the last one
+          clears the list; the marker says the list was offered at all. */}
+      {candidates.length > 0 && (
+        <div>
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink/40">
+            <Link2 size={11} strokeWidth={2} />
+            Waits for
+          </span>
+          <input type="hidden" name="dependsOnPresent" value="1" />
+          <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-ink/12 bg-white p-1">
+            {candidates.map((candidate) => (
+              <label
+                key={candidate.id}
+                className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-ink/[0.04]"
+              >
+                <input
+                  type="checkbox"
+                  name="dependsOn"
+                  value={candidate.id}
+                  defaultChecked={dependsOnTaskIds.includes(candidate.id)}
+                  className="h-3.5 w-3.5 shrink-0 accent-ink"
+                />
+                <span className="min-w-0 truncate text-xs text-ink/70">{candidate.name}</span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-[10px] leading-tight text-ink/35">
+            This step stays &ldquo;waiting&rdquo; on the employee&apos;s task until those are done.
+          </p>
+        </div>
+      )}
+
+      {error && <p className="text-xs font-medium text-pink-strong">{error}</p>}
 
       <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-ink/10 bg-white/60 px-2 py-1.5">
         <input

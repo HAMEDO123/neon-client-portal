@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { notifyTaskAssigned, notifyTaskUpdated, snapshotOf } from "@/lib/notifications/events";
+import { acceptableDependencies } from "@/lib/task-graph";
 import { dayKeyToDate } from "@/lib/time";
 import { getTimezone } from "@/lib/settings";
 import type { TaskPriority } from "@/generated/prisma/enums";
@@ -112,6 +113,11 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
     include: detailInclude,
   });
 
+  // The editor sends the whole list, so a cell with nothing ticked clears it.
+  if (formData.get("dependsOnPresent") === "1") {
+    await replaceDependencies(projectId, entry.id, formData.getAll("dependsOn").map(String).filter(Boolean));
+  }
+
   const after = snapshotOf(entry);
 
   // A cell that had no row yet is new work for whoever owns it; an existing
@@ -125,6 +131,41 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
   revalidatePath("/admin/tasks");
   revalidatePath("/admin/analytics");
   revalidatePath("/employee", "layout");
+}
+
+/**
+ * Sets what one cell waits for, as steps of the same project.
+ *
+ * A cell being waited for may have no row yet — the board is sparse — so each
+ * one is created before an edge can point at it. A list that would leave two
+ * tasks waiting on each other is refused whole rather than half-saved: the
+ * manager gets told, and nothing moves.
+ */
+async function replaceDependencies(projectId: string, entryId: string, dependsOnTaskIds: string[]) {
+  const targetIds: string[] = [];
+  for (const taskId of dependsOnTaskIds) {
+    const target = await prisma.projectTaskEntry.upsert({
+      where: { projectId_taskId: { projectId, taskId } },
+      create: { projectId, taskId },
+      update: {},
+      select: { id: true },
+    });
+    if (target.id !== entryId) targetIds.push(target.id);
+  }
+
+  const edges = await prisma.taskDependency.findMany({ select: { entryId: true, dependsOnEntryId: true } });
+  const { accepted, refused } = acceptableDependencies(edges, entryId, targetIds);
+
+  if (refused.length > 0) {
+    throw new Error("That would leave two tasks waiting on each other. Nothing was saved.");
+  }
+
+  await prisma.taskDependency.deleteMany({ where: { entryId } });
+  if (accepted.length > 0) {
+    await prisma.taskDependency.createMany({
+      data: accepted.map((dependsOnEntryId) => ({ entryId, dependsOnEntryId })),
+    });
+  }
 }
 
 /**

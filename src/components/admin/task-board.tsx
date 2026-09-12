@@ -309,6 +309,10 @@ export function TaskBoard({
                             }}
                             owners={board.team}
                             defaultOwnerId={step.defaultOwnerId}
+                            // Any other step of the process can come first;
+                            // which ones do is decided per project.
+                            candidates={board.steps.filter((other) => other.id !== step.id)}
+                            dependsOnTaskIds={cell.waitsForTaskIds}
                             todayKey={todayKey}
                             tomorrowKey={tomorrowKey}
                             onSaved={(details) =>
@@ -448,6 +452,8 @@ function CellSchedule({
   details,
   owners,
   defaultOwnerId,
+  candidates,
+  dependsOnTaskIds,
   todayKey,
   tomorrowKey,
   onSaved,
@@ -459,6 +465,8 @@ function CellSchedule({
   details: CellDetails;
   owners: { id: string; name: string }[];
   defaultOwnerId: string | null;
+  candidates: { id: string; name: string }[];
+  dependsOnTaskIds: string[];
   todayKey: string;
   tomorrowKey: string;
   onSaved: (details: CellDetails) => void;
@@ -496,6 +504,8 @@ function CellSchedule({
           details={details}
           owners={owners}
           defaultOwnerId={defaultOwnerId}
+          candidates={candidates}
+          dependsOnTaskIds={dependsOnTaskIds}
           todayKey={todayKey}
           tomorrowKey={tomorrowKey}
           onClose={() => setOpen(false)}
