@@ -89,6 +89,19 @@ export function TaskBoard({
   // Before anyone has been added the board is just a project list.
   const empty = board.steps.length === 0;
 
+  // The whole board in one line, under it: the same count each row shows,
+  // added up, and narrowed to one person while the board is filtered.
+  const totals = useMemo(() => {
+    const counted = rows.flatMap((row) => row.cells).filter((cell) => !cell.excludedFromProgress && owned(cell));
+    const finished = counted.filter((cell) => cell.state === "DONE").length;
+    return {
+      projects: rows.length,
+      done: finished,
+      total: counted.length,
+      percent: counted.length === 0 ? 0 : Math.round((finished / counted.length) * 100),
+    };
+  }, [rows, owned]);
+
   function run(action: () => Promise<unknown>) {
     startTransition(async () => {
       await action();
@@ -136,11 +149,15 @@ export function TaskBoard({
 
       <div
         className={cn(
-          "overflow-x-auto rounded-2xl border border-ink/8 bg-white/50 transition-opacity",
+          "overflow-x-auto rounded-xl border border-ink/8 bg-white transition-opacity",
           pending && "opacity-95"
         )}
       >
-        <table className="w-full min-w-[52rem] table-fixed border-separate border-spacing-0 text-left text-sm">
+        {/* w-max, not w-full: with more columns than the window is wide, a
+            full-width fixed table squeezes every column to a few characters
+            and breaks the headings mid-word. Let it take the width its columns
+            ask for and scroll sideways instead. */}
+        <table className="w-max min-w-full table-fixed border-separate border-spacing-0 text-left text-sm">
           <thead>
             {/* Sections on top, their steps beneath — the shape of the process,
                 never a list of people. Who takes a section is decided per
@@ -186,7 +203,7 @@ export function TaskBoard({
                   <th
                     key={step.id}
                     className={cn(
-                      "relative border-b border-l border-ink/8 p-0 align-bottom",
+                      "relative w-24 border-b border-l border-ink/8 p-0 align-bottom",
                       section.real ? columnTone(section.color) : "bg-bg-soft/60"
                     )}
                   >
@@ -342,20 +359,35 @@ export function TaskBoard({
         </table>
       </div>
 
-      <p className="text-xs text-ink/40">
-        {empty ? (
-          <>
-            Add the steps every project passes through, then group them into sections in Settings — site &amp;
-            procurement, 3D visualization, technical drawings.
-          </>
-        ) : (
-          <>
-            Click a box to cycle it: to do → done → tomorrow. Click a{" "}
-            <span className="font-medium text-ink/60">project name</span> to say who takes which section on it — the
-            answer can differ from project to project.
-          </>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+        <p className="min-w-0 flex-1 text-xs text-ink/40">
+          {empty ? (
+            <>
+              Add the steps every project passes through, then group them into sections in Settings — site &amp;
+              procurement, 3D visualization, technical drawings.
+            </>
+          ) : (
+            <>
+              Click a box to cycle it: to do → done → tomorrow. Click a{" "}
+              <span className="font-medium text-ink/60">project name</span> to say who takes which section on it — the
+              answer can differ from project to project.
+            </>
+          )}
+        </p>
+
+        {!empty && (
+          <p className="shrink-0 text-xs text-ink/45">
+            <span className="font-medium text-ink/70">{totals.projects}</span> projects
+            <span className="mx-2 text-ink/20">|</span>
+            <span className="font-medium text-ink/70">
+              {totals.done}/{totals.total}
+            </span>{" "}
+            steps done
+            <span className="mx-2 text-ink/20">|</span>
+            <span className="font-semibold text-emerald-700">{totals.percent}%</span> overall
+          </p>
         )}
-      </p>
+      </div>
     </div>
   );
 }
@@ -585,8 +617,13 @@ function StepHeader({
         }
       }}
       trigger={
-        <span className="flex items-end justify-center py-2">
-          <span className="board-step-label text-[11px] font-medium tracking-tight text-ink/65" title={step.name}>
+        // Written along the row like any other heading: sideways text was
+        // compact and unreadable, and the column is wide enough now.
+        <span className="flex min-h-14 items-end justify-center px-1.5 py-2">
+          <span
+            className="line-clamp-3 w-full break-words text-center text-[11px] font-semibold leading-tight tracking-tight text-ink/70"
+            title={step.name}
+          >
             {step.name}
           </span>
         </span>

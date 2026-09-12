@@ -329,13 +329,5 @@ body:has(.admin-shell) {
    run in instead of the column's width, so every name reads in full, in one
    piece, and the columns can stay narrow enough that the whole board fits
    without scrolling sideways. */
-.board-step-label {
-  writing-mode: vertical-rl;
-  /* vertical-rl reads top-to-bottom on its right edge; rotating puts the text
-     the way a person tilts their head to read a spine. */
-  transform: rotate(180deg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  height: 8.5rem;
-}
+/* The board's column headings used to be written sideways to save width. They
+   are written along the row now, in a column wide enough to read them. */

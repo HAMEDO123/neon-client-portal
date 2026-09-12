@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { Bell, ChevronRight, Home, Menu, X } from "lucide-react";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { LiveSync } from "@/components/live-sync";
 import { SoundCues } from "@/components/sound-cues";
@@ -15,6 +16,26 @@ import { cn } from "@/lib/utils";
 // sideload wrapper, or just Safari) a fixed 256px sidebar eats most of the
 // screen and crushes the content next to it. Below lg, swap it for a top bar
 // + slide-in drawer instead.
+
+/** What the breadcrumb calls each section — the sidebar's own words. */
+const PAGE_NAMES: Record<string, string> = {
+  tasks: "Tasks",
+  reviews: "Reviews",
+  analytics: "Analytics",
+  alerts: "Activity",
+  chat: "Chat",
+  employees: "Employees",
+  requests: "Requests",
+  payroll: "Payroll",
+  settings: "Settings",
+  projects: "Projects",
+};
+
+function pageName(pathname: string) {
+  const section = pathname.split("/")[2];
+  if (!section) return "Dashboard";
+  return PAGE_NAMES[section] ?? "Projects";
+}
 export function AdminShell({
   children,
   badges,
@@ -75,6 +96,46 @@ export function AdminShell({
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-pink ring-2 ring-white" aria-hidden />
             )}
           </button>
+        </div>
+
+        {/* The desktop bar: where you are, what is waiting, and the account you
+            are signed in as. The phone keeps its own compact bar above. */}
+        <div className="hidden items-center gap-4 border-b border-ink/8 bg-white/60 px-8 py-3 lg:flex">
+          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm text-ink/45">
+            <Link href="/admin" aria-label="Dashboard" className="rounded-md p-1 transition-colors hover:bg-ink/5 hover:text-ink">
+              <Home size={15} strokeWidth={1.75} />
+            </Link>
+            <ChevronRight size={13} strokeWidth={2} className="text-ink/25" />
+            <span>Workspace</span>
+            <ChevronRight size={13} strokeWidth={2} className="text-ink/25" />
+            <span className="truncate font-medium text-ink">{pageName(pathname)}</span>
+          </nav>
+
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Link
+              href="/admin/alerts"
+              aria-label={(badges?.alerts ?? 0) > 0 ? `Activity, ${badges?.alerts} waiting` : "Activity"}
+              className="relative rounded-lg p-2 text-ink/50 transition-colors hover:bg-ink/5 hover:text-ink"
+            >
+              <Bell size={18} strokeWidth={1.75} />
+              {(badges?.alerts ?? 0) > 0 && (
+                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-pink ring-2 ring-white" aria-hidden />
+              )}
+            </Link>
+
+            <Link
+              href="/admin/settings"
+              className="flex items-center gap-2.5 rounded-full border border-ink/10 bg-white/70 py-1 pl-1 pr-3 transition-colors hover:bg-white"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-xs font-semibold text-bg">
+                N
+              </span>
+              <span className="text-left leading-tight">
+                <span className="block text-xs font-semibold text-ink">NEON</span>
+                <span className="block text-[11px] text-ink/45">Admin</span>
+              </span>
+            </Link>
+          </div>
         </div>
 
         <main

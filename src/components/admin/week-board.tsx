@@ -303,8 +303,16 @@ export function WeekBoard({
                   data-employee-row={member.id}
                   className="grid grid-cols-[8rem_repeat(7,1fr)] border-b border-ink/6 last:border-b-0 sm:grid-cols-[11.5rem_repeat(7,1fr)]"
                 >
-                  <div className="sticky left-0 z-10 flex items-start gap-2 bg-white px-3 py-3 sm:px-4">
-                    <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", dotTone(member.color))} />
+                  <div className="sticky left-0 z-10 flex items-center gap-2.5 bg-white px-3 py-3 sm:px-4">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white",
+                        dotTone(member.color)
+                      )}
+                    >
+                      {initials(member.name)}
+                    </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-ink">{member.name}</span>
                       {member.role && <span className="block truncate text-xs text-ink/40">{member.role}</span>}
@@ -589,6 +597,13 @@ function TaskDialog({
       </form>
     </div>
   );
+}
+
+/** One or two letters standing in for a name, for the row's face. */
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  const letters = (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
+  return letters.toUpperCase() || "?";
 }
 
 /** Day arithmetic on a key, without dragging the timezone helpers in here. */

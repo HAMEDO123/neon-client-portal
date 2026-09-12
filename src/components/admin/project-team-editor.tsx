@@ -136,23 +136,43 @@ export function TeamDots({ cells, team }: { cells: TaskBoardCell[]; team: TaskBo
   const people = [...owners.values()];
   if (people.length === 0) return null;
 
+  // Faces rather than a list of names: at a glance the row says how many
+  // people are on it and who, without spending the width on words.
+  const shown = people.slice(0, 3);
+
   return (
-    <span className="mt-1 flex items-center gap-1">
-      {people.slice(0, 4).map((member) => (
+    <span className="mt-1.5 flex items-center -space-x-1.5">
+      {shown.map((member) => (
         <span
           key={member.id}
           title={member.name}
-          className={cn("h-1.5 w-1.5 rounded-full", dotTone(member.color))}
-          aria-hidden
-        />
+          className={cn(
+            "flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-2 ring-white",
+            dotTone(member.color)
+          )}
+        >
+          {initials(member.name)}
+        </span>
       ))}
-      <span className="truncate text-[10px] text-ink/40">
-        {people
-          .slice(0, 3)
-          .map((member) => member.name.split(" ")[0])
-          .join(", ")}
-        {people.length > 3 ? ` +${people.length - 3}` : ""}
-      </span>
+      {people.length > shown.length && (
+        <span
+          title={people
+            .slice(shown.length)
+            .map((member) => member.name)
+            .join(", ")}
+          className="flex h-5 w-5 items-center justify-center rounded-full bg-ink/10 text-[9px] font-semibold text-ink/55 ring-2 ring-white"
+        >
+          +{people.length - shown.length}
+        </span>
+      )}
+      <span className="sr-only">{people.map((member) => member.name).join(", ")}</span>
     </span>
   );
+}
+
+/** One or two letters standing in for a name. */
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  const letters = (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
+  return letters.toUpperCase() || "?";
 }
