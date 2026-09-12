@@ -8,6 +8,7 @@ import { dayKeyToDate } from "@/lib/time";
 import { daysBetween } from "@/lib/week";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { recordStateChange } from "@/lib/task-state-log";
+import { canMove } from "@/lib/task-transitions";
 import type { TaskPriority } from "@/generated/prisma/enums";
 
 // Handing out work that is not part of any project.
@@ -222,6 +223,14 @@ export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGR
   await requireAdmin();
 
   const before = await prisma.assignedTask.findUnique({ where: { id }, select: { state: true } });
+
+  // The week board had no runtime check at all: any state could be written from
+  // any state. It asks the same rules as everything else now.
+  if (before && before.state === state) return;
+  if (before) {
+    const move = canMove(before.state, state, "manager");
+    if (!move.ok) throw new Error(move.reason);
+  }
 
   await prisma.assignedTask.update({
     where: { id },

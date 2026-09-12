@@ -5,8 +5,9 @@ import { prisma } from "@/lib/db";
 import { requireEmployee } from "@/lib/employee-session";
 import { saveFile } from "@/lib/storage";
 import { notifyAdmin } from "@/lib/admin-notifications";
-import { EMPLOYEE_SETTABLE_STATES, EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
+import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { recordStateChange } from "@/lib/task-state-log";
+import { canMove } from "@/lib/task-transitions";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // What an employee can do with a job the manager handed to them directly.
@@ -37,18 +38,14 @@ function mine(employeeId: string, id: string) {
 export async function setMyAssignedTaskStatus(id: string, state: TaskState) {
   const employee = await requireEmployee();
 
-  if (!EMPLOYEE_SETTABLE_STATES.includes(state)) {
-    throw new Error("That status cannot be set from the employee portal.");
-  }
-
   const task = await mine(employee.id, id);
   if (!task) throw new Error("Task not found.");
 
-  // Once the photo is with the manager, the employee is no longer the one
-  // moving this job around.
-  if (task.state === "SUBMITTED" || task.state === "DONE") {
-    throw new Error("This task is with the manager now.");
-  }
+  // The same rules as a cell on the board, from the same place: once the photo
+  // is with the manager, the employee is no longer the one moving this around.
+  if (task.state === state) return;
+  const move = canMove(task.state, state, "employee");
+  if (!move.ok) throw new Error(move.reason);
 
   await prisma.assignedTask.update({ where: { id }, data: { state, completedAt: null } });
 
@@ -80,7 +77,9 @@ export async function submitAssignedTaskCompletion(id: string, formData: FormDat
 
   const task = await mine(employee.id, id);
   if (!task) throw new Error("Task not found.");
-  if (task.state === "DONE") throw new Error("This task has already been approved.");
+
+  const move = canMove(task.state, "SUBMITTED", "employee", true);
+  if (!move.ok) throw new Error(move.reason);
 
   const photo = formData.get("photo");
   if (!(photo instanceof File) || photo.size === 0) {

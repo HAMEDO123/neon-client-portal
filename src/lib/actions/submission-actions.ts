@@ -11,6 +11,7 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 import { taskUrl } from "@/lib/notifications/types";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { recordStateChange } from "@/lib/task-state-log";
+import { canMove } from "@/lib/task-transitions";
 
 // Finishing a task is a claim, not a fact.
 //
@@ -48,6 +49,12 @@ export async function submitTaskCompletion(entryId: string, formData: FormData) 
 
   const task = await taskForEmployee(employee.id, entryId);
   if (!task) throw new Error("Task not found.");
+
+  // Sending proof is a move like any other, and it was the one place that
+  // checked nothing: work already with the manager, or already approved, could
+  // be submitted again.
+  const move = canMove(task.state, "SUBMITTED", "employee", true);
+  if (!move.ok) throw new Error(move.reason);
 
   const photo = formData.get("photo");
   if (!(photo instanceof File) || photo.size === 0) {

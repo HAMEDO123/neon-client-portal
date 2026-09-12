@@ -6,8 +6,9 @@ import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
 import type { TaskState } from "@/generated/prisma/enums";
 import { notifyAdmin } from "@/lib/admin-notifications";
-import { EMPLOYEE_SETTABLE_STATES, EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
+import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { recordStateChange } from "@/lib/task-state-log";
+import { canMove } from "@/lib/task-transitions";
 
 // Everything an employee is allowed to change, and nothing else.
 //
@@ -28,14 +29,14 @@ function refresh(entryId?: string) {
 export async function setMyTaskStatus(entryId: string, state: TaskState) {
   const employee = await requireEmployee();
 
-  // Employees move work between Pending / In Progress / Completed. TOMORROW is
-  // an admin planning marker and is not settable here.
-  if (!EMPLOYEE_SETTABLE_STATES.includes(state)) {
-    throw new Error("That status cannot be set from the employee portal.");
-  }
-
   const task = await taskForEmployee(employee.id, entryId);
   if (!task) throw new Error("Task not found.");
+
+  // Who may move what is decided in one place now, so this action and the
+  // board can never drift apart on it.
+  if (task.state === state) return;
+  const move = canMove(task.state, state, "employee");
+  if (!move.ok) throw new Error(move.reason);
 
   await prisma.projectTaskEntry.update({
     where: { id: task.id },

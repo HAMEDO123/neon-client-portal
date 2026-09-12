@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { EMPLOYEE_COLORS } from "@/lib/task-board";
 import { recordStateChange } from "@/lib/task-state-log";
+import { canMove } from "@/lib/task-transitions";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // Every action here is a public POST endpoint, so the admin session is checked
@@ -34,6 +35,14 @@ export async function setTaskState(projectId: string, taskId: string, state: Tas
     where: { projectId_taskId: { projectId, taskId } },
     select: { state: true },
   });
+
+  // A tick that changes nothing is not an error, it is a tick that changes
+  // nothing — the board cycles states and lands on the same one often enough.
+  const from = before?.state ?? "TODO";
+  if (from === state) return;
+
+  const move = canMove(from, state, "manager");
+  if (!move.ok) throw new Error(move.reason);
 
   const entry = await prisma.projectTaskEntry.upsert({
     where: { projectId_taskId: { projectId, taskId } },

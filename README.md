@@ -172,7 +172,7 @@ The domain vocabulary, as the code defines it:
   - **Automation moves nothing.** A planned block ending is not evidence that anything happened, so `canMove(..., "system")` refuses every transition. Jobs ask; people decide.
   - `TaskStateChange` records every move: from, to, who, why, and whether it was automatic. Until it there was no record at all — a tick on the board left nothing behind, so "when did this actually start" had no answer anywhere.
   - `lib/task-state-log.ts` `recordStateChange` is the single choke point, and **all six places that write a state now call it**: the manager's tick (`task-actions.ts`), the employee's status control (`employee-actions.ts`), sending proof and the review that settles it (`submission-actions.ts`), and both sides of a week-board job (`my-assigned-actions.ts`, `assigned-task-actions.ts`). It never throws into its caller — a change that happened must not be undone because the note about it could not be written.
-  - **Still inline:** those six sites enforce their own equivalents of the rules rather than calling `canMove`. The rules and the recording agree today, but they are two copies; making the actions ask `canMove` is the next slice.
+  - **Those six sites ask `canMove` rather than keeping their own copies of the rules.** A move that changes nothing returns quietly instead of throwing — the board cycles states and lands on the same one often enough that an error there would be wrong. The board keeps its own smaller vocabulary (`VALID_STATES`: TODO, DONE, TOMORROW) for what a tick may cycle through; `canMove` then decides whether that particular move is legal.
 - **The follow-up queue** is the first scheduled work in the platform: before it there was no queue, no job table and nothing that could act at a particular minute — only the hourly cron over deadlines.
   - `ScheduledFollowUp` is one row per question owed (who, which day, which block, what it is about, when it is due). `lib/follow-up-queue.ts` writes them (`scheduleFollowUps`, called at the end of `applyDayPlan`, so putting a day on the board is what queues its questions), finds what is due, and records answers.
   - `lib/notifications/follow-up-events.ts` `runFollowUps` sends what has come due, through the same `dispatchNotification` as everything else. It re-reads the world first: a task already submitted or done is marked asked and skipped rather than chased.
@@ -289,7 +289,7 @@ The domain vocabulary, as the code defines it:
 - **Arabic breaks `gallery.pdf`.** It uses the Helvetica font, which has no Arabic characters. Zip and PDF filenames also drop non-ASCII characters.
 - **Deleting a project or drawing leaves some files in storage:** BOQ images and old drawing revisions.
 - **Some analytics events are never logged:** `viewed_render`, `viewed_drawing`, `viewed_boq` and `viewed_pricing` come only from the seed.
-- **Status checks are uneven:** `setMyTaskStatus` and `submitTaskCompletion` don't refuse SUBMITTED or DONE cells, while the week-job versions do.
+- ~~**Status checks are uneven.**~~ Fixed: every state write now goes through `canMove` (`lib/task-transitions.ts`), so sending proof for work already with the manager, or already approved, is refused on both the board and the week board. The week board had no runtime check at all before this and now has the same one as everything else.
 - **Unused variable:** `NEXT_PUBLIC_VAPID_PUBLIC_KEY` in `.env.local` isn't read anywhere.
 
 ## Environment variables (names only; values are in `.env.local` and the Render dashboard)
