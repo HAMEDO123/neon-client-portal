@@ -21,6 +21,9 @@ export function pendingSubmissions(limit = 50) {
         },
       },
       assignedTask: { select: { id: true, title: true } },
+      // What the check made of it, so the manager can see the reasoning before
+      // deciding rather than being handed a verdict to trust.
+      checks: { orderBy: { createdAt: "asc" } },
     },
   });
 }

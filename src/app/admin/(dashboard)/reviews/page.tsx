@@ -4,6 +4,7 @@ import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ReviewActions } from "@/components/admin/review-actions";
+import { SubmissionChecks } from "@/components/admin/submission-checks";
 
 // The evidence queue.
 //
@@ -69,6 +70,12 @@ export default async function ReviewsPage() {
                       {submission.note}
                     </p>
                   )}
+
+                  <SubmissionChecks
+                    checks={submission.checks}
+                    outcome={submission.outcome}
+                    checkedAt={submission.checkedAt}
+                  />
 
                   <div className="mt-3">
                     <ReviewActions submissionId={submission.id} />
