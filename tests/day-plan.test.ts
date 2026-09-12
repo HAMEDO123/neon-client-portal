@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildDayBrief, parsePlan, refOf, refsFor, type PlanTask } from "../src/lib/day-plan";
+import { buildDayBrief, parsePlan, planBlocksFrom, refOf, refsFor, type PlanTask } from "../src/lib/day-plan";
 
 const PERSON = { name: "Wael", role: "Draughtsman", playbook: "Two drawings a day. Never sends to a client himself." };
 
@@ -66,6 +66,29 @@ describe("the brief a proposal is built from", () => {
     assert.equal(byRef.get("T1")?.id, "a");
     assert.equal(byRef.get("T3")?.id, "c");
     assert.equal(byRef.get("T4"), undefined);
+  });
+
+  it("ties a block to the board cell its code stands for, and ticks the whole day", () => {
+    const tasks = [task({ id: "entry-a", name: "2D plan" }), task({ id: "entry-b", name: "Renders" })];
+    const { blocks } = parsePlan(
+      ["09:00-11:00 | T2 | Renders for the villa | Due today", "11:00-11:15 | - | Break | Rest"].join("\n")
+    );
+
+    const planned = planBlocksFrom(blocks, tasks);
+
+    assert.equal(planned[0].entryId, "entry-b");
+    assert.equal(planned[0].taskName, "Renders");
+    // The rest of a working day is real work too — it becomes a job.
+    assert.equal(planned[1].entryId, null);
+    assert.deepEqual(
+      planned.map((block) => block.keep),
+      [true, true]
+    );
+    // Nothing has been handed out yet, so nothing carries a job.
+    assert.deepEqual(
+      planned.map((block) => block.jobId),
+      [null, null]
+    );
   });
 
   it("lists every task with what finishing it means", () => {

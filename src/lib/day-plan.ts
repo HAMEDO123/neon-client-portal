@@ -175,18 +175,25 @@ export type ParsedPlan = {
 };
 
 /**
- * A block once its code has been resolved back to a real board cell, which is
- * what makes it something the manager can put on a day rather than read.
+ * A block once its code has been resolved back to a real board cell.
  *
- * `keep` is the tick beside it. A block that names a task is ticked to begin
- * with, because that is what was proposed; a break or a chase is not, because
- * there is nothing on the board to move.
+ * Two kinds of block end up on a day, and both belong there. One names a step
+ * of a project, and putting it on the day is scheduling that cell. The other is
+ * the rest of the working day — calls, site visits, an hour on the sales
+ * platform — which is real work that is not a step of any project; it becomes a
+ * job on the week board, the same as one handed out by hand.
+ *
+ * `keep` is the tick beside it, and everything is ticked to begin with: the
+ * whole thing is what was proposed. `jobId` is filled in once a block has been
+ * made into a job, so putting the same plan on the day twice does not hand the
+ * person the same work twice.
  */
 export type PlannedBlock = PlanBlock & {
   entryId: string | null;
   taskName: string | null;
   projectName: string | null;
   keep: boolean;
+  jobId: string | null;
 };
 
 /** Ties each block back to the task its code stands for. */
@@ -200,7 +207,8 @@ export function planBlocksFrom(blocks: PlanBlock[], tasks: PlanTask[]): PlannedB
       entryId: task?.id ?? null,
       taskName: task?.name ?? null,
       projectName: task?.projectName ?? null,
-      keep: Boolean(task),
+      keep: true,
+      jobId: null,
     };
   });
 }

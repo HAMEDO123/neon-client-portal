@@ -41,7 +41,9 @@ export function DayPlanPanel({
   const plan = saved[dayKey] ?? null;
   const dayName = dayKey === today ? "today" : "tomorrow";
   const onBoard = plan?.appliedAt ? new Date(plan.appliedAt) : null;
-  const puttable = blocks.filter((block) => block.keep && block.entryId).length;
+  // Everything ticked goes on the day: a step of a project schedules its cell,
+  // and anything else becomes a job on the week board.
+  const puttable = blocks.filter((block) => block.keep).length;
 
   function show(key: string, next: Plans = saved) {
     setDayKey(key);
@@ -104,7 +106,10 @@ export function DayPlanPanel({
           return;
         }
         setSaved({ ...saved, [dayKey]: { ...(plan as StoredDayPlan), blocks, appliedAt: new Date() } });
-        setSaid(`${result.moved} ${result.moved === 1 ? "task is" : "tasks are"} on ${dayName}. ${name} has been told.`);
+        const done: string[] = [];
+        if (result.moved > 0) done.push(`${result.moved} ${result.moved === 1 ? "step" : "steps"} scheduled`);
+        if (result.jobs > 0) done.push(`${result.jobs} ${result.jobs === 1 ? "job" : "jobs"} on the week board`);
+        setSaid(`${done.join(" and ") || "Nothing moved"} for ${dayName}. ${name} has been told.`);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "That did not work.");
       }
@@ -212,9 +217,13 @@ export function DayPlanPanel({
                 <input
                   type="checkbox"
                   checked={block.keep}
-                  disabled={!block.entryId || pending}
+                  disabled={pending}
                   onChange={(event) => edit(index, { keep: event.target.checked })}
-                  title={block.entryId ? "Put this on the day" : "Nothing on the board to move"}
+                  title={
+                    block.entryId
+                      ? "Schedules the step on the board"
+                      : "Goes on the week board as a job for that day"
+                  }
                   className="mt-1.5 h-3.5 w-3.5 shrink-0 accent-ink disabled:opacity-30"
                 />
 
@@ -240,9 +249,13 @@ export function DayPlanPanel({
                   <span dir="auto" className="block text-sm text-ink">
                     {block.what}
                   </span>
-                  {block.taskName && (
+                  {block.taskName ? (
                     <span className="mt-0.5 block text-[11px] text-ink/40">
                       {block.taskName} · {block.projectName}
+                    </span>
+                  ) : (
+                    <span className="mt-0.5 block text-[11px] text-ink/30">
+                      {block.jobId ? "On the week board" : "Goes on the week board"}
                     </span>
                   )}
                   {block.why && (

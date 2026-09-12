@@ -47,6 +47,9 @@ function readBlock(value: unknown): PlannedBlock | null {
     taskName: asString(row.taskName),
     projectName: asString(row.projectName),
     keep: row.keep === true,
+    // Written once the block has been made into a job, so it is never made
+    // into a second one.
+    jobId: asString(row.jobId),
   };
 }
 
