@@ -34,6 +34,8 @@ function readAccountFields(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim();
   const employeeCode = String(formData.get("employeeCode") ?? "").trim();
   const targetRaw = String(formData.get("monthlySalesTarget") ?? "").trim();
+  // How this person is usually worked, for whoever plans their day.
+  const playbook = String(formData.get("playbook") ?? "").trim().slice(0, 4000) || null;
 
   if (!name) throw new Error("Full name is required.");
   if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
@@ -53,6 +55,7 @@ function readAccountFields(formData: FormData) {
     phone: phone || null,
     employeeCode: employeeCode || null,
     monthlySalesTarget: target,
+    playbook,
   };
 }
 

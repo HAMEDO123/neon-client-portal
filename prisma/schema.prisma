@@ -428,6 +428,12 @@ model Employee {
   // Projects this person is expected to sell each calendar month.
   monthlySalesTarget Int @default(3)
 
+  // What this person usually does, in the manager's own words: their trade,
+  // what they are normally given, what they are never given, how much fits in
+  // a day. Read when a day is proposed for them, so the suggestion follows how
+  // the studio actually works rather than what a model guesses.
+  playbook String? @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 

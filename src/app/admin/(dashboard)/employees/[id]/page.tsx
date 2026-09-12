@@ -8,7 +8,7 @@ import {
   setEmployeeActive,
   updateEmployeeAccount,
 } from "@/lib/actions/admin-employee-actions";
-import { TextInput } from "@/components/admin/fields";
+import { TextInput, TextArea } from "@/components/admin/fields";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/buttons";
@@ -83,6 +83,17 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           type="number"
           defaultValue={employee.monthlySalesTarget}
           required={false}
+        />
+
+        {/* In your own words, because this is what a proposed day is built
+            from: the trade, what they are normally given, what they never
+            are, and how much fits in a day. */}
+        <TextArea
+          className="sm:col-span-2"
+          label="What they usually do"
+          name="playbook"
+          rows={4}
+          defaultValue={employee.playbook ?? ""}
         />
         <div className="flex items-end">
           <SaveButton label="Save details" />

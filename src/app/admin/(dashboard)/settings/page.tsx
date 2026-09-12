@@ -1,6 +1,8 @@
-import { Clock, Send, Sparkles } from "lucide-react";
+import { Clock, NotebookPen, Send, Sparkles } from "lucide-react";
 import { saveTimezone } from "@/lib/actions/whatsapp-actions";
-import { getTimezone } from "@/lib/settings";
+import { savePlanningNotes } from "@/lib/actions/settings-actions";
+import { getPlanningNotes, getTimezone } from "@/lib/settings";
+import { TextArea } from "@/components/admin/fields";
 import { isAiConfigured } from "@/lib/ai/client";
 import { isPushConfigured } from "@/lib/notifications/push";
 import { activeTransport, checkWhatsAppConnection, getCloudCredentials } from "@/lib/whatsapp";
@@ -31,6 +33,7 @@ const TIMEZONES = [
 
 export default async function AdminSettingsPage() {
   const timezone = await getTimezone();
+  const planningNotes = await getPlanningNotes();
   const transport = activeTransport();
   const cloud = getCloudCredentials();
   const worker = getWorkerConfig();
@@ -78,6 +81,31 @@ export default async function AdminSettingsPage() {
           days: period.days,
         }))}
       />
+
+      {/* --- How a day is planned ------------------------------------------ */}
+      <section className="glass rounded-2xl p-6">
+        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+          <NotebookPen size={16} strokeWidth={2} />
+          How we plan a day
+        </h2>
+        <p className="mt-1 text-sm text-ink/50">
+          Your rules, in your own words — nobody takes more than three jobs a day, site visits in the morning,
+          renders two days before a handover. This is read whenever a day is proposed for somebody, along with what
+          each person usually does (written on their own page) and what the board actually holds.
+        </p>
+
+        <form action={savePlanningNotes} className="mt-4 max-w-2xl">
+          <TextArea
+            label="Rules for planning"
+            name="planningNotes"
+            rows={5}
+            defaultValue={planningNotes}
+          />
+          <div className="mt-3">
+            <SaveButton label="Save rules" />
+          </div>
+        </form>
+      </section>
 
       {/* --- Channels ------------------------------------------------------ */}
       <section>
