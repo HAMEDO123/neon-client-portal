@@ -1,4 +1,5 @@
 import { effortLabel, readinessReason, type Readiness } from "@/lib/task-readiness";
+import { lunchWindow, timeOf, type WorkHours } from "@/lib/work-hours";
 
 // A proposed day for one person: what to hand the model, and how to read what
 // it hands back.
@@ -44,6 +45,13 @@ export type DayBriefInput = {
   notes: string;
   /** The day being planned, as a person would say it. */
   dayLabel: string;
+  /** When the studio actually works, from Settings. */
+  hours: WorkHours;
+  /**
+   * How many minutes this plan may fill. The day's capacity normally, and only
+   * what is left when the day being planned has already started.
+   */
+  minutesAvailable: number;
   tasks: PlanTask[];
 };
 
@@ -74,7 +82,9 @@ Rules:
 - Use only the work you were given. Never invent a task, a project or a client.
 - Work that is blocked or waiting is not work they can do. You may schedule a short chase for it — asking the person who can clear it — but never the task itself.
 - A task already put on this day comes first, unless the studio's rules say otherwise.
-- Respect the studio's rules above your own judgement. Take the working hours from them; if they do not say, plan 9:00 to 18:00 with a break at 13:00.
+- The working day is given to you: never plan a block before it starts or after it ends, and never plan work across lunch.
+- Never plan more minutes of work than the brief says are available. If the work does not fit, plan what matters most, and say plainly in a last line what is left over and why — do not squeeze it in.
+- Respect the studio's rules above your own judgement, except where they contradict the working day or the minutes available, which are facts.
 - Give each block a real length. Use the expected hours where they are written, and say plainly when the day does not hold everything.
 - Leave a little room between blocks. A day packed to the minute is a day that fails by 10:00.
 
@@ -132,7 +142,14 @@ function describeTask(task: PlanTask, index: number): string {
  * nothing about how the studio works will helpfully invent how it works, and
  * the manager would have no way of telling that apart from a real rule.
  */
-export function buildDayBrief({ person, notes, dayLabel, tasks }: DayBriefInput): string {
+export function buildDayBrief({
+  person,
+  notes,
+  dayLabel,
+  hours,
+  minutesAvailable,
+  tasks,
+}: DayBriefInput): string {
   const lines: string[] = [];
 
   lines.push("<person>");
@@ -140,6 +157,16 @@ export function buildDayBrief({ person, notes, dayLabel, tasks }: DayBriefInput)
   if (person.role) lines.push(`Job title: ${person.role}`);
   lines.push(`What they usually do: ${person.playbook?.trim() || NOTHING_WRITTEN}`);
   lines.push("</person>");
+  lines.push("");
+
+  // The facts about the day itself, kept apart from the manager's prose: these
+  // are not preferences to weigh up, they are the shape of the day.
+  const lunch = lunchWindow(hours);
+  lines.push("<the working day>");
+  lines.push(`Hours: ${hours.start} to ${hours.end}`);
+  lines.push(`Lunch: ${hours.lunchAt} to ${timeOf(lunch.to)} (${hours.lunchMinutes} minutes), which is not working time`);
+  lines.push(`Minutes of work you may plan: ${minutesAvailable}`);
+  lines.push("</the working day>");
   lines.push("");
 
   lines.push("<how this studio plans a day>");

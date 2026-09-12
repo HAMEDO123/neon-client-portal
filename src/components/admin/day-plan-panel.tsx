@@ -19,6 +19,7 @@ export function DayPlanPanel({
   name,
   today,
   tomorrow,
+  tomorrowLabel,
   configured,
   plans,
 }: {
@@ -26,7 +27,10 @@ export function DayPlanPanel({
   name: string;
   /** Day keys in the company's timezone. */
   today: string;
+  /** The next day that is actually worked, which on a Thursday is Sunday. */
   tomorrow: string;
+  /** That day written out, so nobody has to guess which date it is. */
+  tomorrowLabel: string;
   configured: boolean;
   plans: Plans;
 }) {
@@ -137,7 +141,7 @@ export function DayPlanPanel({
 
         <div className="flex shrink-0 items-center gap-1 rounded-full border border-ink/10 p-0.5">
           {[
-            { key: tomorrow, label: "Tomorrow" },
+            { key: tomorrow, label: tomorrowLabel },
             { key: today, label: "Today" },
           ].map((choice) => (
             <button

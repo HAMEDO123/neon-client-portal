@@ -13,12 +13,13 @@ import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/buttons";
 import { formatDate } from "@/lib/format";
-import { getTimezone } from "@/lib/settings";
+import { getTimezone, getWorkHours } from "@/lib/settings";
 import { EmployeeWarnings } from "@/components/admin/employee-warnings";
 import { EmployeeSales } from "@/components/admin/employee-sales";
 import { monthSalesFor } from "@/lib/sales-queries";
 import { periodOf } from "@/lib/payroll";
-import { todayKey, tomorrowKey } from "@/lib/time";
+import { dayKeyToDate, formatDayIn, todayKey } from "@/lib/time";
+import { nextWorkingDay } from "@/lib/work-hours";
 import { DayPlanPanel } from "@/components/admin/day-plan-panel";
 import { getDayPlan } from "@/lib/day-plan-store";
 import { isAiConfigured } from "@/lib/ai/client";
@@ -36,8 +37,13 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
   });
   if (!employee) notFound();
   const timezone = await getTimezone();
+  const hours = await getWorkHours();
   const today = todayKey(timezone);
-  const tomorrow = tomorrowKey(timezone);
+  // The next day anybody actually works, not simply the next date: planning a
+  // Friday nobody is in for is a plan that was never going to happen. The date
+  // is spelled out beside it, because "Tomorrow" on a Thursday means Sunday.
+  const tomorrow = nextWorkingDay(hours, today);
+  const tomorrowLabel = formatDayIn(timezone, dayKeyToDate(tomorrow)) ?? tomorrow;
   const period = periodOf(today);
   const sales = await monthSalesFor(employee.id, period);
 
@@ -117,6 +123,7 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
         name={employee.name}
         today={today}
         tomorrow={tomorrow}
+        tomorrowLabel={tomorrowLabel}
         configured={isAiConfigured()}
         plans={{ [today]: planToday, [tomorrow]: planTomorrow }}
       />

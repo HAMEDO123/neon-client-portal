@@ -57,6 +57,17 @@ export function hourIn(timeZone: string, instant: Date = new Date()) {
   return partsIn(timeZone, instant).hour;
 }
 
+/**
+ * The local wall-clock time in `timeZone` as "HH:MM".
+ *
+ * `formatTimeIn` is for reading ("3:00 PM"); this is for arithmetic — how much
+ * of the working day is left, and whether a follow-up falls inside it.
+ */
+export function wallClockIn(timeZone: string, instant: Date = new Date()) {
+  const { hour, minute } = partsIn(timeZone, instant);
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 /** Shifts a YYYY-MM-DD key by whole days without touching timezones. */
 export function shiftDayKey(dayKey: string, days: number) {
   const [year, month, day] = dayKey.split("-").map(Number);

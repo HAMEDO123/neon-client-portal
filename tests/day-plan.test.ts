@@ -1,7 +1,16 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildDayBrief, parsePlan, planBlocksFrom, refOf, refsFor, type PlanTask } from "../src/lib/day-plan";
+import {
+  DAY_PLAN_SYSTEM,
+  buildDayBrief,
+  parsePlan,
+  planBlocksFrom,
+  refOf,
+  refsFor,
+  type PlanTask,
+} from "../src/lib/day-plan";
+import { DEFAULT_WORK_HOURS } from "../src/lib/work-hours";
 
 const PERSON = { name: "Wael", role: "Draughtsman", playbook: "Two drawings a day. Never sends to a client himself." };
 
@@ -23,9 +32,38 @@ function task(overrides: Partial<PlanTask> = {}): PlanTask {
   };
 }
 
-function brief(tasks: PlanTask[], notes = "Site visits in the morning.") {
-  return buildDayBrief({ person: PERSON, notes, dayLabel: "Sunday", tasks });
+function brief(tasks: PlanTask[], notes = "Site visits in the morning.", minutesAvailable = 450) {
+  return buildDayBrief({
+    person: PERSON,
+    notes,
+    dayLabel: "Sunday",
+    hours: DEFAULT_WORK_HOURS,
+    minutesAvailable,
+    tasks,
+  });
 }
+
+describe("the working day the plan must fit inside", () => {
+  it("hands over the hours, the lunch it may not plan across, and the minutes it may fill", () => {
+    const text = brief([task()]);
+
+    assert.ok(text.includes("Hours: 11:00 to 19:00"));
+    assert.ok(text.includes("Lunch: 14:00 to 14:30 (30 minutes), which is not working time"));
+    assert.ok(text.includes("Minutes of work you may plan: 450"));
+  });
+
+  it("says only what is left when the day is already running", () => {
+    // Planning at 14:00 leaves five hours, less the lunch still ahead.
+    assert.ok(brief([task()], "Site visits in the morning.", 270).includes("Minutes of work you may plan: 270"));
+  });
+
+  it("names no hours of its own in the instructions", () => {
+    // The old prompt hard-coded 9:00 to 18:00, which quietly overrode Settings.
+    assert.ok(!DAY_PLAN_SYSTEM.includes("9:00"));
+    assert.ok(!DAY_PLAN_SYSTEM.includes("18:00"));
+    assert.ok(DAY_PLAN_SYSTEM.includes("The working day is given to you"));
+  });
+});
 
 describe("the brief a proposal is built from", () => {
   it("carries what the person usually does and how the studio plans", () => {
@@ -42,6 +80,8 @@ describe("the brief a proposal is built from", () => {
       person: { name: "Wael", role: null, playbook: "   " },
       notes: "",
       dayLabel: "Sunday",
+      hours: DEFAULT_WORK_HOURS,
+      minutesAvailable: 450,
       tasks: [],
     });
 

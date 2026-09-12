@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db";
 import { ASSISTANT_MODEL, describeAiError, getAiClient, isAiConfigured } from "@/lib/ai/client";
 import { allTasks } from "@/lib/employee-tasks";
-import { getPlanningNotes, getTimezone } from "@/lib/settings";
+import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
+import { capacityMinutes, remainingMinutes } from "@/lib/work-hours";
 import { readinessOf } from "@/lib/task-readiness";
 import { DAY_PLAN_SYSTEM, buildDayBrief, parsePlan, planBlocksFrom, type PlanTask } from "@/lib/day-plan";
 import { saveDayPlan, type StoredDayPlan } from "@/lib/day-plan-store";
-import { dayKeyToDate, formatDayIn, formatTimeIn } from "@/lib/time";
+import { dayKeyToDate, formatDayIn, formatTimeIn, todayKey, wallClockIn } from "@/lib/time";
 
 // "Plan tomorrow for Wael."
 //
@@ -70,9 +71,17 @@ export async function proposeDay(employeeId: string, dayKey: string): Promise<Da
   if (!employee) return { ok: false, error: "That employee no longer exists." };
 
   const timezone = await getTimezone();
+  const hours = await getWorkHours();
   const notes = await getPlanningNotes();
   const open = await allTasks(employeeId, "open");
   const tasks = open.map((task) => toPlanTask(task, dayKey, timezone));
+
+  // A day that has already started has only what is left of it. Planning today
+  // at two in the afternoon must not propose a morning that has been and gone.
+  const minutesAvailable =
+    dayKey === todayKey(timezone)
+      ? remainingMinutes(hours, wallClockIn(timezone))
+      : capacityMinutes(hours);
 
   // A real date always formats; the key itself is the fallback the types want.
   const dayLabel = formatDayIn(timezone, dayKeyToDate(dayKey)) ?? dayKey;
@@ -80,6 +89,8 @@ export async function proposeDay(employeeId: string, dayKey: string): Promise<Da
     person: { name: employee.name, role: employee.role, playbook: employee.playbook },
     notes,
     dayLabel,
+    hours,
+    minutesAvailable,
     tasks,
   });
 
