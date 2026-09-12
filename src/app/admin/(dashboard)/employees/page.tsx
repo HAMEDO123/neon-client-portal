@@ -8,6 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/format";
 import { WARNING_LIMIT } from "@/lib/warnings";
+import { salesCountsForMonth } from "@/lib/sales-queries";
+import { getTimezone } from "@/lib/settings";
+import { periodOf } from "@/lib/payroll";
+import { todayKey } from "@/lib/time";
 
 export default async function AdminEmployeesPage() {
   const employees = await prisma.employee.findMany({
@@ -16,6 +20,10 @@ export default async function AdminEmployeesPage() {
       _count: { select: { tasks: true, assignedEntries: true, subscriptions: true, warnings: true } },
     },
   });
+
+  // This month's sales, for the target badge beside each name.
+  const timezone = await getTimezone();
+  const sold = await salesCountsForMonth(periodOf(todayKey(timezone)));
 
   return (
     <div>
@@ -76,6 +84,7 @@ export default async function AdminEmployeesPage() {
                       <p className="font-medium text-ink">{employee.name}</p>
                       <AccountBadge email={employee.email} active={employee.active} />
                       <WarningsBadge count={employee._count.warnings} />
+                      <SalesBadge sold={sold.get(employee.id) ?? 0} target={employee.monthlySalesTarget} />
                     </div>
                     {employee.role && <p className="mt-0.5 text-xs text-ink/45">{employee.role}</p>}
                     <p className="mt-1 truncate text-xs text-ink/50">{employee.email ?? "Board only — no login"}</p>
@@ -119,6 +128,7 @@ export default async function AdminEmployeesPage() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <AccountBadge email={employee.email} active={employee.active} />
                         <WarningsBadge count={employee._count.warnings} />
+                        <SalesBadge sold={sold.get(employee.id) ?? 0} target={employee.monthlySalesTarget} />
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-ink/50">
@@ -158,6 +168,16 @@ export default async function AdminEmployeesPage() {
 function AccountBadge({ email, active }: { email: string | null; active: boolean }) {
   if (!email) return <Badge tone="warning">No account</Badge>;
   return <Badge tone={active ? "success" : "neutral"}>{active ? "Active" : "Disabled"}</Badge>;
+}
+
+/** This month against the sales target, green once it is met. */
+function SalesBadge({ sold, target }: { sold: number; target: number }) {
+  if (target === 0) return null;
+  return (
+    <Badge tone={sold >= target ? "success" : "neutral"}>
+      {sold}/{target} sold
+    </Badge>
+  );
 }
 
 /** Warnings on record, when there are any. The third closes the account. */

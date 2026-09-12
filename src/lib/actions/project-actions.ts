@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { generateProjectToken } from "@/lib/tokens";
 import { logActivity } from "@/lib/activity";
+import { getTimezone } from "@/lib/settings";
+import { dayKeyToDate, todayKey } from "@/lib/time";
 import type { PipelineStatus, ProjectStage, PublishState } from "@/generated/prisma/enums";
 
 function refresh(id?: string) {
@@ -18,6 +20,18 @@ function refresh(id?: string) {
 function optionalDate(value: FormDataEntryValue | null) {
   const str = String(value ?? "");
   return str ? new Date(str) : null;
+}
+
+/**
+ * Who sold this project and the day it counts for. No seller means no sale, so
+ * the date goes with it; a seller with no date counts for today.
+ */
+async function saleFields(formData: FormData) {
+  const soldById = String(formData.get("soldById") ?? "").trim() || null;
+  if (!soldById) return { soldById: null, soldOn: null };
+
+  const day = String(formData.get("soldOn") ?? "").trim() || todayKey(await getTimezone());
+  return { soldById, soldOn: dayKeyToDate(day) };
 }
 
 export async function createProject(formData: FormData) {
@@ -74,6 +88,7 @@ export async function updateProjectOverview(id: string, formData: FormData) {
       pipelineStatus: String(formData.get("pipelineStatus") ?? existing.pipelineStatus) as PipelineStatus,
       currentStage: String(formData.get("currentStage") ?? existing.currentStage) as ProjectStage,
       completionPercent: Number(formData.get("completionPercent") ?? existing.completionPercent),
+      ...(await saleFields(formData)),
     },
   });
 

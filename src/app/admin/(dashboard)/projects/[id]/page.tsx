@@ -4,6 +4,7 @@ import { updateProjectOverview, updateProjectSettings, deleteProject } from "@/l
 import { TextInput, TextArea, Select, Checkbox } from "@/components/admin/fields";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { PROJECT_STAGES, PIPELINE_STATUSES } from "@/lib/constants";
+import { sellers } from "@/lib/sales-queries";
 
 function toDateInput(date: Date | null) {
   if (!date) return "";
@@ -14,6 +15,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   const { id } = await params;
   const project = await getProjectById(id);
   if (!project) notFound();
+  const team = await sellers();
 
   return (
     <div className="flex flex-col gap-8">
@@ -76,6 +78,29 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
               required={false}
             />
           </div>
+
+          <div className="grid grid-cols-1 gap-4 border-t border-ink/8 pt-4 sm:grid-cols-2">
+            <Select
+              label="Sold by"
+              name="soldById"
+              defaultValue={project.soldById ?? ""}
+              options={[
+                { value: "", label: "Not recorded" },
+                ...team.map((person) => ({ value: person.id, label: person.name })),
+              ]}
+            />
+            <TextInput
+              label="Sold on"
+              name="soldOn"
+              type="date"
+              defaultValue={toDateInput(project.soldOn)}
+              required={false}
+            />
+          </div>
+          <p className="-mt-2 text-xs text-ink/45">
+            This project counts as a sale for whoever is picked here, in the month of the date beside it. Leave the
+            date empty and today is used.
+          </p>
 
           <div>
             <SaveButton label="Save Details" />

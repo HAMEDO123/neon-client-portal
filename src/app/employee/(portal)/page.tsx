@@ -15,6 +15,9 @@ import { getPublicKey } from "@/lib/notifications/push";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WarningsCard } from "@/components/employee/warnings-card";
 import { warningsFor } from "@/lib/employee-warnings";
+import { SalesCard } from "@/components/employee/sales-card";
+import { monthSalesFor } from "@/lib/sales-queries";
+import { periodOf } from "@/lib/payroll";
 import { cn } from "@/lib/utils";
 
 function greeting(hour: number) {
@@ -70,6 +73,10 @@ export default async function EmployeeDashboard({
   // Warnings stay pinned above everything until the manager removes them.
   const warnings = await warningsFor(employee.id);
 
+  // This month against the sales target: a project counts for whoever sold it.
+  const period = periodOf(todayDay);
+  const sales = await monthSalesFor(employee.id, period);
+
   // A job handed out by hand belongs to the first of today and tomorrow it
   // touches. One that started on or before today is today's — including one
   // whose days have run out, because unfinished work does not stop being
@@ -120,6 +127,8 @@ export default async function EmployeeDashboard({
       <WarningsCard warnings={warnings} timezone={timezone} />
 
       <TodaySummary counts={todayCounts} />
+
+      <SalesCard projects={sales.projects} target={sales.target} period={period} timezone={timezone} />
 
       <PushPrompt publicKey={pushKey} />
 

@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { EMPLOYEE_COLORS } from "@/lib/task-board";
+import { DEFAULT_SALES_TARGET } from "@/lib/sales";
 import { dispatchNotification } from "@/lib/notifications/engine";
 
 // Admin-only management of employee accounts. Each action re-checks the admin
@@ -32,10 +33,17 @@ function readAccountFields(formData: FormData) {
   const role = String(formData.get("role") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const employeeCode = String(formData.get("employeeCode") ?? "").trim();
+  const targetRaw = String(formData.get("monthlySalesTarget") ?? "").trim();
 
   if (!name) throw new Error("Full name is required.");
   if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
     throw new Error("That email address does not look valid.");
+  }
+
+  // An empty box means the default target rather than none at all.
+  const target = targetRaw === "" ? DEFAULT_SALES_TARGET : Math.round(Number(targetRaw));
+  if (!Number.isFinite(target) || target < 0) {
+    throw new Error("The monthly sales target must be a whole number, zero or more.");
   }
 
   return {
@@ -44,6 +52,7 @@ function readAccountFields(formData: FormData) {
     role: role || null,
     phone: phone || null,
     employeeCode: employeeCode || null,
+    monthlySalesTarget: target,
   };
 }
 

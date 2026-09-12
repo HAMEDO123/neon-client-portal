@@ -158,6 +158,10 @@ The domain vocabulary, as the code defines it:
   - The employee is notified at once (type `WARNING`, which preferences can't silence) and sees every warning pinned to the top of `/employee` until the manager removes it.
   - Warning `WARNING_LIMIT` (3) tells them first, then disables the account and its devices. Reopening the account is the existing Enable button.
   - Rules are in `lib/warnings.ts`, data in `lib/employee-warnings.ts`, and the admin actions in `lib/actions/warning-actions.ts`.
+- **Sales targets**: a project is a sale. `Project.soldById` and `Project.soldOn` (set under Sold by / Sold on in the project's Details) say who sold it and which month it counts in — the same month window payroll uses.
+  - Each employee has `monthlySalesTarget` (default `DEFAULT_SALES_TARGET`, 3), edited in their Details in the admin.
+  - The employee sees the month's progress on `/employee`; the manager sees it on the employee's page and as a badge on the employees list.
+  - Rules in `lib/sales.ts`, queries in `lib/sales-queries.ts`. Nothing is deducted for missing a target.
 - **Days** are calendar days in the company timezone: AppSetting `timezone`, else `APP_TIMEZONE`, else `Asia/Amman` (`lib/time.ts`). `@db.Date` columns store UTC midnight of that day. Convert with `dayKeyToDate` / `dateToDayKey`.
 
 **Pages:**
@@ -225,8 +229,8 @@ The domain vocabulary, as the code defines it:
 
 ### Tests
 - `npm test` runs `node --test` over `tests/**/*.test.ts` through tsx, loading `.env` and `.env.local`.
-- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`.
-- Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`. A run showing `pass 0 … skipped N` with exit 0 means **the database is down**, not that the tests passed.
+- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`, `sales`.
+- Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`, `sales`. A run showing `pass 0 … skipped N` with exit 0 means **the database is down**, not that the tests passed.
 
 ---
 

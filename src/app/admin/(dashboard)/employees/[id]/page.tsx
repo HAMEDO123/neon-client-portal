@@ -15,6 +15,10 @@ import { buttonClasses } from "@/components/ui/buttons";
 import { formatDate } from "@/lib/format";
 import { getTimezone } from "@/lib/settings";
 import { EmployeeWarnings } from "@/components/admin/employee-warnings";
+import { EmployeeSales } from "@/components/admin/employee-sales";
+import { monthSalesFor } from "@/lib/sales-queries";
+import { periodOf } from "@/lib/payroll";
+import { todayKey } from "@/lib/time";
 
 export default async function AdminEmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,6 +33,8 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
   });
   if (!employee) notFound();
   const timezone = await getTimezone();
+  const period = periodOf(todayKey(timezone));
+  const sales = await monthSalesFor(employee.id, period);
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,10 +77,25 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           defaultValue={employee.employeeCode ?? ""}
           required={false}
         />
+        <TextInput
+          label="Monthly sales target (projects)"
+          name="monthlySalesTarget"
+          type="number"
+          defaultValue={employee.monthlySalesTarget}
+          required={false}
+        />
         <div className="flex items-end">
           <SaveButton label="Save details" />
         </div>
       </form>
+
+      <EmployeeSales
+        name={employee.name}
+        projects={sales.projects}
+        target={sales.target}
+        period={period}
+        timezone={timezone}
+      />
 
       <EmployeeWarnings
         employeeId={employee.id}

@@ -160,6 +160,12 @@ model Project {
   coverImageUrl String?
   deliveryDate  DateTime?
 
+  // A project is a sale. Who sold it, and the day it counts for: the month of
+  // soldOn is the month it counts towards that person's target (lib/sales.ts).
+  soldById String?
+  soldBy   Employee? @relation("ProjectSoldBy", fields: [soldById], references: [id], onDelete: SetNull)
+  soldOn   DateTime? @db.Date
+
   publishState      PublishState   @default(DRAFT)
   pipelineStatus    PipelineStatus @default(DRAFT)
   currentStage      ProjectStage   @default(CONCEPT)
@@ -189,6 +195,8 @@ model Project {
   taskEntries  ProjectTaskEntry[]
   chatMessages ChatMessage[]
   sectionTeam  ProjectSectionAssignment[]
+
+  @@index([soldById, soldOn])
 }
 
 model GallerySpace {
@@ -417,6 +425,9 @@ model Employee {
   salaryAmount Float?
   payBasis     PayBasis @default(MONTHLY)
 
+  // Projects this person is expected to sell each calendar month.
+  monthlySalesTarget Int @default(3)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -436,6 +447,7 @@ model Employee {
   assignedTasks   AssignedTask[]
   sectionWork     ProjectSectionAssignment[]
   warnings        EmployeeWarning[]
+  soldProjects    Project[]                  @relation("ProjectSoldBy")
 }
 
 // A formal warning from the manager, with the reason the employee is shown at
