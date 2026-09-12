@@ -224,7 +224,8 @@ The domain vocabulary, as the code defines it:
 - `lib/ai/client.ts` uses model `claude-opus-5`.
 - `lib/ai/assistant.ts` powers the manager's "Ask the assistant" panel in the team chat. Its answers are stored as `managerOnly` messages.
 - `lib/ai/receipts.ts` reads receipt photos.
-- Without `ANTHROPIC_API_KEY`, both fail softly and nothing else is affected.
+- `lib/ai/day-plan.ts` proposes one person's day, from the card on `/admin/employees/[id]`. It reads three things: `Employee.playbook` ("What they usually do", on that page), the AppSetting `planning_notes` ("How we plan a day", in Settings) and their open board work with its readiness — then asks for a timetable. `lib/day-plan.ts` is the pure half (the brief it is given, and reading the timetable back) and is unit-tested. It writes nothing: a proposal is a screen, and the manager puts the days on the board themselves.
+- Without `ANTHROPIC_API_KEY`, they all fail softly and nothing else is affected.
 
 ### iOS app and mobile API
 - `/api/mobile/{login,dashboard,projects,projects/[id],…/comments,…/cover,…/gallery}` use a Bearer token, the same one as the admin cookie. Mobile is admin only.
@@ -244,11 +245,15 @@ The domain vocabulary, as the code defines it:
   2. If you see "Lock file is already being held", delete `%LOCALAPPDATA%\prisma-dev-nodejs\Data\durable-streams\neon-client-portal\server.lock.lock`. This is a marker, not your data.
   3. Run `npm run db:dev` again.
   4. `migrate status` saying "up to date" does **not** prove the database is serving; confirm with a real query.
+  5. **A whole-suite `npm test` can kill it even from a rested start**, and `--test-concurrency=1` does not save it. The run dies part-way and you get a handful of failures plus a mass of cancellations — which reads exactly like a regression and is not one. Prove it before believing it: run each `*.db.test.ts` in its own process, one after another. Every file that "failed" passes alone, and that per-file run is a full run this machine survives.
+  6. Deleting `…\durable-streams\neon-client-portal` does **not** reset the database. The data lives elsewhere and comes straight back; all that goes is the stream log (it had grown to 14 GB), which is worth doing when `current_schema()` starts coming back `null` — the state in which every unqualified query fails with `42P01`, as though the tables had vanished.
+  7. Rows named `zdev-…`, `zsale-…`, `zdep-…` are fixtures left behind by a run that died before cleaning up. They are harmless — the tests pass with them there. `node --env-file=.env.local scripts/restore-local-data.mjs --replace` puts the database back to the copy in `local-backup/`.
 - **Run queries one after another.** Pages that run several queries at once (`Promise.all`) fail locally with `P1017`, and production copes. Keep reads sequential; it's the codebase convention.
   - To screenshot a heavy page locally, temporarily add `max: 1` to the `Pool` in `src/lib/db.ts`, restart the dev server, and **don't commit it**.
 - **Every action checks its own session.** Server actions are public endpoints, and the layout redirect isn't a security boundary. Keep queries out of `"use server"` files, because every export there becomes callable.
 - **`deploymentId`** makes a page left open across a deploy reload instead of failing its server actions.
 - **Git Bash on Windows** rewrites arguments that start with `/` into Windows paths. Prefix the command with `MSYS_NO_PATHCONV=1`.
+- **Drive the dev server as `localhost`, never `127.0.0.1`.** `next dev` treats the other spelling as a foreign origin and answers its own chunks with 403, so the page renders, never hydrates, and every click does nothing — with no error in the browser. The dev server's log says "Blocked cross-origin request to Next.js dev resource". Read as a broken feature, this costs an afternoon.
 - **Phone layout:** see "Phone frame". Never stretch the frame past the visual viewport, and use the readout.
 
 ## Known issues (open)

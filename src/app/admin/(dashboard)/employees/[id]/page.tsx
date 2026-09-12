@@ -18,7 +18,9 @@ import { EmployeeWarnings } from "@/components/admin/employee-warnings";
 import { EmployeeSales } from "@/components/admin/employee-sales";
 import { monthSalesFor } from "@/lib/sales-queries";
 import { periodOf } from "@/lib/payroll";
-import { todayKey } from "@/lib/time";
+import { todayKey, tomorrowKey } from "@/lib/time";
+import { DayPlanPanel } from "@/components/admin/day-plan-panel";
+import { isAiConfigured } from "@/lib/ai/client";
 
 export default async function AdminEmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,7 +35,8 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
   });
   if (!employee) notFound();
   const timezone = await getTimezone();
-  const period = periodOf(todayKey(timezone));
+  const today = todayKey(timezone);
+  const period = periodOf(today);
   const sales = await monthSalesFor(employee.id, period);
 
   return (
@@ -99,6 +102,16 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           <SaveButton label="Save details" />
         </div>
       </form>
+
+      {/* Sits under what was just written about them: the box above is what
+          this reads from, so the effect of filling it in is one card away. */}
+      <DayPlanPanel
+        employeeId={employee.id}
+        name={employee.name}
+        today={today}
+        tomorrow={tomorrowKey(timezone)}
+        configured={isAiConfigured()}
+      />
 
       <EmployeeSales
         name={employee.name}
