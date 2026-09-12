@@ -95,12 +95,18 @@ function Row({
         <span className="block text-sm font-medium text-ink">{label}</span>
         <span className="block text-xs text-ink/45">{hint}</span>
       </span>
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={defaultChecked}
-        className="h-6 w-6 shrink-0 accent-[var(--cyan-strong)]"
-      />
+      {/* The same switch as Push and Sounds above, over a real checkbox so the
+          form still posts every row. */}
+      <span className="relative inline-block h-7 w-12 shrink-0">
+        <input
+          type="checkbox"
+          name={name}
+          defaultChecked={defaultChecked}
+          className="peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+        />
+        <span className="block h-7 w-12 rounded-full bg-ink/15 transition-colors peer-checked:bg-emerald-600" />
+        <span className="pointer-events-none absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-[left] peer-checked:left-[1.375rem]" />
+      </span>
     </label>
   );
 }

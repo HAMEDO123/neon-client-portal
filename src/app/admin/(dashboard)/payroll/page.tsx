@@ -382,10 +382,12 @@ export default async function AdminPayrollPage({
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  // Label first, the number under it, and tighter on a phone: four of these
+  // filled the screen before the pay sheet itself.
   return (
-    <div className="glass rounded-2xl p-5">
-      <p className="text-2xl font-semibold text-ink">{value}</p>
-      <p className="mt-1 text-xs text-ink/50">{label}</p>
+    <div className="glass rounded-2xl p-3.5 sm:p-5">
+      <p className="truncate text-[11px] font-medium text-ink/45 sm:text-xs">{label}</p>
+      <p className="mt-1.5 text-xl font-semibold tabular-nums text-ink sm:mt-2 sm:text-2xl">{value}</p>
     </div>
   );
 }

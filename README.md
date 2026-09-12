@@ -25,7 +25,7 @@ One Next.js app runs NEON's interior-design studio. It is live at **https://neon
 - **Push without asking.** Once a change is done and verified, commit it and push to `main`. Verified means `npx tsc --noEmit`, `npm run lint`, `npm test` and `npm run build` all pass. The owner, Hamed, tests on a phone against the live site, so an unpushed fix is one they can't see. Never force-push or rewrite history.
 - **Confirm the deploy.** Every page's asset URLs carry `?dpl=<commit SHA>` (set by `deploymentId` in `next.config.ts`). The deploy is live when `curl -s https://neon-client-portal.onrender.com/employee/login | grep -oE 'dpl=[A-Za-z0-9]+'` matches `git rev-parse HEAD`, usually 2–3 minutes after the push. Then tell the owner.
 - **Keep replies short and plain.** Requests are brief, sometimes in Arabic, and often come with phone screenshots. Answer in the language you were asked in.
-- **Known lint errors.** As of 2026-09-10, `npm run lint` already fails on `react-hooks/set-state-in-effect` in `src/components/employee/countdown.tsx` and `deadline-meter.tsx`. Lint the files you change, and don't take those two for a regression of yours.
+- **Lint is clean.** `npm run lint` passes with 0 errors (a few unused-variable warnings remain), so an error you see is one you introduced. A component that needs the current time ticking uses `lib/use-minute-now.ts` — one shared clock read through `useSyncExternalStore`, rather than setting state in an effect, which `react-hooks/set-state-in-effect` refuses.
 - **Next.js has breaking changes here.** This is not the Next.js you know (see AGENTS.md). Check `node_modules/next/dist/docs/` before using an API you're unsure of.
 
 ---

@@ -89,14 +89,18 @@ export function PushPrompt({ publicKey }: { publicKey: string }) {
   );
 
   if (mode === "install") {
+    // One line until it is asked for: the steps matter once, and the home
+    // screen belongs to today's work.
     return (
-      <div className="glass relative rounded-2xl border border-cyan/25 bg-cyan/[0.06] p-4">
+      <details className="glass group relative rounded-2xl border border-cyan/25 bg-cyan/[0.06] p-3.5">
         {close}
-        <p className="inline-flex items-center gap-2 pr-6 text-sm font-semibold text-ink">
-          <BellRing size={16} strokeWidth={2} />
-          Get notifications on this iPhone
-        </p>
-        <p className="mt-1 text-xs text-ink/55">
+        <summary className="flex cursor-pointer list-none items-center gap-2 pr-7 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
+          <BellRing size={16} strokeWidth={2} className="shrink-0" />
+          <span className="min-w-0 flex-1">Get notifications on this iPhone</span>
+          <span className="shrink-0 text-xs font-medium text-cyan-strong group-open:hidden">How?</span>
+        </summary>
+
+        <p className="mt-2 text-xs text-ink/55">
           iPhone only sends notifications to apps on your Home Screen. It takes ten seconds, once:
         </p>
 
@@ -115,7 +119,7 @@ export function PushPrompt({ publicKey }: { publicKey: string }) {
         <p className="mt-3 text-[11px] text-ink/40">
           Do it from Safari. If this page is open inside another app, open it in Safari first.
         </p>
-      </div>
+      </details>
     );
   }
 

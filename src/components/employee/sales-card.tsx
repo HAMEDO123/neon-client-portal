@@ -24,7 +24,7 @@ export function SalesCard({
   const standing = salesStanding(projects.length, target);
 
   return (
-    <section aria-label="Sales target" className="rounded-2xl border border-ink/8 bg-white/60 p-4">
+    <section aria-label="Sales target" className="glass rounded-2xl p-4">
       <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
         <TrendingUp size={16} strokeWidth={2} />
         Projects sold in {periodLabel(period)}

@@ -41,10 +41,14 @@ export default async function AdminDashboardPage() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:grid-cols-4 sm:gap-4">
         {cards.map((c) => (
-          <div key={c.label} className="glass rounded-2xl p-4 sm:p-5">
-            <c.icon size={18} strokeWidth={1.75} className="text-ink/40" />
-            <p className="mt-3 text-2xl font-semibold text-ink">{c.value}</p>
-            <p className="mt-1 text-xs text-ink/50">{c.label}</p>
+          // Label first with its icon, the number as the answer under it: half
+          // the height of the old stacked tile, and it reads in one go.
+          <div key={c.label} className="glass rounded-2xl p-3.5 sm:p-5">
+            <p className="flex items-center gap-1.5 text-[11px] font-medium text-ink/45 sm:text-xs">
+              <c.icon size={14} strokeWidth={1.75} className="shrink-0 text-ink/35" />
+              <span className="truncate">{c.label}</span>
+            </p>
+            <p className="mt-1.5 text-2xl font-semibold tabular-nums text-ink sm:mt-2">{c.value}</p>
           </div>
         ))}
       </div>

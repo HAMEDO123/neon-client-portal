@@ -123,7 +123,9 @@ export function TaskBoard({
             {member.name}
           </FilterChip>
         ))}
-        <span className="ml-auto hidden items-center gap-3 text-xs text-ink/40 md:flex">
+        {/* On a phone this wraps onto its own line rather than disappearing:
+            the colours in the board need saying wherever the board is read. */}
+        <span className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-ink/40 md:ml-auto md:w-auto md:text-xs">
           <Legend state="DONE" />
           <Legend state="IN_PROGRESS" />
           <Legend state="SUBMITTED" />

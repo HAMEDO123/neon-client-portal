@@ -283,6 +283,20 @@ body:has(.admin-shell) {
   }
 }
 
+/* On a phone an admin page's heading and the line under it took a third of the
+   screen before any content. The same words, in type that fits the screen. */
+@media (max-width: 639.98px) {
+  .admin-shell h1 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+
+  .admin-shell h1 + p {
+    font-size: 0.8125rem;
+    line-height: 1.15rem;
+  }
+}
+
 /* Scoped scrollbar hide for horizontal chip/tab rails. */
 .scrollbar-none {
   scrollbar-width: none;

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AlarmClock, TimerReset } from "lucide-react";
+import { useMinuteNow } from "@/lib/use-minute-now";
 import { countdownOf, countdownToDay } from "@/lib/stage-schedule";
 import { cn } from "@/lib/utils";
 
@@ -39,16 +39,9 @@ export function Countdown({
   size?: "small" | "large";
   className?: string;
 }) {
-  const [now, setNow] = useState<Date | null>(null);
-
-  useEffect(() => {
-    setNow(new Date());
-    // A minute is fine: nothing here changes faster than that.
-    const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  if (!now) return null;
+  const minute = useMinuteNow();
+  if (!minute) return null;
+  const now = new Date(minute);
 
   let countdown;
   if (dueDay) {

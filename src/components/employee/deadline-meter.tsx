@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useMinuteNow } from "@/lib/use-minute-now";
 import { DEFAULT_TIMEZONE, dayKeyIn } from "@/lib/time";
 import { countdownToDay } from "@/lib/stage-schedule";
 import { dayOfWindow, windowFraction, windowLabel } from "@/lib/progress";
@@ -27,25 +28,26 @@ export function DeadlineMeter({
   startKey,
   endKey,
   timeZone = DEFAULT_TIMEZONE,
+  showLabel = true,
 }: {
   startKey: string;
   endKey: string;
   timeZone?: string;
+  /** Off where a countdown chip beside it already says the same thing. */
+  showLabel?: boolean;
 }) {
-  const [now, setNow] = useState<Date | null>(null);
+  const minute = useMinuteNow();
   const [grown, setGrown] = useState(false);
 
+  // Grown on the next frame rather than this one, so the bar fills in from
+  // empty instead of appearing already full.
   useEffect(() => {
-    setNow(new Date());
     const frame = requestAnimationFrame(() => setGrown(true));
-    const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearInterval(timer);
-    };
+    return () => cancelAnimationFrame(frame);
   }, []);
 
-  if (!now) return <div className="mt-3 h-[22px]" aria-hidden />;
+  if (!minute) return <div className={showLabel ? "mt-3 h-[22px]" : "mt-2.5 h-1.5"} aria-hidden />;
+  const now = new Date(minute);
 
   const window = dayOfWindow(startKey, endKey, dayKeyIn(timeZone, now));
   const tone = TONES[countdownToDay(endKey, now, timeZone).tone];
@@ -53,7 +55,7 @@ export function DeadlineMeter({
   const label = windowLabel(window);
 
   return (
-    <div className="mt-3">
+    <div className={showLabel ? "mt-3" : "mt-2.5"}>
       <div
         role="progressbar"
         aria-label={label}
@@ -67,7 +69,9 @@ export function DeadlineMeter({
           style={{ width: `${grown ? fraction * 100 : 0}%` }}
         />
       </div>
-      <p className="mt-1 text-[11px] font-medium text-ink/45">{label}</p>
+      {/* The bar carries the label only where it stands alone: on a card, the
+          countdown chip beside the title has already said it. */}
+      {showLabel && <p className="mt-1 text-[11px] font-medium text-ink/45">{label}</p>}
     </div>
   );
 }

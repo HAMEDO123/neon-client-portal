@@ -49,37 +49,41 @@ export function TaskCard({
     <Link
       href={`/employee/tasks/${task.id}`}
       className={cn(
-        "glass block rounded-2xl p-4 transition-transform active:scale-[0.99]",
+        "glass block rounded-2xl p-3.5 transition-transform active:scale-[0.99]",
         done && "opacity-70"
       )}
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                PRIORITY_STYLE[task.priority]
+          {/* Only the priority worth acting on gets a chip: "MEDIUM" on every
+              card said nothing and cost a line. */}
+          {(task.priority === "HIGH" || recentlyUpdated(task)) && (
+            <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+              {task.priority === "HIGH" && (
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                    PRIORITY_STYLE.HIGH
+                  )}
+                >
+                  High
+                </span>
               )}
-            >
-              {task.priority}
-            </span>
-            {recentlyUpdated(task) && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-purple/20 bg-purple/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-strong">
-                <Sparkles size={10} strokeWidth={2.5} />
-                Updated
-              </span>
-            )}
-          </div>
+              {recentlyUpdated(task) && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-purple/20 bg-purple/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-purple-strong">
+                  <Sparkles size={10} strokeWidth={2.5} />
+                  Updated
+                </span>
+              )}
+            </div>
+          )}
 
-          <h3 className={cn("mt-2 text-[15px] font-semibold text-ink", done && "line-through")}>
-            {task.task.name}
-          </h3>
+          <h3 className={cn("text-[15px] font-semibold text-ink", done && "line-through")}>{task.task.name}</h3>
           <p className="mt-0.5 truncate text-xs text-ink/50">{task.project.name}</p>
 
-          {task.adminNote && <p className="mt-2 line-clamp-2 text-sm text-ink/60">{task.adminNote}</p>}
+          {task.adminNote && <p className="mt-1.5 line-clamp-2 text-sm text-ink/60">{task.adminNote}</p>}
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
             <span
               className={cn(
                 "rounded-full border px-2 py-0.5 text-[11px] font-medium",
@@ -105,7 +109,7 @@ export function TaskCard({
           </div>
 
           {window && !done && (
-            <DeadlineMeter startKey={window.startKey} endKey={window.endKey} timeZone={timezone} />
+            <DeadlineMeter startKey={window.startKey} endKey={window.endKey} timeZone={timezone} showLabel={false} />
           )}
         </div>
 
