@@ -3,20 +3,23 @@ import { ASSISTANT_MODEL, describeAiError, getAiClient, isAiConfigured } from "@
 import { allTasks } from "@/lib/employee-tasks";
 import { getPlanningNotes, getTimezone } from "@/lib/settings";
 import { readinessOf } from "@/lib/task-readiness";
-import { DAY_PLAN_SYSTEM, buildDayBrief, parsePlan, type PlanBlock, type PlanTask } from "@/lib/day-plan";
+import { DAY_PLAN_SYSTEM, buildDayBrief, parsePlan, planBlocksFrom, type PlanTask } from "@/lib/day-plan";
+import { saveDayPlan, type StoredDayPlan } from "@/lib/day-plan-store";
 import { dayKeyToDate, formatDayIn, formatTimeIn } from "@/lib/time";
 
 // "Plan tomorrow for Wael."
 //
-// Reads three things and writes none: what the manager wrote about how this
-// person is usually worked, the studio's own rules for a day, and the real
-// state of their board — then asks Claude for a timetable.
+// Reads three things: what the manager wrote about how this person is usually
+// worked, the studio's own rules for a day, and the real state of their board —
+// then asks Claude for a timetable and writes the answer down.
 //
-// The proposal is returned, never saved. Nothing on the board moves until the
-// manager does it themselves, so a wrong suggestion costs a glance.
+// Writing it down is the point: a proposal that only lived on the screen was
+// gone the moment the manager looked at the board, which is exactly what they
+// do before deciding. Nothing here touches the board itself — putting the plan
+// on the day is a separate, deliberate press.
 
 export type DayPlanResult =
-  | { ok: true; person: string; dayLabel: string; blocks: PlanBlock[]; rest: string[] }
+  | { ok: true; person: string; dayLabel: string; plan: StoredDayPlan }
   | { ok: false; error: string };
 
 /** Prisma's row for a task, as the brief wants it. */
@@ -28,6 +31,7 @@ function toPlanTask(
   const day = dayKeyToDate(dayKey);
 
   return {
+    // The board cell itself, so a block can later be put on a day.
     id: task.id,
     name: task.task.name,
     projectName: task.project.name,
@@ -68,6 +72,7 @@ export async function proposeDay(employeeId: string, dayKey: string): Promise<Da
   const timezone = await getTimezone();
   const notes = await getPlanningNotes();
   const open = await allTasks(employeeId, "open");
+  const tasks = open.map((task) => toPlanTask(task, dayKey, timezone));
 
   // A real date always formats; the key itself is the fallback the types want.
   const dayLabel = formatDayIn(timezone, dayKeyToDate(dayKey)) ?? dayKey;
@@ -75,7 +80,7 @@ export async function proposeDay(employeeId: string, dayKey: string): Promise<Da
     person: { name: employee.name, role: employee.role, playbook: employee.playbook },
     notes,
     dayLabel,
-    tasks: open.map((task) => toPlanTask(task, dayKey, timezone)),
+    tasks,
   });
 
   try {
@@ -105,7 +110,18 @@ export async function proposeDay(employeeId: string, dayKey: string): Promise<Da
     if (!text) return { ok: false, error: "The assistant returned nothing." };
 
     const { blocks, rest } = parsePlan(text);
-    return { ok: true, person: employee.name, dayLabel, blocks, rest };
+    // Each block's code becomes the board cell it stands for — which is what
+    // lets the whole plan be put on the day in one press.
+    const planned = planBlocksFrom(blocks, tasks);
+
+    await saveDayPlan(employeeId, dayKey, planned, rest);
+
+    return {
+      ok: true,
+      person: employee.name,
+      dayLabel,
+      plan: { blocks: planned, notes: rest, appliedAt: null, updatedAt: new Date() },
+    };
   } catch (error) {
     return { ok: false, error: describeAiError(error) };
   }

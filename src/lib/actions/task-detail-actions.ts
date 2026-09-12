@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { notifyTaskAssigned, notifyTaskUpdated, snapshotOf } from "@/lib/notifications/events";
 import { acceptableDependencies } from "@/lib/task-graph";
-import { dayKeyToDate } from "@/lib/time";
+import { dayKeyToDate, instantAt } from "@/lib/time";
 import { getTimezone } from "@/lib/settings";
 import type { TaskPriority } from "@/generated/prisma/enums";
 
@@ -27,23 +27,6 @@ const detailInclude = {
   task: { select: { id: true, name: true, employeeId: true } },
   project: { select: { name: true } },
 } as const;
-
-/**
- * Combines a day and a wall-clock time into an instant in the company
- * timezone. Doing this by hand rather than with `new Date("...")` keeps the
- * deadline correct no matter where the server is.
- */
-function toInstant(dayKey: string, time: string, timeZone: string): Date | null {
-  if (!dayKey || !time) return null;
-  const [hours, minutes] = time.split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
-
-  const guess = new Date(`${dayKey}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00Z`);
-  // Measure the zone's offset at that moment, then subtract it.
-  const localised = new Date(guess.toLocaleString("en-US", { timeZone }));
-  const utc = new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));
-  return new Date(guess.getTime() - (localised.getTime() - utc.getTime()));
-}
 
 export async function updateTaskEntryDetails(projectId: string, taskId: string, formData: FormData) {
   await requireAdmin();
@@ -71,7 +54,7 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
   const blockedById = blockedReason ? String(formData.get("blockedById") ?? "") || null : null;
 
   const scheduledFor = scheduledKey ? dayKeyToDate(scheduledKey) : null;
-  const dueAt = scheduledKey && dueTime ? toInstant(scheduledKey, dueTime, timezone) : null;
+  const dueAt = scheduledKey && dueTime ? instantAt(scheduledKey, dueTime, timezone) : null;
 
   const existing = await prisma.projectTaskEntry.findUnique({
     where: { projectId_taskId: { projectId, taskId } },

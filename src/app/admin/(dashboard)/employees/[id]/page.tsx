@@ -20,6 +20,7 @@ import { monthSalesFor } from "@/lib/sales-queries";
 import { periodOf } from "@/lib/payroll";
 import { todayKey, tomorrowKey } from "@/lib/time";
 import { DayPlanPanel } from "@/components/admin/day-plan-panel";
+import { getDayPlan } from "@/lib/day-plan-store";
 import { isAiConfigured } from "@/lib/ai/client";
 
 export default async function AdminEmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -36,8 +37,14 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
   if (!employee) notFound();
   const timezone = await getTimezone();
   const today = todayKey(timezone);
+  const tomorrow = tomorrowKey(timezone);
   const period = periodOf(today);
   const sales = await monthSalesFor(employee.id, period);
+
+  // A proposed day is stored, so it is still here after a look at the board.
+  // One after another, like every other read on this page.
+  const planToday = await getDayPlan(employee.id, today);
+  const planTomorrow = await getDayPlan(employee.id, tomorrow);
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,8 +116,9 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
         employeeId={employee.id}
         name={employee.name}
         today={today}
-        tomorrow={tomorrowKey(timezone)}
+        tomorrow={tomorrow}
         configured={isAiConfigured()}
+        plans={{ [today]: planToday, [tomorrow]: planTomorrow }}
       />
 
       <EmployeeSales

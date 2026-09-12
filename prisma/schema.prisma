@@ -447,6 +447,7 @@ model Employee {
   supplyRequests  SupplyRequest[]
   submissions     TaskSubmission[]
   receipts        ExpenseReceipt[]
+  dayPlans        DayPlan[]
   attendance      AttendanceRecord[]
   adminAlerts     AdminNotification[]        @relation("AdminNotificationSubject")
   adjustments     SalaryAdjustment[]
@@ -584,6 +585,36 @@ model TaskDependency {
 
   @@unique([entryId, dependsOnEntryId])
   @@index([dependsOnEntryId])
+}
+
+// A day proposed for one person, kept rather than held on a screen.
+//
+// A proposal is worth nothing if it vanishes when the manager navigates away:
+// they generate it, look at the board, come back, adjust it, and only then put
+// it on the day. So it is stored, one per person per day, and editing it is
+// just writing it again. `appliedAt` records that it has been put on the
+// board; the plan stays afterwards, as the record of what was decided.
+model DayPlan {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // The day being planned, in the company timezone, like every other day column.
+  day DateTime @db.Date
+
+  // The blocks, as proposed and then as the manager edited them. JSON because
+  // a block is only ever read and written whole, and its shape belongs to
+  // lib/day-plan.ts rather than to the database.
+  blocks Json
+
+  // Anything the model said that was not a block, kept rather than dropped.
+  notes String? @db.Text
+
+  appliedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+
+  @@unique([employeeId, day])
 }
 
 // One notification for one employee. Everything an employee is told goes

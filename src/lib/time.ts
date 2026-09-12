@@ -76,6 +76,32 @@ export function dateToDayKey(value: Date | null | undefined) {
   return value ? value.toISOString().slice(0, 10) : null;
 }
 
+/**
+ * A wall-clock time on a given day, as the instant it actually happens.
+ *
+ * "09:30 tomorrow" is a statement about Amman, not about the server, so the
+ * offset is measured at that moment and taken off — which keeps it right
+ * across a daylight-saving change, where a fixed offset would not. Returns
+ * null for anything that is not a real time, so a caller can tell "no time
+ * given" from "the middle of the night".
+ */
+export function instantAt(dayKey: string, time: string, timeZone: string): Date | null {
+  if (!dayKey || !time) return null;
+
+  const [hours, minutes] = time.split(":").map(Number);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+
+  const guess = new Date(
+    `${dayKey}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00Z`
+  );
+  if (Number.isNaN(guess.getTime())) return null;
+
+  const localised = new Date(guess.toLocaleString("en-US", { timeZone }));
+  const utc = new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));
+  return new Date(guess.getTime() - (localised.getTime() - utc.getTime()));
+}
+
 export function todayKey(timeZone: string) {
   return dayKeyIn(timeZone);
 }
