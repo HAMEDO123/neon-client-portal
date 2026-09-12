@@ -22,6 +22,7 @@ import {
   updateProcessTask,
 } from "@/lib/actions/task-actions";
 import { NEXT_STATE, STATE_LABEL, dotTone, headerTone, columnTone } from "@/lib/task-board";
+import { placePanel } from "@/lib/popover-placement";
 import { TaskScheduleEditor, type CellDetails } from "@/components/admin/task-schedule-editor";
 import { ProjectTeamEditor, TeamDots } from "@/components/admin/project-team-editor";
 import { LiveDot } from "@/components/ui/live-dot";
@@ -807,8 +808,6 @@ function PopoverField({
 
 const POPOVER_WIDTH = 224; // w-56
 const EDITOR_WIDTH = 272;
-// However cramped the window, a panel never shrinks below this — it scrolls.
-const MIN_PANEL_HEIGHT = 200;
 
 // A header cell is only ~96px wide, so its editor floats above the table. The
 // board scrolls sideways, and a horizontal overflow container clips vertically
@@ -841,34 +840,34 @@ function Popover({
 
     // Written straight to the node: the panel is positioned against a cell that
     // scrolls, so this runs on every scroll frame and never needs a re-render.
-    function place() {
+    function place(event?: Event) {
       const panel = panelRef.current;
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!panel || !rect) return;
 
-      const margin = 8;
-      const offset = align === "end" ? rect.width - width : align === "center" ? (rect.width - width) / 2 : 0;
-      panel.style.left = `${Math.max(margin, Math.min(rect.left + offset, window.innerWidth - width - margin))}px`;
+      // Scrolling inside the panel is not a reason to move it — and it is the
+      // one scroll that must not re-measure. Measuring lets the panel out to
+      // its full height, at which point it no longer overflows and the browser
+      // pins it back to the top. Caught in the capture phase below, that made
+      // the editor impossible to scroll at all.
+      if (event?.target instanceof Node && panel.contains(event.target)) return;
 
-      // The scheduling editor is far taller than the cell that opens it, and
-      // the board sits low on the page — hung under its trigger it ran off the
-      // bottom of the window, taking the Save button with it. Measure first,
-      // then hang it wherever there is more room and cap it to that, so the
-      // whole form is always reachable and scrolls inside itself if it must.
+      // Measured uncapped, because where it hangs depends on how tall the form
+      // actually is; the reader keeps their place across the measurement.
+      const kept = panel.scrollTop;
       panel.style.maxHeight = "none";
-      const height = panel.scrollHeight;
-      const below = window.innerHeight - rect.bottom - margin * 2;
-      const above = rect.top - margin * 2;
 
-      if (height <= below || below >= above) {
-        panel.style.top = `${rect.bottom + 4}px`;
-        panel.style.maxHeight = `${Math.max(below, MIN_PANEL_HEIGHT)}px`;
-      } else {
-        const capped = Math.min(height, above);
-        panel.style.top = `${Math.max(margin, rect.top - capped - 4)}px`;
-        panel.style.maxHeight = `${Math.max(above, MIN_PANEL_HEIGHT)}px`;
-      }
+      const box = placePanel({
+        trigger: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
+        panel: { width, height: panel.scrollHeight },
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        align,
+      });
 
+      panel.style.left = `${box.left}px`;
+      panel.style.top = `${box.top}px`;
+      panel.style.maxHeight = `${box.maxHeight}px`;
+      panel.scrollTop = kept;
       panel.style.visibility = "visible";
     }
 
