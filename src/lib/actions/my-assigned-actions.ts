@@ -6,6 +6,7 @@ import { requireEmployee } from "@/lib/employee-session";
 import { saveFile } from "@/lib/storage";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { EMPLOYEE_SETTABLE_STATES, EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
+import { recordStateChange } from "@/lib/task-state-log";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // What an employee can do with a job the manager handed to them directly.
@@ -51,6 +52,14 @@ export async function setMyAssignedTaskStatus(id: string, state: TaskState) {
 
   await prisma.assignedTask.update({ where: { id }, data: { state, completedAt: null } });
 
+  await recordStateChange({
+    assignedTaskId: id,
+    from: task.state,
+    to: state,
+    actor: "employee",
+    actorEmployeeId: employee.id,
+  });
+
   if (task.state !== state) {
     await notifyAdmin({
       type: "TASK_STATUS_CHANGED",
@@ -87,6 +96,14 @@ export async function submitAssignedTaskCompletion(id: string, formData: FormDat
 
   // Not DONE — that word belongs to the manager.
   await prisma.assignedTask.update({ where: { id }, data: { state: "SUBMITTED", completedAt: null } });
+
+  await recordStateChange({
+    assignedTaskId: id,
+    from: task.state,
+    to: "SUBMITTED",
+    actor: "employee",
+    actorEmployeeId: employee.id,
+  });
 
   await notifyAdmin({
     type: "TASK_SUBMITTED",

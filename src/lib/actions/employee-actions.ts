@@ -7,6 +7,7 @@ import { taskForEmployee } from "@/lib/employee-tasks";
 import type { TaskState } from "@/generated/prisma/enums";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { EMPLOYEE_SETTABLE_STATES, EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
+import { recordStateChange } from "@/lib/task-state-log";
 
 // Everything an employee is allowed to change, and nothing else.
 //
@@ -43,6 +44,14 @@ export async function setMyTaskStatus(entryId: string, state: TaskState) {
       completedAt: null,
       startedAt: state === "IN_PROGRESS" ? (task.startedAt ?? new Date()) : task.startedAt,
     },
+  });
+
+  await recordStateChange({
+    entryId: task.id,
+    from: task.state,
+    to: state,
+    actor: "employee",
+    actorEmployeeId: employee.id,
   });
 
   // Nothing here is worth an alert if it did not actually change.

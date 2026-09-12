@@ -7,6 +7,7 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { dayKeyToDate } from "@/lib/time";
 import { daysBetween } from "@/lib/week";
 import { dispatchNotification } from "@/lib/notifications/engine";
+import { recordStateChange } from "@/lib/task-state-log";
 import type { TaskPriority } from "@/generated/prisma/enums";
 
 // Handing out work that is not part of any project.
@@ -220,10 +221,16 @@ export async function moveAssignedTask(id: string, input: { days: number; employ
 export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGRESS" | "DONE") {
   await requireAdmin();
 
+  const before = await prisma.assignedTask.findUnique({ where: { id }, select: { state: true } });
+
   await prisma.assignedTask.update({
     where: { id },
     data: { state, completedAt: state === "DONE" ? new Date() : null },
   });
+
+  if (before) {
+    await recordStateChange({ assignedTaskId: id, from: before.state, to: state, actor: "manager" });
+  }
 
   refresh();
 }

@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { EMPLOYEE_COLORS } from "@/lib/task-board";
+import { recordStateChange } from "@/lib/task-state-log";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // Every action here is a public POST endpoint, so the admin session is checked
@@ -26,10 +27,25 @@ export async function setTaskState(projectId: string, taskId: string, state: Tas
   await requireAdmin();
   if (!VALID_STATES.includes(state)) throw new Error("Unknown task state.");
 
-  await prisma.projectTaskEntry.upsert({
+  // Read first: a tick on the board used to leave nothing behind, so there was
+  // no way to know what it had been before. A row that does not exist yet was
+  // pending by definition — that is what an empty cell means.
+  const before = await prisma.projectTaskEntry.findUnique({
+    where: { projectId_taskId: { projectId, taskId } },
+    select: { state: true },
+  });
+
+  const entry = await prisma.projectTaskEntry.upsert({
     where: { projectId_taskId: { projectId, taskId } },
     create: { projectId, taskId, state, completedAt: state === "DONE" ? new Date() : null },
     update: { state, completedAt: state === "DONE" ? new Date() : null },
+  });
+
+  await recordStateChange({
+    entryId: entry.id,
+    from: before?.state ?? "TODO",
+    to: state,
+    actor: "manager",
   });
 
   refresh();

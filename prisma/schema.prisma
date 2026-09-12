@@ -555,6 +555,7 @@ model ProjectTaskEntry {
 
   notifications Notification[]
   submissions   TaskSubmission[]
+  stateChanges  TaskStateChange[]
   waitsFor      TaskDependency[] @relation("DependentEntry")
   blocks        TaskDependency[] @relation("BlockingEntry")
 
@@ -666,6 +667,48 @@ model ScheduledFollowUp {
 
   @@index([dueAt, askedAt])
   @@index([employeeId, day])
+}
+
+// Every time a task changed state: what it was, what it became, who did it and
+// why.
+//
+// Until this table there was no record at all. The manager ticking a cell on
+// the board left nothing behind — not who, not when, not from what — so a
+// question like "when did this actually start" had no answer anywhere, and an
+// automatic change could not be told apart from a person's.
+//
+// Rows are never edited. A wrong change is corrected by another change, and
+// both stay.
+model TaskStateChange {
+  id String @id @default(cuid())
+
+  // Exactly one of the two: a cell of the project board, or a week-board job.
+  entryId String?
+  entry   ProjectTaskEntry? @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  assignedTaskId String?
+  job            AssignedTask? @relation(fields: [assignedTaskId], references: [id], onDelete: Cascade)
+
+  fromState TaskState
+  toState   TaskState
+
+  // Who made the claim: employee, manager, or system. The employee is named
+  // where there is one; the manager is a single shared account, so there is no
+  // id to record for them.
+  actorType       String
+  actorEmployeeId String?
+
+  // Why, where anybody said — a review note, a reason for reopening.
+  reason String? @db.Text
+
+  // Whether a job made this change rather than a person. Nothing automatic may
+  // reach DONE, but the column is here so the difference is always visible.
+  automatic Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([entryId, createdAt])
+  @@index([assignedTaskId, createdAt])
 }
 
 // One notification for one employee. Everything an employee is told goes
@@ -1086,6 +1129,8 @@ model AssignedTask {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
+
+  stateChanges TaskStateChange[]
 
   @@index([employeeId, startDay])
   @@index([startDay, endDay])

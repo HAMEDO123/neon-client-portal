@@ -10,6 +10,7 @@ import { saveFile } from "@/lib/storage";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { taskUrl } from "@/lib/notifications/types";
 import { notifyAdmin } from "@/lib/admin-notifications";
+import { recordStateChange } from "@/lib/task-state-log";
 
 // Finishing a task is a claim, not a fact.
 //
@@ -66,6 +67,14 @@ export async function submitTaskCompletion(entryId: string, formData: FormData) 
     data: { state: "SUBMITTED", completedAt: null },
   });
 
+  await recordStateChange({
+    entryId: task.id,
+    from: task.state,
+    to: "SUBMITTED",
+    actor: "employee",
+    actorEmployeeId: employee.id,
+  });
+
   await notifyAdmin({
     type: "TASK_SUBMITTED",
     title: `${employee.name} finished a task`,
@@ -99,14 +108,44 @@ function describe(submission: Subject & {
   };
 }
 
-/** Moves the work the evidence was for into its next state. */
-async function settle(subject: Subject, state: "DONE" | "IN_PROGRESS") {
+/**
+ * Moves the work the evidence was for into its next state, and writes down
+ * that it moved. The state is read first because the record is of a change:
+ * "approved" means nothing without what it was approved from.
+ */
+async function settle(subject: Subject, state: "DONE" | "IN_PROGRESS", reason?: string | null) {
   const data = { state, completedAt: state === "DONE" ? new Date() : null };
 
   if (subject.entryId) {
+    const before = await prisma.projectTaskEntry.findUnique({
+      where: { id: subject.entryId },
+      select: { state: true },
+    });
     await prisma.projectTaskEntry.update({ where: { id: subject.entryId }, data });
+    if (before) {
+      await recordStateChange({
+        entryId: subject.entryId,
+        from: before.state,
+        to: state,
+        actor: "manager",
+        reason,
+      });
+    }
   } else if (subject.assignedTaskId) {
+    const before = await prisma.assignedTask.findUnique({
+      where: { id: subject.assignedTaskId },
+      select: { state: true },
+    });
     await prisma.assignedTask.update({ where: { id: subject.assignedTaskId }, data });
+    if (before) {
+      await recordStateChange({
+        assignedTaskId: subject.assignedTaskId,
+        from: before.state,
+        to: state,
+        actor: "manager",
+        reason,
+      });
+    }
   }
 }
 
@@ -124,7 +163,7 @@ export async function approveSubmission(submissionId: string, formData?: FormDat
     include: reviewInclude,
   });
 
-  await settle(submission, "DONE");
+  await settle(submission, "DONE", submission.reviewNote);
 
   const subject = describe(submission);
   await dispatchNotification({
@@ -154,7 +193,7 @@ export async function rejectSubmission(submissionId: string, formData?: FormData
 
   // Back to being worked on, not back to untouched: the employee has already
   // done something, and the history of the attempt is kept.
-  await settle(submission, "IN_PROGRESS");
+  await settle(submission, "IN_PROGRESS", reason);
 
   const subject = describe(submission);
   await dispatchNotification({
