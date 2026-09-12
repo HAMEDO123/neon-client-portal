@@ -5,6 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/format";
 import { PIPELINE_STATUSES } from "@/lib/constants";
+import { dayBoard } from "@/lib/day-board-queries";
+import { DayBoardList } from "@/components/admin/day-board-list";
+import { getTimezone } from "@/lib/settings";
+import { dayKeyToDate, formatDayIn, todayKey } from "@/lib/time";
 
 const PIPELINE_LABEL = new Map(PIPELINE_STATUSES.map((s) => [s.value, s.label]));
 
@@ -15,7 +19,20 @@ function publishTone(state: string) {
 }
 
 export default async function AdminDashboardPage() {
-  const [stats, projects] = await Promise.all([getDashboardStats(), getProjects()]);
+  // One after another, which is the convention everywhere else here. This page
+  // fired both at once, and that is the pattern the local database falls over
+  // on (README, "Run queries one after another"). Production copes either way,
+  // so nothing is lost by reading them in order.
+  const stats = await getDashboardStats();
+  const projects = await getProjects();
+
+  // The team's day, read one person at a time rather than joined onto the call
+  // above: the gatherer runs a handful of queries per person, and firing those
+  // alongside everything else is what the local database falls over on.
+  const timezone = await getTimezone();
+  const today = todayKey(timezone);
+  const days = await dayBoard(today);
+  const dayLabel = formatDayIn(timezone, dayKeyToDate(today)) ?? "today";
 
   const cards = [
     { label: "Total Projects", value: stats.total, icon: FolderKanban, tone: "cyan" as const },
@@ -51,6 +68,13 @@ export default async function AdminDashboardPage() {
             <p className="mt-1.5 text-2xl font-semibold tabular-nums text-ink sm:mt-2">{c.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* The team's day before the catalogue of projects: what needs somebody
+          today is more urgent than what exists. */}
+      <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-ink/40">The day · {dayLabel}</h2>
+      <div className="mt-4">
+        <DayBoardList days={days} dayLabel={dayLabel} />
       </div>
 
       <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-ink/40">All Projects</h2>
