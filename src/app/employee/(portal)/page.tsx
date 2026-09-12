@@ -19,6 +19,8 @@ import { SalesCard } from "@/components/employee/sales-card";
 import { monthSalesFor } from "@/lib/sales-queries";
 import { periodOf } from "@/lib/payroll";
 import { cn } from "@/lib/utils";
+import { myDay } from "@/lib/now-next-queries";
+import { NowNextCard } from "@/components/employee/now-next-card";
 
 function greeting(hour: number) {
   if (hour < 12) return "Good Morning";
@@ -77,6 +79,10 @@ export default async function EmployeeDashboard({
   const period = periodOf(todayDay);
   const sales = await monthSalesFor(employee.id, period);
 
+  // Where they are in the day that was actually put on the board for them.
+  // Read on its own, like everything else on this page.
+  const { state: nowNext, hours } = await myDay(employee.id);
+
   // A job handed out by hand belongs to the first of today and tomorrow it
   // touches. One that started on or before today is today's — including one
   // whose days have run out, because unfinished work does not stop being
@@ -125,6 +131,10 @@ export default async function EmployeeDashboard({
       </div>
 
       <WarningsCard warnings={warnings} timezone={timezone} />
+
+      {/* What they are on right now, above everything else: the question the
+          page exists to answer, before any summary of it. */}
+      <NowNextCard state={nowNext} hours={hours} />
 
       <TodaySummary counts={todayCounts} />
 
