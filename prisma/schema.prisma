@@ -448,6 +448,9 @@ model Employee {
   sectionWork     ProjectSectionAssignment[]
   warnings        EmployeeWarning[]
   soldProjects    Project[]                  @relation("ProjectSoldBy")
+  // Work waiting on this person to unstick it.
+  blockedEntries  ProjectTaskEntry[]         @relation("EntryBlockedBy")
+  blockedJobs     AssignedTask[]             @relation("JobBlockedBy")
 }
 
 // A formal warning from the manager, with the reason the employee is shown at
@@ -522,13 +525,59 @@ model ProjectTaskEntry {
   // towards anyone's completion percentage.
   excludedFromProgress Boolean @default(false)
 
+  // What finishing this actually means, and what it costs. Written by the
+  // manager (or proposed by the assistant) so that "done" is checkable rather
+  // than a matter of opinion, and so the day's work can be weighed as well as
+  // counted.
+  deliverable   String? @db.Text
+  acceptance    String? @db.Text
+  estimateHours Float?
+
+  // Why it cannot move, and who can unstick it. Set means blocked; cleared
+  // means it is running again — no extra state on the board.
+  blockedReason String?   @db.Text
+  blockedById   String?
+  blockedBy     Employee? @relation("EntryBlockedBy", fields: [blockedById], references: [id], onDelete: SetNull)
+
+  // The last thing anyone said about it, and what happens next: what a
+  // follow-up asks for and what a summary reads back.
+  lastUpdateNote String?   @db.Text
+  lastUpdateAt   DateTime?
+  nextStep       String?
+
   notifications Notification[]
   submissions   TaskSubmission[]
+  waitsFor      TaskDependency[] @relation("DependentEntry")
+  blocks        TaskDependency[] @relation("BlockingEntry")
 
   @@unique([projectId, taskId])
   @@index([taskId])
   @@index([assigneeId])
   @@index([scheduledFor])
+  @@index([blockedById])
+}
+
+// One task waiting on another: the drawings wait on the design being approved.
+//
+// Between board cells rather than between steps, because the answer differs per
+// project: the same two steps run in parallel on one job and in sequence on the
+// next. Nothing here is a state — whether a task is "ready" is read off these
+// rows (lib/task-readiness.ts), so the board keeps the states it has.
+model TaskDependency {
+  id String @id @default(cuid())
+
+  /// The task that waits.
+  entryId String
+  entry   ProjectTaskEntry @relation("DependentEntry", fields: [entryId], references: [id], onDelete: Cascade)
+
+  /// The task it waits for.
+  dependsOnEntryId String
+  dependsOn        ProjectTaskEntry @relation("BlockingEntry", fields: [dependsOnEntryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([entryId, dependsOnEntryId])
+  @@index([dependsOnEntryId])
 }
 
 // One notification for one employee. Everything an employee is told goes
@@ -931,6 +980,19 @@ model AssignedTask {
   state       TaskState    @default(TODO)
   priority    TaskPriority @default(MEDIUM)
   completedAt DateTime?
+
+  // The same detail a board cell carries, for the jobs handed out by hand.
+  deliverable   String? @db.Text
+  acceptance    String? @db.Text
+  estimateHours Float?
+
+  blockedReason String?   @db.Text
+  blockedById   String?
+  blockedBy     Employee? @relation("JobBlockedBy", fields: [blockedById], references: [id], onDelete: SetNull)
+
+  lastUpdateNote String?   @db.Text
+  lastUpdateAt   DateTime?
+  nextStep       String?
 
   submissions TaskSubmission[]
 

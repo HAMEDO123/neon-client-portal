@@ -53,6 +53,21 @@ const taskSelect = {
   updatedAt: true,
   assigneeId: true,
   excludedFromProgress: true,
+  // What finishing means, what it is expected to cost, and why it cannot move.
+  deliverable: true,
+  acceptance: true,
+  estimateHours: true,
+  blockedReason: true,
+  lastUpdateNote: true,
+  lastUpdateAt: true,
+  nextStep: true,
+  blockedBy: { select: { id: true, name: true } },
+  // The work this task waits for, so "ready" can be read rather than stored.
+  waitsFor: {
+    select: {
+      dependsOn: { select: { id: true, state: true, task: { select: { name: true } } } },
+    },
+  },
   task: { select: { id: true, name: true, employeeId: true } },
   project: { select: { id: true, name: true, clientName: true, location: true } },
 } satisfies Prisma.ProjectTaskEntrySelect;

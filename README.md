@@ -162,6 +162,9 @@ The domain vocabulary, as the code defines it:
   - Each employee has `monthlySalesTarget` (default `DEFAULT_SALES_TARGET`, 3), edited in their Details in the admin.
   - The employee sees the month's progress on `/employee`; the manager sees it on the employee's page and as a badge on the employees list.
   - Rules in `lib/sales.ts`, queries in `lib/sales-queries.ts`. Nothing is deducted for missing a target.
+- **Task detail and dependencies**: a board cell (and a week job) can carry what to hand in (`deliverable`), what counts as done (`acceptance`), the hours it should take (`estimateHours`), why it cannot move (`blockedReason` + `blockedById`), and where it stands (`lastUpdateNote`, `lastUpdateAt`, `nextStep`). `TaskDependency` rows say which cell waits for which.
+  - **None of it is a new state.** Ready, blocked, waiting on something, waiting for approval are all read off those facts by `readinessOf` in `lib/task-readiness.ts`, so the board keeps its five states and a task turns ready the moment the one before it finishes — nothing to remember to update.
+  - The manager fills the detail in the cell editor; the employee sees it on `/employee/tasks/[id]`. Dependencies can only be created in code so far — the manager's editor for them is the next slice.
 - **Days** are calendar days in the company timezone: AppSetting `timezone`, else `APP_TIMEZONE`, else `Asia/Amman` (`lib/time.ts`). `@db.Date` columns store UTC midnight of that day. Convert with `dayKeyToDate` / `dateToDayKey`.
 
 **Pages:**

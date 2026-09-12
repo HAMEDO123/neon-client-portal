@@ -1,12 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Building2, CalendarDays, Camera, Clock, FileText, Flag } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  CalendarDays,
+  Camera,
+  Clock,
+  FileText,
+  Flag,
+  Hourglass,
+  OctagonAlert,
+  PackageCheck,
+} from "lucide-react";
 import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
 import { saveMyTaskNote } from "@/lib/actions/employee-actions";
 import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { EMPLOYEE_STATE_LABEL, PRIORITY_LABEL } from "@/lib/task-board";
+import { effortLabel, readinessLabel, readinessOf, readinessReason } from "@/lib/task-readiness";
 import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
 import { submissionsForEntry } from "@/lib/submissions";
@@ -28,6 +40,20 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
   const due = formatTimeIn(timezone, task.dueAt);
   const dueDay = formatDayIn(timezone, task.dueAt);
   const scheduled = formatDayIn(timezone, task.scheduledFor);
+
+  // Ready, blocked, or waiting on something else — read off the facts rather
+  // than stored, so it is right the moment the task before this one finishes.
+  const readiness = readinessOf({
+    state: task.state,
+    blockedReason: task.blockedReason,
+    blockedByName: task.blockedBy?.name ?? null,
+    dependencies: task.waitsFor.map((row) => ({
+      name: row.dependsOn.task.name,
+      done: row.dependsOn.state === "DONE",
+    })),
+  });
+  const holdUp = readinessReason(readiness);
+  const effort = effortLabel(task.estimateHours);
 
   return (
     <div className="flex flex-col gap-5">
@@ -54,6 +80,39 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
         <Countdown dueBy={dueBy.toISOString()} timeZone={timezone} size="large" className="self-start" />
       )}
 
+      {/* Why it cannot be picked up, where that is the case: the reason is on
+          the task itself rather than something to go and ask about. */}
+      {(readiness.status === "blocked" || readiness.status === "waiting") && (
+        <section
+          className={
+            readiness.status === "blocked"
+              ? "rounded-2xl border border-pink/25 bg-pink/[0.06] p-4"
+              : "rounded-2xl border border-amber-300 bg-amber-50 p-4"
+          }
+        >
+          <p
+            className={
+              readiness.status === "blocked"
+                ? "inline-flex items-center gap-2 text-sm font-semibold text-pink-strong"
+                : "inline-flex items-center gap-2 text-sm font-semibold text-amber-900"
+            }
+          >
+            <OctagonAlert size={16} strokeWidth={2.25} />
+            {readinessLabel(readiness)}
+          </p>
+          {holdUp && (
+            <>
+              {/* dir="auto": the reason is as often Arabic as English, and it
+                  reads in its own direction rather than the page's. */}
+              <p dir="auto" className="mt-1 text-sm text-ink/70">
+                {holdUp.reason}
+              </p>
+              {holdUp.who && <p className="mt-1 text-xs text-ink/50">{holdUp.who} can clear it</p>}
+            </>
+          )}
+        </section>
+      )}
+
       <div className="glass grid grid-cols-2 gap-3 rounded-2xl p-4">
         <Detail icon={Flag} label="Priority" value={PRIORITY_LABEL[task.priority]} />
         <Detail icon={CalendarDays} label="Status" value={EMPLOYEE_STATE_LABEL[task.state]} />
@@ -63,7 +122,51 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
           label="Deadline"
           value={due ? `${dueDay ?? ""} ${due}`.trim() : "No deadline"}
         />
+        {effort && <Detail icon={Hourglass} label="Expected" value={effort} />}
       </div>
+
+      {(task.deliverable || task.acceptance) && (
+        <section className="glass rounded-2xl p-4">
+          <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
+            <PackageCheck size={13} strokeWidth={2} />
+            What counts as finished
+          </h2>
+          {task.deliverable && (
+            <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm text-ink/75">
+              {task.deliverable}
+            </p>
+          )}
+          {task.acceptance && (
+            <p dir="auto" className="mt-2 whitespace-pre-wrap border-t border-ink/8 pt-2 text-sm text-ink/60">
+              {task.acceptance}
+            </p>
+          )}
+        </section>
+      )}
+
+      {(task.lastUpdateNote || task.nextStep) && (
+        <section className="glass rounded-2xl p-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">Where it stands</h2>
+          {task.lastUpdateNote && (
+            <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm text-ink/75">
+              {task.lastUpdateNote}
+            </p>
+          )}
+          {task.lastUpdateAt && (
+            <p className="mt-1 text-[11px] text-ink/40">
+              {formatDayIn(timezone, task.lastUpdateAt)} · {formatTimeIn(timezone, task.lastUpdateAt)}
+            </p>
+          )}
+          {task.nextStep && (
+            <div className="mt-2 border-t border-ink/8 pt-2">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-ink/40">Next</p>
+              <p dir="auto" className="mt-0.5 text-sm text-ink/70">
+                {task.nextStep}
+              </p>
+            </div>
+          )}
+        </section>
+      )}
 
       <section>
         <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">Update status</h2>

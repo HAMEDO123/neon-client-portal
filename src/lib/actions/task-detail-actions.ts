@@ -56,6 +56,19 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
   const adminNote = String(formData.get("adminNote") ?? "").trim().slice(0, 2000) || null;
   const excludedFromProgress = formData.get("excludedFromProgress") === "on";
 
+  // What finishing means, what it should cost, and what is holding it up. All
+  // optional: a cell with none of them behaves exactly as it always has.
+  const deliverable = String(formData.get("deliverable") ?? "").trim().slice(0, 2000) || null;
+  const acceptance = String(formData.get("acceptance") ?? "").trim().slice(0, 2000) || null;
+  const estimateRaw = String(formData.get("estimateHours") ?? "").trim();
+  const estimateHours = estimateRaw === "" ? null : Math.max(0, Number(estimateRaw));
+  if (estimateHours != null && !Number.isFinite(estimateHours)) {
+    throw new Error("The estimate must be a number of hours.");
+  }
+  const blockedReason = String(formData.get("blockedReason") ?? "").trim().slice(0, 1000) || null;
+  // Nobody owns a blocker that does not exist.
+  const blockedById = blockedReason ? String(formData.get("blockedById") ?? "") || null : null;
+
   const scheduledFor = scheduledKey ? dayKeyToDate(scheduledKey) : null;
   const dueAt = scheduledKey && dueTime ? toInstant(scheduledKey, dueTime, timezone) : null;
 
@@ -68,8 +81,34 @@ export async function updateTaskEntryDetails(projectId: string, taskId: string, 
 
   const entry = await prisma.projectTaskEntry.upsert({
     where: { projectId_taskId: { projectId, taskId } },
-    create: { projectId, taskId, assigneeId, scheduledFor, dueAt, priority, adminNote, excludedFromProgress },
-    update: { assigneeId, scheduledFor, dueAt, priority, adminNote, excludedFromProgress },
+    create: {
+      projectId,
+      taskId,
+      assigneeId,
+      scheduledFor,
+      dueAt,
+      priority,
+      adminNote,
+      excludedFromProgress,
+      deliverable,
+      acceptance,
+      estimateHours,
+      blockedReason,
+      blockedById,
+    },
+    update: {
+      assigneeId,
+      scheduledFor,
+      dueAt,
+      priority,
+      adminNote,
+      excludedFromProgress,
+      deliverable,
+      acceptance,
+      estimateHours,
+      blockedReason,
+      blockedById,
+    },
     include: detailInclude,
   });
 

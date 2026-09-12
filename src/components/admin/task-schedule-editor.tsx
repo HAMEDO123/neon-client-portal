@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, EyeOff, StickyNote, X } from "lucide-react";
+import { CalendarClock, EyeOff, OctagonAlert, PackageCheck, StickyNote, X } from "lucide-react";
 import { updateTaskEntryDetails } from "@/lib/actions/task-detail-actions";
 import { PRIORITY_LABEL } from "@/lib/task-board";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,13 @@ export type CellDetails = {
   adminNote: string | null;
   assigneeId: string | null;
   excludedFromProgress: boolean;
+  /** What finishing means, and what it should cost. Optional everywhere. */
+  deliverable?: string | null;
+  acceptance?: string | null;
+  estimateHours?: number | null;
+  /** Why it cannot move, and who can clear it. */
+  blockedReason?: string | null;
+  blockedById?: string | null;
 };
 
 export function TaskScheduleEditor({
@@ -69,6 +76,13 @@ export function TaskScheduleEditor({
           adminNote: String(formData.get("adminNote") ?? "").trim() || null,
           assigneeId: String(formData.get("assigneeId") ?? "") || null,
           excludedFromProgress: formData.get("excludedFromProgress") === "on",
+          deliverable: String(formData.get("deliverable") ?? "").trim() || null,
+          acceptance: String(formData.get("acceptance") ?? "").trim() || null,
+          estimateHours: String(formData.get("estimateHours") ?? "").trim()
+            ? Number(formData.get("estimateHours"))
+            : null,
+          blockedReason: String(formData.get("blockedReason") ?? "").trim() || null,
+          blockedById: String(formData.get("blockedById") ?? "") || null,
         });
 
         try {
@@ -179,6 +193,77 @@ export function TaskScheduleEditor({
           placeholder="Anything they need to know…"
           className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
         />
+      </label>
+
+      {/* What "finished" means here, so a review has something to check against
+          and the assistant has something to read. All optional. */}
+      <label className="block">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink/40">
+          <PackageCheck size={11} strokeWidth={2} />
+          What to hand in
+        </span>
+        <textarea
+          name="deliverable"
+          rows={2}
+          defaultValue={details.deliverable ?? ""}
+          placeholder="The 2D plan as a PDF, with dimensions"
+          className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
+        />
+      </label>
+
+      <label className="block">
+        <span className="block text-[11px] font-medium uppercase tracking-wider text-ink/40">Counts as done when</span>
+        <textarea
+          name="acceptance"
+          rows={2}
+          defaultValue={details.acceptance ?? ""}
+          placeholder="Every room labelled and the client's changes in"
+          className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
+        />
+      </label>
+
+      <label className="block">
+        <span className="block text-[11px] font-medium uppercase tracking-wider text-ink/40">Expected hours</span>
+        <input
+          type="number"
+          name="estimateHours"
+          min="0"
+          step="0.5"
+          defaultValue={details.estimateHours ?? ""}
+          placeholder="3"
+          className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
+        />
+      </label>
+
+      {/* A blocker is a reason plus somebody who can clear it; with no reason
+          written, the task is simply running. */}
+      <label className="block">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink/40">
+          <OctagonAlert size={11} strokeWidth={2} />
+          Blocked because
+        </span>
+        <input
+          name="blockedReason"
+          defaultValue={details.blockedReason ?? ""}
+          placeholder="Waiting on the site measurements"
+          className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
+        />
+      </label>
+
+      <label className="block">
+        <span className="block text-[11px] font-medium uppercase tracking-wider text-ink/40">Who can clear it</span>
+        <select
+          name="blockedById"
+          defaultValue={details.blockedById ?? ""}
+          className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
+        >
+          <option value="">Nobody named</option>
+          {owners.map((owner) => (
+            <option key={owner.id} value={owner.id}>
+              {owner.name}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-ink/10 bg-white/60 px-2 py-1.5">
