@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/admin-guard";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { generateProjectToken } from "@/lib/tokens";
 import { logActivity } from "@/lib/activity";
@@ -35,6 +36,7 @@ async function saleFields(formData: FormData) {
 }
 
 export async function createProject(formData: FormData) {
+  await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Project name is required.");
 
@@ -58,6 +60,7 @@ export async function createProject(formData: FormData) {
 }
 
 export async function updateProjectOverview(id: string, formData: FormData) {
+  await requireAdmin();
   const existing = await prisma.project.findUniqueOrThrow({ where: { id } });
   const coverFile = formData.get("coverImage");
   const removeCover = formData.get("removeCoverImage") === "on";
@@ -96,6 +99,7 @@ export async function updateProjectOverview(id: string, formData: FormData) {
 }
 
 export async function updateProjectSettings(id: string, formData: FormData) {
+  await requireAdmin();
   await prisma.project.update({
     where: { id },
     data: {
@@ -111,21 +115,25 @@ export async function updateProjectSettings(id: string, formData: FormData) {
 }
 
 export async function setPublishState(id: string, state: PublishState) {
+  await requireAdmin();
   await prisma.project.update({ where: { id }, data: { publishState: state } });
   refresh(id);
 }
 
 export async function logClientNotification(id: string, type: "sent_to_client" | "sent_update") {
+  await requireAdmin();
   await logActivity(id, type);
 }
 
 export async function regenerateProjectLink(id: string) {
+  await requireAdmin();
   const project = await prisma.project.findUniqueOrThrow({ where: { id } });
   await prisma.project.update({ where: { id }, data: { token: generateProjectToken(project.name) } });
   refresh(id);
 }
 
 export async function deleteProject(id: string) {
+  await requireAdmin();
   const project = await prisma.project.findUnique({
     where: { id },
     include: { spaces: { include: { images: true } }, drawings: true, documents: true, materials: true, furniture: true },

@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { runPerformanceReview } from "@/lib/analytics-run";
 
 export async function applyPerformanceDeductions(period: string) {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) throw new Error("Unauthorized");
+  // This one writes money: a shortfall becomes a SalaryAdjustment against a real
+  // person. The check is the shared one rather than a copy, so it cannot drift
+  // apart from every other admin action.
+  await requireAdmin();
 
   const result = await runPerformanceReview(period);
 

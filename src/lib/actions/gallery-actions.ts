@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/admin-guard";
 import { deleteFile, saveFile } from "@/lib/storage";
 
 function refresh(projectId: string) {
@@ -9,6 +10,7 @@ function refresh(projectId: string) {
 }
 
 export async function createSpace(projectId: string, formData: FormData) {
+  await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   const count = await prisma.gallerySpace.count({ where: { projectId } });
@@ -17,6 +19,7 @@ export async function createSpace(projectId: string, formData: FormData) {
 }
 
 export async function deleteSpace(projectId: string, id: string) {
+  await requireAdmin();
   const space = await prisma.gallerySpace.findUnique({ where: { id }, include: { images: true } });
   if (space) {
     for (const image of space.images) {
@@ -29,6 +32,7 @@ export async function deleteSpace(projectId: string, id: string) {
 }
 
 export async function addImage(projectId: string, spaceId: string, formData: FormData) {
+  await requireAdmin();
   const files = formData.getAll("image").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) throw new Error("Select at least one image to upload.");
 
@@ -70,6 +74,7 @@ export async function addImage(projectId: string, spaceId: string, formData: For
 }
 
 export async function deleteImage(projectId: string, id: string) {
+  await requireAdmin();
   const image = await prisma.galleryImage.findUnique({ where: { id } });
   if (image) {
     await deleteFile(image.imageUrl);

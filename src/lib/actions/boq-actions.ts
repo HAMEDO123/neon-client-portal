@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/admin-guard";
 import { deleteFile, saveFile } from "@/lib/storage";
 
 function refresh(projectId: string) {
@@ -9,6 +10,7 @@ function refresh(projectId: string) {
 }
 
 export async function createBoqItem(projectId: string, formData: FormData) {
+  await requireAdmin();
   const imageFile = formData.get("image");
   const imageUrl = imageFile instanceof File && imageFile.size > 0 ? (await saveFile(imageFile, `projects/${projectId}/boq`, "image")).url : null;
   const count = await prisma.boqItem.count({ where: { projectId } });
@@ -34,6 +36,7 @@ export async function createBoqItem(projectId: string, formData: FormData) {
 }
 
 export async function deleteBoqItem(projectId: string, id: string) {
+  await requireAdmin();
   const existing = await prisma.boqItem.findUnique({ where: { id } });
   if (existing) await deleteFile(existing.imageUrl);
   await prisma.boqItem.delete({ where: { id } });

@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/admin-guard";
 
 function refresh(projectId: string) {
   revalidatePath(`/admin/projects/${projectId}/pricing`);
 }
 
 export async function createPricingItem(projectId: string, formData: FormData) {
+  await requireAdmin();
   const count = await prisma.pricingItem.count({ where: { projectId } });
   await prisma.pricingItem.create({
     data: {
@@ -24,6 +26,7 @@ export async function createPricingItem(projectId: string, formData: FormData) {
 }
 
 export async function deletePricingItem(projectId: string, id: string) {
+  await requireAdmin();
   await prisma.pricingItem.delete({ where: { id } });
   refresh(projectId);
 }

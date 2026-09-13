@@ -301,7 +301,7 @@ The domain vocabulary, as the code defines it:
 
 ### Tests
 - `npm test` runs `node --test` over `tests/**/*.test.ts` through tsx, loading `.env` and `.env.local`.
-- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`, `sales`, `performance`, `task-types`, `automation`.
+- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`, `sales`, `performance`, `task-types`, `automation`, `admin-guard`.
 - Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`, `sales`, `performance`. A run showing `pass 0 … skipped N` with exit 0 means **the database is down**, not that the tests passed.
 
 ---
@@ -320,7 +320,7 @@ The domain vocabulary, as the code defines it:
 - **Run queries one after another.** Pages that run several queries at once (`Promise.all`) fail locally with `P1017`, and production copes. Keep reads sequential; it's the codebase convention.
   - To screenshot a heavy page locally, temporarily add `max: 1` to the `Pool` in `src/lib/db.ts`, restart the dev server, and **don't commit it**.
   - **The test fixtures count too.** Three `*.db.test.ts` files built their rows with `Promise.all` in `before`; the connection closed under them, and the failure then surfaced in whichever file happened to run next — which reads as a regression in a feature that is fine. They create one row at a time now.
-- **Every action checks its own session.** Server actions are public endpoints, and the layout redirect isn't a security boundary. Keep queries out of `"use server"` files, because every export there becomes callable.
+- **Every action checks its own session.** Server actions are public endpoints, and the layout redirect isn't a security boundary. The admin check is `requireAdmin` in `lib/admin-guard.ts` — a plain module, deliberately **not** `"use server"`, because every export of one of those becomes callable over the network and a guard that can itself be called is not a guard. Keep queries out of `"use server"` files for the same reason.
 - **`deploymentId`** makes a page left open across a deploy reload instead of failing its server actions.
 - **Git Bash on Windows** rewrites arguments that start with `/` into Windows paths. Prefix the command with `MSYS_NO_PATHCONV=1`.
 - **Drive the dev server as `localhost`, never `127.0.0.1`.** `next dev` treats the other spelling as a foreign origin and answers its own chunks with 403, so the page renders, never hydrates, and every click does nothing — with no error in the browser. The dev server's log says "Blocked cross-origin request to Next.js dev resource". Read as a broken feature, this costs an afternoon.
@@ -328,7 +328,9 @@ The domain vocabulary, as the code defines it:
 
 ## Known issues (open)
 
-- **The project area's server actions don't check the admin session.** This covers `lib/actions/{project,gallery,drawing,document,boq,pricing,material,furniture,hotspot}-actions.ts` and the admin parts of `approval`/`comment`. Only the layout redirect guards them; the team-side actions all check. Found on 2026-09-10 and not fixed yet.
+- ~~**The project area's server actions don't check the admin session.**~~ Fixed: all 27 exports across `lib/actions/{project,gallery,drawing,document,boq,pricing,material,furniture,hotspot}-actions.ts` now call `requireAdmin` from `lib/admin-guard.ts`, as do the admin halves of `approval`/`comment`. The two client actions there stay deliberately open — a client has no login and the project link is the credential — so each of those files now labels its two halves, and both client actions are scoped by token in the `where` rather than trusting an argument.
+  - **A missing guard is invisible to every check we run**: it typechecks, it lints, it builds, it passes the tests. So it is proved by counting instead — `grep -c "^export async function"` against `grep -c "await requireAdmin();"`, file by file, must match.
+  - Still to tidy, not a hole: eleven action files define their own local `requireAdmin()` with an identical body instead of importing the shared one. Worth migrating, but each one is already correct.
 - **Arabic breaks `gallery.pdf`.** It uses the Helvetica font, which has no Arabic characters. Zip and PDF filenames also drop non-ASCII characters.
 - **Deleting a project or drawing leaves some files in storage:** BOQ images and old drawing revisions.
 - **Some analytics events are never logged:** `viewed_render`, `viewed_drawing`, `viewed_boq` and `viewed_pricing` come only from the seed.

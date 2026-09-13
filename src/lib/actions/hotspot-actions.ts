@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/admin-guard";
 
 function refresh(projectId: string) {
   revalidatePath(`/admin/projects/${projectId}/gallery`);
@@ -14,6 +15,7 @@ export async function createHotspot(
   yPercent: number,
   formData: FormData
 ) {
+  await requireAdmin();
   const label = String(formData.get("label") ?? "").trim();
   if (!label) return;
 
@@ -34,6 +36,7 @@ export async function createHotspot(
 }
 
 export async function deleteHotspot(projectId: string, id: string) {
+  await requireAdmin();
   await prisma.imageHotspot.delete({ where: { id } });
   refresh(projectId);
 }
