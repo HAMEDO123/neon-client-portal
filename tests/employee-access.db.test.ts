@@ -58,15 +58,18 @@ before(async () => {
 
   await cleanup();
 
-  const [a, b, d] = await Promise.all([
-    prisma.employee.create({
-      data: { name: `${PREFIX}Alice`, email: `${PREFIX}alice@test.local`, active: true, accessRole: "EMPLOYEE" },
-    }),
-    prisma.employee.create({
-      data: { name: `${PREFIX}Bob`, email: `${PREFIX}bob@test.local`, active: true, accessRole: "EMPLOYEE" },
-    }),
-    prisma.employee.create({ data: { name: `${PREFIX}Dana`, email: `${PREFIX}dana@test.local`, active: false } }),
-  ]);
+  // One after another, like every other query in this codebase. The local
+  // database answers parallel writes by closing the connection, and the failure
+  // then surfaces in whatever test happens to run next, not in this one.
+  const a = await prisma.employee.create({
+    data: { name: `${PREFIX}Alice`, email: `${PREFIX}alice@test.local`, active: true, accessRole: "EMPLOYEE" },
+  });
+  const b = await prisma.employee.create({
+    data: { name: `${PREFIX}Bob`, email: `${PREFIX}bob@test.local`, active: true, accessRole: "EMPLOYEE" },
+  });
+  const d = await prisma.employee.create({
+    data: { name: `${PREFIX}Dana`, email: `${PREFIX}dana@test.local`, active: false },
+  });
   alice = a.id;
   bob = b.id;
   disabled = d.id;
@@ -76,18 +79,20 @@ before(async () => {
   });
   projectId = project.id;
 
-  const [aliceStep, bobStep] = await Promise.all([
-    prisma.processTask.create({ data: { name: `${PREFIX}Alice step`, employeeId: alice, order: 900 } }),
-    prisma.processTask.create({ data: { name: `${PREFIX}Bob step`, employeeId: bob, order: 901 } }),
-  ]);
+  const aliceStep = await prisma.processTask.create({
+    data: { name: `${PREFIX}Alice step`, employeeId: alice, order: 900 },
+  });
+  const bobStep = await prisma.processTask.create({
+    data: { name: `${PREFIX}Bob step`, employeeId: bob, order: 901 },
+  });
 
   const timezone = await getTimezone();
-  const [aliceEntry, bobEntry] = await Promise.all([
-    prisma.projectTaskEntry.create({
-      data: { projectId, taskId: aliceStep.id, scheduledFor: dayKeyToDate(tomorrowKey(timezone)) },
-    }),
-    prisma.projectTaskEntry.create({ data: { projectId, taskId: bobStep.id } }),
-  ]);
+  const aliceEntry = await prisma.projectTaskEntry.create({
+    data: { projectId, taskId: aliceStep.id, scheduledFor: dayKeyToDate(tomorrowKey(timezone)) },
+  });
+  const bobEntry = await prisma.projectTaskEntry.create({
+    data: { projectId, taskId: bobStep.id },
+  });
   aliceEntryId = aliceEntry.id;
   bobEntryId = bobEntry.id;
 });

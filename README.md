@@ -175,6 +175,11 @@ The domain vocabulary, as the code defines it:
   - **Silence is never a verdict.** An unanswered question is counted and shown as an unanswered question; nothing on this screen says anybody did nothing, because the data cannot tell the difference between "did not work" and "did not reply".
   - Capacity comes from the working day, and for today it is what is *left* of it, so a board opened at four in the afternoon does not call everybody overloaded.
   - The gatherer reads one person at a time on purpose: it runs several queries each, and firing them all at once is what the local database falls over on.
+- **How the work is going** (`lib/performance.ts`, pure and tested; gathered by `lib/performance-queries.ts`, shown by `components/admin/performance-card.tsx` on `/admin/employees/[id]`) is five numbers over the last 30 days: what landed by the date it was given, what was accepted first time, how often work came back, how long it sat waiting on somebody else, and how close the estimates were.
+  - **Every one of them is about the output.** Presence, hours at a desk, reply speed and click counts are deliberately absent and must stay absent — a number that stands in for the work is worse than no number.
+  - **A figure is refused rather than guessed.** Below `MIN_SAMPLE` (3) an indicator returns `{value: null, sample, why}` and the card prints the reason instead, so one late task can never read as "0% on time". Work with no deadline is left out of the on-time figure rather than counted as met; waiting time is reported from the very first measurement, because it is a fact about the studio and not a judgement of a person; and estimate accuracy is a **median**, so one afternoon that went badly does not define somebody's estimating.
+  - **The facts are recorded events, never inferences:** `TaskStateChange` for when work was started and when it landed, `TaskSubmission` for what the review made of it, and a `blocked` answer on `ScheduledFollowUp` for waiting — measured to the next thing that happened to that task, or to now if it is still stuck. Work finished, reopened and finished again is one piece of work, counted by the time it finally landed.
+  - **Whose work it is comes from `ownedBy`, never from a filter written out again here.** Each of its branches requires the cell to have no assignee; a hand-written `OR` of "assigned to them or their step" instead counts a cell the manager gave to somebody else in the step owner's numbers. `tests/performance.db.test.ts` exists for that one case, and week-board jobs are counted alongside board cells because that is where a planned day's blocks land.
 - **Checking a claim of finished work** (`lib/verification.ts`, pure and tested) turns per-criterion verdicts into one decision. Each criterion carries what was asked, what in the evidence speaks to it, a verdict, and the gap.
   - Five verdicts, and the distinction that matters: **`cannot-tell` is not `not-met`**. "The photo does not show whether it was sent" and "it was not sent" must never produce the same message to a person — one asks a question, the other asks for work.
   - Precedence: anything needing a person wins; then a definite gap (it can be acted on); then an unsettled one; and only then, everything shown.
@@ -278,8 +283,8 @@ The domain vocabulary, as the code defines it:
 
 ### Tests
 - `npm test` runs `node --test` over `tests/**/*.test.ts` through tsx, loading `.env` and `.env.local`.
-- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`, `sales`.
-- Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`, `sales`. A run showing `pass 0 … skipped N` with exit 0 means **the database is down**, not that the tests passed.
+- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`, `sales`, `performance`.
+- Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`, `sales`, `performance`. A run showing `pass 0 … skipped N` with exit 0 means **the database is down**, not that the tests passed.
 
 ---
 
@@ -295,6 +300,7 @@ The domain vocabulary, as the code defines it:
   7. Rows named `zdev-…`, `zsale-…`, `zdep-…` are fixtures left behind by a run that died before cleaning up. They are harmless — the tests pass with them there. `node --env-file=.env.local scripts/restore-local-data.mjs --replace` puts the database back to the copy in `local-backup/`.
 - **Run queries one after another.** Pages that run several queries at once (`Promise.all`) fail locally with `P1017`, and production copes. Keep reads sequential; it's the codebase convention.
   - To screenshot a heavy page locally, temporarily add `max: 1` to the `Pool` in `src/lib/db.ts`, restart the dev server, and **don't commit it**.
+  - **The test fixtures count too.** Three `*.db.test.ts` files built their rows with `Promise.all` in `before`; the connection closed under them, and the failure then surfaced in whichever file happened to run next — which reads as a regression in a feature that is fine. They create one row at a time now.
 - **Every action checks its own session.** Server actions are public endpoints, and the layout redirect isn't a security boundary. Keep queries out of `"use server"` files, because every export there becomes callable.
 - **`deploymentId`** makes a page left open across a deploy reload instead of failing its server actions.
 - **Git Bash on Windows** rewrites arguments that start with `/` into Windows paths. Prefix the command with `MSYS_NO_PATHCONV=1`.

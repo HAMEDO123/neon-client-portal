@@ -23,6 +23,8 @@ import { nextWorkingDay } from "@/lib/work-hours";
 import { DayPlanPanel } from "@/components/admin/day-plan-panel";
 import { getDayPlan } from "@/lib/day-plan-store";
 import { isAiConfigured } from "@/lib/ai/client";
+import { PerformanceCard } from "@/components/admin/performance-card";
+import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-queries";
 
 export default async function AdminEmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -51,6 +53,10 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
   // One after another, like every other read on this page.
   const planToday = await getDayPlan(employee.id, today);
   const planTomorrow = await getDayPlan(employee.id, tomorrow);
+
+  // What the work itself has looked like lately, measured from what came out of
+  // it rather than from how present somebody was.
+  const performance = await performanceFor(employee.id, sinceDays());
 
   return (
     <div className="flex flex-col gap-6">
@@ -135,6 +141,8 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
         period={period}
         timezone={timezone}
       />
+
+      <PerformanceCard performance={performance} name={employee.name} days={WINDOW_DAYS} />
 
       <EmployeeWarnings
         employeeId={employee.id}

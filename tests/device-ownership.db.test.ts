@@ -58,10 +58,15 @@ before(async () => {
 
   await cleanup();
 
-  const [a, b] = await Promise.all([
-    prisma.employee.create({ data: { name: `${PREFIX}Wael`, email: `${PREFIX}wael@test.local`, active: true } }),
-    prisma.employee.create({ data: { name: `${PREFIX}Sally`, email: `${PREFIX}sally@test.local`, active: true } }),
-  ]);
+  // One after another, like every other query in this codebase. The local
+  // database answers parallel writes by closing the connection, and the failure
+  // then surfaces in whatever test happens to run next, not in this one.
+  const a = await prisma.employee.create({
+    data: { name: `${PREFIX}Wael`, email: `${PREFIX}wael@test.local`, active: true },
+  });
+  const b = await prisma.employee.create({
+    data: { name: `${PREFIX}Sally`, email: `${PREFIX}sally@test.local`, active: true },
+  });
   wael = a.id;
   sally = b.id;
 });
