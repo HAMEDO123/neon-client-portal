@@ -2,9 +2,8 @@
 
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { EMPLOYEE_COLORS } from "@/lib/task-board";
 import { DEFAULT_SALES_TARGET } from "@/lib/sales";
 import { dispatchNotification } from "@/lib/notifications/engine";
@@ -12,13 +11,6 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 // Admin-only management of employee accounts. Each action re-checks the admin
 // session: these are public POST endpoints, and the layout's redirect is a
 // convenience for the browser, not a security boundary.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 function refresh() {
   revalidatePath("/admin/employees");

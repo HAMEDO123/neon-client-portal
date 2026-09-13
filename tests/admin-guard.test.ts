@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // A guard that goes missing is invisible to everything else we run.
@@ -115,5 +115,27 @@ describe("every admin action checks the session itself", () => {
 
     assert.deepEqual(directives, [], "admin-guard.ts must not be a 'use server' module");
     assert.ok(guard.includes("export async function requireAdmin"));
+  });
+});
+
+describe("one definition of the check, not twenty-five", () => {
+  const files = readdirSync(DIR).filter((name) => name.endsWith("-actions.ts"));
+
+  it("has no action file writing its own", () => {
+    // Every one of these used to carry an identical five-line copy. They were
+    // all correct — that is the point. A security primitive does not drift
+    // because somebody is careless; it drifts because there are twenty-five
+    // chances for one of them to be edited and the rest not.
+    const local = files.filter((file) => /^async function requireAdmin/m.test(read(file)));
+
+    assert.deepEqual(local, [], `these define their own guard instead of importing lib/admin-guard.ts: ${local.join(", ")}`);
+  });
+
+  it("keeps the raw session primitives to the two files that issue sessions", () => {
+    // Reading the cookie directly anywhere else is a guard being written a
+    // second time, whatever it is called.
+    const touching = files.filter((file) => read(file).includes("SESSION_COOKIE_NAME")).sort();
+
+    assert.deepEqual(touching, ["auth-actions.ts", "employee-auth-actions.ts"]);
   });
 });

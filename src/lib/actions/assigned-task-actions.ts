@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { dayKeyToDate } from "@/lib/time";
 import { daysBetween } from "@/lib/week";
 import { dispatchNotification } from "@/lib/notifications/engine";
@@ -17,13 +16,6 @@ import type { TaskPriority } from "@/generated/prisma/enums";
 // last part is the whole point of the week view: "two days to go and negotiate
 // with the supplier" fills two cells, and everyone can see what those two days
 // are already spent on.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;

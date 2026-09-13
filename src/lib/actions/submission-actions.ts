@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
 import { saveFile } from "@/lib/storage";
@@ -24,13 +23,6 @@ import { verifySubmission } from "@/lib/ai/verify-submission";
 // The evidence is for one of two things — a cell on the project board, or a
 // job the manager handed out by hand — and the review settles whichever it is.
 // The employee's side of a hand-assigned job lives in my-assigned-actions.ts.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 type Subject = { entryId: string | null; assignedTaskId: string | null };
 

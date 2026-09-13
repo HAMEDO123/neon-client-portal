@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { proposeDay, type DayPlanResult } from "@/lib/ai/day-plan";
 import { getDayPlan, markDayPlanApplied, saveDayPlan } from "@/lib/day-plan-store";
 import { ownedBy } from "@/lib/employee-tasks";
@@ -17,13 +16,6 @@ import type { PlannedBlock } from "@/lib/day-plan";
 // Proposing a day, editing it, and putting it on the board. Admin only: these
 // are public endpoints, and one of them reads out an employee's whole workload
 // while another moves real work onto a real day.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 /** Where a notification about a job lands, as the week board's own action has it. */
 const jobUrl = (id: string) => `/employee/assigned/${id}`;

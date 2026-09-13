@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { requireEmployee } from "@/lib/employee-session";
 import { saveFile } from "@/lib/storage";
 import { readReceipt } from "@/lib/ai/receipts";
@@ -17,13 +16,6 @@ import type { PayBasis, SupplyRequestStatus } from "@/generated/prisma/enums";
 //
 // The same rule as everywhere else in the employee portal: the employee comes
 // from the session, and every employee-facing write is scoped by ownership.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 function refreshEmployee() {
   revalidatePath("/employee/requests");

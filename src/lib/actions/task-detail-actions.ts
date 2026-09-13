@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { notifyTaskAssigned, notifyTaskUpdated, snapshotOf } from "@/lib/notifications/events";
 import { acceptableDependencies } from "@/lib/task-graph";
 import { dayKeyToDate, instantAt } from "@/lib/time";
@@ -13,13 +12,6 @@ import type { TaskPriority } from "@/generated/prisma/enums";
 // Admin-side scheduling of one board cell. This is the only place the admin
 // portal has to touch: it saves the task and hands the change to the
 // notification engine, which decides who hears about it and how.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH"];
 

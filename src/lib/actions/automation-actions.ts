@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { ACTIONS, RECIPIENTS, TRIGGERS, type Action, type Recipient, type Trigger } from "@/lib/automation";
 import { AUTOMATION_SWITCH_KEY } from "@/lib/notifications/automation-events";
 import { setSetting } from "@/lib/settings";
@@ -15,13 +14,6 @@ import { setSetting } from "@/lib/settings";
 //
 // Nothing in this file can act on work. The worst a saved rule does is speak,
 // and it does not even do that until both it and the studio-wide switch are on.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 function refresh() {
   revalidatePath("/admin/settings");

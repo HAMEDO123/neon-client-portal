@@ -1,21 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { PLANNING_NOTES_KEY, WORK_HOURS_KEYS, setSetting } from "@/lib/settings";
 import { parseWorkHours } from "@/lib/work-hours";
 
 // The studio's own rules, kept beside the timezone in the settings table.
 // Admin only: these are public POST endpoints, and the layout's redirect is a
 // convenience for the browser rather than a security boundary.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 /**
  * How a day is planned here, in the manager's words. Free text on purpose:

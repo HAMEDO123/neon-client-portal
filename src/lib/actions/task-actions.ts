@@ -1,22 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { EMPLOYEE_COLORS } from "@/lib/task-board";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
 import type { TaskState } from "@/generated/prisma/enums";
-
-// Every action here is a public POST endpoint, so the admin session is checked
-// inside the action rather than relying on the dashboard layout's redirect.
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  if (!verifySessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 function refresh() {
   revalidatePath("/admin/tasks");

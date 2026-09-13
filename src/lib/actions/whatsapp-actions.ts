@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { requireAdmin } from "@/lib/admin-guard";
 import { logActivity } from "@/lib/activity";
 import { setSetting, TIMEZONE_SETTING_KEY } from "@/lib/settings";
 import { resolveTimezone } from "@/lib/time";
@@ -12,13 +11,6 @@ import { lineStatus, startWhatsAppLink, stopWhatsAppLink } from "@/lib/whatsapp/
 
 // Sending through the shared WhatsApp worker, plus the platform settings that
 // live beside it. Admin only — these send real messages to real clients.
-
-async function requireAdmin() {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
-    throw new Error("Unauthorized");
-  }
-}
 
 export type SendOutcome = { ok: boolean; message: string };
 
