@@ -59,6 +59,12 @@ function readForm(formData: FormData) {
     title,
     employeeId,
     note: String(formData.get("note") ?? "").trim().slice(0, 2000) || null,
+    // What to hand in, and what counts as finished. The second is the one that
+    // matters beyond the person doing the work: it is what a photo is checked
+    // against, and a job with none can only ever come back "there was nothing
+    // to check it against".
+    deliverable: String(formData.get("deliverable") ?? "").trim().slice(0, 2000) || null,
+    acceptance: String(formData.get("acceptance") ?? "").trim().slice(0, 4000) || null,
     startDay: dayKeyToDate(from),
     endDay: dayKeyToDate(to),
     priority,
@@ -81,6 +87,8 @@ export async function createAssignedTask(formData: FormData) {
       employeeId: input.employeeId,
       title: input.title,
       note: input.note,
+      deliverable: input.deliverable,
+      acceptance: input.acceptance,
       startDay: input.startDay,
       endDay: input.endDay,
       priority: input.priority,
@@ -122,6 +130,8 @@ export async function updateAssignedTask(id: string, formData: FormData) {
       employeeId: input.employeeId,
       title: input.title,
       note: input.note,
+      deliverable: input.deliverable,
+      acceptance: input.acceptance,
       startDay: input.startDay,
       endDay: input.endDay,
       priority: input.priority,

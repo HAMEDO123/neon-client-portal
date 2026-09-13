@@ -547,6 +547,34 @@ function TaskDialog({
           </select>
         </label>
 
+        {/* The one field that decides whether the photo they send can be
+            checked at all. A job with nothing here comes back from the review
+            queue saying there was nothing to check it against — which is
+            honest, and useless. One line per thing, because each line is
+            checked on its own. */}
+        <label className="mt-3 block">
+          <span className="block text-[11px] font-medium uppercase tracking-wider text-ink/40">
+            Counts as done when — one per line
+          </span>
+          <textarea
+            name="acceptance"
+            rows={3}
+            defaultValue={task?.acceptance ?? ""}
+            placeholder={"Price agreed in writing\nSample photographed on site"}
+            className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+          />
+        </label>
+
+        <label className="mt-3 block">
+          <span className="block text-[11px] font-medium uppercase tracking-wider text-ink/40">What to hand in</span>
+          <input
+            name="deliverable"
+            defaultValue={task?.deliverable ?? ""}
+            placeholder="A photo of the signed quote"
+            className="mt-1 w-full rounded-lg border border-ink/12 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+          />
+        </label>
+
         <label className="mt-3 block">
           <span className="block text-[11px] font-medium uppercase tracking-wider text-ink/40">Notes</span>
           <textarea

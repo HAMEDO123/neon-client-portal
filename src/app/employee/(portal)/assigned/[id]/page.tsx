@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarRange, Camera, ClipboardList, FileText, Flag } from "lucide-react";
+import { ArrowLeft, CalendarRange, Camera, ClipboardList, FileText, Flag, PackageCheck } from "lucide-react";
+import { linesOf } from "@/lib/task-types";
 import { requireEmployee } from "@/lib/employee-session";
 import { myAssignedTask } from "@/lib/assigned-tasks";
 import { submissionsForAssignedTask } from "@/lib/submissions";
@@ -72,6 +73,34 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
           />
         </div>
       </div>
+
+      {/* Above the status control and the camera on purpose: what finishing
+          means is the thing to read before deciding you have finished. */}
+      {(task.deliverable || task.acceptance) && (
+        <section className="glass rounded-2xl p-4">
+          <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
+            <PackageCheck size={13} strokeWidth={2} />
+            What counts as finished
+          </h2>
+          {task.deliverable && (
+            <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm text-ink/75">
+              {task.deliverable}
+            </p>
+          )}
+          {/* One line, one thing — each is checked on its own when the photo
+              arrives, and a block of prose hides that they are separate. */}
+          {task.acceptance && (
+            <ul className="mt-2 flex flex-col gap-1.5 border-t border-ink/8 pt-2">
+              {linesOf(task.acceptance).map((line, index) => (
+                <li key={`${index}-${line}`} dir="auto" className="flex gap-2 text-sm text-ink/65">
+                  <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-ink/25" />
+                  {line}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <section>
         <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">Update status</h2>

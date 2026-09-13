@@ -13,6 +13,9 @@ export type AssignedTaskView = {
   employeeId: string;
   title: string;
   note: string | null;
+  /** What to hand in, and what counts as finished. Both optional. */
+  deliverable: string | null;
+  acceptance: string | null;
   startKey: string;
   endKey: string;
   state: "TODO" | "IN_PROGRESS" | "SUBMITTED" | "DONE" | "TOMORROW";
@@ -24,6 +27,8 @@ function toView(row: {
   employeeId: string;
   title: string;
   note: string | null;
+  deliverable: string | null;
+  acceptance: string | null;
   startDay: Date;
   endDay: Date;
   state: AssignedTaskView["state"];
@@ -34,6 +39,8 @@ function toView(row: {
     employeeId: row.employeeId,
     title: row.title,
     note: row.note,
+    deliverable: row.deliverable,
+    acceptance: row.acceptance,
     startKey: dateToDayKey(row.startDay)!,
     endKey: dateToDayKey(row.endDay)!,
     state: row.state,
@@ -41,11 +48,18 @@ function toView(row: {
   };
 }
 
+// `acceptance` earns its place here rather than being fetched where it is
+// needed: it is what a submitted photo is checked against, and for a job handed
+// out by hand there is no step behind it carrying a standard. Unselected, the
+// check has nothing to compare to and every one of these reads "there was
+// nothing to check it against" — which is exactly what it did.
 const view = {
   id: true,
   employeeId: true,
   title: true,
   note: true,
+  deliverable: true,
+  acceptance: true,
   startDay: true,
   endDay: true,
   state: true,
