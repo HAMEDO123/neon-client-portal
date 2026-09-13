@@ -434,6 +434,19 @@ model Employee {
   // the studio actually works rather than what a model guesses.
   playbook String? @db.Text
 
+  // The rest of the profile a day is proposed from: what they can actually do,
+  // work of theirs worth copying, and how much of a day is really theirs to
+  // fill. The studio's hours say how long the day is; this says how much of it
+  // to plan (`capacityFor` in lib/day-plan.ts), and it may only ever lower it.
+  skills               String? @db.Text
+  examples             String? @db.Text
+  dailyCapacityMinutes Int?
+
+  // Who this person's finished work goes to, where that is not the manager.
+  reviewerId String?
+  reviewer   Employee?  @relation("EmployeeReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewees  Employee[] @relation("EmployeeReviewer")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 

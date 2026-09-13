@@ -4,7 +4,15 @@ import { allTasks } from "@/lib/employee-tasks";
 import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
 import { capacityMinutes, remainingMinutes } from "@/lib/work-hours";
 import { readinessOf } from "@/lib/task-readiness";
-import { DAY_PLAN_SYSTEM, buildDayBrief, parsePlan, planBlocksFrom, type PlanTask } from "@/lib/day-plan";
+import {
+  DAY_PLAN_SYSTEM,
+  buildDayBrief,
+  capacityFor,
+  parsePlan,
+  planBlocksFrom,
+  type PlanTask,
+} from "@/lib/day-plan";
+import { effectiveDetail } from "@/lib/task-types";
 import { saveDayPlan, type StoredDayPlan } from "@/lib/day-plan-store";
 import { dayKeyToDate, formatDayIn, formatTimeIn, todayKey, wallClockIn } from "@/lib/time";
 
@@ -30,6 +38,10 @@ function toPlanTask(
   timezone: string
 ): PlanTask {
   const day = dayKeyToDate(dayKey);
+  // What the task actually asks for: the cell's own words, or the step's
+  // standard where the cell says nothing. Without this the planner is told
+  // "no deliverable" about work whose deliverable was written once in Settings.
+  const applies = effectiveDetail(task, task.task);
 
   return {
     // The board cell itself, so a block can later be put on a day.
@@ -49,9 +61,9 @@ function toPlanTask(
     priority: task.priority,
     scheduledForDay: task.scheduledFor?.getTime() === day.getTime(),
     dueLabel: task.dueAt ? `${formatDayIn(timezone, task.dueAt)} ${formatTimeIn(timezone, task.dueAt)}` : null,
-    estimateHours: task.estimateHours == null ? null : Number(task.estimateHours),
-    deliverable: task.deliverable,
-    acceptance: task.acceptance,
+    estimateHours: applies.estimateHours.value,
+    deliverable: applies.deliverable.value,
+    acceptance: applies.acceptance.value,
     lastUpdateNote: task.lastUpdateNote,
   };
 }
@@ -66,7 +78,15 @@ export async function proposeDay(employeeId: string, dayKey: string): Promise<Da
   // One after another, like every other multi-query read here.
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { name: true, role: true, playbook: true },
+    select: {
+      name: true,
+      role: true,
+      playbook: true,
+      skills: true,
+      examples: true,
+      dailyCapacityMinutes: true,
+      reviewer: { select: { name: true } },
+    },
   });
   if (!employee) return { ok: false, error: "That employee no longer exists." };
 
@@ -78,15 +98,26 @@ export async function proposeDay(employeeId: string, dayKey: string): Promise<Da
 
   // A day that has already started has only what is left of it. Planning today
   // at two in the afternoon must not propose a morning that has been and gone.
-  const minutesAvailable =
+  // And this person may have less of it than the studio's day allows, which
+  // only ever lowers the number — never raises it past what the day holds.
+  const minutesAvailable = capacityFor(
     dayKey === todayKey(timezone)
       ? remainingMinutes(hours, wallClockIn(timezone))
-      : capacityMinutes(hours);
+      : capacityMinutes(hours),
+    employee.dailyCapacityMinutes
+  );
 
   // A real date always formats; the key itself is the fallback the types want.
   const dayLabel = formatDayIn(timezone, dayKeyToDate(dayKey)) ?? dayKey;
   const brief = buildDayBrief({
-    person: { name: employee.name, role: employee.role, playbook: employee.playbook },
+    person: {
+      name: employee.name,
+      role: employee.role,
+      playbook: employee.playbook,
+      skills: employee.skills,
+      examples: employee.examples,
+      reviewerName: employee.reviewer?.name ?? null,
+    },
     notes,
     dayLabel,
     hours,

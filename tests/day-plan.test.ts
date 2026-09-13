@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   DAY_PLAN_SYSTEM,
   buildDayBrief,
+  capacityFor,
   parsePlan,
   planBlocksFrom,
   refOf,
@@ -168,6 +169,65 @@ describe("the brief a proposal is built from", () => {
   it("keeps half-hour estimates readable", () => {
     assert.ok(brief([task({ estimateHours: 0.5 })]).includes("expected 30 min"));
     assert.ok(brief([task({ estimateHours: 2.5 })]).includes("expected 2.5 h"));
+  });
+});
+
+describe("what else is known about the person", () => {
+  it("carries their skills, their good work and who reviews them", () => {
+    const text = buildDayBrief({
+      person: {
+        ...PERSON,
+        skills: "AutoCAD, site surveys. No 3D.",
+        examples: "The Al-Fulan drawing set.",
+        reviewerName: "Sally",
+      },
+      notes: "Site visits in the morning.",
+      dayLabel: "Sunday",
+      hours: DEFAULT_WORK_HOURS,
+      minutesAvailable: 450,
+      tasks: [task()],
+    });
+
+    assert.ok(text.includes("What they can do: AutoCAD, site surveys. No 3D."));
+    assert.ok(text.includes("Work of theirs worth copying: The Al-Fulan drawing set."));
+    assert.ok(text.includes("Their finished work goes to: Sally"));
+  });
+
+  it("leaves an unfilled profile out rather than padding it", () => {
+    // The two "nothing written" lines are reserved for the things a proposal
+    // cannot be judged without. A blank skills box must not become a third.
+    const text = buildDayBrief({
+      person: { name: "Wael", role: null, playbook: "   ", skills: "  ", examples: null, reviewerName: "" },
+      notes: "",
+      dayLabel: "Sunday",
+      hours: DEFAULT_WORK_HOURS,
+      minutesAvailable: 450,
+      tasks: [],
+    });
+
+    assert.equal(text.split("(nothing written down yet)").length - 1, 2);
+    assert.ok(!text.includes("What they can do:"));
+    assert.ok(!text.includes("goes to:"));
+  });
+});
+
+describe("how much of the day is theirs to fill", () => {
+  it("lets a person's own figure lower the studio's day, never raise it", () => {
+    assert.equal(capacityFor(450, 240), 240);
+    // Six hours typed on the page does not create a day that does not exist.
+    assert.equal(capacityFor(180, 360), 180);
+  });
+
+  it("treats no answer as no answer, rather than as none at all", () => {
+    assert.equal(capacityFor(450, null), 450);
+    assert.equal(capacityFor(450, undefined), 450);
+    assert.equal(capacityFor(450, 0), 450);
+    assert.equal(capacityFor(450, -60), 450);
+    assert.equal(capacityFor(450, Number.NaN), 450);
+  });
+
+  it("never returns less than nothing", () => {
+    assert.equal(capacityFor(-30, null), 0);
   });
 });
 

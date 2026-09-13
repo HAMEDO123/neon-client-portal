@@ -36,6 +36,10 @@ function readAccountFields(formData: FormData) {
   const targetRaw = String(formData.get("monthlySalesTarget") ?? "").trim();
   // How this person is usually worked, for whoever plans their day.
   const playbook = String(formData.get("playbook") ?? "").trim().slice(0, 4000) || null;
+  const skills = String(formData.get("skills") ?? "").trim().slice(0, 2000) || null;
+  const examples = String(formData.get("examples") ?? "").trim().slice(0, 2000) || null;
+  const reviewerId = String(formData.get("reviewerId") ?? "") || null;
+  const capacityRaw = String(formData.get("dailyCapacityMinutes") ?? "").trim();
 
   if (!name) throw new Error("Full name is required.");
   if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
@@ -48,6 +52,14 @@ function readAccountFields(formData: FormData) {
     throw new Error("The monthly sales target must be a whole number, zero or more.");
   }
 
+  // An empty box means "no answer", which leaves the studio's day as it is. A
+  // typed zero means the same thing: nobody has a working day of no minutes,
+  // and reading it literally would propose an empty day for ever.
+  const capacity = capacityRaw === "" ? null : Math.round(Number(capacityRaw));
+  if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) {
+    throw new Error("The daily capacity must be a whole number of minutes, zero or more.");
+  }
+
   return {
     name,
     email: emailRaw || null,
@@ -56,6 +68,10 @@ function readAccountFields(formData: FormData) {
     employeeCode: employeeCode || null,
     monthlySalesTarget: target,
     playbook,
+    skills,
+    examples,
+    dailyCapacityMinutes: capacity === 0 ? null : capacity,
+    reviewerId,
   };
 }
 
@@ -107,7 +123,12 @@ export async function updateEmployeeAccount(id: string, formData: FormData) {
     if (clash) throw new Error("Another employee already uses that email.");
   }
 
-  await prisma.employee.update({ where: { id }, data: fields });
+  // Nobody reviews their own work. A select that offered it would be a mistake
+  // waiting to be made, so the rule is enforced here rather than only hidden.
+  await prisma.employee.update({
+    where: { id },
+    data: { ...fields, reviewerId: fields.reviewerId === id ? null : fields.reviewerId },
+  });
   refresh();
 }
 

@@ -19,6 +19,12 @@ export type PlanPerson = {
   role: string | null;
   /** What this person is normally given, written on their own page. */
   playbook: string | null;
+  /** What they can actually do, in the manager's words. */
+  skills?: string | null;
+  /** Work of theirs worth copying — the standard, by example. */
+  examples?: string | null;
+  /** Who their finished work goes to, where that is not the manager. */
+  reviewerName?: string | null;
 };
 
 export type PlanTask = {
@@ -70,6 +76,26 @@ export function refOf(index: number) {
 /** The codes of a list of tasks, in the order they were given. */
 export function refsFor<T>(tasks: T[]): Map<string, T> {
   return new Map(tasks.map((task, index) => [refOf(index), task]));
+}
+
+/**
+ * How many minutes of this person's day a plan may fill.
+ *
+ * The studio's day is the ceiling and a person's own figure only ever lowers
+ * it. Somebody who realistically manages four good hours of drawing does not
+ * get six because the day is long — and nobody gets more than the day actually
+ * holds, however generous a number was typed on their page, because a plan that
+ * runs past the end of the day was never a plan.
+ *
+ * An unset, zero or nonsense figure means "no answer", which leaves the
+ * studio's day as it was rather than reducing it to nothing.
+ */
+export function capacityFor(studioMinutes: number, personMinutes: number | null | undefined): number {
+  const available = Math.max(0, Math.round(studioMinutes));
+  if (typeof personMinutes !== "number" || !Number.isFinite(personMinutes) || personMinutes <= 0) {
+    return available;
+  }
+  return Math.min(available, Math.round(personMinutes));
 }
 
 export const DAY_PLAN_SYSTEM = `You plan one person's working day at NEON, an interior design and build studio in Amman, Jordan.
@@ -156,6 +182,14 @@ export function buildDayBrief({
   lines.push(`Name: ${person.name}`);
   if (person.role) lines.push(`Job title: ${person.role}`);
   lines.push(`What they usually do: ${person.playbook?.trim() || NOTHING_WRITTEN}`);
+  // The rest of the profile is left out when it is not written, rather than
+  // padded with a placeholder. Only two things in this whole brief say "nothing
+  // written down yet" — how the person is worked, and how the studio plans —
+  // because those are the two a proposal cannot honestly be judged without.
+  // Saying it about every empty field would bury them in noise.
+  if (person.skills?.trim()) lines.push(`What they can do: ${person.skills.trim()}`);
+  if (person.examples?.trim()) lines.push(`Work of theirs worth copying: ${person.examples.trim()}`);
+  if (person.reviewerName?.trim()) lines.push(`Their finished work goes to: ${person.reviewerName.trim()}`);
   lines.push("</person>");
   lines.push("");
 

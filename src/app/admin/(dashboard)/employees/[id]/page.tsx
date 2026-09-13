@@ -48,6 +48,13 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
   const tomorrowLabel = formatDayIn(timezone, dayKeyToDate(tomorrow)) ?? tomorrow;
   const period = periodOf(today);
   const sales = await monthSalesFor(employee.id, period);
+  // Everybody else, for "who reviews their work". Themselves excluded: nobody
+  // reviews their own work, so it is not offered in the first place.
+  const colleagues = await prisma.employee.findMany({
+    where: { active: true, NOT: { id: employee.id } },
+    select: { id: true, name: true },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  });
 
   // A proposed day is stored, so it is still here after a look at the board.
   // One after another, like every other read on this page.
@@ -117,6 +124,46 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           rows={4}
           defaultValue={employee.playbook ?? ""}
         />
+
+        {/* The rest of what a proposed day is built from. All optional: left
+            empty, nothing about this person is invented to fill the gap. */}
+        <TextArea
+          label="What they can do"
+          name="skills"
+          rows={3}
+          defaultValue={employee.skills ?? ""}
+        />
+        <TextArea
+          label="Work of theirs worth copying"
+          name="examples"
+          rows={3}
+          defaultValue={employee.examples ?? ""}
+        />
+
+        <TextInput
+          label="Minutes of real work in their day"
+          name="dailyCapacityMinutes"
+          type="number"
+          defaultValue={employee.dailyCapacityMinutes == null ? "" : String(employee.dailyCapacityMinutes)}
+          required={false}
+        />
+
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink/50">Their work is reviewed by</span>
+          <select
+            name="reviewerId"
+            defaultValue={employee.reviewerId ?? ""}
+            className="w-full rounded-lg border border-ink/12 bg-white/70 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+          >
+            <option value="">The manager</option>
+            {colleagues.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div className="flex items-end">
           <SaveButton label="Save details" />
         </div>
