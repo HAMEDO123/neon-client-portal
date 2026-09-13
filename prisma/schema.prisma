@@ -447,6 +447,9 @@ model Employee {
   reviewer   Employee?  @relation("EmployeeReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
   reviewees  Employee[] @relation("EmployeeReviewer")
 
+  // What the studio's own rules remember about this person, day by day.
+  automationStates AutomationState[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -706,6 +709,70 @@ model ScheduledFollowUp {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([dueAt, askedAt])
+  @@index([employeeId, day])
+}
+
+// A rule the studio sets for itself: when to ask, when to tell, when to
+// escalate.
+//
+// Every rule produces speech and nothing else — a question to the person, a
+// note to the manager, an escalation when something has gone on too long. There
+// is deliberately no action here that moves, ticks or approves work:
+// `mayMoveWork()` in lib/automation.ts says so in one place rather than leaving
+// it to be inferred from the absence of a case.
+model AutomationRule {
+  id   String @id @default(cuid())
+  name String
+
+  // Read off the manager's day board rather than defined again here: no-plan,
+  // overloaded, blocked, contradiction, waiting-on-manager, unanswered.
+  trigger String
+  atLeast Int    @default(1)
+
+  // ask | tell | escalate, and who hears it.
+  action    String @default("ask")
+  recipient String @default("the-person")
+
+  graceMinutes         Int  @default(0)
+  cooldownMinutes      Int  @default(0)
+  escalateAfterMinutes Int?
+
+  // Off until somebody turns it on, and the AppSetting `automation_enabled`
+  // stops every one of them at once. A feature that talks to people on its own
+  // is not born switched on.
+  enabled Boolean @default(false)
+  order   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  states AutomationState[]
+}
+
+// What a rule remembers about one person on one day: when its condition was
+// first seen to be true, and when it last actually said something.
+//
+// Both are recorded moments rather than anything worked out from the clock,
+// which is what makes grace and cooldown mean the same thing whether the runner
+// runs twice a minute or wakes up an hour late.
+model AutomationState {
+  id String @id @default(cuid())
+
+  ruleId String
+  rule   AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  day DateTime @db.Date
+
+  since       DateTime?
+  lastActedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([ruleId, employeeId, day])
   @@index([employeeId, day])
 }
 

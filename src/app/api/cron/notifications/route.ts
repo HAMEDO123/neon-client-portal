@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runDeadlineReminders, runScheduleNotifier, runStageReminders } from "@/lib/notifications/events";
 import { runFollowUps } from "@/lib/notifications/follow-up-events";
+import { runRules } from "@/lib/notifications/automation-events";
 import { getTimezone } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
 
@@ -61,6 +62,14 @@ async function handle(request: Request) {
   // 12:05. Every one carries its own dedupe key, so overlapping runs ask once.
   if (forced === "followups" || !forced) {
     ran.followUps = await runFollowUps();
+  }
+
+  // The studio's own rules, on the same footing as the follow-ups: considered
+  // every run, each one keyed to the rule, the person and the day so overlapping
+  // runs say it once. With the switch off — which is how it ships — this looks
+  // at the day and says nothing.
+  if (forced === "rules" || !forced) {
+    ran.rules = await runRules();
   }
 
   // Chasing against the stage periods is a daily conversation, not an hourly

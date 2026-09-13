@@ -18,6 +18,9 @@ import { SoundToggle } from "@/components/sound-toggle";
 import { getPushHealth } from "@/lib/push-health";
 import { getEmployees, getProcessSections, getProcessTasks, getStagePeriods } from "@/lib/queries";
 import { TaskTypeLibrary } from "@/components/admin/task-type-library";
+import { AutomationRules } from "@/components/admin/automation-rules";
+import { automationOn, runRules } from "@/lib/notifications/automation-events";
+import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 
 // Integrations and the settings the platform reads at runtime, in one place
@@ -33,7 +36,12 @@ const TIMEZONES = [
   "UTC",
 ];
 
-export default async function AdminSettingsPage() {
+export default async function AdminSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ preview?: string }>;
+}) {
+  const { preview } = await searchParams;
   const timezone = await getTimezone();
   const planningNotes = await getPlanningNotes();
   const workHours = await getWorkHours();
@@ -52,6 +60,12 @@ export default async function AdminSettingsPage() {
   const periods = await getStagePeriods();
   const team = await getEmployees();
   const pushHealth = await getPushHealth();
+
+  // The studio's own rules, and — only when asked for — what they would do
+  // against today. The preview writes nothing: no state, no notification.
+  const rules = await prisma.automationRule.findMany({ orderBy: [{ order: "asc" }, { createdAt: "asc" }] });
+  const automationSwitchedOn = await automationOn();
+  const rulePreview = preview === "rules" ? await runRules(new Date(), { preview: true }) : null;
 
   const line = worker ? await lineStatus() : null;
   const linkState = line?.ok
@@ -190,6 +204,11 @@ export default async function AdminSettingsPage() {
           </div>
         </form>
       </section>
+
+      {/* Sits under the rules for planning a day, because it is the other half
+          of the same thought: those say how a day is made, these say what
+          happens when one goes wrong. */}
+      <AutomationRules rules={rules} switchedOn={automationSwitchedOn} preview={rulePreview} />
 
       {/* --- Channels ------------------------------------------------------ */}
       <section>
