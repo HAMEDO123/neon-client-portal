@@ -1,10 +1,13 @@
-// Client for the WhatsApp worker that already runs for Nixora.
+// Client for NEON's own WhatsApp worker (whatsapp-worker/ in this repo).
 //
-// That worker holds a real whatsapp-web.js browser session and exposes a small
-// HTTP API; it serves exactly one company, and the line in the path is either
-// "main" (the company's own line) or an employee's line id. Rather than stand
-// up a second Chromium session here — which a Next.js app on Render cannot
-// host anyway — this portal talks to that worker.
+// The worker holds a real whatsapp-web.js browser session and exposes a small
+// HTTP API; it serves one company — this one — and the line in the path is
+// either "main" (the studio's own number) or a named line. It is a separate
+// service because a Next.js app on Render cannot host a browser, a process that
+// stays up, or a disk that survives a restart, and the session needs all three.
+//
+// It is the studio's own service: its own key, its own session, its own disk.
+// Nothing here reaches into another product's deployment.
 //
 // Contract, from whatsapp-worker/worker.ts:
 //   GET  /health                        → { ok, companyId }        (no auth)
@@ -120,7 +123,13 @@ export async function sendWhatsAppText(phone: string, text: string): Promise<Wha
 
   return call(`/lines/${encodeURIComponent(config.line)}/send-text`, {
     method: "POST",
-    body: { phone: to, text },
+    // `kind` is the library's whole safety model, so it is stated here rather
+    // than left to a default at the other end. The caller is the only side that
+    // knows what a message actually is, and a default is a guess made by
+    // something that does not. Everything the portal sends is business-initiated
+    // to a client who already has a relationship with the studio:
+    // `notification`, never `cold`.
+    body: { phone: to, text, kind: "notification" },
     timeoutMs: 30_000,
   });
 }

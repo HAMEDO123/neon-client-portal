@@ -103,8 +103,20 @@ describe("worker client", () => {
     assert.equal(request.path, "/lines/main/send-text");
     assert.equal(request.method, "POST");
     assert.equal(request.key, WORKER_KEY);
-    // The number reaches the worker as digits, as WhatsApp expects.
-    assert.deepEqual(request.body, { phone: "962791234567", text: "Hello from NEON" });
+    // Two things, and the second is the one worth pinning deliberately rather
+    // than by accident. The number reaches the worker as digits, as WhatsApp
+    // expects; and the send states its own `kind`.
+    //
+    // `kind` is the library's whole safety model — `cold` is capped at 20 a day
+    // because first contact is what gets a number restricted. The portal is the
+    // only side that knows what a message actually is, so it says so rather
+    // than letting the worker guess a default. Everything it sends is an update
+    // to a client who already has a relationship with the studio.
+    assert.deepEqual(request.body, {
+      phone: "962791234567",
+      text: "Hello from NEON",
+      kind: "notification",
+    });
   });
 
   it("refuses to send to an unusable number without calling the worker", async () => {

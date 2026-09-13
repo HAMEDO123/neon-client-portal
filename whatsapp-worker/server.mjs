@@ -6,8 +6,8 @@
 // to change: the browser needs Chromium, the session needs a process that
 // stays up, and the login needs a disk that survives a restart.
 //
-// The API is deliberately the same shape as the worker that already runs for
-// Nixora, so the portal's client speaks to either without knowing which.
+// This is the studio's own service and holds the studio's own number. It has
+// one company, one key and one disk, and it talks to nothing but the portal.
 //
 //   GET  /health                     → { ok, companyId }        (no auth)
 //   GET  /lines/:line/status         → session snapshot
@@ -130,7 +130,17 @@ const server = createServer(async (request, response) => {
         text: body.text,
         // An update a client is expecting, unless the caller says otherwise.
         kind: body.kind ?? "notification",
-        idempotencyKey: body.idempotencyKey ?? `portal:${body.phone}:${Date.now()}`,
+        // No key means NO key — the library then derives one from the line, the
+        // recipient and the text, and suppresses an identical message for five
+        // minutes. That is what collapses a retried POST or an operator's
+        // second tap while the first send is still pacing.
+        //
+        // This used to fall back to `portal:<phone>:<Date.now()>`, which looks
+        // like a sensible default and is the opposite of one: a key containing
+        // the clock is unique on every call, so it matches nothing, and
+        // supplying it turns the deduplication off precisely where it was
+        // designed to work.
+        ...(body.idempotencyKey ? { idempotencyKey: body.idempotencyKey } : {}),
       });
 
       return send(response, 202, result);

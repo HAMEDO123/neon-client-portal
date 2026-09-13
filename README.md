@@ -280,7 +280,10 @@ The domain vocabulary, as the code defines it:
 
 ### WhatsApp
 `lib/whatsapp/index.ts` offers one send interface over two transports: Meta's Cloud API (`WHATSAPP_CLOUD_*`, preferred) or the worker (`WHATSAPP_WORKER_URL`/`_KEY`). With neither configured, the buttons open `wa.me` links.
-- `lib/whatsapp/cloud-api.ts` is copied from the nexora-whatsapp library. Don't edit it here.
+- `lib/whatsapp/cloud-api.ts` is copied from the nexora-whatsapp library. Don't edit it here. Both transports are that library's — the Cloud one is a module inside it, not something reached for outside the studio's own stack.
+- **The worker is the studio's own service**, in `whatsapp-worker/`: its own key, its own session, its own disk, its own container. It is separate from the portal because a session needs a browser, a process that stays up and a disk that survives a restart, and Render's Node runtime has none of the three — not because it belongs to anything else. `whatsapp-worker/docker-compose.yml` runs it anywhere Docker runs.
+- **The portal states its own `kind`.** Every send-text carries `kind: "notification"`. The library's classes are `reply`, `notification` and `cold`, and `cold` is capped at 20 new recipients per number per day because first contact is what gets a number restricted. The caller is the only side that knows what a message actually is, so it says so rather than letting the worker guess. A test pins it.
+- **An absent `idempotencyKey` is passed on as absent.** The library then derives one from line + recipient + text and suppresses an identical message for five minutes, which is what collapses a retried POST or a second tap while the first send is still pacing. `server.mjs` used to substitute `portal:<phone>:<Date.now()>`, which looks like a sensible default and is the opposite of one: a key carrying the clock is unique every call, matches nothing, and turns the deduplication off exactly where it was designed to work.
 - The worker (`whatsapp-worker/server.mjs`, port 4100) needs a persistent disk at `/app/data`.
 - Without `PUBLIC_APP_URL`, project links go out as relative paths.
 

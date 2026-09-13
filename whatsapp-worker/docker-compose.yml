@@ -1,0 +1,37 @@
+# NEON's WhatsApp worker, on its own.
+#
+#   docker compose up -d --build
+#
+# One service, one volume, nothing else. The volume is the part that matters:
+# the linked session lives on it, and without it every restart means scanning
+# the QR again.
+
+services:
+  whatsapp:
+    build: .
+    container_name: neon-whatsapp
+    restart: unless-stopped
+    environment:
+      # The only thing between the internet and the studio's WhatsApp number.
+      # `:?` rather than a default on purpose — an empty key would start a
+      # service that answers anybody, which is worse than one that refuses to
+      # start at all.
+      WORKER_API_KEY: ${WORKER_API_KEY:?set WORKER_API_KEY — it guards the studio's number}
+      WHATSAPP_COMPANY_ID: ${WHATSAPP_COMPANY_ID:-neon}
+    volumes:
+      # The login and the send journal. Named, so `docker compose down` does not
+      # take the session with it.
+      - whatsapp-data:/app/data
+    ports:
+      - "${WHATSAPP_WORKER_PORT:-4100}:4100"
+    healthcheck:
+      # /health is the one route without auth, which is exactly what a
+      # healthcheck should be able to reach.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4100/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  whatsapp-data:
