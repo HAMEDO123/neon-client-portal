@@ -138,4 +138,16 @@ describe("one definition of the check, not twenty-five", () => {
 
     assert.deepEqual(touching, ["auth-actions.ts", "employee-auth-actions.ts"]);
   });
+
+  it("holds the employee's own project actions to the same standard", () => {
+    // A different guard, but the identical failure: an exported action with no
+    // session check at all typechecks, lints, builds, and passes every other
+    // test. These put drawings and photos straight onto a client's page, so an
+    // unguarded one would be reachable by anybody who knew the endpoint.
+    const unguarded = exportedActions(read("employee-project-actions.ts"))
+      .filter((action) => !action.body.includes("await requireEmployee();"))
+      .map((action) => action.name);
+
+    assert.deepEqual(unguarded, [], `these reach a client's page with no session check: ${unguarded.join(", ")}`);
+  });
 });

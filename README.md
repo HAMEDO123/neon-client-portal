@@ -139,6 +139,12 @@ whatsapp-worker/      standalone WhatsApp Web service (its own Dockerfile; not i
   - Storage is Cloudflare R2 if all five `R2_*` variables are set, otherwise Vercel Blob if `BLOB_READ_WRITE_TOKEN` is set, otherwise local `public/uploads/`.
   - Images are made upright, fit within 2400px, re-encoded as mozjpeg and always saved as `.jpg`.
   - `<Image>` is used with `unoptimized` throughout; keep it that way.
+- **Employees put things on projects too** (`/employee/projects`, `lib/actions/employee-project-actions.ts`): drawings, documents, and photos into a room of the gallery. A Projects tab in the portal lists every non-archived project; tapping one gives what is on it and the forms to add more.
+  - **Two decisions the studio made, written here because the code cannot explain itself:** an employee's upload reaches the client **immediately**, with nobody in between; and **anybody on the team** may add to any project, not only whoever holds a section of it. Both were asked and answered rather than assumed.
+  - **Adding only — nothing there deletes.** Removing a drawing also removes the file from storage and takes it off the client's page for good, and an accidental tap on a phone should not be able to do that. Deletion stays with the manager.
+  - **The admin actions were not loosened to make this work.** They still require an admin session; these are separate actions behind `requireEmployee`. Opening one of the existing ones would not have meant "employees too", it would have meant anybody at all — which is the hole that was closed the same day.
+  - **Photos upload one per request, compressed in the browser first.** The request body limit applies to the *raw* upload, before any compression, so a handful of camera photos sent together is refused however small they end up. `components/employee/project-photo-upload.tsx` loops; `addProjectImage` takes one file. The admin's own uploader learned this first and its comment says so.
+  - The manager is told after the fact — not a gate, since the studio chose immediate, but it means an upload is learned from the platform rather than from the client. Photos are keyed on the room and the day, so eight from one site visit arrive as one notification.
 - **Language:** the client page is English and Arabic (`lib/client-i18n.tsx`; the English strings are the keys, with an `AR` dictionary). Every new client string needs an `AR` entry. The admin is English only.
 
 ### Team operations
@@ -227,7 +233,7 @@ The domain vocabulary, as the code defines it:
 
 **Pages:**
 - Admin: `tasks` (the board and the week board), `reviews`, `alerts`, `analytics` (`?day=`, `?period=`), `payroll`, `employees`, `requests`, and `settings` (process sections, stage periods, what each kind of work needs, the working day, how a day is planned, push health, timezone, WhatsApp).
-- Employee: `/employee` (today, or tomorrow with `?day=tomorrow`), `tasks`, `tasks/[id]`, `assigned/[id]`, `requests`, `notifications` and `profile` (push, preferences, devices, sounds, sign out).
+- Employee: `/employee` (today, or tomorrow with `?day=tomorrow`), `tasks`, `tasks/[id]`, `assigned/[id]`, `projects`, `projects/[id]`, `requests`, `notifications` and `profile` (push, preferences, devices, sounds, sign out). The tab bar carries six of them — it said five for a long time, and Projects was added deliberately rather than drifted into.
 
 ### Chat, live updates and sounds
 - **Conversations:**

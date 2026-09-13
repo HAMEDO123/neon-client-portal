@@ -2,16 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ListChecks, MessagesSquare, ShoppingBag, User } from "lucide-react";
+import { Building2, Home, ListChecks, MessagesSquare, ShoppingBag, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Five destinations, nothing else. Notifications are not among them: the bell
-// in the header already carries the unread count, so a tab for it would be a
-// second door to the same room.
-// Chat sits at the right-hand end, under the thumb.
+// Six destinations. This said five for a long time, and the sixth was added
+// deliberately rather than drifted into: employees now put drawings, documents
+// and photos onto projects themselves, and work you can do needs a door of its
+// own — reaching it through a task would only be findable while a task happened
+// to point at that project.
+//
+// Notifications are still not among them: the bell in the header already
+// carries the unread count, so a tab for it would be a second door to the same
+// room. Chat stays at the right-hand end, under the thumb.
 const TABS = [
   { href: "/employee", label: "Home", icon: Home, exact: true },
   { href: "/employee/tasks", label: "Tasks", icon: ListChecks, exact: false },
+  { href: "/employee/projects", label: "Projects", icon: Building2, exact: false },
   { href: "/employee/requests", label: "Requests", icon: ShoppingBag, exact: false },
   { href: "/employee/profile", label: "Profile", icon: User, exact: false },
   { href: "/employee/chat", label: "Chat", icon: MessagesSquare, exact: false },
