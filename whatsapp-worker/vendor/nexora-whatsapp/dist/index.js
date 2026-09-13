@@ -136,6 +136,37 @@ export class WhatsApp {
         return this.outbox.snapshot(typeof line === "string" ? line : localSessionKey(line));
     }
     /**
+     * One pass of the queue: every line gets a look, and each may hand at most
+     * one message to the transport.
+     *
+     * THE QUEUE DOES NOT RUN ITSELF. `send()` only enqueues, and nothing in
+     * here is on a timer, so whoever owns the process must call this on an
+     * interval — otherwise every message is journalled, reported as queued, and
+     * never sent, with no error anywhere to say so.
+     *
+     * Safe to call often: pacing, backoff and the daily caps are enforced
+     * inside, and a pass with nothing due does nothing.
+     */
+    pump() {
+        return this.outbox.tick();
+    }
+    /**
+     * Reads the journal back into the queue. Call it once on boot, before the
+     * first pass.
+     *
+     * THE JOURNAL IS A FILE UNTIL SOMEBODY READS IT. Without this the queue
+     * starts empty, so messages the last process left waiting stay on disk,
+     * still `queued`, and invisible to this one — a pass iterates no lines and
+     * finds nothing to do, which is indistinguishable from a healthy queue with
+     * an empty backlog.
+     *
+     * Says what it found: how many were requeued, how many were dropped for
+     * having been mid-send when the process died, and how many had expired.
+     */
+    restoreQueue() {
+        return this.outbox.restore();
+    }
+    /**
      * Lets the queue finish what it is holding before the process exits, and
      * says what it managed: how many it drained, how many were still in flight.
      */

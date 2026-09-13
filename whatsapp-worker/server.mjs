@@ -50,6 +50,17 @@ const resumed = await wa.resume().catch((error) => {
 });
 console.log(`[whatsapp] resumed ${resumed.length} saved line(s)`);
 
+// Bringing the login back is only half of it: the queue starts empty, so
+// anything the last process left waiting is still in the journal on disk and
+// invisible to this one. Without this a pass iterates no lines and finds
+// nothing to do — which looks exactly like a healthy queue with no backlog,
+// and is how four real messages sat unsent while everything reported success.
+const restored = wa.restoreQueue();
+console.log(
+  `[whatsapp] queue restored: ${restored.requeued} waiting, ` +
+    `${restored.droppedInFlight} dropped mid-send, ${restored.expired} expired`
+);
+
 /** "main" is the company's own number; anything else is a named line. */
 function lineFor(param) {
   return { companyId: COMPANY_ID, lineId: param === "main" ? null : param };
@@ -181,8 +192,36 @@ const server = createServer(async (request, response) => {
 
 server.listen(PORT, () => console.log(`[whatsapp] worker ready for ${COMPANY_ID} on :${PORT}`));
 
+// The queue does not run itself. `wa.send` only enqueues, so without this the
+// worker accepts a message, writes it to the journal, answers 202, and never
+// sends it — and nothing reports an error, because nothing failed. That is
+// exactly how this looked like it was working while no message ever arrived.
+//
+// Two seconds is deliberately finer than the tightest gap the queue enforces
+// (3s between replies on one line), so how promptly a message leaves is decided
+// by the queue's own pacing rather than by this interval. A pass with nothing
+// due does nothing.
+const PUMP_INTERVAL_MS = 2_000;
+let pumping = false;
+const pump = setInterval(async () => {
+  // One pass at a time: a pass that outruns the interval must not have a second
+  // started on top of it.
+  if (pumping) return;
+  pumping = true;
+  try {
+    await wa.pump();
+  } catch (error) {
+    console.error("[whatsapp] pump failed:", error instanceof Error ? error.message : error);
+  } finally {
+    pumping = false;
+  }
+}, PUMP_INTERVAL_MS);
+
 async function shutdown(why) {
   console.log(`[whatsapp] shutting down (${why})`);
+  // Stop starting passes before asking the queue to settle, so shutdown is not
+  // racing a pump that is handing another message to the transport.
+  clearInterval(pump);
   // Let the queue finish what it is holding rather than dropping it.
   await wa.shutdown(5_000).catch(() => {});
   server.close(() => process.exit(0));

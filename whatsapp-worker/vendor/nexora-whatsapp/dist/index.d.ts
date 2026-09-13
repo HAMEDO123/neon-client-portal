@@ -83,6 +83,28 @@ export declare class WhatsApp {
     /** What a number has left today: the backlog, and the remaining cold budget. */
     lineSnapshot(line: LocalLine | string): import("./outbox.js").OutboxLineSnapshot;
     /**
+     * One pass of the queue: every line gets a look, and each may hand at most
+     * one message to the transport.
+     *
+     * THE QUEUE DOES NOT RUN ITSELF. `send()` only enqueues, so whoever owns
+     * the process must call this on an interval, or messages are journalled and
+     * never sent. Safe to call often: pacing and caps are enforced inside.
+     */
+    pump(): Promise<void>;
+    /**
+     * Reads the journal back into the queue. Call it once on boot, before the
+     * first pass.
+     *
+     * THE JOURNAL IS A FILE UNTIL SOMEBODY READS IT. Without this the queue
+     * starts empty, so messages left waiting by the last process stay on disk
+     * and invisible — a pass iterates no lines and looks perfectly healthy.
+     */
+    restoreQueue(): {
+        requeued: number;
+        droppedInFlight: number;
+        expired: number;
+    };
+    /**
      * Lets the queue finish what it is holding before the process exits, and
      * says what it managed: how many it drained, how many were still in flight.
      */
