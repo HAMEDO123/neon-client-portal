@@ -449,6 +449,8 @@ model Employee {
 
   // What the studio's own rules remember about this person, day by day.
   automationStates AutomationState[]
+  // Their own account of each day, written by them for the manager.
+  dailyReports     DailyReport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -774,6 +776,35 @@ model AutomationState {
 
   @@unique([ruleId, employeeId, day])
   @@index([employeeId, day])
+}
+
+// One employee's account of their own day, in their own words, for the manager.
+//
+// The other half of the day's record. Everything else the platform holds about
+// a day is inferred — a state that moved, a question answered with a tap, a
+// photo checked against criteria. This is the part only the person who did the
+// work can supply: what actually happened, including the parts no field has a
+// column for.
+//
+// One row per person per day, so writing again during the day edits the same
+// report rather than stacking notes. That matters for reading it: a manager
+// wants one account of Tuesday, not seven fragments of it.
+model DailyReport {
+  id String @id @default(cuid())
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// The day it is about, in the company timezone.
+  day DateTime @db.Date
+
+  text String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([employeeId, day])
+  @@index([day])
 }
 
 // Every time a task changed state: what it was, what it became, who did it and

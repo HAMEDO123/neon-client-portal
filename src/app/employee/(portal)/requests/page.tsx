@@ -2,10 +2,11 @@ import { prisma } from "@/lib/db";
 import { requireEmployee } from "@/lib/employee-session";
 import { getMyReceipts } from "@/lib/payroll-queries";
 import { getTimezone } from "@/lib/settings";
-import { todayKey } from "@/lib/time";
+import { dayKeyToDate, todayKey } from "@/lib/time";
 import { periodLabel, periodOf, RECEIPT_CAP } from "@/lib/payroll";
 import { SupplyRequestForm, SupplyRequestList } from "@/components/employee/supply-requests";
 import { ReceiptUploader, ReceiptList } from "@/components/employee/receipts";
+import { DailyReport } from "@/components/employee/daily-report";
 
 // One tab for the two things an employee asks the office for: something to be
 // bought, and money back for something they already paid for.
@@ -20,15 +21,25 @@ export default async function EmployeeRequestsPage({
   const period = periodOf(todayKey(timezone));
 
   const showReceipts = tab === "receipts";
+  const showReport = tab === "report";
 
-  const [requests, receipts] = await Promise.all([
-    prisma.supplyRequest.findMany({
-      where: { employeeId: employee.id },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-    getMyReceipts(employee.id, period),
-  ]);
+  // One after another, the convention everywhere here: the local database drops
+  // the connection when a page fires several at once. This was a Promise.all
+  // and is now three reads rather than two, which is exactly when that starts
+  // to bite.
+  const requests = await prisma.supplyRequest.findMany({
+    where: { employeeId: employee.id },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+  const receipts = await getMyReceipts(employee.id, period);
+
+  // Today's report, if there is one — the box opens with their own words in it,
+  // because this is edited through the day rather than written once.
+  const report = await prisma.dailyReport.findUnique({
+    where: { employeeId_day: { employeeId: employee.id, day: dayKeyToDate(todayKey(timezone)) } },
+    select: { text: true, updatedAt: true },
+  });
 
   const counted = receipts.reduce((sum, receipt) => sum + (receipt.countedAmount ?? 0), 0);
 
@@ -42,11 +53,16 @@ export default async function EmployeeRequestsPage({
       </div>
 
       <div className="flex gap-2">
-        <Tab href="/employee/requests" active={!showReceipts} label="Office supplies" />
-        <Tab href="/employee/requests?tab=receipts" active={showReceipts} label="My receipts" />
+        <Tab href="/employee/requests" active={!showReceipts && !showReport} label="Supplies" />
+        <Tab href="/employee/requests?tab=receipts" active={showReceipts} label="Receipts" />
+        {/* A plain apostrophe: this is a string attribute, not JSX text, so an
+            HTML entity here would reach the screen as the entity itself. */}
+        <Tab href="/employee/requests?tab=report" active={showReport} label="Today's report" />
       </div>
 
-      {showReceipts ? (
+      {showReport ? (
+        <DailyReport today={report?.text ?? ""} savedAt={report?.updatedAt ?? null} />
+      ) : showReceipts ? (
         <>
           <div className="glass rounded-2xl p-4">
             <p className="text-xs font-medium uppercase tracking-wider text-ink/40">

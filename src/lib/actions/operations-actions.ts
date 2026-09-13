@@ -8,8 +8,9 @@ import { saveFile } from "@/lib/storage";
 import { readReceipt } from "@/lib/ai/receipts";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { countedReceiptAmount, periodOf } from "@/lib/payroll";
+import { notifyAdmin } from "@/lib/admin-notifications";
 import { getTimezone } from "@/lib/settings";
-import { todayKey } from "@/lib/time";
+import { dayKeyToDate, todayKey } from "@/lib/time";
 import type { PayBasis, SupplyRequestStatus } from "@/generated/prisma/enums";
 
 // Office supply requests, expense receipts and attendance.
@@ -25,6 +26,49 @@ function refreshEmployee() {
 function refreshAdmin() {
   revalidatePath("/admin/requests");
   revalidatePath("/admin/payroll");
+}
+
+// --- The day's own report --------------------------------------------------
+
+/**
+ * What the employee says happened today, in their own words.
+ *
+ * Upserted on (employee, day): writing again during the day edits the same
+ * report rather than adding another note, so the manager reads one account of
+ * Tuesday instead of seven fragments of it. There is no "submit once and it
+ * locks" — somebody remembering at six o'clock what they did at eleven should
+ * be able to add it.
+ *
+ * The manager is told once a day per person, not once per edit. A report that
+ * is still being written should not buzz a phone every time a sentence lands.
+ */
+export async function saveDailyReport(formData: FormData) {
+  const employee = await requireEmployee();
+
+  const text = String(formData.get("text") ?? "").trim().slice(0, 4000);
+  if (!text) throw new Error("Write something before sending it.");
+
+  const timezone = await getTimezone();
+  const dayKey = todayKey(timezone);
+
+  await prisma.dailyReport.upsert({
+    where: { employeeId_day: { employeeId: employee.id, day: dayKeyToDate(dayKey) } },
+    create: { employeeId: employee.id, day: dayKeyToDate(dayKey), text },
+    update: { text },
+  });
+
+  await notifyAdmin({
+    type: "TASK_STATUS_CHANGED",
+    title: `${employee.name} wrote today's report`,
+    message: text.length > 200 ? `${text.slice(0, 200)}…` : text,
+    url: "/admin/requests",
+    // Keyed on the person and the day, so edits collapse into the one telling.
+    dedupeKey: `DAILY_REPORT:${employee.id}:${dayKey}`,
+    employeeId: employee.id,
+  }).catch(() => null);
+
+  revalidatePath("/employee/requests");
+  revalidatePath("/admin/requests");
 }
 
 // --- Office supplies -------------------------------------------------------
