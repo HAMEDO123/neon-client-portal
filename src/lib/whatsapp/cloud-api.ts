@@ -2,13 +2,18 @@
 // which is kept at ../nexora-whatsapp. Update it from there rather than
 // editing it here.
 //
-// Only this half of the library is vendored. The other half drives WhatsApp
-// Web through whatsapp-web.js, which hard-depends on puppeteer — a Chromium
-// download on every build, a long-lived process to hold the browser session,
-// and a persistent disk to keep the login across deploys. This deployment has
-// none of those, and the library's own README says to put a number you cannot
-// afford to lose on the Cloud API anyway. The session half already runs in the
-// Nixora worker; src/lib/whatsapp/worker.ts talks to it.
+// Only this half of the library is vendored here. The other half drives
+// WhatsApp Web through whatsapp-web.js, which hard-depends on puppeteer — a
+// Chromium download on every build, a long-lived process to hold the browser
+// session, and a persistent disk to keep the login across deploys. Render's
+// Node runtime has none of those, so that half lives in a container of its
+// own: whatsapp-worker/ in this repo, which src/lib/whatsapp/worker.ts talks
+// to over HTTP. It is the studio's own service, and nothing runs it yet — it
+// is built and documented, not deployed.
+//
+// The library's own README also says to put a number you cannot afford to lose
+// on the Cloud transport rather than a session, which is why this half is the
+// one that ships inside the app.
 
 // Real, official WhatsApp Business Cloud API (Meta Graph API) — the legal
 // replacement for the whatsapp-web.js Connector path (an unofficial

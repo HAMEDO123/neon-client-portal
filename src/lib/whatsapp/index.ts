@@ -18,9 +18,10 @@ import {
 //
 //   cloud   — Meta's official Cloud API, from the nexora-whatsapp library.
 //             Pure HTTPS, so it runs here on Render with nothing else needed.
-//   worker  — the whatsapp-web.js session the Nixora app already holds. It
-//             needs a browser and a persistent disk, which is why it lives
-//             there and this portal only calls it.
+//   worker  — the studio's own whatsapp-web.js session, in whatsapp-worker/.
+//             It needs a browser, a process that stays up and a disk that
+//             survives a restart, which is why it is a service of its own and
+//             this portal only calls it.
 //   none    — neither configured; the UI falls back to wa.me links, exactly
 //             as it did before any of this existed.
 //

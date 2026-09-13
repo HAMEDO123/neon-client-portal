@@ -247,8 +247,8 @@ export default async function AdminSettingsPage({
                 label="Transport"
                 value={
                   transport === "cloud"
-                    ? "Meta Cloud API — official, cannot get the number banned"
-                    : "whatsapp-web.js session (the Nixora worker)"
+                    ? "Official Cloud API — cannot get the number banned"
+                    : "whatsapp-web.js session (the studio's own worker)"
                 }
               />
               {cloud && <Row label="Phone number ID" value={cloud.phoneNumberId} />}
@@ -284,10 +284,10 @@ WHATSAPP_CLOUD_APP_SECRET        optional, for inbound webhooks`}
             </p>
 
             <p className="mt-4 text-xs font-medium uppercase tracking-wider text-ink/40">
-              Or the existing session worker
+              Or the studio&apos;s own session worker
             </p>
             <pre className="mt-2 overflow-x-auto rounded-lg bg-ink/[0.04] p-3 text-xs text-ink/70">
-{`WHATSAPP_WORKER_URL   the Nixora worker's URL
+{`WHATSAPP_WORKER_URL   where the studio's worker answers
 WHATSAPP_WORKER_KEY   its WORKER_API_KEY
 WHATSAPP_LINE_ID      "main" for the company line (default)`}
             </pre>
