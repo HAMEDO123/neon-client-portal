@@ -48,7 +48,7 @@ export default async function EmployeeRequestsPage({
       <div>
         <h1 className="text-xl font-semibold text-ink">Requests</h1>
         <p className="mt-1 text-sm text-ink/50">
-          Ask for office supplies, or send in a receipt you paid for yourself.
+          Write up your day, ask for office supplies, or send in a receipt you paid for yourself.
         </p>
       </div>
 
