@@ -18,11 +18,19 @@ export function CompletionForm({
   entryId,
   state,
   kind = "entry",
+  evidence = null,
 }: {
   entryId: string;
   state: "TODO" | "IN_PROGRESS" | "SUBMITTED" | "DONE" | "TOMORROW";
   /** A cell on the project board, or a job the manager handed out by hand. */
   kind?: "entry" | "assigned";
+  /**
+   * What proof this kind of work is supposed to come with, where the step says
+   * so. Shown above the camera rather than below it: telling somebody what to
+   * photograph after they have photographed something is advice that arrived
+   * too late.
+   */
+  evidence?: string | null;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -86,6 +94,13 @@ export function CompletionForm({
           ? "Your photo is with the manager. You can add a better one while you wait."
           : "A photo of the finished work, or a screenshot of it. The manager reviews it and marks the task complete."}
       </p>
+
+      {evidence && (
+        <p dir="auto" className="mt-2 rounded-lg border border-ink/10 bg-white/60 px-3 py-2 text-xs text-ink/70">
+          <span className="font-semibold text-ink/45">Send: </span>
+          {evidence}
+        </p>
+      )}
 
       <input
         ref={cameraRef}

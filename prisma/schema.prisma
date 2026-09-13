@@ -438,6 +438,9 @@ model Employee {
   updatedAt DateTime @default(now()) @updatedAt
 
   tasks           ProcessTask[]
+  // Steps whose finished work normally comes to this person rather than the
+  // manager. Named, because there are now two ways to be attached to a step.
+  reviewsSteps    ProcessTask[]              @relation("StepReviewer")
   assignedEntries ProjectTaskEntry[]         @relation("EntryAssignee")
   notifications   Notification[]
   subscriptions   PushSubscription[]
@@ -490,6 +493,30 @@ model ProcessTask {
   // sixteen separate steps.
   sectionId String?
   section   ProcessSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  // What this kind of work needs, written once instead of on every project.
+  //
+  // A step is the same job whatever project it sits on, so the standard belongs
+  // here and a cell of the board only has to say where it differs — lib/
+  // task-types.ts decides which applies. Before this, "what counts as done" was
+  // typed per cell, which in practice meant it was usually not typed at all,
+  // and a submission can only be checked against something somebody wrote.
+  deliverable   String? @db.Text
+  acceptance    String? @db.Text
+  estimateHours Float?
+  // What proof to send back, and the checks to run through while doing it.
+  evidence  String? @db.Text
+  checklist String? @db.Text
+
+  // Whether work of this kind may be settled without a person looking. Refused
+  // outright when no acceptance criteria are written, however this is set:
+  // accepting with nothing to check against is the one setting here that could
+  // do real damage quietly (`mayAutoAccept` in lib/task-types.ts).
+  autoAccept Boolean @default(false)
+
+  // Who normally reviews this step, where that is not the manager.
+  reviewerId String?
+  reviewer   Employee? @relation("StepReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
 
   periodsFrom StagePeriod[] @relation("PeriodFrom")
   periodsTo   StagePeriod[] @relation("PeriodTo")

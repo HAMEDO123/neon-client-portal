@@ -16,7 +16,8 @@ import { StagePeriods } from "@/components/admin/stage-periods";
 import { PushHealthCard } from "@/components/admin/push-health-card";
 import { SoundToggle } from "@/components/sound-toggle";
 import { getPushHealth } from "@/lib/push-health";
-import { getProcessSections, getProcessTasks, getStagePeriods } from "@/lib/queries";
+import { getEmployees, getProcessSections, getProcessTasks, getStagePeriods } from "@/lib/queries";
+import { TaskTypeLibrary } from "@/components/admin/task-type-library";
 import { Badge } from "@/components/ui/badge";
 
 // Integrations and the settings the platform reads at runtime, in one place
@@ -49,6 +50,7 @@ export default async function AdminSettingsPage() {
   const stages = await getProcessTasks();
   const sections = await getProcessSections();
   const periods = await getStagePeriods();
+  const team = await getEmployees();
   const pushHealth = await getPushHealth();
 
   const line = worker ? await lineStatus() : null;
@@ -82,6 +84,25 @@ export default async function AdminSettingsPage() {
           toTaskId: period.toTaskId,
           days: period.days,
         }))}
+      />
+
+      {/* Sits under the shape of the process, because it is the same list of
+          steps seen from the other side: not where they come in the order, but
+          what each one actually needs. */}
+      <TaskTypeLibrary
+        steps={stages.map((stage) => ({
+          id: stage.id,
+          name: stage.name,
+          sectionName: stage.section?.name ?? null,
+          deliverable: stage.deliverable,
+          acceptance: stage.acceptance,
+          estimateHours: stage.estimateHours,
+          evidence: stage.evidence,
+          checklist: stage.checklist,
+          autoAccept: stage.autoAccept,
+          reviewerId: stage.reviewerId,
+        }))}
+        employees={team.map((person) => ({ id: person.id, name: person.name }))}
       />
 
       {/* --- The working day ----------------------------------------------- */}

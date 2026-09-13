@@ -9,9 +9,11 @@ import {
   FileText,
   Flag,
   Hourglass,
+  ListChecks,
   OctagonAlert,
   PackageCheck,
 } from "lucide-react";
+import { effectiveDetail, linesOf } from "@/lib/task-types";
 import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
 import { saveMyTaskNote } from "@/lib/actions/employee-actions";
@@ -59,6 +61,13 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
   });
   const holdUp = readinessReason(readiness);
   const effort = effortLabel(task.estimateHours);
+
+  // What this task actually asks for: the cell's own words where the manager
+  // wrote them here, and the step's standard where they did not. Filling a step
+  // in once in Settings is what puts this in front of everybody working it.
+  const applies = effectiveDetail(task, task.task);
+  const checklist = linesOf(task.task.checklist);
+  const proof = task.task.evidence?.trim() || null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -130,22 +139,51 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
         {effort && <Detail icon={Hourglass} label="Expected" value={effort} />}
       </div>
 
-      {(task.deliverable || task.acceptance) && (
+      {(applies.deliverable.value || applies.acceptance.value) && (
         <section className="glass rounded-2xl p-4">
           <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
             <PackageCheck size={13} strokeWidth={2} />
             What counts as finished
           </h2>
-          {task.deliverable && (
+          {applies.deliverable.value && (
             <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm text-ink/75">
-              {task.deliverable}
+              {applies.deliverable.value}
             </p>
           )}
-          {task.acceptance && (
-            <p dir="auto" className="mt-2 whitespace-pre-wrap border-t border-ink/8 pt-2 text-sm text-ink/60">
-              {task.acceptance}
-            </p>
+          {/* One line, one thing: each of these is checked on its own when the
+              photo arrives, so showing them as a block of prose would hide that
+              they are separate items somebody has to satisfy. */}
+          {applies.acceptance.value && (
+            <ul className="mt-2 flex flex-col gap-1.5 border-t border-ink/8 pt-2">
+              {linesOf(applies.acceptance.value).map((line, index) => (
+                <li key={`${index}-${line}`} dir="auto" className="flex gap-2 text-sm text-ink/65">
+                  <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-ink/25" />
+                  {line}
+                </li>
+              ))}
+            </ul>
           )}
+        </section>
+      )}
+
+      {/* How this kind of work is normally done, where somebody wrote it down.
+          A reminder, not a form: nothing here is ticked and nothing is recorded,
+          because a box that gets ticked becomes a claim, and a claim in this
+          system has exactly one route — the photo. */}
+      {checklist.length > 0 && (
+        <section className="glass rounded-2xl p-4">
+          <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
+            <ListChecks size={13} strokeWidth={2} />
+            How we do this one
+          </h2>
+          <ol className="mt-2 flex flex-col gap-1.5">
+            {checklist.map((line, index) => (
+              <li key={`${index}-${line}`} dir="auto" className="flex gap-2 text-sm text-ink/70">
+                <span className="mt-px text-[11px] font-semibold tabular-nums text-ink/30">{index + 1}</span>
+                {line}
+              </li>
+            ))}
+          </ol>
         </section>
       )}
 
@@ -182,7 +220,7 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
         </div>
       </section>
 
-      <CompletionForm entryId={task.id} state={task.state} />
+      <CompletionForm entryId={task.id} state={task.state} evidence={proof} />
 
       {submissions.length > 0 && (
         <section className="glass rounded-2xl p-4">

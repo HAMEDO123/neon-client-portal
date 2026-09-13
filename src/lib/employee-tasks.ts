@@ -68,7 +68,20 @@ const taskSelect = {
       dependsOn: { select: { id: true, state: true, task: { select: { name: true } } } },
     },
   },
-  task: { select: { id: true, name: true, employeeId: true } },
+  // The step's own standard, for a cell that says nothing of its own: what to
+  // hand in, what counts as finished, the proof to send and the checklist to
+  // follow. `effectiveDetail` in lib/task-types.ts decides which applies.
+  task: {
+    select: {
+      id: true,
+      name: true,
+      employeeId: true,
+      deliverable: true,
+      acceptance: true,
+      evidence: true,
+      checklist: true,
+    },
+  },
   project: { select: { id: true, name: true, clientName: true, location: true } },
 } satisfies Prisma.ProjectTaskEntrySelect;
 

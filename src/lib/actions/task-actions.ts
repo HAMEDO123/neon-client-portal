@@ -164,6 +164,49 @@ export async function updateProcessTask(
 }
 
 /**
+ * The standard for one kind of work: what is handed in, what counts as
+ * finished, the proof to send, the checklist, the hours, and who reviews it.
+ *
+ * Written once on the step rather than again on every cell of the board. A cell
+ * may still say something different — `lib/task-types.ts` decides which applies
+ * — so filling this in changes nothing anybody has already written.
+ */
+export async function saveTaskType(id: string, formData: FormData) {
+  await requireAdmin();
+
+  const text = (field: string, limit = 2000) =>
+    String(formData.get(field) ?? "")
+      .trim()
+      .slice(0, limit) || null;
+
+  const estimateRaw = String(formData.get("estimateHours") ?? "").trim();
+  const estimate = estimateRaw === "" ? null : Number(estimateRaw);
+  if (estimate !== null && (!Number.isFinite(estimate) || estimate < 0)) {
+    throw new Error("The estimate must be a number of hours.");
+  }
+
+  await prisma.processTask.update({
+    where: { id },
+    data: {
+      deliverable: text("deliverable"),
+      // Room for a real list: each line is checked on its own.
+      acceptance: text("acceptance", 4000),
+      evidence: text("evidence"),
+      checklist: text("checklist", 4000),
+      // Zero hours is not an estimate, it is an empty box.
+      estimateHours: estimate === 0 ? null : estimate,
+      autoAccept: formData.get("autoAccept") === "on",
+      reviewerId: String(formData.get("reviewerId") ?? "") || null,
+    },
+  });
+
+  refresh();
+  revalidatePath("/admin/settings");
+  // The employee reads the same detail on their own task page.
+  revalidatePath("/employee", "layout");
+}
+
+/**
  * How long a run of steps is allowed to take.
  *
  * A range, not a number per step: "site visit through BOQ is four days" is one

@@ -1,13 +1,13 @@
 import { prisma } from "@/lib/db";
 import { ASSISTANT_MODEL, describeAiError, getAiClient, isAiConfigured } from "@/lib/ai/client";
 import {
-  DEFAULT_POLICY,
   outcomeOf,
   type CriterionCheck,
   type Outcome,
   type Policy,
   type Verdict,
 } from "@/lib/verification";
+import { effectiveDetail, linesOf, policyFor } from "@/lib/task-types";
 
 // Checking a claim of finished work against what was actually asked for.
 //
@@ -50,14 +50,16 @@ export type VerificationResult =
   | { ok: true; outcome: Outcome; checks: CriterionCheck[]; note?: string }
   | { ok: false; error: string };
 
-/** The acceptance criteria as separate things to check, one per line. */
+/**
+ * The acceptance criteria as separate things to check, one per line.
+ *
+ * The reading itself lives in lib/task-types.ts, so the list a submission is
+ * judged against is the same list, read the same way, as the one the manager
+ * counted on the step when they wrote it.
+ */
 function criteriaFrom(acceptance: string | null, deliverable: string | null): string[] {
-  const lines = (acceptance ?? "")
-    .split(/\r?\n|·|;/)
-    .map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim())
-    .filter((line) => line.length > 1);
-
-  if (lines.length > 0) return lines.slice(0, 12);
+  const lines = linesOf(acceptance);
+  if (lines.length > 0) return lines;
 
   // Nothing written as acceptance: what was asked to be handed in is the next
   // best thing, and still something a person wrote.
@@ -139,7 +141,7 @@ async function store(submissionId: string, checks: CriterionCheck[], outcome: Ou
  */
 export async function verifySubmission(
   submissionId: string,
-  policy: Policy = DEFAULT_POLICY
+  policy?: Policy
 ): Promise<VerificationResult> {
   const submission = await prisma.taskSubmission.findUnique({
     where: { id: submissionId },
@@ -147,14 +149,31 @@ export async function verifySubmission(
       id: true,
       imageUrl: true,
       note: true,
-      entry: { select: { acceptance: true, deliverable: true, task: { select: { name: true } } } },
+      entry: {
+        select: {
+          acceptance: true,
+          deliverable: true,
+          // The step's own standard, for a cell that says nothing of its own.
+          task: { select: { name: true, acceptance: true, deliverable: true, autoAccept: true } },
+        },
+      },
       assignedTask: { select: { acceptance: true, deliverable: true, title: true } },
     },
   });
   if (!submission) return { ok: false, error: "That submission no longer exists." };
 
+  // What this piece of work was actually asked for: the cell's own words where
+  // it has them, the step's standard where it does not. Filling a step in once
+  // therefore writes the criteria for every project's copy of it, which is the
+  // difference between a check that runs and a check that gives up.
+  const step = submission.entry?.task ?? null;
   const subject = submission.entry ?? submission.assignedTask;
-  const criteria = criteriaFrom(subject?.acceptance ?? null, subject?.deliverable ?? null);
+  const applies = effectiveDetail(subject, step);
+  const criteria = criteriaFrom(applies.acceptance.value, applies.deliverable.value);
+
+  // A job handed out by hand has no step behind it, so it has no policy either:
+  // week-board work is never settled without a person.
+  const settled = policy ?? policyFor(step);
 
   // Nobody wrote down what finishing means. Judging against criteria that do
   // not exist would be inventing them and then holding somebody to them.
@@ -240,7 +259,7 @@ export async function verifySubmission(
       return { ok: true, outcome: "human-review", checks: unreadable, note: "The check could not be read." };
     }
 
-    const outcome = outcomeOf(checks, policy);
+    const outcome = outcomeOf(checks, settled);
     await store(submissionId, checks, outcome);
     return { ok: true, outcome, checks };
   } catch (error) {
