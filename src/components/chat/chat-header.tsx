@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { GROUP_AVATAR } from "@/lib/chat-conversations";
@@ -16,12 +17,15 @@ export function ChatHeader({
   subtitle,
   avatar = GROUP_AVATAR,
   backHref,
+  actions,
 }: {
   name: string;
   subtitle: string;
   /** The group's mark by default; a person's initials for a private chat. */
   avatar?: string;
   backHref?: string;
+  /** Buttons at the end of the header: the calls. */
+  actions?: ReactNode;
 }) {
   return (
     <div className="chat-header flex shrink-0 items-center gap-2.5 border-b border-ink/10 bg-[#f6f6f6]/95 px-2 py-2 backdrop-blur-lg">
@@ -45,6 +49,8 @@ export function ChatHeader({
         <p className="truncate text-base font-semibold leading-tight text-ink">{name}</p>
         <p className="mt-0.5 truncate text-xs text-ink/50">{subtitle}</p>
       </div>
+
+      {actions}
     </div>
   );
 }

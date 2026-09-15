@@ -132,6 +132,27 @@ enum ChatMessageKind {
   VOICE
   // A task the manager handed out from the chat; the card is its ChatTask.
   TASK
+  // The line a call leaves when it ends: "Missed call", "Call ended · 4:32".
+  CALL
+}
+
+enum CallKind {
+  AUDIO
+  VIDEO
+}
+
+enum CallStatus {
+  // Asking the people in the conversation; nobody but the caller is in it yet.
+  RINGING
+  ACTIVE
+  ENDED
+}
+
+enum CallParticipantState {
+  INVITED
+  JOINED
+  LEFT
+  DECLINED
 }
 
 enum DeliveryChannel {
@@ -970,6 +991,7 @@ model ChatChannel {
   messages ChatMessage[]
   reads    ChatRead[]
   tasks    ChatTask[]
+  calls    Call[]
 }
 
 model ChatMessage {
@@ -1003,6 +1025,8 @@ model ChatMessage {
 
   // The card, when this message is a task.
   task ChatTask?
+  // The call, when this message is the line a call left behind.
+  call Call?
 
   createdAt DateTime @default(now())
 
@@ -1384,4 +1408,82 @@ model ChatTaskComment {
   createdAt DateTime @default(now())
 
   @@index([chatTaskId, createdAt])
+}
+
+// A call in a conversation, audio or video, between the people in it.
+//
+// The sound and pictures go straight between their devices (WebRTC). This is
+// only the meeting point: who was asked, who is in it, and — in CallSignal —
+// the offers, answers and network addresses their devices trade to find each
+// other. When it ends it leaves a line in the conversation.
+model Call {
+  id String @id @default(cuid())
+
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  kind   CallKind
+  status CallStatus @default(RINGING)
+
+  // "admin" for the manager, the employee id otherwise: the key chat reads use.
+  startedByKey  String
+  startedByName String
+
+  createdAt  DateTime  @default(now())
+  answeredAt DateTime?
+  endedAt    DateTime?
+  // "completed", "missed" or "declined", once it has ended.
+  endReason  String?
+
+  // The line it left in the conversation.
+  messageId String?      @unique
+  message   ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  participants CallParticipant[]
+  signals      CallSignal[]
+
+  @@index([channelId, status])
+  @@index([status, createdAt])
+}
+
+// One person's place in a call: asked, in it, gone, or said no.
+model CallParticipant {
+  id String @id @default(cuid())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  memberKey String
+  name      String
+  color     String?
+
+  state      CallParticipantState @default(INVITED)
+  joinedAt   DateTime?
+  leftAt     DateTime?
+  // When their open call last showed it was still there. A closed tab or a
+  // phone that lost its signal stops this, and they are counted as gone.
+  lastSeenAt DateTime?
+
+  @@unique([callId, memberKey])
+  @@index([memberKey, state])
+}
+
+// What one device in a call sends another to connect: a session description
+// or a batch of network candidates. Read in id order; deleted when the call ends.
+model CallSignal {
+  id Int @id @default(autoincrement())
+
+  callId String
+  call   Call   @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  fromKey String
+  toKey   String
+  // "description" or "candidates".
+  type    String
+  payload Json
+
+  createdAt DateTime @default(now())
+
+  @@index([toKey, id])
+  @@index([callId])
 }

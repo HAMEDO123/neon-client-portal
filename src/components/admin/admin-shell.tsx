@@ -8,6 +8,7 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { LiveSync } from "@/components/live-sync";
 import { SoundCues } from "@/components/sound-cues";
 import { AppViewport } from "@/components/employee/app-viewport";
+import { CallProvider } from "@/components/calls/call-provider";
 import { isConversationPath } from "@/lib/chat-conversations";
 import type { AdminBadges } from "@/lib/admin-badges";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,8 @@ export function AdminShell({
   // not 100vh: on an iPhone 100vh runs on under Safari's toolbar and under the
   // keyboard, which is where the message box went the moment you typed.
   return (
+    // Calls ring on every page of the admin, and a call keeps going while you move between them.
+    <CallProvider side="ADMIN">
     <div className="admin-shell flex overflow-hidden bg-background">
       {/* Board, badges and review queue stay current on their own. */}
       <LiveSync />
@@ -177,5 +180,6 @@ export function AdminShell({
         </div>
       )}
     </div>
+    </CallProvider>
   );
 }

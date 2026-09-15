@@ -278,5 +278,6 @@ export function chatPreview(
   if (kind === "IMAGE") return text ? `📷 ${text}` : "📷 Photo";
   if (kind === "FILE") return `📄 ${fileName?.trim() || text || "File"}`;
   if (kind === "TASK") return `📋 ${text || "Task"}`;
+  if (kind === "CALL") return `📞 ${text || "Call"}`;
   return text;
 }

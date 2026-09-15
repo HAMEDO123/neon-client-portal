@@ -173,6 +173,8 @@ export const messageSelect = {
   project: { select: { id: true, name: true } },
   // A task message carries its card, so it arrives drawn rather than as a blank to fill in.
   task: { select: chatTaskSelect },
+  // The line a call left: what kind of call, and how it ended.
+  call: { select: { kind: true, endReason: true } },
 } as const;
 
 /** One conversation's messages, for a channel already resolved through channelFor. */

@@ -12,13 +12,17 @@ import {
   FileText,
   Mic,
   Paperclip,
+  Phone,
+  PhoneMissed,
   Plus,
   Send,
   Trash2,
+  Video,
 } from "lucide-react";
 import { deleteChatMessage, sendChatMessage } from "@/lib/actions/chat-actions";
 import { createChatTask } from "@/lib/actions/chat-task-actions";
 import { ChatHeader } from "@/components/chat/chat-header";
+import { CallButtons } from "@/components/calls/call-buttons";
 import { TaskCard } from "@/components/chat/task-card";
 import { TaskSheet, type TaskSetup } from "@/components/chat/task-sheet";
 import { shrinkPhoto } from "@/lib/client-image";
@@ -270,6 +274,7 @@ export function ChatRoom({
         createdAt: new Date(),
         project: projects.find((project) => project.id === draft.projectId) ?? null,
         task: null,
+        call: null,
         status: "sending",
       };
 
@@ -339,7 +344,13 @@ export function ChatRoom({
   return (
     <div className="flex h-full flex-col bg-[#efeae2]">
       {header && (
-        <ChatHeader name={header.name} subtitle={header.subtitle} avatar={header.avatar} backHref={header.backHref} />
+        <ChatHeader
+          name={header.name}
+          subtitle={header.subtitle}
+          avatar={header.avatar}
+          backHref={header.backHref}
+          actions={<CallButtons conversation={conversation} title={header.name} viewer={viewer} />}
+        />
       )}
       <div
         ref={scrollerRef}
@@ -374,6 +385,29 @@ export function ChatRoom({
                 onDeleted={() => setMessages((current) => current.filter((item) => item.id !== message.id))}
               />
             </TaskMessage>
+          ) : message.kind === "CALL" ? (
+            // What a call left behind: one line across the conversation, not a bubble from somebody.
+            <div key={message.id}>
+              {dayHeadings[index] ? <DayHeading day={dayHeadings[index] as string} /> : null}
+              <p className="my-2 flex justify-center">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-sm",
+                    message.call?.endReason === "completed" ? "bg-white/90 text-ink/65" : "bg-red-50 text-red-700"
+                  )}
+                >
+                  {message.call?.endReason !== "completed" ? (
+                    <PhoneMissed size={14} aria-hidden />
+                  ) : message.call?.kind === "VIDEO" ? (
+                    <Video size={14} aria-hidden />
+                  ) : (
+                    <Phone size={14} aria-hidden />
+                  )}
+                  <span>{message.body}</span>
+                  <span className="text-ink/35">{timeLabel(new Date(message.createdAt))}</span>
+                </span>
+              </p>
+            </div>
           ) : (
             <Bubble
               key={message.id}

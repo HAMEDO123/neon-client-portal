@@ -1,5 +1,6 @@
-// Two sounds the app makes while it is open: one when a message arrives, and a
-// different one for everything else — a task, a review, a request.
+// The sounds the app makes while it is open: one when a message arrives, a
+// different one for everything else — a task, a review, a request — and the
+// sounds of a call: its ring, and a note as somebody joins or leaves.
 //
 // Only while it is open. A notification that arrives with the app closed is
 // shown by the phone, and the phone plays its own sound for it: a web app
@@ -35,6 +36,32 @@ export const CUES: Record<Cue, Note[]> = {
   update: [
     { frequency: 659.25, start: 0, duration: 0.45, wave: "triangle", level: 0.3 },
     { frequency: 987.77, start: 0.15, duration: 0.6, wave: "triangle", level: 0.26 },
+  ],
+};
+
+/**
+ * One ring of an incoming call: two quick rising pairs, like a phone's own,
+ * repeated with a pause by startRingtone. Unlike the message sound, which is
+ * over in half a second, this goes on until somebody answers.
+ */
+export const RING: Note[] = [
+  { frequency: 880, start: 0, duration: 0.16, wave: "triangle", level: 0.5, shimmer: 0.3 },
+  { frequency: 1174.66, start: 0.18, duration: 0.2, wave: "triangle", level: 0.5, shimmer: 0.3 },
+  { frequency: 880, start: 0.5, duration: 0.16, wave: "triangle", level: 0.5, shimmer: 0.3 },
+  { frequency: 1174.66, start: 0.68, duration: 0.28, wave: "triangle", level: 0.5, shimmer: 0.3 },
+];
+/** From the start of one ring to the start of the next. */
+export const RING_EVERY_MS = 2600;
+
+/** Somebody arriving in a call, and somebody leaving it: up, and down. */
+export const CALL_SOUNDS: Record<"joined" | "left", Note[]> = {
+  joined: [
+    { frequency: 587.33, start: 0, duration: 0.14, wave: "sine", level: 0.35 },
+    { frequency: 880, start: 0.1, duration: 0.22, wave: "sine", level: 0.35 },
+  ],
+  left: [
+    { frequency: 880, start: 0, duration: 0.14, wave: "sine", level: 0.3 },
+    { frequency: 587.33, start: 0.1, duration: 0.24, wave: "sine", level: 0.3 },
   ],
 };
 
@@ -106,16 +133,43 @@ export function markHeard(cue: Cue, at: number) {
 export function playCue(cue: Cue, at: number) {
   if (!isNews(heard[cue], at)) return false;
   heard[cue] = at;
-  if (soundsOn() && document.visibilityState === "visible") sound(cue);
+  if (soundsOn() && document.visibilityState === "visible") play(CUES[cue]);
   return true;
 }
 
 /** Plays a sound now, whatever has been heard: for trying them out. */
 export function previewCue(cue: Cue) {
-  void unlockSounds().then(() => sound(cue));
+  void unlockSounds().then(() => play(CUES[cue]));
 }
 
-function sound(cue: Cue) {
+/**
+ * Rings until the function it returns is called. A ring that cannot sound —
+ * sound switched off on this device, or no tap yet to allow it — stays silent
+ * and the incoming call still shows.
+ */
+export function startRingtone(): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const ring = () => {
+    if (stopped) return;
+    if (soundsOn()) play(RING);
+    timer = setTimeout(ring, RING_EVERY_MS);
+  };
+  ring();
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}
+
+/** The note for somebody joining or leaving the call you are in. */
+export function playCallSound(sound: "joined" | "left") {
+  if (soundsOn()) play(CALL_SOUNDS[sound]);
+}
+
+function play(notes: Note[]) {
   const ctx = context;
   if (!ctx || ctx.state !== "running") return;
   const now = ctx.currentTime + 0.02;
@@ -147,7 +201,7 @@ function sound(cue: Cue) {
     oscillator.stop(start + note.duration + 0.05);
   };
 
-  for (const note of CUES[cue]) {
+  for (const note of notes) {
     voice(note, note.frequency, note.wave, note.level);
     if (note.shimmer) voice(note, note.frequency * 2, "sine", note.level * note.shimmer);
   }

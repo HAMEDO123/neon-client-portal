@@ -9,6 +9,7 @@ import { AppViewport } from "@/components/employee/app-viewport";
 import { LiveSync } from "@/components/live-sync";
 import { SoundCues } from "@/components/sound-cues";
 import { DeviceGuard } from "@/components/employee/device-guard";
+import { CallProvider } from "@/components/calls/call-provider";
 
 // Server-side gate for the whole portal. Anything under this layout has an
 // authenticated, enabled employee behind it — and every action it can reach
@@ -26,6 +27,8 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
   const { unread, unreadChat } = await getEmployeeBadges(employee.id);
 
   return (
+    // Calls ring on every page of the portal, and a call keeps going while you move between them.
+    <CallProvider side="EMPLOYEE">
     <div className="employee-shell flex flex-col overflow-hidden bg-background">
       {/* pt-[safe-area-inset-top]: the app draws under the status bar on a
           notched phone, so the header reserves that height itself rather than
@@ -68,5 +71,6 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
           enabled push on it first. */}
       <DeviceGuard />
     </div>
+    </CallProvider>
   );
 }
