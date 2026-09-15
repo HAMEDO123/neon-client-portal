@@ -3,6 +3,7 @@ import {
   DIRECT_KEY_PATTERN,
   TEAM_CHANNEL_KEY,
   directChannelKey,
+  peerKeyPatterns,
   type ChatViewer,
 } from "@/lib/chat-conversations";
 
@@ -19,36 +20,46 @@ export type Cues = { messages: number; updates: number };
 
 type Row = { messages: Date | null; updates: Date | null };
 
-export async function latestCues(viewer: ChatViewer): Promise<Cues> {
-  const rows =
-    viewer.type === "ADMIN"
-      ? await prisma.$queryRaw<Row[]>`
-          SELECT
-            (
-              SELECT MAX(m."createdAt") FROM "ChatMessage" m
-              JOIN "ChatChannel" c ON c.id = m."channelId"
-              WHERE (c.key = ${TEAM_CHANNEL_KEY} OR c.key LIKE ${DIRECT_KEY_PATTERN})
-                AND m."authorType" = 'EMPLOYEE'
-                AND m."managerOnly" = false
-            ) AS messages,
-            (SELECT MAX("createdAt") FROM "AdminNotification") AS updates
-        `
-      : await prisma.$queryRaw<Row[]>`
-          SELECT
-            (
-              SELECT MAX(m."createdAt") FROM "ChatMessage" m
-              JOIN "ChatChannel" c ON c.id = m."channelId"
-              WHERE c.key IN (${TEAM_CHANNEL_KEY}, ${directChannelKey(viewer.id)})
-                AND m."managerOnly" = false
-                AND NOT (m."authorType" = 'EMPLOYEE' AND m."authorId" = ${viewer.id})
-            ) AS messages,
-            (
-              -- A chat message is already the other sound.
-              SELECT MAX("createdAt") FROM "Notification"
-              WHERE "employeeId" = ${viewer.id} AND "type" <> 'CHAT_MESSAGE'
-            ) AS updates
-        `;
+async function readCues(viewer: ChatViewer) {
+  if (viewer.type === "ADMIN") {
+    // The team and every private chat with the manager — never a chat between
+    // two employees, which the manager is not in.
+    return prisma.$queryRaw<Row[]>`
+      SELECT
+        (
+          SELECT MAX(m."createdAt") FROM "ChatMessage" m
+          JOIN "ChatChannel" c ON c.id = m."channelId"
+          WHERE (c.key = ${TEAM_CHANNEL_KEY} OR c.key LIKE ${DIRECT_KEY_PATTERN})
+            AND m."authorType" = 'EMPLOYEE'
+            AND m."managerOnly" = false
+        ) AS messages,
+        (SELECT MAX("createdAt") FROM "AdminNotification") AS updates
+    `;
+  }
 
-  const row = rows[0];
+  const [peerFirst, peerSecond] = peerKeyPatterns(viewer.id);
+  return prisma.$queryRaw<Row[]>`
+    SELECT
+      (
+        SELECT MAX(m."createdAt") FROM "ChatMessage" m
+        JOIN "ChatChannel" c ON c.id = m."channelId"
+        WHERE (
+            c.key IN (${TEAM_CHANNEL_KEY}, ${directChannelKey(viewer.id)})
+            OR c.key LIKE ${peerFirst}
+            OR c.key LIKE ${peerSecond}
+          )
+          AND m."managerOnly" = false
+          AND NOT (m."authorType" = 'EMPLOYEE' AND m."authorId" = ${viewer.id})
+      ) AS messages,
+      (
+        -- A chat message is already the other sound.
+        SELECT MAX("createdAt") FROM "Notification"
+        WHERE "employeeId" = ${viewer.id} AND "type" <> 'CHAT_MESSAGE'
+      ) AS updates
+  `;
+}
+
+export async function latestCues(viewer: ChatViewer): Promise<Cues> {
+  const row = (await readCues(viewer))[0];
   return { messages: row?.messages?.getTime() ?? 0, updates: row?.updates?.getTime() ?? 0 };
 }

@@ -1,13 +1,15 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { channelFor, listMessages, parseConversation, recordChatRead, requireChatViewer } from "@/lib/chat";
+import { otherPeer } from "@/lib/chat-conversations";
 import { memberLine } from "@/lib/group-members";
 import { avatarUrl } from "@/lib/avatar";
 import { ChatRoom } from "@/components/chat/chat-room";
 
-// One conversation, full screen: the team's group, or the private chat with
-// the manager. Somebody else's private chat does not exist from here — the
-// only name an employee can give one is "manager", which is always their own.
+// One conversation, full screen: the team's group, the private chat with the
+// manager, or a private chat with a colleague. Somebody else's private chat
+// does not exist from here — the only names an employee can give one are
+// "manager" and a colleague's id, and both always mean a chat they are in.
 
 export default async function EmployeeConversationPage({
   params,
@@ -37,10 +39,18 @@ export default async function EmployeeConversationPage({
           select: { name: true },
         })
       : [];
+  const colleague =
+    conversation.kind === "peer"
+      ? await prisma.employee.findUnique({
+          where: { id: otherPeer(conversation, viewer.id) },
+          select: { name: true, color: true },
+        })
+      : null;
 
   await recordChatRead(viewer, channel.id);
 
   const group = conversation.kind === "team";
+  const withName = conversation.kind === "peer" ? (colleague?.name ?? channel.name) : "the manager";
 
   return (
     // Its own screen, WhatsApp-style: the conversation's header replaces the
@@ -62,14 +72,21 @@ export default async function EmployeeConversationPage({
                 subtitle: memberLine(["Manager", ...team.map((member) => member.name)], viewer.name),
                 backHref: "/employee/chat",
               }
-            : {
-                name: "Manager",
-                subtitle: "Private · only you and the manager",
-                avatar: avatarUrl("Manager", "ink"),
-                backHref: "/employee/chat",
-              }
+            : conversation.kind === "peer"
+              ? {
+                  name: withName,
+                  subtitle: `Private · only you and ${withName}`,
+                  avatar: avatarUrl(withName, colleague?.color),
+                  backHref: "/employee/chat",
+                }
+              : {
+                  name: "Manager",
+                  subtitle: "Private · only you and the manager",
+                  avatar: avatarUrl("Manager", "ink"),
+                  backHref: "/employee/chat",
+                }
         }
-        emptyText={group ? undefined : "No messages yet. Only you and the manager can see this chat."}
+        emptyText={group ? undefined : `No messages yet. Only you and ${withName} can see this chat.`}
       />
     </div>
   );

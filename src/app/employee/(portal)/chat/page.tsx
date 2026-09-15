@@ -2,8 +2,8 @@ import { conversationsFor, requireChatViewer } from "@/lib/chat";
 import { getTimezone } from "@/lib/settings";
 import { ConversationList } from "@/components/chat/conversation-list";
 
-// The employee's chats: the team's group, and their private conversation with
-// the manager — the only two they have.
+// The employee's chats: the team's group, their private conversation with the
+// manager, and one with each colleague.
 
 export default async function EmployeeChatsPage() {
   const viewer = await requireChatViewer("EMPLOYEE");
@@ -25,7 +25,7 @@ export default async function EmployeeChatsPage() {
       </div>
 
       <p className="px-4 text-center text-xs text-ink/40">
-        Your chat with the manager is private: only the two of you can see it.
+        A private chat is seen only by the two people in it. The manager cannot read your chats with colleagues.
       </p>
     </div>
   );

@@ -277,7 +277,8 @@ The domain vocabulary, as the code defines it:
 - **Conversations:**
   - The team group is channel key `team`.
   - A private chat between the manager and one employee is `dm:<employeeId>`.
-  - URLs are `/employee/chat/team`, `/employee/chat/manager`, `/admin/chat/team` and `/admin/chat/<employeeId>`.
+  - A private chat between two employees is `pair:<id>:<id>`, the two ids sorted so each pair has exactly one. **The manager is not in it and cannot open it** — a decision, not an omission: it is absent from the manager's list, badges and sounds, and `mayOpen` refuses it. It is created only while both are active; once it exists it stays readable after one of them leaves.
+  - URLs are `/employee/chat/team`, `/employee/chat/manager`, `/employee/chat/<colleagueId>`, `/admin/chat/team` and `/admin/chat/<employeeId>`. The same id means a different conversation on each side: on the employee side it is always a chat the employee is in.
 - **Files:**
   - `lib/chat-conversations.ts` is pure: keys, `parseConversation`, `mayOpen`, URLs.
   - `lib/chat.ts`: `getChatViewer(side)`, `channelFor` (the access check), `listMessages`, `recordChatRead`, and `conversationsFor` (one SQL query with LATERAL).

@@ -31,7 +31,7 @@ import {
 import type { ChatMessageView } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
-// A conversation — the team's, or a private one with the manager — laid out
+// A conversation — the team's, or a private one between two people — laid out
 // the way a messaging app is: a scrolling column of bubbles, your own on the
 // right, everyone else's on the left (in the group with their name above, in
 // their own colour), and a composer pinned to the bottom.

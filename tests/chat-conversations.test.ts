@@ -4,11 +4,15 @@ import assert from "node:assert/strict";
 import {
   chatSide,
   conversationSlug,
+  directChannelKey,
   employeeChatUrl,
   isConversationPath,
   listTime,
   mayOpen,
   parseConversation,
+  peerChannelKey,
+  peerConversation,
+  peerKeyPatterns,
   previewLine,
   type ChatViewer,
 } from "../src/lib/chat-conversations";
@@ -16,45 +20,90 @@ import {
 const manager: ChatViewer = { type: "ADMIN", id: null, name: "Manager" };
 const wael: ChatViewer = { type: "EMPLOYEE", id: "cmwael00000000000000", name: "Wael" };
 const sally: ChatViewer = { type: "EMPLOYEE", id: "cmsally0000000000000", name: "Sally" };
+const carla: ChatViewer = { type: "EMPLOYEE", id: "cmcarla0000000000000", name: "Carla" };
+
+/** What SQL's LIKE makes of these patterns: % is anything at all. */
+function like(pattern: string, text: string) {
+  return new RegExp(`^${pattern.split("%").join(".*")}$`).test(text);
+}
 
 describe("who may open a conversation", () => {
   it("lets everyone into the team", () => {
-    for (const viewer of [manager, wael, sally]) assert.equal(mayOpen(viewer, { kind: "team" }), true);
+    for (const viewer of [manager, wael, sally, carla]) assert.equal(mayOpen(viewer, { kind: "team" }), true);
   });
 
-  it("lets an employee into their own private chat, and nobody else's", () => {
+  it("lets an employee into their own private chat with the manager, and nobody else's", () => {
     assert.equal(mayOpen(wael, { kind: "direct", employeeId: wael.id }), true);
     assert.equal(mayOpen(wael, { kind: "direct", employeeId: sally.id }), false);
   });
 
-  it("lets the manager into every private chat", () => {
+  it("lets the manager into every private chat with the manager", () => {
     assert.equal(mayOpen(manager, { kind: "direct", employeeId: wael.id }), true);
     assert.equal(mayOpen(manager, { kind: "direct", employeeId: sally.id }), true);
+  });
+
+  it("lets two employees into their chat with each other, and nobody else, not even the manager", () => {
+    const theirs = peerConversation(wael.id, sally.id);
+    assert.equal(mayOpen(wael, theirs), true);
+    assert.equal(mayOpen(sally, theirs), true);
+    assert.equal(mayOpen(carla, theirs), false);
+    assert.equal(mayOpen(manager, theirs), false);
+  });
+
+  it("opens no chat with yourself", () => {
+    assert.equal(mayOpen(wael, { kind: "peer", employeeIds: [wael.id, wael.id] }), false);
   });
 });
 
 describe("naming a conversation", () => {
-  it("reads the team, the manager, and an employee", () => {
+  it("reads the team, the manager, a colleague, and an employee", () => {
     assert.deepEqual(parseConversation("team", wael), { kind: "team" });
     assert.deepEqual(parseConversation("manager", wael), { kind: "direct", employeeId: wael.id });
+    assert.deepEqual(parseConversation(sally.id, wael), peerConversation(wael.id, sally.id));
     assert.deepEqual(parseConversation(sally.id, manager), { kind: "direct", employeeId: sally.id });
   });
 
+  it("names a chat between two employees the same from either side", () => {
+    assert.deepEqual(parseConversation(sally.id, wael), parseConversation(wael.id, sally));
+    assert.equal(peerChannelKey(wael.id, sally.id), peerChannelKey(sally.id, wael.id));
+    assert.notEqual(peerChannelKey(wael.id, sally.id), peerChannelKey(wael.id, carla.id));
+  });
+
   it("gives an employee no way to name somebody else's chat", () => {
-    assert.equal(parseConversation(sally.id, wael), null);
+    // Every id an employee can name is a conversation they are in.
+    const named = parseConversation(carla.id, wael);
+    assert.ok(named && mayOpen(wael, named) && !mayOpen(sally, named));
+    assert.equal(parseConversation(wael.id, wael), null, "not a chat with yourself");
     assert.equal(parseConversation("manager", manager), null);
     assert.equal(parseConversation("../../etc/passwd", manager), null);
+    assert.equal(parseConversation("../../etc/passwd", wael), null);
     assert.equal(parseConversation("", wael), null);
     assert.equal(parseConversation(null, wael), null);
   });
 
   it("names it back from each side", () => {
     const direct = { kind: "direct", employeeId: wael.id } as const;
+    const theirs = peerConversation(wael.id, sally.id);
     assert.equal(conversationSlug(direct, wael), "manager");
     assert.equal(conversationSlug(direct, manager), wael.id);
     assert.equal(conversationSlug({ kind: "team" }, sally), "team");
-    assert.equal(employeeChatUrl(direct), "/employee/chat/manager");
-    assert.equal(employeeChatUrl({ kind: "team" }), "/employee/chat/team");
+    assert.equal(conversationSlug(theirs, wael), sally.id);
+    assert.equal(conversationSlug(theirs, sally), wael.id);
+    assert.equal(employeeChatUrl(direct, wael.id), "/employee/chat/manager");
+    assert.equal(employeeChatUrl({ kind: "team" }, wael.id), "/employee/chat/team");
+    assert.equal(employeeChatUrl(theirs, wael.id), `/employee/chat/${sally.id}`, "Wael's phone opens the chat with Sally");
+    assert.equal(employeeChatUrl(theirs, sally.id), `/employee/chat/${wael.id}`, "and Sally's the chat with Wael");
+  });
+
+  it("finds an employee's chats with colleagues by key, and nobody else's", () => {
+    const patterns = peerKeyPatterns(sally.id);
+    const matches = (key: string) => patterns.some((pattern) => like(pattern, key));
+    // Sally's id sorts second with Wael and first with Carla: both places are found.
+    assert.equal(matches(peerChannelKey(wael.id, sally.id)), true);
+    assert.equal(matches(peerChannelKey(sally.id, carla.id)), true);
+    assert.equal(matches(peerChannelKey(wael.id, carla.id)), false);
+    assert.equal(matches(directChannelKey(sally.id)), false);
+    assert.equal(matches("team"), false);
   });
 
   it("tells an open conversation from the list of them", () => {

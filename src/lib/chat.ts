@@ -10,6 +10,9 @@ import {
   TEAM_CHANNEL_KEY,
   directChannelKey,
   mayOpen,
+  peerChannelKey,
+  peerConversation,
+  peerKeyPatterns,
   type ChatSide,
   type ChatViewer,
   type Conversation,
@@ -29,12 +32,14 @@ export {
 
 // The conversations, shared by the admin portal and the employee portal.
 //
-// One team conversation everybody is in, and one private conversation between
-// the manager and each employee. Both portals read and write through here, and
-// every read and write finds its channel through channelFor — so there is
-// exactly one definition of who may see what: an employee sees the team and
-// their own private chat, never another employee's; the manager sees all of
-// them, plus their own exchanges with the assistant in the team conversation.
+// One team conversation everybody is in, one private conversation between the
+// manager and each employee, and one between any two employees. Both portals
+// read and write through here, and every read and write finds its channel
+// through channelFor — so there is exactly one definition of who may see what:
+// an employee sees the team, their own chat with the manager and their own
+// chats with colleagues, never anybody else's; the manager sees the team and
+// every chat with the manager, plus their own exchanges with the assistant in
+// the team conversation, and never a chat between two employees.
 
 /**
  * Resolves whoever is asking from their session cookie. Never takes an
@@ -108,12 +113,40 @@ async function getDirectChannel(employeeId: string) {
 }
 
 /**
+ * The private conversation between two employees, created the first time
+ * either of them opens it, and only while both are on the team. Once it exists
+ * it stays readable to both, so somebody leaving does not take the history of
+ * what was said with them.
+ */
+async function getPeerChannel([first, second]: [string, string]) {
+  const key = peerChannelKey(first, second);
+  const existing = await prisma.chatChannel.findUnique({ where: { key } });
+  if (existing) return existing;
+
+  const people = await prisma.employee.findMany({
+    where: { id: { in: [first, second] }, active: true, accessRole: "EMPLOYEE" },
+    orderBy: { order: "asc" },
+    select: { name: true },
+  });
+  if (people.length !== 2) return null;
+
+  try {
+    return await prisma.chatChannel.create({ data: { key, name: people.map((person) => person.name).join(" & ") } });
+  } catch {
+    // Both of them opened it at once; the other request made it.
+    return prisma.chatChannel.findUnique({ where: { key } });
+  }
+}
+
+/**
  * The channel behind a conversation, or null when this viewer may not open it.
  * The rule itself is mayOpen, in chat-conversations.ts.
  */
 export async function channelFor(viewer: ChatViewer, conversation: Conversation) {
   if (!mayOpen(viewer, conversation)) return null;
-  return conversation.kind === "team" ? getTeamChannel() : getDirectChannel(conversation.employeeId);
+  if (conversation.kind === "team") return getTeamChannel();
+  if (conversation.kind === "direct") return getDirectChannel(conversation.employeeId);
+  return getPeerChannel(conversation.employeeIds);
 }
 
 // Assistant messages belong to the manager alone, so they are filtered out in
@@ -233,26 +266,60 @@ function notMine(viewer: ChatViewer) {
 }
 
 /**
+ * The people a private chat can be with, from this viewer's side. For the
+ * manager, everybody on the team. For an employee, every colleague — and also
+ * a colleague who has since left, when there is already a conversation with
+ * them, so what was said stays findable and its unread count can be cleared.
+ */
+async function chatPartners(viewer: ChatViewer) {
+  const select = { id: true, name: true, color: true, role: true, active: true } as const;
+
+  if (viewer.type === "ADMIN") {
+    return prisma.employee.findMany({
+      where: { active: true, accessRole: "EMPLOYEE" },
+      orderBy: { order: "asc" },
+      select,
+    });
+  }
+
+  const [peerFirst, peerSecond] = peerKeyPatterns(viewer.id);
+  const existing = await prisma.$queryRaw<{ key: string }[]>`
+    SELECT key FROM "ChatChannel" WHERE key LIKE ${peerFirst} OR key LIKE ${peerSecond}
+  `;
+  const pastIds = existing
+    .map((row) => row.key.split(":").slice(1))
+    .map(([first, second]) => (first === viewer.id ? second : first));
+
+  return prisma.employee.findMany({
+    where: {
+      accessRole: "EMPLOYEE",
+      NOT: { id: viewer.id },
+      OR: [{ active: true }, { id: { in: pastIds } }],
+    },
+    orderBy: { order: "asc" },
+    select,
+  });
+}
+
+/**
  * The list of conversations this viewer has, WhatsApp-style: each with its
  * last message and how many are unread, in one query. The group first, then
- * the private conversations, the most recent first. For the manager that is
- * one per employee, whether or not anything has been said yet.
+ * the private conversations, the most recent first — for the manager one per
+ * employee, for an employee the manager and one per colleague, whether or not
+ * anything has been said yet.
  */
 export async function conversationsFor(viewer: ChatViewer): Promise<ConversationSummary[]> {
   const team = await getTeamChannel();
-  const people =
-    viewer.type === "ADMIN"
-      ? await prisma.employee.findMany({
-          where: { active: true, accessRole: "EMPLOYEE" },
-          orderBy: { order: "asc" },
-          select: { id: true, name: true, color: true, role: true },
-        })
-      : [];
+  const people = await chatPartners(viewer);
 
   const keys =
     viewer.type === "ADMIN"
       ? [TEAM_CHANNEL_KEY, ...people.map((person) => directChannelKey(person.id))]
-      : [TEAM_CHANNEL_KEY, directChannelKey(viewer.id)];
+      : [
+          TEAM_CHANNEL_KEY,
+          directChannelKey(viewer.id),
+          ...people.map((person) => peerChannelKey(viewer.id, person.id)),
+        ];
 
   const rows = await prisma.$queryRaw<SummaryRow[]>`
     SELECT
@@ -331,6 +398,16 @@ export async function conversationsFor(viewer: ChatViewer): Promise<Conversation
             avatar: avatarUrl("Manager", "ink"),
             isGroup: false,
           }),
+          ...people.map((person) =>
+            summarize(peerChannelKey(viewer.id, person.id), {
+              conversation: peerConversation(viewer.id, person.id),
+              slug: person.id,
+              title: person.name,
+              subtitle: person.active ? person.role : "No longer on the team",
+              avatar: avatarUrl(person.name, person.color),
+              isGroup: false,
+            })
+          ),
         ];
 
   // Sorting is stable, so people nobody has written to yet keep the team's order.

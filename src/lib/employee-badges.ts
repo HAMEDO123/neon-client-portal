@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { TEAM_CHANNEL_KEY, directChannelKey } from "@/lib/chat-conversations";
+import { TEAM_CHANNEL_KEY, directChannelKey, peerKeyPatterns } from "@/lib/chat-conversations";
 
 // The two counts in the employee portal's chrome, in one round trip.
 //
@@ -9,12 +9,15 @@ import { TEAM_CHANNEL_KEY, directChannelKey } from "@/lib/chat-conversations";
 // hosted database that is four round trips of latency on every tap. As one
 // statement it is one.
 //
-// The chat count is both of the employee's conversations: the team's and their
-// private one with the manager, each measured against its own read marker.
+// The chat count is every conversation the employee is in: the team's, their
+// private one with the manager and those with colleagues, each measured against
+// its own read marker.
 
 export type EmployeeBadges = { unread: number; unreadChat: number };
 
 export async function getEmployeeBadges(employeeId: string): Promise<EmployeeBadges> {
+  const [peerFirst, peerSecond] = peerKeyPatterns(employeeId);
+
   try {
     const rows = await prisma.$queryRaw<{ unread: bigint; unread_chat: bigint }[]>`
       SELECT
@@ -25,7 +28,11 @@ export async function getEmployeeBadges(employeeId: string): Promise<EmployeeBad
         (
           SELECT COUNT(*) FROM "ChatMessage" m
           JOIN "ChatChannel" c ON c.id = m."channelId"
-            AND c.key IN (${TEAM_CHANNEL_KEY}, ${directChannelKey(employeeId)})
+            AND (
+              c.key IN (${TEAM_CHANNEL_KEY}, ${directChannelKey(employeeId)})
+              OR c.key LIKE ${peerFirst}
+              OR c.key LIKE ${peerSecond}
+            )
           LEFT JOIN "ChatRead" r ON r."channelId" = c.id AND r."readerKey" = ${employeeId}
           WHERE m."managerOnly" = false
             -- Your own messages are not news.

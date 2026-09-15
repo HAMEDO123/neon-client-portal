@@ -7,14 +7,16 @@ import type { ChatMessageKind } from "@/generated/prisma/enums";
 // and summarised. Pure — the database side is chat.ts — so the rule that keeps
 // one employee out of another's private chat is pinned by tests.
 //
-// There is one team conversation everybody is in, and one private conversation
-// between the manager and each employee. Employees do not have private
-// conversations with each other.
+// There is one team conversation everybody is in, one private conversation
+// between the manager and each employee, and one private conversation between
+// any two employees. The manager is not in that last kind: what two people on
+// the team say to each other is theirs.
 
 export const TEAM_CHANNEL_KEY = "team";
 const DIRECT_PREFIX = "dm:";
-/** Every private conversation's channel key, as a SQL LIKE pattern. */
+/** Every private conversation with the manager's channel key, as a SQL LIKE pattern. */
 export const DIRECT_KEY_PATTERN = `${DIRECT_PREFIX}%`;
+const PEER_PREFIX = "pair:";
 
 /** The group's picture: the studio's own mark. */
 export const GROUP_AVATAR = "/admin-icon-192.png";
@@ -23,7 +25,13 @@ export type ChatViewer =
   | { type: "ADMIN"; id: null; name: string }
   | { type: "EMPLOYEE"; id: string; name: string };
 
-export type Conversation = { kind: "team" } | { kind: "direct"; employeeId: string };
+export type Conversation =
+  | { kind: "team" }
+  | { kind: "direct"; employeeId: string }
+  // Two employees, always in id order, so each pair has exactly one conversation.
+  | { kind: "peer"; employeeIds: [string, string] };
+
+export type PeerConversation = Extract<Conversation, { kind: "peer" }>;
 
 /** Which portal is asking, for a browser that holds both sessions. See getChatViewer. */
 export type ChatSide = "ADMIN" | "EMPLOYEE";
@@ -38,40 +46,79 @@ export function directChannelKey(employeeId: string) {
   return `${DIRECT_PREFIX}${employeeId}`;
 }
 
+/** The conversation between two employees, whichever of them names it. */
+export function peerConversation(a: string, b: string): PeerConversation {
+  const [first, second] = [a, b].sort();
+  return { kind: "peer", employeeIds: [first, second] };
+}
+
+/** The channel key of the private conversation between two employees: the same from either side. */
+export function peerChannelKey(a: string, b: string) {
+  const [first, second] = peerConversation(a, b).employeeIds;
+  return `${PEER_PREFIX}${first}:${second}`;
+}
+
+/**
+ * Every conversation one employee has with a colleague, as two SQL LIKE
+ * patterns: one for each place their id can sit in the key. Ids are letters and
+ * digits only, so neither pattern can match somebody else's conversation.
+ */
+export function peerKeyPatterns(employeeId: string): [string, string] {
+  return [`${PEER_PREFIX}${employeeId}:%`, `${PEER_PREFIX}%:${employeeId}`];
+}
+
+/** The other person in a conversation between two employees. */
+export function otherPeer(conversation: PeerConversation, employeeId: string) {
+  const [first, second] = conversation.employeeIds;
+  return first === employeeId ? second : first;
+}
+
 // Employee ids are cuids: letters and digits only.
 const EMPLOYEE_ID = /^[a-z0-9]{8,40}$/i;
 
 /**
  * A conversation from how a URL or a form names it: "team"; for an employee,
- * "manager" for their own private chat; for the manager, the id of the
- * employee the private chat is with. Anything else is nothing.
+ * "manager" for their own private chat and a colleague's id for their chat with
+ * that colleague; for the manager, the id of the employee the private chat is
+ * with. Anything else is nothing.
  */
 export function parseConversation(value: string | null | undefined, viewer: ChatViewer): Conversation | null {
   if (!value) return null;
   if (value === "team") return { kind: "team" };
-  if (viewer.type === "EMPLOYEE") return value === "manager" ? { kind: "direct", employeeId: viewer.id } : null;
+  if (viewer.type === "EMPLOYEE") {
+    if (value === "manager") return { kind: "direct", employeeId: viewer.id };
+    // Every id an employee can name is a conversation they are in; never one with themselves.
+    return EMPLOYEE_ID.test(value) && value !== viewer.id ? peerConversation(viewer.id, value) : null;
+  }
   return EMPLOYEE_ID.test(value) ? { kind: "direct", employeeId: value } : null;
 }
 
 /**
  * Whether this viewer may open a conversation. The team: everyone. A private
- * chat: the manager, and the one employee it is with — nobody else, whatever
- * id they send.
+ * chat with the manager: the manager, and the one employee it is with. A chat
+ * between two employees: those two — not the manager, and nobody else, whatever
+ * ids they send.
  */
 export function mayOpen(viewer: ChatViewer, conversation: Conversation) {
   if (conversation.kind === "team") return true;
-  return viewer.type === "ADMIN" || viewer.id === conversation.employeeId;
+  if (conversation.kind === "direct") return viewer.type === "ADMIN" || viewer.id === conversation.employeeId;
+
+  const [first, second] = conversation.employeeIds;
+  return viewer.type === "EMPLOYEE" && first !== second && (viewer.id === first || viewer.id === second);
 }
 
 /** How a conversation is named in a URL, from this viewer's side of it. */
 export function conversationSlug(conversation: Conversation, viewer: ChatViewer) {
   if (conversation.kind === "team") return "team";
-  return viewer.type === "EMPLOYEE" ? "manager" : conversation.employeeId;
+  if (conversation.kind === "direct") return viewer.type === "EMPLOYEE" ? "manager" : conversation.employeeId;
+  return otherPeer(conversation, viewer.id ?? "");
 }
 
-/** Where an employee's phone opens a conversation from a notification. */
-export function employeeChatUrl(conversation: Conversation) {
-  return conversation.kind === "team" ? "/employee/chat/team" : "/employee/chat/manager";
+/** Where one employee's phone opens a conversation from a notification: their side of it. */
+export function employeeChatUrl(conversation: Conversation, recipientId: string) {
+  if (conversation.kind === "team") return "/employee/chat/team";
+  if (conversation.kind === "direct") return "/employee/chat/manager";
+  return `/employee/chat/${otherPeer(conversation, recipientId)}`;
 }
 
 /** An open conversation, which keeps its own live connection, rather than the list of them. */

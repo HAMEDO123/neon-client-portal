@@ -14,17 +14,17 @@ import {
   type ChatViewer,
   type Conversation,
 } from "@/lib/chat";
-import { employeeChatUrl } from "@/lib/chat-conversations";
+import { employeeChatUrl, otherPeer } from "@/lib/chat-conversations";
 import { askAssistant } from "@/lib/ai/assistant";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { chatCopy, chatKey, chatPreview } from "@/lib/notifications/types";
 import { avatarUrl } from "@/lib/avatar";
 import type { ChatMessageKind } from "@/generated/prisma/enums";
 
-// Posting to a conversation: the team's, or a private one between the manager
-// and an employee. Both portals call these. The author is always taken from
-// the session, never from the form, and the conversation the form names is
-// only ever opened through channelFor, which refuses anyone it is not theirs.
+// Posting to a conversation: the team's, or a private one between two people.
+// Both portals call these. The author is always taken from the session, never
+// from the form, and the conversation the form names is only ever opened
+// through channelFor, which refuses anyone it is not theirs.
 
 function refresh() {
   revalidatePath("/admin/chat", "layout");
@@ -141,9 +141,10 @@ async function senderIcon(sender: ChatViewer) {
 
 /**
  * In-app and push, to whoever the conversation is for: the rest of the team
- * for the group; the employee, for the manager's private message to them. The
- * manager has no phone registered to push to, so a private message for them
- * waits in their chat list, with its sound, instead.
+ * for the group; the employee, for the manager's private message to them; the
+ * other one, in a chat between two employees. The manager has no phone
+ * registered to push to, so a private message for them waits in their chat
+ * list, with its sound, instead.
  */
 async function notifyOfMessage(messageId: string, sender: ChatViewer, conversation: Conversation, preview: string) {
   try {
@@ -157,9 +158,13 @@ async function notifyOfMessage(messageId: string, sender: ChatViewer, conversati
             },
             select: { id: true },
           })
-        : sender.type === "ADMIN"
-          ? [{ id: conversation.employeeId }]
-          : [];
+        : conversation.kind === "peer"
+          ? sender.type === "EMPLOYEE"
+            ? [{ id: otherPeer(conversation, sender.id) }]
+            : []
+          : sender.type === "ADMIN"
+            ? [{ id: conversation.employeeId }]
+            : [];
     if (recipients.length === 0) return;
 
     const copy = chatCopy(sender.name, preview);
@@ -172,7 +177,7 @@ async function notifyOfMessage(messageId: string, sender: ChatViewer, conversati
           type: "CHAT_MESSAGE",
           title: copy.title,
           message: copy.message,
-          url: employeeChatUrl(conversation),
+          url: employeeChatUrl(conversation, recipient.id),
           icon,
           // One notification per message per person, so a retry cannot double it.
           dedupeKey: chatKey(messageId, recipient.id),
