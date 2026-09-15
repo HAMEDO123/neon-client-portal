@@ -1,0 +1,75 @@
+# NEON on the studio's own PC: the site, its PostgreSQL, and the tunnel that puts
+# it on clients.neonjo.com.
+#
+#   docker compose --env-file .env.docker up -d --build            site + database
+#   docker compose --env-file .env.docker --profile public up -d   ...and go public
+#
+# `--env-file .env.docker` is required: it holds the secrets and the database
+# password. Forget it and Compose refuses to start rather than starting wrong.
+#
+# The WhatsApp worker keeps its own project in whatsapp-worker/ — it holds a
+# linked WhatsApp session that must not be disturbed — and the site reaches it
+# through the host.
+
+name: neon
+
+services:
+  db:
+    image: postgres:17
+    container_name: neon-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: neon
+      POSTGRES_USER: neon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run compose with --env-file .env.docker}
+    volumes:
+      # The studio's data. Named, so `docker compose down` leaves it alone;
+      # `down -v` deletes it.
+      - db-data:/var/lib/postgresql/data
+    ports:
+      # This PC only — for loading a copy and taking backups, never the network.
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neon -d neon"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    container_name: neon-app
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      DATABASE_URL: postgresql://neon:${POSTGRES_PASSWORD:?run compose with --env-file .env.docker}@db:5432/neon
+      WHATSAPP_WORKER_URL: http://host.docker.internal:4100
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # This PC only, for testing. The public way in is the tunnel.
+      - "127.0.0.1:3011:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/employee/login').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.1
+    container_name: neon-tunnel
+    restart: unless-stopped
+    # Only with --profile public, so nothing is put on the internet by accident.
+    profiles: ["public"]
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./deploy/cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      # The tunnel's secret stays where cloudflared wrote it, outside the repo.
+      - ${USERPROFILE:?USERPROFILE is not set}/.cloudflared/966aca87-3a46-4400-829c-d7a2667f1f04.json:/etc/cloudflared/credentials.json:ro
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  db-data:

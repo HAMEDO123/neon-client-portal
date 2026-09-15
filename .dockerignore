@@ -1,0 +1,27 @@
+# Secrets never enter the image. prisma.config.ts loads .env.local with
+# override: true, so a copied file would silently replace the container's own
+# DATABASE_URL and point migrations at a database that is not there.
+.env*
+
+# Real client and employee data.
+local-backup
+
+# Built and installed inside the image, for Linux — the Windows copies here
+# would carry the wrong native binaries (sharp, Prisma's engines).
+node_modules
+.next
+src/generated
+
+# whatsapp-worker/ stays IN, although the site does not run it: `next build`
+# type-checks every .ts file, and tests/whatsapp-queue.test.ts imports the
+# worker's vendored library. Leaving the folder out fails the build with TS2307
+# — which Render never shows, because it builds from the whole repository.
+# Only its runtime leftovers are kept out.
+whatsapp-worker/node_modules
+whatsapp-worker/data
+
+# Nothing here is type-checked or served.
+.git
+ios
+public/uploads
+*.log

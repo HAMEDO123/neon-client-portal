@@ -1,0 +1,11 @@
+# The neon-portal tunnel as it runs inside Docker (see docker-compose.yml).
+# Nothing here is secret: the tunnel's credentials are mounted from the user's
+# .cloudflared folder and never enter the repo.
+tunnel: 966aca87-3a46-4400-829c-d7a2667f1f04
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: clients.neonjo.com
+    service: http://app:3000
+  # Anything else that reaches this tunnel is refused rather than served.
+  - service: http_status:404

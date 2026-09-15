@@ -99,6 +99,31 @@ npx prisma generate
 
 ---
 
+## Running it on the studio's PC (Docker)
+
+`clients.neonjo.com` is served from the studio's own PC, entirely in Docker. Render keeps running the same code at its own address until the switch-over is finished.
+
+| Container | What it is |
+|---|---|
+| `neon-db` | PostgreSQL 17, the same major version as the Neon database it replaces. Data on the `neon_db-data` volume. Reachable from this PC only, at `127.0.0.1:55432`. |
+| `neon-app` | The site, built by `Dockerfile`. On start it applies migrations and serves, as Render does. Also on `127.0.0.1:3011`, this PC only, for testing. |
+| `neon-tunnel` | `cloudflared` running the `neon-portal` tunnel: `clients.neonjo.com` → `neon-app`. Config in `deploy/cloudflared/config.yml`; its secret credentials stay in `%USERPROFILE%.cloudflared`. |
+| `neon-whatsapp` | The WhatsApp worker, in its own project (`whatsapp-worker/`) because it holds a linked session. The site reaches it at `host.docker.internal:4100`. |
+
+```
+docker compose --env-file .env.docker up -d --build            # site + database
+docker compose --env-file .env.docker --profile public up -d   # ...and the tunnel
+```
+
+- **`--env-file .env.docker` is required.** It holds the database password and the site's secrets (git-ignored, generated from `.env.local`). Without it Compose refuses to start rather than starting wrong.
+- **Everything restarts by itself** (`restart: unless-stopped`), and Docker Desktop starts at sign-in — so after a reboot the site is back once Windows is signed in.
+- **The tunnel sits behind `--profile public`**, so a plain `up` never puts anything on the internet.
+- **`.env.local` still points at the development database, on purpose.** `npm run dev` and the tests must never touch the database clients use. With the development database stopped, the `*.db.test.ts` files skip — that is the right outcome, not a failure.
+- **Backups:** `scripts/backup-docker-db.ps1`, run daily by the scheduled task *NEON database backup*, writes a complete copy to `local-backupdocker` and keeps 14 days; `local-backupdockerackup.log` records each run. The copies sit on the same disk as the database, so keep one somewhere else too.
+- **Loading a copy of the live data into it:** create the tables with migrations run from this PC through a Prisma config that loads **no** env files — the project's `prisma.config.ts` lets `.env.local` override `DATABASE_URL`, which would aim them at the development database. Confirm `prisma migrate status` reports `127.0.0.1:55432` before `migrate deploy`, then run `scripts/restore-local-data.mjs <copy>` with `DATABASE_URL` set to the Docker database and no `--env-file`.
+
+---
+
 ## Map of the code
 
 ```
@@ -109,9 +134,12 @@ src/generated/prisma  generated client (git-ignored). Import from "@/generated/p
 prisma/               schema.prisma, migrations/, seed.ts
 public/               sw.js (push), manifests, icons, seed-images/, uploads/ (git-ignored local files)
 tests/                node:test run through tsx; *.db.test.ts need the local database
-scripts/              restore-local-data.mjs
+scripts/              restore-local-data.mjs, backup-docker-db.ps1 (daily backup of the Docker database)
 ios/                  NeonAdmin SwiftUI app (XcodeGen spec in ios/project.yml; no .xcodeproj committed)
 whatsapp-worker/      standalone WhatsApp Web service (its own Dockerfile; not in render.yaml)
+Dockerfile            the site as a container (see "Running it on the studio's PC")
+docker-compose.yml    the site, its PostgreSQL and the tunnel on the studio's PC
+deploy/cloudflared/   the tunnel's config inside Docker (no secrets)
 ```
 
 ### Sign-in and sessions
@@ -346,6 +374,9 @@ The domain vocabulary, as the code defines it:
 - **`deploymentId`** makes a page left open across a deploy reload instead of failing its server actions.
 - **Git Bash on Windows** rewrites arguments that start with `/` into Windows paths. Prefix the command with `MSYS_NO_PATHCONV=1`.
 - **Drive the dev server as `localhost`, never `127.0.0.1`.** `next dev` treats the other spelling as a foreign origin and answers its own chunks with 403, so the page renders, never hydrates, and every click does nothing — with no error in the browser. The dev server's log says "Blocked cross-origin request to Next.js dev resource". Read as a broken feature, this costs an afternoon.
+- **`.dockerignore` must keep `whatsapp-worker/`.** `next build` type-checks every `.ts` file, and `tests/whatsapp-queue.test.ts` imports the worker's vendored library — leave the folder out of the image and the build fails with `TS2307`. Render never shows this because it builds from the whole repository.
+- **A `$` in `.env.docker` needs single quotes or `$$`.** Inside double quotes Compose substitutes, and the admin password hash arrives three characters short — admin login would fail with nothing wrong in the code. **`docker compose config` prints a literal `$` as `$$`**, so it reports a mismatch even when the value is right: check what a container actually receives (a fingerprint of the value from `docker exec`), never the rendered config.
+- **Inserting text with JavaScript's `String.replace` corrupts it when the text contains `$`.** In a replacement string `` $` `` means "everything before the match" and `$$` means `$` — adding the gotcha above that way pasted the whole README into itself twice. Use `split`/`join`, or pass a function as the replacement.
 - **Phone layout:** see "Phone frame". Never stretch the frame past the visual viewport, and use the readout.
 
 ## Known issues (open)
