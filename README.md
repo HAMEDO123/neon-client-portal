@@ -318,7 +318,10 @@ The domain vocabulary, as the code defines it:
 ### Tests
 - `npm test` runs `node --test` over `tests/**/*.test.ts` through tsx, loading `.env` and `.env.local`.
 - Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`, `sales`, `performance`, `task-types`, `automation`, `admin-guard`.
-- Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`, `sales`, `performance`. A run showing `pass 0 … skipped N` with exit 0 means **the database is down**, not that the tests passed.
+- Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`, `sales`, `performance`. A run showing `pass 0 … skipped N` with exit 0 never means the tests passed — but it has **two** causes, and they look identical.
+
+- **Run them the way `package.json` does.** `npm test` and `npm run test:db` pass `--env-file-if-exists=.env --env-file-if-exists=.env.local`; a bare `npx tsx --test tests/x.db.test.ts` passes neither, so `DATABASE_URL` is unset, every test skips itself as "no database", and a perfectly healthy database is blamed. Running one file at a time is the documented recovery from a suite that dies mid-run, so the wrong command is reached for at exactly the moment its output is most likely to be believed.
+- **The tell, before touching anything:** a real query, run with `--env-file=.env.local`, answers fine at the same moment. That is the same signature as the stale-Prisma-client trap below, and it means the same thing both times — **the database is not the problem, the process asking it is**. Killing and restarting the database on this evidence destroys a working one and teaches you nothing.
 
 ---
 
