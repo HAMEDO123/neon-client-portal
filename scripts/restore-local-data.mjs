@@ -89,5 +89,15 @@ try {
   console.error(`Nothing was loaded: ${error instanceof Error ? error.message : error}`);
   process.exitCode = 1;
 } finally {
+  // A pg_dump copy begins with `set_config('search_path', '', false)`, so that every
+  // name in it resolves only when written out as public."Table". On an ordinary
+  // server that setting dies with this connection. `prisma dev` does not give each
+  // connection a session of its own, so the empty path outlives the restore and
+  // every later connection — the site's included — finds no tables at all:
+  // current_schema() is NULL and unqualified queries fail with 42P01. Put it back
+  // before letting go, whether the load committed or rolled back.
+  await client
+    .query(`select pg_catalog.set_config('search_path', '"$user", public', false)`)
+    .catch(() => {});
   await client.end();
 }
