@@ -106,6 +106,7 @@ export async function dueFollowUps(
     where: {
       dueAt: { lte: now },
       askedAt: null,
+      skippedAt: null,
       day: { gte: dayKeyToDate(firstAskableDay(timeZone, now)) },
     },
     orderBy: { dueAt: "asc" },
@@ -131,6 +132,21 @@ export async function markAsked(id: string): Promise<void> {
   await prisma.scheduledFollowUp.update({
     where: { id },
     data: { askedAt: new Date(), attempts: { increment: 1 } },
+  });
+}
+
+/**
+ * Closes a question without asking it, and says why — the work was already
+ * finished, or is no longer there.
+ *
+ * Deliberately not markAsked. An asked question without an answer is what the
+ * day board counts as unanswered and what a task's page offers as still
+ * waiting, and nobody received this one. Not an attempt either.
+ */
+export async function markSkipped(id: string, because: string): Promise<void> {
+  await prisma.scheduledFollowUp.update({
+    where: { id },
+    data: { skippedAt: new Date(), skippedBecause: because },
   });
 }
 

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { DASHBOARD_PATH, taskUrl } from "@/lib/notifications/types";
-import { dueFollowUps, markAsked } from "@/lib/follow-up-queue";
+import { dueFollowUps, markAsked, markSkipped } from "@/lib/follow-up-queue";
 import type { FollowUpKind } from "@/lib/follow-ups";
 import { getTimezone } from "@/lib/settings";
 
@@ -9,8 +9,9 @@ import { getTimezone } from "@/lib/settings";
 //
 // The poller may run as often as the scheduler likes: every question carries
 // the dedupe key it was written with, so the notification engine's unique index
-// refuses a second copy even if two runs overlap. `askedAt` is stamped either
-// way, so a question is never considered again.
+// refuses a second copy even if two runs overlap. `askedAt` is stamped on every
+// question that goes out, and `skippedAt` on one closed without being asked, so
+// neither is considered again.
 //
 // What is deliberately not here: any judgement about the work. A follow-up asks;
 // it does not decide that something was late, or unfinished, or that silence
@@ -71,8 +72,9 @@ async function nameOf(followUp: { entryId: string | null; jobId: string | null }
  * Sends every question that has come due.
  *
  * The world is re-read before each one: a task that has since been finished, or
- * a block whose work no longer exists, is marked asked and skipped rather than
- * chasing somebody about something they have already done.
+ * a block whose work no longer exists, is closed as skipped rather than chasing
+ * somebody about something they have already done — never marked asked, which
+ * the day board would count as a question left unanswered.
  *
  * Only questions about today are considered, in the company's timezone — see
  * `dueFollowUps`. The caller usually knows the timezone already; without it,
@@ -91,7 +93,7 @@ export async function runFollowUps(now: Date = new Date(), timeZone?: string) {
         select: { state: true },
       });
       if (!entry || entry.state === "DONE" || entry.state === "SUBMITTED") {
-        await markAsked(followUp.id);
+        await markSkipped(followUp.id, entry ? `task-${entry.state.toLowerCase()}` : "task-gone");
         skipped += 1;
         continue;
       }
@@ -99,7 +101,7 @@ export async function runFollowUps(now: Date = new Date(), timeZone?: string) {
 
     const copy = COPY[followUp.kind];
     if (!copy) {
-      await markAsked(followUp.id);
+      await markSkipped(followUp.id, "unknown-kind");
       skipped += 1;
       continue;
     }

@@ -698,6 +698,13 @@ model ScheduledFollowUp {
   dueAt  DateTime
   askedAt DateTime?
 
+  // Closed without asking: by the time it came due the work was already
+  // finished, or no longer existed. Nobody received it, so it stays out of
+  // askedAt — which the day board counts as asked and unanswered — and the
+  // sender never looks at it again.
+  skippedAt      DateTime?
+  skippedBecause String?
+
   // What the employee said, and when. Nothing assumes an unanswered question
   // means the work did not happen.
   answeredAt DateTime?

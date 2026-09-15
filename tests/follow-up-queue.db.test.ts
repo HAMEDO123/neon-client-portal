@@ -156,6 +156,12 @@ describe("asking what has come due", () => {
       where: { employeeId, kind: "block-end" },
       data: { askedAt: null },
     });
+    const attemptsBefore = (
+      await prisma.scheduledFollowUp.findFirst({
+        where: { employeeId, kind: "block-end", entryId },
+        select: { attempts: true },
+      })
+    )?.attempts;
 
     const before = await prisma.notification.count({ where: { employeeId } });
     const result = await runFollowUps(ON_THE_DAY, TZ);
@@ -164,7 +170,18 @@ describe("asking what has come due", () => {
     assert.equal(await prisma.notification.count({ where: { employeeId } }), before);
 
     const left = (await dueFollowUps(ON_THE_DAY, { timeZone: TZ })).filter((row) => row.employeeId === employeeId);
-    assert.equal(left.length, 0, "a skipped question is still marked asked");
+    assert.equal(left.length, 0, "a skipped question is not picked up again");
+
+    // Closed, not asked: nobody received it, so it must not count as a question
+    // somebody has left unanswered.
+    const closed = await prisma.scheduledFollowUp.findFirst({
+      where: { employeeId, kind: "block-end", entryId },
+      select: { askedAt: true, skippedAt: true, skippedBecause: true, attempts: true },
+    });
+    assert.equal(closed?.askedAt, null, "a skipped question is never marked asked");
+    assert.ok(closed?.skippedAt, "it is recorded as skipped");
+    assert.equal(closed?.skippedBecause, "task-submitted", "with the reason");
+    assert.equal(closed?.attempts, attemptsBefore, "and it is not counted as an attempt");
   });
 
   it("never asks about a day that is already over, and leaves the question unasked", async (t) => {
