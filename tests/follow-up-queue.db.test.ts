@@ -20,6 +20,10 @@ import { dayKeyToDate } from "@/lib/time";
 // A day in the past, so everything written is due immediately.
 const DAY = "2026-09-06";
 const TZ = "Asia/Amman";
+// 20:00 in Amman on that day, after every question on it has come due. The
+// tests run as of that evening rather than as of whenever they happen to run:
+// a question is only ever asked on its own day.
+const ON_THE_DAY = new Date("2026-09-06T17:00:00Z");
 
 let reachable = false;
 let employeeId = "";
@@ -123,14 +127,14 @@ describe("asking what has come due", () => {
   it("sends each question once, and stamps it so it is never sent again", async (t) => {
     if (!reachable) return t.skip("no database");
 
-    const waiting = await dueFollowUps(new Date());
+    const waiting = await dueFollowUps(ON_THE_DAY, { timeZone: TZ });
     const mine = waiting.filter((row) => row.employeeId === employeeId);
-    assert.ok(mine.length > 0, "a day in the past should be due");
+    assert.ok(mine.length > 0, "by the evening, every question on the day is due");
 
-    const first = await runFollowUps();
+    const first = await runFollowUps(ON_THE_DAY, TZ);
     assert.ok(first.due > 0);
 
-    const stillDue = (await dueFollowUps(new Date())).filter((row) => row.employeeId === employeeId);
+    const stillDue = (await dueFollowUps(ON_THE_DAY, { timeZone: TZ })).filter((row) => row.employeeId === employeeId);
     assert.equal(stillDue.length, 0, "nothing should remain unasked");
 
     // The employee was told, under the question's own key.
@@ -138,7 +142,7 @@ describe("asking what has come due", () => {
     assert.ok(told > 0, "a notification should have been written");
 
     // A second run has nothing left to do, and writes nothing new.
-    const second = await runFollowUps();
+    const second = await runFollowUps(ON_THE_DAY, TZ);
     const toldAgain = await prisma.notification.count({ where: { employeeId } });
     assert.equal(second.sent, 0);
     assert.equal(toldAgain, told);
@@ -154,13 +158,33 @@ describe("asking what has come due", () => {
     });
 
     const before = await prisma.notification.count({ where: { employeeId } });
-    const result = await runFollowUps();
+    const result = await runFollowUps(ON_THE_DAY, TZ);
 
     assert.ok(result.skipped > 0, "the finished task should have been skipped");
     assert.equal(await prisma.notification.count({ where: { employeeId } }), before);
 
-    const left = (await dueFollowUps(new Date())).filter((row) => row.employeeId === employeeId);
+    const left = (await dueFollowUps(ON_THE_DAY, { timeZone: TZ })).filter((row) => row.employeeId === employeeId);
     assert.equal(left.length, 0, "a skipped question is still marked asked");
+  });
+
+  it("never asks about a day that is already over, and leaves the question unasked", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // Every question on the day unasked again, looked at from the next morning:
+    // what a scheduler that was down overnight would find when it came back.
+    await prisma.scheduledFollowUp.updateMany({ where: { employeeId }, data: { askedAt: null } });
+    const nextMorning = new Date("2026-09-07T08:00:00Z"); // 11:00 in Amman on the 7th
+
+    const due = (await dueFollowUps(nextMorning, { timeZone: TZ })).filter((row) => row.employeeId === employeeId);
+    assert.equal(due.length, 0, "yesterday's questions are not due today");
+
+    const before = await prisma.notification.count({ where: { employeeId } });
+    await runFollowUps(nextMorning, TZ);
+    assert.equal(await prisma.notification.count({ where: { employeeId } }), before, "nothing is sent about yesterday");
+
+    // Not stamped either: the day board counts an asked, unanswered question as
+    // one somebody has not replied to, and nobody received these.
+    assert.equal(await prisma.scheduledFollowUp.count({ where: { employeeId, askedAt: { not: null } } }), 0);
   });
 });
 

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { followUpKey, followUpsFor, type FollowUpKind } from "@/lib/follow-ups";
+import { firstAskableDay, followUpKey, followUpsFor, type FollowUpKind } from "@/lib/follow-ups";
 import { dayKeyToDate, instantAt } from "@/lib/time";
 import type { WorkHours } from "@/lib/work-hours";
 
@@ -87,15 +87,27 @@ export type DueFollowUp = {
 };
 
 /**
- * Questions that have come due and have not been asked.
+ * Questions about today that have come due and have not been asked.
  *
- * Capped, because a poller that has been asleep should not wake up and send a
- * hundred messages at once — the rest keep until the next run, which is minutes
- * away.
+ * Only today's, in the company's timezone (`firstAskableDay`): a poller that
+ * was down overnight must not wake up to a morning of "did you start it?" about
+ * yesterday. Older questions are left unasked rather than stamped — an asked
+ * question without an answer is what the day board counts as unanswered, and
+ * nobody received these.
+ *
+ * Capped as well, so even a backlog from earlier today goes out a few dozen at a
+ * time; the rest keep until the next run, which is minutes away.
  */
-export async function dueFollowUps(now: Date = new Date(), limit = 40): Promise<DueFollowUp[]> {
+export async function dueFollowUps(
+  now: Date = new Date(),
+  { timeZone, limit = 40 }: { timeZone: string; limit?: number }
+): Promise<DueFollowUp[]> {
   const rows = await prisma.scheduledFollowUp.findMany({
-    where: { dueAt: { lte: now }, askedAt: null },
+    where: {
+      dueAt: { lte: now },
+      askedAt: null,
+      day: { gte: dayKeyToDate(firstAskableDay(timeZone, now)) },
+    },
     orderBy: { dueAt: "asc" },
     take: limit,
     select: {

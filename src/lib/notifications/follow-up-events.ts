@@ -3,6 +3,7 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 import { DASHBOARD_PATH, taskUrl } from "@/lib/notifications/types";
 import { dueFollowUps, markAsked } from "@/lib/follow-up-queue";
 import type { FollowUpKind } from "@/lib/follow-ups";
+import { getTimezone } from "@/lib/settings";
 
 // Asking the questions that have come due.
 //
@@ -72,9 +73,13 @@ async function nameOf(followUp: { entryId: string | null; jobId: string | null }
  * The world is re-read before each one: a task that has since been finished, or
  * a block whose work no longer exists, is marked asked and skipped rather than
  * chasing somebody about something they have already done.
+ *
+ * Only questions about today are considered, in the company's timezone — see
+ * `dueFollowUps`. The caller usually knows the timezone already; without it,
+ * it is read from settings.
  */
-export async function runFollowUps(now: Date = new Date()) {
-  const due = await dueFollowUps(now);
+export async function runFollowUps(now: Date = new Date(), timeZone?: string) {
+  const due = await dueFollowUps(now, { timeZone: timeZone ?? (await getTimezone()) });
   let sent = 0;
   let skipped = 0;
 

@@ -61,7 +61,7 @@ async function handle(request: Request) {
   // few minutes rather than hourly: a question due at 11:30 is worth little at
   // 12:05. Every one carries its own dedupe key, so overlapping runs ask once.
   if (forced === "followups" || !forced) {
-    ran.followUps = await runFollowUps();
+    ran.followUps = await runFollowUps(new Date(), timezone);
   }
 
   // The studio's own rules, on the same footing as the follow-ups: considered

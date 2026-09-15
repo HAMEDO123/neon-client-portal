@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { MID_CHECK_AFTER_MINUTES, followUpKey, followUpsFor, mayAskNow } from "../src/lib/follow-ups";
+import { MID_CHECK_AFTER_MINUTES, firstAskableDay, followUpKey, followUpsFor, mayAskNow } from "../src/lib/follow-ups";
 import { DEFAULT_WORK_HOURS } from "../src/lib/work-hours";
 
 // The working day here is 11:00 to 19:00 with lunch 14:00–14:30.
@@ -136,5 +136,21 @@ describe("asking once", () => {
     assert.notEqual(first, followUpKey("emp1", DAY, "block-start", 2, "12:00"));
     assert.notEqual(first, followUpKey("emp2", DAY, "block-start", 2, "11:30"));
     assert.notEqual(first, followUpKey("emp1", DAY, "block-end", 2, "11:30"));
+  });
+});
+
+describe("a question belongs to its own day", () => {
+  // Amman is UTC+3 all year.
+  it("asks about today, in the company's timezone", () => {
+    // 20:00 in Amman on the 15th.
+    assert.equal(firstAskableDay("Asia/Amman", new Date("2026-09-15T17:00:00Z")), "2026-09-15");
+  });
+
+  it("moves on at the company's midnight, not at UTC's", () => {
+    // 23:59 in Amman: the 15th is still today.
+    assert.equal(firstAskableDay("Asia/Amman", new Date("2026-09-15T20:59:00Z")), "2026-09-15");
+    // 01:30 on the 16th in Amman, while UTC still reads the 15th: a question
+    // about the 15th is now about a day that is over.
+    assert.equal(firstAskableDay("Asia/Amman", new Date("2026-09-15T22:30:00Z")), "2026-09-16");
   });
 });

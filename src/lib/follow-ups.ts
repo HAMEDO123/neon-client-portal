@@ -6,6 +6,7 @@ import {
   timeOf,
   type WorkHours,
 } from "@/lib/work-hours";
+import { dayKeyIn } from "@/lib/time";
 
 // When somebody should be asked about their day, and what they are being asked.
 //
@@ -148,4 +149,19 @@ export function followUpsFor({
 /** Whether a moment is one where somebody may be messaged at all. */
 export function mayAskNow(hours: WorkHours, dayKey: string, time: string): boolean {
   return isWorkingTime(hours, time) && nextWorkingMoment(hours, dayKey, time).dayKey === dayKey;
+}
+
+/**
+ * The oldest day a follow-up may still be asked about: today, in the company's
+ * timezone.
+ *
+ * A follow-up is about a moment of one particular day — "did you start it?",
+ * "how did it go?" — and once that day is over the question has lost its point.
+ * Asking it the next morning is not late, it is wrong: it chases somebody about
+ * a day they have already finished. So nothing older than this is ever sent,
+ * however long the scheduler was down. The day turns at the company's midnight,
+ * not the server's and not UTC's.
+ */
+export function firstAskableDay(timeZone: string, now: Date = new Date()): string {
+  return dayKeyIn(timeZone, now);
 }
