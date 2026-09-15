@@ -28,11 +28,12 @@ export function memberKeyOf(viewer: ChatViewer) {
 }
 
 /**
- * Where calls can be made. The private chats — with the manager, and between
- * two employees. The team's group is not called yet.
+ * Where calls can be made: every conversation. A call in the team's group rings
+ * everybody on the team and carries on while anybody is in it; a call in a
+ * private chat is between its two people.
  */
 export function mayCallIn(conversation: Conversation) {
-  return conversation.kind !== "team";
+  return conversation.kind === "team" || conversation.kind === "direct" || conversation.kind === "peer";
 }
 
 function time(value: Date | string) {

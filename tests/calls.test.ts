@@ -32,10 +32,10 @@ describe("who is in calls, and where", () => {
     assert.equal(memberKeyOf(wael), wael.id);
   });
 
-  it("allows calls in private chats, not yet in the team's group", () => {
+  it("allows calls in every conversation: the team's group and the private chats", () => {
     assert.equal(mayCallIn({ kind: "direct", employeeId: "cmwael00000000000000" }), true);
     assert.equal(mayCallIn(peerConversation("cmwael00000000000000", "cmsally0000000000000")), true);
-    assert.equal(mayCallIn({ kind: "team" }), false);
+    assert.equal(mayCallIn({ kind: "team" }), true);
   });
 });
 

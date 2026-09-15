@@ -276,8 +276,9 @@ export function CallScreen({
             <Grid tiles={cameraTiles} narrow={narrow} />
           )}
 
-          {/* Between two people, yourself floats in a corner over the other person, as on a phone call. */}
-          {(others.length <= 1 || !!spotlight) && !(spotlight && !screenTile) && (
+          {/* Between two people, or while waiting for the others, yourself floats in a corner, as on a
+              phone call. With somebody large and a strip below, you are already in the strip. */}
+          {others.length <= 1 && !spotlight && (
             <div className="absolute right-3 top-3 aspect-[3/4] w-24 sm:aspect-video sm:w-44">
               <TileView tile={selfTile} />
             </div>
@@ -408,13 +409,25 @@ function buildTiles(state: SessionState, me: string, mine: { name: string; color
 
 function Grid({ tiles, narrow }: { tiles: Tile[]; narrow: boolean }) {
   const { columns, rows } = gridFor(tiles.length, narrow);
+  // Every tile spans two half-columns, so a short last row — the third of
+  // three, the last two of five — can sit in the middle rather than hug the left.
+  const shortRow = tiles.length % columns;
+  const firstOfShortRow = shortRow === 0 ? -1 : tiles.length - shortRow;
+  const indent = columns - shortRow;
+
   return (
     <div
       className="grid min-h-0 flex-1 gap-2 sm:gap-3"
-      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
+      style={{ gridTemplateColumns: `repeat(${columns * 2}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
     >
-      {tiles.map((tile) => (
-        <TileView key={tile.id} tile={tile} large={tiles.length <= 2} />
+      {tiles.map((tile, index) => (
+        <div
+          key={tile.id}
+          className="min-h-0 min-w-0"
+          style={{ gridColumn: index === firstOfShortRow ? `${indent + 1} / span 2` : "span 2" }}
+        >
+          <TileView tile={tile} large={tiles.length <= 2} />
+        </div>
       ))}
     </div>
   );
