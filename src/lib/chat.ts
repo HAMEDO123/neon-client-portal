@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { avatarUrl } from "@/lib/avatar";
+import { chatTaskSelect } from "@/lib/chat-task-select";
 import {
   GROUP_AVATAR,
   TEAM_CHANNEL_KEY,
@@ -170,6 +171,8 @@ export const messageSelect = {
   managerOnly: true,
   createdAt: true,
   project: { select: { id: true, name: true } },
+  // A task message carries its card, so it arrives drawn rather than as a blank to fill in.
+  task: { select: chatTaskSelect },
 } as const;
 
 /** One conversation's messages, for a channel already resolved through channelFor. */

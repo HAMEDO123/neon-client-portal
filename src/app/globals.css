@@ -306,12 +306,83 @@ body:has(.admin-shell) {
   display: none;
 }
 
+/* Task cards in chat, and the form that hands one out.
+
+   Only opacity and transform move, so every one of these stays on the
+   compositor. Something appearing rises a few pixels into place; the task
+   form slides up like a sheet; a card opened from a notification or the Tasks
+   list is pointed out with a ring that fades, drawn on a layer above the card
+   so the card itself never repaints. */
+.neon-rise {
+  animation: neon-rise 180ms ease-out both;
+}
+@keyframes neon-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.task-sheet[open] {
+  animation: neon-sheet-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.task-sheet[open]::backdrop {
+  animation: neon-fade-in 240ms ease-out;
+}
+@keyframes neon-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes neon-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.task-flash::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 1.25rem;
+  box-shadow: 0 0 0 3px var(--cyan-strong);
+  pointer-events: none;
+  animation: neon-flash 2.4s ease-out forwards;
+}
+@keyframes neon-flash {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Still pointed out, just without the fade: the class comes off after a moment. */
+  .task-flash::after {
+    animation: none !important;
+    opacity: 1;
   }
 }
 

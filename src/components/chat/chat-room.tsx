@@ -7,6 +7,7 @@ import {
   CheckCheck,
   ChevronLeft,
   CircleAlert,
+  ClipboardList,
   Clock,
   FileText,
   Mic,
@@ -16,9 +17,13 @@ import {
   Trash2,
 } from "lucide-react";
 import { deleteChatMessage, sendChatMessage } from "@/lib/actions/chat-actions";
+import { createChatTask } from "@/lib/actions/chat-task-actions";
 import { ChatHeader } from "@/components/chat/chat-header";
+import { TaskCard } from "@/components/chat/task-card";
+import { TaskSheet, type TaskSetup } from "@/components/chat/task-sheet";
 import { shrinkPhoto } from "@/lib/client-image";
 import { mergeIncoming, pendingId, reconcile } from "@/lib/chat-sync";
+import { slashTask } from "@/lib/chat-tasks";
 import { playCue } from "@/lib/sound-cues";
 import {
   SLIDE_TO_CANCEL_PX,
@@ -29,6 +34,8 @@ import {
   recordingOutcome,
 } from "@/lib/voice";
 import type { ChatMessageView } from "@/lib/chat";
+import type { ChatViewer } from "@/lib/chat-conversations";
+import type { ChatTaskView } from "@/lib/chat-task-store";
 import { cn } from "@/lib/utils";
 
 // A conversation — the team's, or a private one between two people — laid out
@@ -37,7 +44,9 @@ import { cn } from "@/lib/utils";
 // their own colour), and a composer pinned to the bottom.
 //
 // Messages arrive over an event stream, so one person sending is visible to
-// everyone else without a refresh.
+// everyone else without a refresh. So do the task cards: the same stream sends
+// them again whenever somebody's part moves, a photo arrives or a comment is
+// written, none of which is a new message.
 
 // A message on screen: saved, or one of ours still on its way.
 type Message = ChatMessageView & { status?: "sending" | "failed" };
@@ -48,6 +57,9 @@ type Draft =
   | { kind: "IMAGE"; file: File; body: string; projectId: string }
   | { kind: "FILE"; file: File; body: string; projectId: string }
   | { kind: "VOICE"; blob: Blob; fileName: string; durationSeconds: number; projectId: string };
+
+/** The cards as the stream last described them: which exist, the newest in full, and when that was. */
+type LiveTasks = { at: number; ids: Set<string>; byId: Map<string, ChatTaskView> };
 
 const NAME_COLOURS = [
   "text-cyan-strong",
@@ -82,16 +94,22 @@ export function ChatRoom({
   initialMessages,
   viewerType,
   viewerId,
+  viewerName,
   canDeleteAny,
   projects,
   conversation,
   header,
   showNames = true,
   emptyText,
+  timeZone,
+  initialNow,
+  taskSetup = null,
+  focusTaskId = null,
 }: {
   initialMessages: Message[];
   viewerType: "ADMIN" | "EMPLOYEE";
   viewerId: string | null;
+  viewerName: string;
   canDeleteAny: boolean;
   projects: { id: string; name: string }[];
   /** Which conversation, as its URL names it: "team", or a private chat. */
@@ -101,13 +119,31 @@ export function ChatRoom({
   /** A private chat has two people in it, so its bubbles need no names. */
   showNames?: boolean;
   emptyText?: string;
+  /** The company's timezone, which a card's due moment is written in. */
+  timeZone: string;
+  /** The server's clock when the page was drawn, until the device's own takes over. */
+  initialNow: number;
+  /** Present only where this viewer may hand out tasks: who to, and the due moment to start from. */
+  taskSetup?: TaskSetup | null;
+  /** A card to scroll to and point out, when a notification or the Tasks list opened the chat for it. */
+  focusTaskId?: string | null;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [liveTasks, setLiveTasks] = useState<LiveTasks | null>(null);
+  const [sheet, setSheet] = useState<{ key: number; title: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
 
   const newest = messages.at(-1)?.createdAt;
+
+  const viewer: ChatViewer = useMemo(
+    () =>
+      viewerType === "ADMIN"
+        ? { type: "ADMIN", id: null, name: viewerName }
+        : { type: "EMPLOYEE", id: viewerId ?? "", name: viewerName },
+    [viewerType, viewerId, viewerName]
+  );
 
   const isMine = useCallback(
     (message: Pick<Message, "authorType" | "authorId">) =>
@@ -142,11 +178,30 @@ export function ChatRoom({
       }
     });
 
+    source.addEventListener("tasks", (event) => {
+      const data = JSON.parse((event as MessageEvent).data) as { at: number; ids: string[]; tasks: ChatTaskView[] };
+      setLiveTasks({ at: data.at, ids: new Set(data.ids), byId: new Map(data.tasks.map((task) => [task.id, task])) });
+    });
+
     // The browser reconnects on its own; the next connection carries the
     // cursor from whatever this one delivered.
     return () => source.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A task message whose card has gone — deleted by the manager — leaves the
+  // conversation. One created after the stream's last look is simply newer
+  // than it, not gone.
+  const visible = useMemo(
+    () =>
+      messages.filter((message) => {
+        if (message.kind !== "TASK") return true;
+        if (!message.task) return false;
+        if (!liveTasks || liveTasks.ids.has(message.task.id)) return true;
+        return new Date(message.task.createdAt).getTime() > liveTasks.at;
+      }),
+    [messages, liveTasks]
+  );
 
   // --- scrolling -----------------------------------------------------------
   // Jump to the newest message, unless the reader has scrolled up to read
@@ -168,6 +223,19 @@ export function ChatRoom({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // Opened for one card: bring it to the middle of the screen and point it out.
+  useEffect(() => {
+    if (!focusTaskId) return;
+    const card = document.getElementById(`task-${focusTaskId}`);
+    if (!card) return;
+
+    pinnedToBottom.current = false;
+    card.scrollIntoView({ block: "center" });
+    card.classList.add("task-flash");
+    const timer = setTimeout(() => card.classList.remove("task-flash"), 2600);
+    return () => clearTimeout(timer);
+  }, [focusTaskId]);
 
   const onScroll = useCallback(() => {
     const el = scrollerRef.current;
@@ -201,6 +269,7 @@ export function ChatRoom({
         managerOnly: false,
         createdAt: new Date(),
         project: projects.find((project) => project.id === draft.projectId) ?? null,
+        task: null,
         status: "sending",
       };
 
@@ -237,14 +306,34 @@ export function ChatRoom({
     [conversation, projects, viewerType, viewerId]
   );
 
+  // --- tasks ---------------------------------------------------------------
+  const openTaskSheet = useCallback((title: string) => setSheet({ key: Date.now(), title }), []);
+
+  // The form stays open until the task is saved, then the card goes straight
+  // into the conversation; the stream's copy of it later changes nothing.
+  const createTask = useCallback(
+    async (formData: FormData) => {
+      formData.set("conversation", conversation);
+      const saved = await createChatTask(formData);
+      pinnedToBottom.current = true;
+      setMessages((current) =>
+        current.some((message) => message.id === saved.id)
+          ? current
+          : [...current, { ...saved, createdAt: new Date(saved.createdAt) } as Message]
+      );
+      setSheet(null);
+    },
+    [conversation]
+  );
+
   const dayHeadings = useMemo(
     () =>
-      messages.map((message, index) => {
+      visible.map((message, index) => {
         const day = dayLabel(new Date(message.createdAt));
-        const previous = index > 0 ? dayLabel(new Date(messages[index - 1].createdAt)) : null;
+        const previous = index > 0 ? dayLabel(new Date(visible[index - 1].createdAt)) : null;
         return day === previous ? null : day;
       }),
-    [messages]
+    [visible]
   );
 
   return (
@@ -263,33 +352,95 @@ export function ChatRoom({
           backgroundSize: "56px 56px, 84px 84px",
         }}
       >
-        {messages.length === 0 && (
+        {visible.length === 0 && (
           <p className="mt-12 text-center text-sm text-ink/40">
             {emptyText ?? "No messages yet. Send an update, a photo from site, or a voice note."}
           </p>
         )}
 
-        {messages.map((message, index) => (
-          <Bubble
-            key={message.id}
-            message={message}
-            day={dayHeadings[index]}
-            mine={isMine(message)}
-            showName={showNames}
-            canDelete={canDeleteAny}
-            onDiscard={
-              message.status
-                ? () => setMessages((current) => current.filter((item) => item.id !== message.id))
-                : undefined
-            }
-          />
-        ))}
+        {visible.map((message, index) =>
+          message.kind === "TASK" && message.task ? (
+            <TaskMessage
+              key={message.id}
+              day={dayHeadings[index]}
+              mine={isMine(message)}
+              time={timeLabel(new Date(message.createdAt))}
+            >
+              <TaskCard
+                task={liveTasks?.byId.get(message.task.id) ?? message.task}
+                viewer={viewer}
+                timeZone={timeZone}
+                initialNow={initialNow}
+                onDeleted={() => setMessages((current) => current.filter((item) => item.id !== message.id))}
+              />
+            </TaskMessage>
+          ) : (
+            <Bubble
+              key={message.id}
+              message={message}
+              day={dayHeadings[index]}
+              mine={isMine(message)}
+              showName={showNames}
+              canDelete={canDeleteAny}
+              onDiscard={
+                message.status
+                  ? () => setMessages((current) => current.filter((item) => item.id !== message.id))
+                  : undefined
+              }
+            />
+          )
+        )}
 
         <div ref={bottomRef} />
       </div>
 
-      <Composer projects={projects} onSend={sendDraft} />
+      <Composer projects={projects} onSend={sendDraft} onTask={taskSetup ? openTaskSheet : undefined} />
+
+      {sheet && taskSetup && (
+        <TaskSheet
+          key={sheet.key}
+          setup={taskSetup}
+          initialTitle={sheet.title}
+          onClose={() => setSheet(null)}
+          onCreate={createTask}
+        />
+      )}
     </div>
+  );
+}
+
+function DayHeading({ day }: { day: string }) {
+  return (
+    <div className="my-3 flex justify-center">
+      <span className="rounded-lg bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-ink/45 shadow-sm">
+        {day}
+      </span>
+    </div>
+  );
+}
+
+/** A task card in the conversation, on the side of whoever handed it out, with the time under it. */
+function TaskMessage({
+  day,
+  mine,
+  time,
+  children,
+}: {
+  day: string | null;
+  mine: boolean;
+  time: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      {day && <DayHeading day={day} />}
+      <div className={cn("mb-2 flex", mine ? "justify-end" : "justify-start")}>
+        <div className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
+          {children}
+          <span className="mt-0.5 px-1 text-[11px] text-ink/40">{time}</span>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -316,13 +467,7 @@ function Bubble({
 
   return (
     <>
-      {day && (
-        <div className="my-3 flex justify-center">
-          <span className="rounded-lg bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-ink/45 shadow-sm">
-            {day}
-          </span>
-        </div>
-      )}
+      {day && <DayHeading day={day} />}
 
       <div className={cn("group/msg mb-1.5 flex", mine && !isAgent ? "justify-end" : "justify-start")}>
         <div
@@ -506,9 +651,12 @@ function VoiceNote({ url, seconds, mine }: { url: string; seconds: number | null
 function Composer({
   projects,
   onSend,
+  onTask,
 }: {
   projects: { id: string; name: string }[];
   onSend: (draft: Draft) => Promise<void>;
+  /** Opens the task form, with a title when "/task …" was typed. Only where tasks can be handed out. */
+  onTask?: (title: string) => void;
 }) {
   const [text, setText] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -563,6 +711,14 @@ function Composer({
     setShowAttach(false);
     setError(null);
     if (textRef.current) textRef.current.style.height = "auto";
+
+    // "/task …" opens the task form instead of sending the words.
+    const slash = onTask ? slashTask(body) : null;
+    if (slash && onTask) {
+      onTask(slash.title);
+      return;
+    }
+
     void onSend({ kind: "TEXT", body, projectId }).catch(fail);
   }
 
@@ -672,7 +828,18 @@ function Composer({
       {hint && !recording && <p className="px-2 pb-1.5 text-center text-xs text-ink/50">{hint}</p>}
 
       {showAttach && !recording && (
-        <div className="mb-2 flex gap-2 px-1">
+        <div className="mb-2 flex flex-wrap gap-2 px-1">
+          {onTask && (
+            <AttachButton
+              label="Task"
+              onClick={() => {
+                setShowAttach(false);
+                onTask("");
+              }}
+            >
+              <ClipboardList size={18} strokeWidth={1.75} />
+            </AttachButton>
+          )}
           <AttachButton label="Photo" onClick={() => photoRef.current?.click()}>
             <Camera size={18} strokeWidth={1.75} />
           </AttachButton>
@@ -683,6 +850,7 @@ function Composer({
             <select
               value={projectId}
               onChange={(event) => setProjectId(event.target.value)}
+              aria-label="Project this is about"
               className="min-w-0 flex-1 rounded-xl border border-ink/12 bg-white px-2 py-1.5 text-xs text-ink/70 outline-none"
             >
               <option value="">No project</option>
@@ -752,6 +920,7 @@ function Composer({
               type="button"
               onClick={() => setShowAttach(!showAttach)}
               aria-label="Attach"
+              aria-expanded={showAttach}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink/45 hover:bg-ink/5"
             >
               <Plus size={22} strokeWidth={2} className={cn("transition-transform", showAttach && "rotate-45")} />
@@ -764,6 +933,7 @@ function Composer({
                 rows={1}
                 dir="auto"
                 placeholder="Message"
+                aria-label="Message"
                 onChange={(event) => {
                   setText(event.target.value);
                   // Grow with the text, like a messaging app, up to a limit.
@@ -838,7 +1008,7 @@ function AttachButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-xl border border-ink/12 bg-white px-3 py-1.5 text-xs font-medium text-ink/70"
+      className="flex items-center gap-1.5 rounded-xl border border-ink/12 bg-white px-3 py-1.5 text-xs font-medium text-ink/70 transition-colors hover:bg-ink/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-strong/40"
     >
       {children}
       {label}

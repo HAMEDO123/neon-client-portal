@@ -4,22 +4,29 @@ import { channelFor, listMessages, parseConversation, recordChatRead, requireCha
 import { otherPeer } from "@/lib/chat-conversations";
 import { memberLine } from "@/lib/group-members";
 import { avatarUrl } from "@/lib/avatar";
+import { getTimezone } from "@/lib/settings";
 import { ChatRoom } from "@/components/chat/chat-room";
 
 // One conversation, full screen: the team's group, the private chat with the
 // manager, or a private chat with a colleague. Somebody else's private chat
 // does not exist from here — the only names an employee can give one are
 // "manager" and a colleague's id, and both always mean a chat they are in.
+//
+// `?task=` opens it at one task card: where a notification about a task, or
+// the Tasks list, sends the employee.
 
 export default async function EmployeeConversationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ conversation: string }>;
+  searchParams: Promise<{ task?: string | string[] }>;
 }) {
   const viewer = await requireChatViewer("EMPLOYEE");
   if (viewer.type !== "EMPLOYEE") throw new Error("Unauthorized");
 
   const { conversation: slug } = await params;
+  const { task: focus } = await searchParams;
   const conversation = parseConversation(slug, viewer);
   const channel = conversation ? await channelFor(viewer, conversation) : null;
   if (!conversation || !channel) notFound();
@@ -46,6 +53,7 @@ export default async function EmployeeConversationPage({
           select: { name: true, color: true },
         })
       : null;
+  const timezone = await getTimezone();
 
   await recordChatRead(viewer, channel.id);
 
@@ -61,10 +69,14 @@ export default async function EmployeeConversationPage({
         initialMessages={messages}
         viewerType="EMPLOYEE"
         viewerId={viewer.id}
+        viewerName={viewer.name}
         canDeleteAny={false}
         projects={projects}
         conversation={slug}
         showNames={group}
+        timeZone={timezone}
+        initialNow={new Date().getTime()}
+        focusTaskId={typeof focus === "string" ? focus : null}
         header={
           group
             ? {

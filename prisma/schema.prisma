@@ -130,6 +130,8 @@ enum ChatMessageKind {
   IMAGE
   FILE
   VOICE
+  // A task the manager handed out from the chat; the card is its ChatTask.
+  TASK
 }
 
 enum DeliveryChannel {
@@ -967,6 +969,7 @@ model ChatChannel {
 
   messages ChatMessage[]
   reads    ChatRead[]
+  tasks    ChatTask[]
 }
 
 model ChatMessage {
@@ -997,6 +1000,9 @@ model ChatMessage {
   // The assistant is the manager's tool, so its questions and answers stay out
   // of the team's view entirely rather than being hidden in the client.
   managerOnly Boolean @default(false)
+
+  // The card, when this message is a task.
+  task ChatTask?
 
   createdAt DateTime @default(now())
 
@@ -1313,6 +1319,69 @@ model AssignedTask {
 
   stateChanges TaskStateChange[]
 
+  // Handed out from a chat, as one person's part of a task card there. The card
+  // carries the exact moment it is due; these days are the calendar span of it.
+  chatTaskId String?
+  chatTask   ChatTask? @relation(fields: [chatTaskId], references: [id], onDelete: Cascade)
+
   @@index([employeeId, startDay])
   @@index([startDay, endDay])
+  @@index([chatTaskId])
+}
+
+// A task the manager hands out from a conversation, shown there as a card.
+//
+// Not a new kind of work: each person it is given to gets an ordinary
+// AssignedTask, with the same states, the same photo proof and the same review
+// as a job from the week board. The card is what they share: the title, the
+// moment it is due, and the thread of comments under it.
+model ChatTask {
+  id String @id @default(cuid())
+
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  // The message the card sits in. Deleting it deletes the task, with every
+  // person's part of it.
+  messageId String      @unique
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?      @db.Text
+  // A moment, not a day: "by 3 PM" is what a task in a chat says.
+  dueAt       DateTime
+  priority    TaskPriority @default(MEDIUM)
+
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentType String?
+  attachmentSize Int?
+
+  assignments AssignedTask[]
+  comments    ChatTaskComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([channelId, createdAt])
+  @@index([dueAt])
+}
+
+// The thread under a task card, written by the manager and the people the task
+// was given to.
+model ChatTaskComment {
+  id String @id @default(cuid())
+
+  chatTaskId String
+  chatTask   ChatTask @relation(fields: [chatTaskId], references: [id], onDelete: Cascade)
+
+  authorType ChatAuthorType
+  // Set for employees; the manager has no Employee row.
+  authorId   String?
+  authorName String
+  body       String         @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([chatTaskId, createdAt])
 }

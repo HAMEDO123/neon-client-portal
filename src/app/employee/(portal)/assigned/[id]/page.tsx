@@ -1,6 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarRange, Camera, ClipboardList, FileText, Flag, PackageCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  CalendarRange,
+  Camera,
+  ClipboardList,
+  FileText,
+  Flag,
+  MessageSquare,
+  PackageCheck,
+} from "lucide-react";
+import { prisma } from "@/lib/db";
 import { linesOf } from "@/lib/task-types";
 import { requireEmployee } from "@/lib/employee-session";
 import { myAssignedTask } from "@/lib/assigned-tasks";
@@ -8,6 +19,8 @@ import { submissionsForAssignedTask } from "@/lib/submissions";
 import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { dayLabel, daysBetween } from "@/lib/week";
+import { conversationFromKey, employeeChatUrl } from "@/lib/chat-conversations";
+import { dueLabel } from "@/lib/chat-tasks";
 import { EMPLOYEE_STATE_LABEL, PRIORITY_LABEL } from "@/lib/task-board";
 import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
@@ -18,6 +31,10 @@ import { Countdown } from "@/components/employee/countdown";
 // Laid out like a task from the board, and working the same way — status,
 // proof, the manager's verdict — because the employee should not have to learn
 // two sets of rules for two kinds of work.
+//
+// A job handed out from a chat is the same job, with two things more: the
+// exact moment it is due, and a way back to its card, where the manager and
+// the others on it talk about it.
 export default async function AssignedTaskPage({ params }: { params: Promise<{ id: string }> }) {
   const employee = await requireEmployee();
   const { id } = await params;
@@ -28,6 +45,14 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
 
   const timezone = await getTimezone();
   const submissions = await submissionsForAssignedTask(task.id);
+  const fromChat = await prisma.chatTask.findFirst({
+    where: { assignments: { some: { id: task.id } } },
+    select: { id: true, dueAt: true, channel: { select: { key: true } } },
+  });
+
+  const chatConversation = fromChat ? conversationFromKey(fromChat.channel.key) : null;
+  const chatHref =
+    fromChat && chatConversation ? `${employeeChatUrl(chatConversation, employee.id)}?task=${fromChat.id}` : null;
 
   const days = daysBetween(task.startKey, task.endKey) + 1;
   const from = dayLabel(task.startKey);
@@ -48,10 +73,21 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
       </Link>
 
       <div>
-        <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
-          <ClipboardList size={10} strokeWidth={2.5} />
-          From the manager
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
+            <ClipboardList size={10} strokeWidth={2.5} />
+            From the manager
+          </span>
+          {chatHref && (
+            <Link
+              href={chatHref}
+              className="inline-flex items-center gap-1 rounded-full bg-cyan/15 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-strong transition-colors hover:bg-cyan/25"
+            >
+              <MessageSquare size={11} strokeWidth={2.5} />
+              Open in chat
+            </Link>
+          )}
+        </div>
         <h1 dir="auto" className="mt-2 text-xl font-semibold text-ink">
           {task.title}
         </h1>
@@ -65,6 +101,11 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
       <div className="glass grid grid-cols-2 gap-3 rounded-2xl p-4">
         <Detail icon={Flag} label="Priority" value={PRIORITY_LABEL[task.priority]} />
         <Detail icon={ClipboardList} label="Status" value={EMPLOYEE_STATE_LABEL[task.state]} />
+        {fromChat && (
+          <div className="col-span-2">
+            <Detail icon={CalendarClock} label="Due" value={dueLabel(fromChat.dueAt, new Date(), timezone)} />
+          </div>
+        )}
         <div className="col-span-2">
           <Detail
             icon={CalendarRange}

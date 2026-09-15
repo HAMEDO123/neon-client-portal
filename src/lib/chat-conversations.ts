@@ -73,6 +73,25 @@ export function otherPeer(conversation: PeerConversation, employeeId: string) {
   return first === employeeId ? second : first;
 }
 
+/** The conversation behind a channel key, or null for a key that names none. */
+export function conversationFromKey(key: string): Conversation | null {
+  if (key === TEAM_CHANNEL_KEY) return { kind: "team" };
+
+  if (key.startsWith(DIRECT_PREFIX)) {
+    const id = key.slice(DIRECT_PREFIX.length);
+    return EMPLOYEE_ID.test(id) ? { kind: "direct", employeeId: id } : null;
+  }
+
+  if (key.startsWith(PEER_PREFIX)) {
+    const ids = key.slice(PEER_PREFIX.length).split(":");
+    const [first, second] = ids;
+    const valid = ids.length === 2 && EMPLOYEE_ID.test(first) && EMPLOYEE_ID.test(second) && first !== second;
+    return valid ? peerConversation(first, second) : null;
+  }
+
+  return null;
+}
+
 // Employee ids are cuids: letters and digits only.
 const EMPLOYEE_ID = /^[a-z0-9]{8,40}$/i;
 

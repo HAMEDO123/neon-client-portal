@@ -7,6 +7,7 @@ import {
   parseConversation,
   type ChatViewer,
 } from "@/lib/chat";
+import { taskSignature, taskSnapshot } from "@/lib/chat-task-store";
 
 // Live chat, over Server-Sent Events.
 //
@@ -18,8 +19,13 @@ import {
 //
 // One connection per open conversation, opened through channelFor like every
 // other read: an employee's stream can carry the team and their own private
-// chat, never somebody else's, and never the manager's private exchanges with
+// chats, never somebody else's, and never the manager's private exchanges with
 // the assistant.
+//
+// Two kinds of news: `messages`, each new message once; and `tasks`, the
+// conversation's task cards whenever anything about them changes — somebody
+// starting their part, a photo arriving or being reviewed, a comment — none of
+// which is a new message.
 
 export const dynamic = "force-dynamic";
 // Streaming responses must not be buffered or collapsed by any cache.
@@ -55,6 +61,13 @@ export async function GET(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       let closed = false;
+      let busy = false;
+      // Set once the first look is done; finish may run before either exists.
+      const clocks: { poll?: ReturnType<typeof setInterval>; lifetime?: ReturnType<typeof setTimeout> } = {};
+      // Empty, so the first look always sends the cards: one that changed
+      // between the page being drawn and this connection opening is not missed.
+      let tasksSeen = "";
+
       const send = (event: string, data: unknown) => {
         if (closed) return;
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
@@ -63,8 +76,8 @@ export async function GET(request: Request) {
       const finish = () => {
         if (closed) return;
         closed = true;
-        clearInterval(timer);
-        clearTimeout(lifetime);
+        clearInterval(clocks.poll);
+        clearTimeout(clocks.lifetime);
         try {
           controller.close();
         } catch {
@@ -72,11 +85,30 @@ export async function GET(request: Request) {
         }
       };
 
+      const syncTasks = async () => {
+        const signature = await taskSignature(channel.id);
+        if (signature === tasksSeen) return false;
+        tasksSeen = signature;
+        send("tasks", await taskSnapshot(channel.id));
+        return true;
+      };
+
+      request.signal.addEventListener("abort", finish);
+
       // Tells the browser to reconnect quickly, and proves the stream is open.
       send("ready", { at: cursor.toISOString() });
 
-      const timer = setInterval(async () => {
-        if (closed) return;
+      try {
+        await syncTasks();
+      } catch {
+        finish();
+        return;
+      }
+
+      clocks.poll = setInterval(async () => {
+        // A slow database must not stack one look on top of the last.
+        if (closed || busy) return;
+        busy = true;
         try {
           const messages = await prisma.chatMessage.findMany({
             where: {
@@ -92,7 +124,11 @@ export async function GET(request: Request) {
           if (messages.length > 0) {
             cursor = messages[messages.length - 1].createdAt;
             send("messages", messages);
-          } else {
+          }
+
+          const tasksChanged = await syncTasks();
+
+          if (messages.length === 0 && !tasksChanged && !closed) {
             // A comment frame keeps proxies from closing an idle connection.
             controller.enqueue(encoder.encode(": keep-alive\n\n"));
           }
@@ -100,11 +136,12 @@ export async function GET(request: Request) {
           // A database hiccup should drop the stream, not crash the route —
           // the browser reconnects and picks up from its own cursor.
           finish();
+        } finally {
+          busy = false;
         }
       }, POLL_MS);
 
-      const lifetime = setTimeout(finish, MAX_LIFETIME_MS);
-      request.signal.addEventListener("abort", finish);
+      clocks.lifetime = setTimeout(finish, MAX_LIFETIME_MS);
     },
   });
 

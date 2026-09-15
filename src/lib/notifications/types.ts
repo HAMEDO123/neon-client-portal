@@ -258,7 +258,7 @@ export function stageReminderKey(entryId: string, employeeId: string, dayKey: st
 /**
  * What a chat message says on a lock screen, in the shorthand WhatsApp uses:
  * the text as written, or what was sent — a photo with its caption, a voice
- * note with its length, a file by its name.
+ * note with its length, a file by its name, a task by its title.
  */
 export function chatPreview(
   kind: ChatMessageKind,
@@ -277,5 +277,6 @@ export function chatPreview(
 
   if (kind === "IMAGE") return text ? `📷 ${text}` : "📷 Photo";
   if (kind === "FILE") return `📄 ${fileName?.trim() || text || "File"}`;
+  if (kind === "TASK") return `📋 ${text || "Task"}`;
   return text;
 }

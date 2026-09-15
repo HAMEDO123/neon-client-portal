@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   chatSide,
+  conversationFromKey,
   conversationSlug,
   directChannelKey,
   employeeChatUrl,
@@ -93,6 +94,17 @@ describe("naming a conversation", () => {
     assert.equal(employeeChatUrl({ kind: "team" }, wael.id), "/employee/chat/team");
     assert.equal(employeeChatUrl(theirs, wael.id), `/employee/chat/${sally.id}`, "Wael's phone opens the chat with Sally");
     assert.equal(employeeChatUrl(theirs, sally.id), `/employee/chat/${wael.id}`, "and Sally's the chat with Wael");
+  });
+
+  it("reads a conversation back from its channel key, and nothing from a key that names none", () => {
+    const theirs = peerConversation(wael.id, sally.id);
+    assert.deepEqual(conversationFromKey("team"), { kind: "team" });
+    assert.deepEqual(conversationFromKey(directChannelKey(wael.id)), { kind: "direct", employeeId: wael.id });
+    assert.deepEqual(conversationFromKey(peerChannelKey(sally.id, wael.id)), theirs);
+    assert.equal(conversationFromKey("dm:../../etc"), null);
+    assert.equal(conversationFromKey(`pair:${wael.id}:${wael.id}`), null, "no chat with yourself");
+    assert.equal(conversationFromKey(`pair:${wael.id}:${sally.id}:${carla.id}`), null);
+    assert.equal(conversationFromKey("general"), null);
   });
 
   it("finds an employee's chats with colleagues by key, and nobody else's", () => {
