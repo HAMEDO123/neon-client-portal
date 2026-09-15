@@ -5,7 +5,8 @@ import type { PayBasis } from "@/generated/prisma/enums";
 //
 //   hourly rate  = salary ÷ working days ÷ 8
 //   cutoff       = hourly rate × hours arrived late
-//   final pay    = salary − cutoff − adjustments + reimbursed receipts
+//   total cut    = cutoff + adjustments
+//   final pay    = salary − total cut + reimbursed receipts
 //
 // Monthly staff divide by 26 working days. Weekly staff divide by 6 — the
 // same six-day week, one week at a time.
@@ -53,6 +54,8 @@ export type PayrollBreakdown = {
   delayHours: number;
   cutoff: number;
   adjustmentTotal: number;
+  /** Everything taken off the salary in this period — lateness and adjustments as one number. */
+  totalCut: number;
   receiptTotal: number;
   finalPay: number;
 };
@@ -79,6 +82,11 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
     delayHours: round(delayHours),
     cutoff,
     adjustmentTotal,
+    // The two deductions added up, because "how much came off" is the question
+    // a pay sheet is actually asked, and adding two columns in your head is how
+    // it gets answered wrongly. Both are already capped together above, so this
+    // can never exceed the salary.
+    totalCut: round(cutoff + adjustmentTotal),
     receiptTotal: round(receiptTotal),
     // Reimbursements are added after the deduction: they are money the
     // employee already spent, not part of the salary being docked.

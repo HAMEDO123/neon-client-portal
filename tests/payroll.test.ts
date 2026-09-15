@@ -8,6 +8,7 @@ import {
   periodOf,
   previousPeriod,
   RECEIPT_CAP,
+  round,
 } from "@/lib/payroll";
 
 describe("hourly rate", () => {
@@ -91,6 +92,62 @@ describe("monthly payroll", () => {
       receiptTotal: 12,
     });
     assert.equal(result.finalPay, 12);
+  });
+});
+
+describe("what came off the salary", () => {
+  it("adds the lateness and the adjustments into one figure", () => {
+    const result = computePayroll({
+      salaryAmount: 520,
+      payBasis: "MONTHLY",
+      delayHours: 3,
+      receiptTotal: 6,
+      adjustmentTotal: 2,
+    });
+
+    assert.equal(result.cutoff, 7.5);
+    assert.equal(result.adjustmentTotal, 2);
+    assert.equal(result.totalCut, 9.5);
+  });
+
+  it("is zero when nothing came off", () => {
+    const result = computePayroll({
+      salaryAmount: 350,
+      payBasis: "MONTHLY",
+      delayHours: 0,
+      receiptTotal: 0,
+    });
+    assert.equal(result.totalCut, 0);
+  });
+
+  it("never exceeds the salary, however much is thrown at it", () => {
+    // The pay sheet shows this number on its own, so a figure bigger than the
+    // salary would read as a debt — which no deduction here may become.
+    const result = computePayroll({
+      salaryAmount: 300,
+      payBasis: "MONTHLY",
+      delayHours: 1000,
+      receiptTotal: 0,
+      adjustmentTotal: 500,
+    });
+
+    assert.equal(result.totalCut, 300);
+    assert.equal(result.finalPay, 0);
+  });
+
+  it("is exactly what the salary less the pay, receipts aside, comes to", () => {
+    // Rounded on both sides, because deriving the identity out of numbers that
+    // have each already been rounded puts the float noise back in: this failed
+    // once at 3.344 against 3.343999999999994.
+    const result = computePayroll({
+      salaryAmount: 75,
+      payBasis: "WEEKLY",
+      delayHours: 1.5,
+      receiptTotal: 4,
+      adjustmentTotal: 1,
+    });
+
+    assert.equal(result.totalCut, round(result.salary - result.finalPay + result.receiptTotal));
   });
 });
 

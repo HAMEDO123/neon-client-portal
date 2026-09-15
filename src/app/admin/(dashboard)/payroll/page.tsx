@@ -26,6 +26,11 @@ export default async function AdminPayrollPage({
 
   const period = /^\d{4}-\d{2}$/.test(requested ?? "") ? requested! : thisMonth;
 
+  // A month still being lived in is read differently from a closed one: what
+  // has been cut so far is a running total, not a payslip. The wording says
+  // which of the two is on screen.
+  const isThisMonth = period === thisMonth;
+
   // Sequential for the same reason as the aggregates behind them.
   const rows = await getPayrollForPeriod(period);
   const attendance = await getAttendanceForPeriod(period);
@@ -38,11 +43,11 @@ export default async function AdminPayrollPage({
 
   const totals = rows.reduce(
     (sum, row) => ({
-      cutoff: sum.cutoff + row.breakdown.cutoff + row.breakdown.adjustmentTotal,
+      cut: sum.cut + row.breakdown.totalCut,
       receipts: sum.receipts + row.breakdown.receiptTotal,
       final: sum.final + row.breakdown.finalPay,
     }),
-    { cutoff: 0, receipts: 0, final: 0 }
+    { cut: 0, receipts: 0, final: 0 }
   );
 
   return (
@@ -58,13 +63,16 @@ export default async function AdminPayrollPage({
 
         <div className="flex gap-2">
           <PeriodLink period={previousPeriod(period)} label="Previous month" />
-          {period !== thisMonth && <PeriodLink period={thisMonth} label="This month" />}
+          {!isThisMonth && <PeriodLink period={thisMonth} label="This month" />}
         </div>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Team" value={String(rows.length)} />
-        <Stat label="Total deducted" value={`${totals.cutoff.toFixed(2)} JOD`} />
+        <Stat
+          label={isThisMonth ? "Deducted so far" : "Total deducted"}
+          value={`${totals.cut.toFixed(2)} JOD`}
+        />
         <Stat label="Receipts owed" value={`${totals.receipts.toFixed(2)} JOD`} />
         <Stat label="Total payable" value={`${totals.final.toFixed(2)} JOD`} />
       </div>
@@ -76,7 +84,7 @@ export default async function AdminPayrollPage({
         <EmptyState className="mt-4" icon={Wallet} title="No employees yet" description="Add the team first." />
       ) : (
         <>
-          {/* On a phone, a card per person: the table needs eight columns. */}
+          {/* On a phone, a card per person: the table needs nine columns. */}
           <ul className="mt-4 flex flex-col gap-3 sm:hidden">
             {rows.map(({ employee, breakdown, delayDays, receiptCount, adjustments }) => (
               <li key={employee.id} className="glass rounded-2xl p-4">
@@ -112,6 +120,12 @@ export default async function AdminPayrollPage({
                   >
                     {breakdown.adjustmentTotal === 0 ? "—" : `−${breakdown.adjustmentTotal.toFixed(2)}`}
                   </Line>
+                  <Line
+                    label={isThisMonth ? "Cut so far" : "Total cut"}
+                    className={breakdown.totalCut === 0 ? "text-ink/30" : "font-medium text-red-600"}
+                  >
+                    {breakdown.totalCut === 0 ? "—" : `−${breakdown.totalCut.toFixed(2)}`}
+                  </Line>
                   <Line label="Receipts" className="text-emerald-700">
                     +{breakdown.receiptTotal.toFixed(2)}
                     {receiptCount > 0 && ` (${receiptCount})`}
@@ -136,6 +150,7 @@ export default async function AdminPayrollPage({
                   <th className="px-4 py-3">Late</th>
                   <th className="px-4 py-3">Cutoff</th>
                   <th className="px-4 py-3">Adjustments</th>
+                  <th className="px-4 py-3">{isThisMonth ? "Cut so far" : "Total cut"}</th>
                   <th className="px-4 py-3">Receipts</th>
                   <th className="px-4 py-3">Final pay</th>
                 </tr>
@@ -174,6 +189,13 @@ export default async function AdminPayrollPage({
                         <span className="text-red-600" title={adjustments.map((a) => a.reason).join(" · ")}>
                           −{breakdown.adjustmentTotal.toFixed(2)}
                         </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {breakdown.totalCut === 0 ? (
+                        <span className="text-ink/30">—</span>
+                      ) : (
+                        <span className="font-medium text-red-600">−{breakdown.totalCut.toFixed(2)}</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-emerald-700">
