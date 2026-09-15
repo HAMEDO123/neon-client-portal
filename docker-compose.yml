@@ -3,6 +3,8 @@
 #
 #   docker compose --env-file .env.docker up -d --build            site + database
 #   docker compose --env-file .env.docker --profile public up -d   ...and go public
+#   docker compose --env-file .env.docker --profile public --profile live up -d
+#                                     ...and the scheduler, once this PC is the real site
 #
 # `--env-file .env.docker` is required: it holds the secrets and the database
 # password. Forget it and Compose refuses to start rather than starting wrong.
@@ -67,6 +69,29 @@ services:
       - ./deploy/cloudflared/config.yml:/etc/cloudflared/config.yml:ro
       # The tunnel's secret stays where cloudflared wrote it, outside the repo.
       - ${USERPROFILE:?USERPROFILE is not set}/.cloudflared/966aca87-3a46-4400-829c-d7a2667f1f04.json:/etc/cloudflared/credentials.json:ro
+    depends_on:
+      app:
+        condition: service_healthy
+
+  scheduler:
+    image: curlimages/curl:8.22.0
+    container_name: neon-scheduler
+    restart: unless-stopped
+    # Only once this PC is the real site (--profile live). Started before the
+    # switch-over, it would send the team notifications from a copy they are not
+    # working on.
+    profiles: ["live"]
+    environment:
+      # The one secret it needs, not the whole of .env.docker.
+      CRON_SECRET: ${CRON_SECRET:?run compose with --env-file .env.docker}
+    # The notification jobs every ten minutes, replacing the GitHub schedule that
+    # never ran: deadline reminders and the day's follow-up questions on every
+    # run, the 08:00 and 16:00 summaries when a run lands inside their hour. Every
+    # job is idempotent, so a late or doubled run is harmless. One log line per
+    # run: docker logs neon-scheduler
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'while true; do status=$$(curl -sS -o /tmp/ran.json -w "%{http_code}" --max-time 120 -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/notifications); echo "$$(date -u +%FT%TZ) HTTP $$status $$(head -c 400 /tmp/ran.json)"; sleep 600; done'
     depends_on:
       app:
         condition: service_healthy

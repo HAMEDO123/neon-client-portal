@@ -94,7 +94,7 @@ npx prisma generate
   - Environment variables live in the Render dashboard. Render generates `SESSION_SECRET` and `CRON_SECRET` itself.
   - A free instance sleeps when idle, so the first request after a pause is slow.
 - **GitHub Actions:**
-  - `daily-notifier.yml` calls `/api/cron/notifications` every hour at :05, with `Authorization: Bearer $CRON_SECRET`. It uses the repo secrets `APP_URL` and `CRON_SECRET`, and `CRON_SECRET` must match Render's.
+  - `daily-notifier.yml` calls `/api/cron/notifications` every ten minutes — GitHub in practice ran it every two to five hours — with `Authorization: Bearer $CRON_SECRET`. It uses the repo secrets `APP_URL` and `CRON_SECRET`, and `CRON_SECRET` must match the site's. It has never succeeded (see Known issues); on the studio's PC `neon-scheduler` replaces it, and the workflow is disabled at the switch-over.
   - `ios-build.yml` builds an unsigned IPA whenever `ios/**` changes.
 
 ---
@@ -107,19 +107,21 @@ npx prisma generate
 |---|---|
 | `neon-db` | PostgreSQL 17, the same major version as the Neon database it replaces. Data on the `neon_db-data` volume. Reachable from this PC only, at `127.0.0.1:55432`. |
 | `neon-app` | The site, built by `Dockerfile`. On start it applies migrations and serves, as Render does. Also on `127.0.0.1:3011`, this PC only, for testing. |
-| `neon-tunnel` | `cloudflared` running the `neon-portal` tunnel: `clients.neonjo.com` → `neon-app`. Config in `deploy/cloudflared/config.yml`; its secret credentials stay in `%USERPROFILE%.cloudflared`. |
+| `neon-tunnel` | `cloudflared` running the `neon-portal` tunnel: `clients.neonjo.com` → `neon-app`. Config in `deploy/cloudflared/config.yml`; its secret credentials stay in `%USERPROFILE%\.cloudflared\`. |
+| `neon-scheduler` | Calls the notification jobs on `neon-app` every ten minutes (`curlimages/curl`), with only `CRON_SECRET`. Behind `--profile live`: off until this PC is the real site, because before that it would notify the team from a copy they are not working on. `docker logs neon-scheduler` shows one line per run. |
 | `neon-whatsapp` | The WhatsApp worker, in its own project (`whatsapp-worker/`) because it holds a linked session. The site reaches it at `host.docker.internal:4100`. |
 
 ```
 docker compose --env-file .env.docker up -d --build            # site + database
 docker compose --env-file .env.docker --profile public up -d   # ...and the tunnel
+docker compose --env-file .env.docker --profile public --profile live up -d   # ...and the scheduler, once this PC is the real site
 ```
 
 - **`--env-file .env.docker` is required.** It holds the database password and the site's secrets (git-ignored, generated from `.env.local`). Without it Compose refuses to start rather than starting wrong.
 - **Everything restarts by itself** (`restart: unless-stopped`), and Docker Desktop starts at sign-in — so after a reboot the site is back once Windows is signed in.
-- **The tunnel sits behind `--profile public`**, so a plain `up` never puts anything on the internet.
+- **The tunnel sits behind `--profile public`**, so a plain `up` never puts anything on the internet, and **the scheduler behind `--profile live`**, so nothing notifies anybody until the switch-over.
 - **`.env.local` still points at the development database, on purpose.** `npm run dev` and the tests must never touch the database clients use. With the development database stopped, the `*.db.test.ts` files skip — that is the right outcome, not a failure.
-- **Backups:** `scripts/backup-docker-db.ps1`, run daily by the scheduled task *NEON database backup*, writes a complete copy to `local-backupdocker` and keeps 14 days; `local-backupdockerackup.log` records each run. The copies sit on the same disk as the database, so keep one somewhere else too.
+- **Backups:** `scripts/backup-docker-db.ps1`, run daily by the scheduled task *NEON database backup*, writes a complete copy to `local-backup\docker\` and keeps 14 days; `local-backup\docker\backup.log` records each run. The copies sit on the same disk as the database, so keep one somewhere else too.
 - **Loading a copy of the live data into it:** create the tables with migrations run from this PC through a Prisma config that loads **no** env files — the project's `prisma.config.ts` lets `.env.local` override `DATABASE_URL`, which would aim them at the development database. Confirm `prisma migrate status` reports `127.0.0.1:55432` before `migrate deploy`, then run `scripts/restore-local-data.mjs <copy>` with `DATABASE_URL` set to the Docker database and no `--env-file`.
 
 ---
@@ -394,7 +396,7 @@ The domain vocabulary, as the code defines it:
   - **Two gaps, not one, and the second hid behind the first.** Nothing called `tick()`, so no pass ever ran; and nothing called `restore()`, so after a restart the journal stayed a file nobody read and a pass iterated an empty map. Fixing only the pump leaves new messages sending while a restarted backlog stays invisible — which looks healthier than it is.
   - **A worker that never restores destroys its own backlog on restart.** `shutdown()` persists the queue as it stands in memory, and a process that never restored holds nothing — so it writes an empty list over a journal full of waiting messages. They are not sent, not expired and not reported: they are deleted by the shutdown of a process that never knew about them. That is how the first four test messages were lost, and it is why the boot call matters as much as the timer.
   - **Re-vendoring the library erases all of it and the silence comes back.** `tests/whatsapp-queue.test.ts` is the tripwire: it pins that enqueue alone sends nothing, that a pass sends, that a journalled backlog is unreachable until restored, and that shutting down without restoring wipes it. The durable fix belongs in the library's own source, which is not in this repo.
-- **Scheduled notifications have never run in production.** `daily-notifier.yml` stops with an error when the repository secrets `APP_URL` and `CRON_SECRET` are missing, and they were never set: 38 runs from 9 September, none succeeded. So the 08:00 and 16:00 summaries, deadline and stage reminders and the day's follow-up questions have never been sent by schedule; only notifications caused directly by somebody's action went out. GitHub also ran the job every two to five hours rather than every ten minutes, and the two summaries fire only when a run lands inside their hour, so even with the secrets set most would have been missed.
+- **Scheduled notifications have never run in production.** `daily-notifier.yml` stops with an error when the repository secrets `APP_URL` and `CRON_SECRET` are missing, and they were never set: 38 runs from 9 September, none succeeded. So the 08:00 and 16:00 summaries, deadline and stage reminders and the day's follow-up questions have never been sent by schedule; only notifications caused directly by somebody's action went out. GitHub also ran the job every two to five hours rather than every ten minutes, and the two summaries fire only when a run lands inside their hour, so even with the secrets set most would have been missed. `neon-scheduler` in `docker-compose.yml` replaces it once the studio's PC is the real site.
 
 ## Environment variables (names only; values are in `.env.local` and the Render dashboard)
 
