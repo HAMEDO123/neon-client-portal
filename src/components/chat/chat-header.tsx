@@ -18,6 +18,11 @@ import { cn } from "@/lib/utils";
 export function ChatHeader({
   name,
   subtitle,
+  // Bound here on purpose, and it must stay bound: `status` is a global in
+  // lib.dom.d.ts, so leaving it out of this list does not fail to compile —
+  // the reads below quietly find window.status instead, which is the empty
+  // string in a browser and nothing at all on the server.
+  status,
   avatar = GROUP_AVATAR,
   backHref,
   actions,
