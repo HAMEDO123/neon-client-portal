@@ -225,6 +225,56 @@ h1, h2, h3, h4 {
   height: var(--app-height);
 }
 
+/* The portal in the studio's colours, keeping its phone shape.
+
+   The tokens are redefined on the frame rather than at :root, so every screen
+   in the portal turns warm without one component changing — bg-bg, text-ink,
+   the default border colour and the whole button set all read these — while
+   the client's own pages at /p/<token>, which share those utilities, cannot
+   move. The sign-in screen is outside the frame and carries the class itself.
+
+   The accents are deliberately left alone. In this portal cyan, pink, orange
+   and emerald are not decoration: they are priority, how much of a deadline is
+   left, unread, and what a request's state is. Repainting them clay would
+   delete what the screen is saying. */
+.employee-shell,
+.employee-signin {
+  --bg: #f6f2ec;
+  --bg-soft: #efe6d9;
+  --ink: #2c2722;
+  --foreground: #2c2722;
+  --line: rgba(44, 39, 34, 0.09);
+}
+
+/* Where the frame stops short of the bottom of the screen, the strip below it
+   shows the page behind — so the page is paper too, not the old lavender. The
+   sign-in screen needs it for the same reason: its card is centred in a page
+   that would otherwise still be the old colour behind it. */
+html:has(.employee-shell),
+html:has(.employee-signin),
+body:has(.employee-shell),
+body:has(.employee-signin) {
+  background: var(--paper);
+}
+
+/* Cards here sit on paper rather than lavender, so the translucent white they
+   were is warmed to match. Scoped to the portal: .glass is shared with the
+   client's pages, which keep the original. */
+.employee-shell .glass,
+.employee-signin .glass,
+.employee-signin .glass-strong {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.92), rgba(253, 250, 245, 0.68));
+  border: 1px solid var(--warm-line);
+  box-shadow: 0 10px 30px -14px rgba(44, 39, 34, 0.18);
+}
+
+/* The mark, in the studio's own colours instead of the cyan-purple-pink
+   gradient the rest of the platform wears. */
+.wordmark-warm {
+  color: var(--bark);
+  letter-spacing: 0.01em;
+}
+
 /* Nothing outside the frame scrolls, and a scroll that reaches the end of a
    list does not drag the page behind it. */
 body:has(.employee-shell) {

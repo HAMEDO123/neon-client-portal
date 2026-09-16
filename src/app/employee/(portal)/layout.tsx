@@ -37,7 +37,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
       <header className="employee-header shrink-0 border-b border-ink/8 bg-bg/85 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
         <div className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 py-3">
           <Link href="/employee" className="flex items-baseline gap-1.5">
-            <span className="text-gradient-neon text-base font-bold">NEON</span>
+            <span className="wordmark-warm font-display text-base font-bold">NEON</span>
             <span className="text-sm font-medium text-ink/60">Tasks</span>
           </Link>
 
@@ -48,7 +48,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
           >
             <Bell size={20} strokeWidth={1.75} />
             {unread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink px-1.5 text-[11px] font-semibold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-clay px-1.5 text-[11px] font-semibold text-white">
                 {unread > 99 ? "99+" : unread}
               </span>
             )}

@@ -7,7 +7,10 @@ export default async function EmployeeLoginPage() {
   if (await getSessionEmployee()) redirect("/employee");
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6">
+    // employee-signin carries the portal's warm tokens: this screen sits
+    // outside the shell that normally provides them, and it is the first one
+    // anybody sees.
+    <main className="employee-signin relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6">
       <div className="grid-overlay pointer-events-none absolute inset-0 opacity-60" />
       <EmployeeLoginForm />
     </main>

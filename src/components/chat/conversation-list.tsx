@@ -65,10 +65,12 @@ export function ConversationList({
                     <span
                       className={cn(
                         "shrink-0 text-xs",
+                        // Clay in both looks now that the portal is warm too.
+                        // Unread is not information this colour carries — the
+                        // count beside it says that — so it follows the palette
+                        // rather than keeping WhatsApp's green on paper.
                         item.unread > 0
-                          ? studio
-                            ? "font-semibold text-clay-deep"
-                            : "font-medium text-emerald-600"
+                          ? "font-semibold text-clay-deep"
                           : studio
                             ? "text-bark/35"
                             : "text-ink/40"
@@ -97,10 +99,7 @@ export function ConversationList({
                   </p>
                   {item.unread > 0 && (
                     <span
-                      className={cn(
-                        "flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white",
-                        studio ? "bg-clay" : "bg-emerald-600"
-                      )}
+                      className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-clay px-1.5 text-[11px] font-semibold text-white"
                       aria-label={`${item.unread} unread`}
                     >
                       {item.unread > 99 ? "99+" : item.unread}

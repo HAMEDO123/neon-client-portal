@@ -45,7 +45,7 @@ export function EmployeeNav({ unreadChat = 0 }: { unreadChat?: number }) {
               <span className="relative">
                 <tab.icon size={21} strokeWidth={active ? 2.25 : 1.75} />
                 {tab.href === "/employee/chat" && unreadChat > 0 && (
-                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-strong px-1 text-[10px] font-semibold text-white">
+                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white">
                     {unreadChat > 9 ? "9+" : unreadChat}
                   </span>
                 )}
