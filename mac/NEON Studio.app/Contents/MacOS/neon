@@ -1,0 +1,30 @@
+#!/bin/sh
+# NEON Studio, as a desktop application on a Mac.
+#
+# There is no browser in here. This opens the platform in a Chrome-family
+# browser's app mode — one window, no tabs, no address bar, its own icon in the
+# Dock — and falls back to the default browser if none of them is installed.
+#
+# The address is the studio's own, served from the PC in the office through the
+# Cloudflare tunnel. Change the one line below to point it somewhere else.
+
+URL="https://clients.neonjo.com/admin"
+
+# Chrome's app mode runs in the ordinary profile on purpose, so a session that
+# is already signed in stays signed in. To keep this window's sign-in separate
+# from everyday browsing, add to the exec line:
+#   --user-data-dir="$HOME/Library/Application Support/NEON Studio/browser"
+
+for browser in \
+	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+	"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
+	"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" \
+	"/Applications/Chromium.app/Contents/MacOS/Chromium"
+do
+	if [ -x "$browser" ]; then
+		exec "$browser" --app="$URL"
+	fi
+done
+
+# No Chrome-family browser: open it the ordinary way rather than failing.
+exec /usr/bin/open "$URL"

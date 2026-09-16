@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>NEON Studio</string>
+	<key>CFBundleDisplayName</key>
+	<string>NEON Studio</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.neonjo.studio</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<!-- The script in Contents/MacOS that macOS runs when the icon is clicked. -->
+	<key>CFBundleExecutable</key>
+	<string>neon</string>
+	<!-- Looks for Contents/Resources/neon.icns. Build it with make-icon.sh;
+	     without it the app still runs and wears the generic icon. -->
+	<key>CFBundleIconFile</key>
+	<string>neon</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>
