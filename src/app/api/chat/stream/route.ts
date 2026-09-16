@@ -9,6 +9,7 @@ import {
 } from "@/lib/chat";
 import { taskSignature, taskSnapshot } from "@/lib/chat-task-store";
 import { meetingSignature, meetingSnapshot } from "@/lib/chat-meeting-store";
+import { reactionSignature, reactionSnapshot } from "@/lib/chat-reaction-store";
 import { readMarksFor, typingIn } from "@/lib/presence-store";
 
 // Live chat, over Server-Sent Events.
@@ -24,13 +25,14 @@ import { readMarksFor, typingIn } from "@/lib/presence-store";
 // chats, never somebody else's, and never the manager's private exchanges with
 // the assistant.
 //
-// Four kinds of news: `messages`, each new message once; `tasks`, the
+// Five kinds of news: `messages`, each new message once; `tasks`, the
 // conversation's task cards whenever anything about them changes — somebody
 // starting their part, a photo arriving or being reviewed, a comment — none of
 // which is a new message; `meetings`, the same for meeting cards, which change
-// when somebody says whether they are coming; and `people`, who is writing in
-// this conversation and how far each person has read it, which is what a
-// typing line and a read tick are drawn from.
+// when somebody says whether they are coming; `reactions`, what people gave
+// each message and what is pinned, neither of which is a message either; and
+// `people`, who is writing in this conversation and how far each person has
+// read it, which is what a typing line and a read tick are drawn from.
 
 export const dynamic = "force-dynamic";
 // Streaming responses must not be buffered or collapsed by any cache.
@@ -73,6 +75,7 @@ export async function GET(request: Request) {
       // between the page being drawn and this connection opening is not missed.
       let tasksSeen = "";
       let meetingsSeen = "";
+      let reactionsSeen = "";
       let peopleSeen = "";
 
       const send = (event: string, data: unknown) => {
@@ -108,6 +111,17 @@ export async function GET(request: Request) {
         return true;
       };
 
+      // Reactions and pins. Both are changes to a message that already exists,
+      // so neither moves the message cursor and neither can travel as one —
+      // they are sent whole, like the cards, and only when they actually move.
+      const syncReactions = async () => {
+        const signature = await reactionSignature(channel.id);
+        if (signature === reactionsSeen) return false;
+        reactionsSeen = signature;
+        send("reactions", await reactionSnapshot(channel.id));
+        return true;
+      };
+
       // Who is writing, and how far each person has read. Both are about
       // somebody other than the viewer, and neither is a new message — so like
       // the cards, they are sent only when they actually move. One after the
@@ -136,6 +150,7 @@ export async function GET(request: Request) {
       try {
         await syncTasks();
         await syncMeetings();
+        await syncReactions();
         await syncPeople();
       } catch {
         finish();
@@ -165,9 +180,17 @@ export async function GET(request: Request) {
 
           const tasksChanged = await syncTasks();
           const meetingsChanged = await syncMeetings();
+          const reactionsChanged = await syncReactions();
           const peopleChanged = await syncPeople();
 
-          if (messages.length === 0 && !tasksChanged && !meetingsChanged && !peopleChanged && !closed) {
+          if (
+            messages.length === 0 &&
+            !tasksChanged &&
+            !meetingsChanged &&
+            !reactionsChanged &&
+            !peopleChanged &&
+            !closed
+          ) {
             // A comment frame keeps proxies from closing an idle connection.
             controller.enqueue(encoder.encode(": keep-alive\n\n"));
           }

@@ -15,14 +15,17 @@ import {
   Paperclip,
   Phone,
   PhoneMissed,
+  Pin,
   Plus,
   Search,
   Send,
+  SmilePlus,
   Trash2,
   Video,
   X,
 } from "lucide-react";
 import { deleteChatMessage, sendChatMessage } from "@/lib/actions/chat-actions";
+import { reactToMessage, setMessagePinned } from "@/lib/actions/chat-reaction-actions";
 import { createChatTask } from "@/lib/actions/chat-task-actions";
 import { createChatMeeting } from "@/lib/actions/chat-meeting-actions";
 import { ChatHeader } from "@/components/chat/chat-header";
@@ -38,6 +41,7 @@ import { shrinkPhoto } from "@/lib/client-image";
 import { mergeIncoming, pendingId, reconcile } from "@/lib/chat-sync";
 import { usePresence } from "@/lib/use-presence";
 import { isReadBy, lastSeenLabel } from "@/lib/presence";
+import { REACTIONS, tally, type ReactionRow } from "@/lib/chat-reactions";
 import { useMinuteNow } from "@/lib/use-minute-now";
 import { slashTask } from "@/lib/chat-tasks";
 import { playCue } from "@/lib/sound-cues";
@@ -87,6 +91,25 @@ type LiveTasks = { at: number; ids: Set<string>; byId: Map<string, ChatTaskView>
 
 /** The same, for meeting cards, which change when somebody says whether they are coming. */
 type LiveMeetings = { at: number; ids: Set<string>; byId: Map<string, ChatMeetingView> };
+
+/** One message lifted to the top of the conversation, as the stream describes it. */
+type PinnedView = {
+  id: string;
+  kind: Message["kind"];
+  body: string | null;
+  attachmentName: string | null;
+  authorName: string;
+  pinnedAt: string;
+  pinnedByName: string | null;
+};
+
+/**
+ * Reactions and pins as the stream last described them. Both are changes to
+ * messages that already exist, so they arrive whole rather than as news — and
+ * once a snapshot has arrived it is the truth, including for a message whose
+ * only reaction has just been taken back.
+ */
+type LiveReactions = { byMessage: Map<string, ReactionRow[]>; pinned: PinnedView[] };
 
 const NAME_COLOURS = [
   "text-cyan-strong",
@@ -185,6 +208,10 @@ export function ChatRoom({
     typing: [],
     reads: {},
   });
+  // What people gave each message, and what is pinned. Null until the stream's
+  // first snapshot lands — until then the messages carry their own, from the
+  // page's first draw.
+  const [liveReactions, setLiveReactions] = useState<LiveReactions | null>(null);
   const [sheet, setSheet] = useState<{ key: number; title: string } | null>(null);
   const [meetingSheet, setMeetingSheet] = useState<{ key: number; title: string } | null>(null);
   const [search, setSearch] = useState<string | null>(null);
@@ -275,6 +302,21 @@ export function ChatRoom({
         ids: new Set(data.ids),
         byId: new Map(data.meetings.map((meeting) => [meeting.id, meeting])),
       });
+    });
+
+    source.addEventListener("reactions", (event) => {
+      const data = JSON.parse((event as MessageEvent).data) as {
+        reactions: (ReactionRow & { messageId: string })[];
+        pinned: PinnedView[];
+      };
+
+      const byMessage = new Map<string, ReactionRow[]>();
+      for (const one of data.reactions) {
+        const rows = byMessage.get(one.messageId);
+        if (rows) rows.push(one);
+        else byMessage.set(one.messageId, [one]);
+      }
+      setLiveReactions({ byMessage, pinned: data.pinned });
     });
 
     // The browser reconnects on its own; the next connection carries the
@@ -397,6 +439,9 @@ export function ChatRoom({
         task: null,
         call: null,
         meeting: null,
+        // Nobody has pinned a message that is still on its way.
+        pinnedAt: null,
+        pinnedByName: null,
         status: "sending",
       };
 
@@ -481,6 +526,38 @@ export function ChatRoom({
     [visible]
   );
 
+  // The stream is the only source of these: a message does not carry its own
+  // reactions, because reading a fifth relation alongside the four already in
+  // messageSelect closes the local database's connection (the note beside that
+  // select has the measurements). Nothing is shown until the first snapshot,
+  // which arrives on the stream's first look rather than a poll later.
+  const reactionsOf = useCallback(
+    (message: Message) => liveReactions?.byMessage.get(message.id) ?? [],
+    [liveReactions]
+  );
+
+  // The same for pins: the stream's list while there is one, and until then
+  // whatever the page was drawn with.
+  const pinned = useMemo(() => {
+    if (liveReactions) return liveReactions.pinned;
+    return present
+      .filter((message) => message.pinnedAt)
+      .sort((a, b) => new Date(b.pinnedAt as Date).getTime() - new Date(a.pinnedAt as Date).getTime())
+      .map((message) => ({
+        id: message.id,
+        kind: message.kind,
+        body: message.body,
+        attachmentName: message.attachmentName,
+        authorName: message.authorName,
+        pinnedAt: new Date(message.pinnedAt as Date).toISOString(),
+        pinnedByName: message.pinnedByName,
+      }));
+  }, [liveReactions, present]);
+
+  // Which messages carry a pin, so the bar above and the bubble itself never
+  // disagree about what is pinned.
+  const pinnedIds = useMemo(() => new Set(pinned.map((one) => one.id)), [pinned]);
+
   return (
     <div className={cn("flex h-full flex-col", studio ? "bg-canvas" : "bg-[#efeae2]")}>
       {header && (
@@ -530,6 +607,8 @@ export function ChatRoom({
             better living
           </p>
         )}
+
+        {pinned.length > 0 && <PinnedBar pinned={pinned} studio={studio} />}
 
         {visible.length === 0 && (
           <p className={cn("mt-12 text-center text-sm", studio ? "text-bark/40" : "text-ink/40")}>
@@ -612,6 +691,10 @@ export function ChatRoom({
               canDelete={canDeleteAny}
               studio={studio}
               readAt={otherKey ? people.reads[otherKey] : null}
+              reactions={reactionsOf(message)}
+              pinned={pinnedIds.has(message.id)}
+              myKey={myKey}
+              as={viewerType}
               onDiscard={
                 message.status
                   ? () => setMessages((current) => current.filter((item) => item.id !== message.id))
@@ -772,6 +855,10 @@ function Bubble({
   canDelete,
   studio = false,
   readAt = null,
+  reactions,
+  pinned,
+  myKey,
+  as,
   onDiscard,
 }: {
   message: Message;
@@ -787,20 +874,65 @@ function Bubble({
    * null before they have ever opened it, which is not the same as unread.
    */
   readAt?: string | null;
+  /** What people gave this message, from the stream or the page's first draw. */
+  reactions: ReactionRow[];
+  /** Whether it is one of the conversation's pinned messages. */
+  pinned: boolean;
+  /** How the person looking is keyed, so the row can say which are theirs. */
+  myKey: string;
+  /** Which of the two sessions a browser may hold is reacting. */
+  as: "ADMIN" | "EMPLOYEE";
   /** Removes one of our own copies that never made it. */
   onDiscard?: () => void;
 }) {
   const [, startTransition] = useTransition();
+  const [picking, setPicking] = useState(false);
+  // My own reactions, applied the instant I tap.
+  //
+  // Everybody else's come from the stream, which is a poll away — and a tap
+  // that takes a second to show reads as a tap that did nothing. Only my own
+  // rows are overridden, because from this screen only I change them; the
+  // stream stays the authority on everybody else's, and on the pin, which is
+  // a deliberate act rather than a tap and can afford to wait for the truth.
+  const [minePressed, setMinePressed] = useState<Record<string, boolean>>({});
+
   const isAgent = message.authorType === "AGENT";
   const created = new Date(message.createdAt);
   // A face beside what somebody else said, so a long conversation reads at a glance.
   const withFace = studio && !mine && !isAgent;
+
+  const rows = useMemo(() => {
+    const others = reactions.filter((row) => row.memberKey !== myKey);
+    const mineNow = new Set(reactions.filter((row) => row.memberKey === myKey).map((row) => row.emoji));
+    for (const [emoji, on] of Object.entries(minePressed)) {
+      if (on) mineNow.add(emoji);
+      else mineNow.delete(emoji);
+    }
+    return tally(
+      [...others, ...[...mineNow].map((emoji) => ({ emoji, memberKey: myKey, memberName: "You" }))],
+      myKey
+    );
+  }, [reactions, myKey, minePressed]);
+
+  const press = (emoji: string) => {
+    const already = rows.some((one) => one.emoji === emoji && one.mine);
+    setMinePressed((current) => ({ ...current, [emoji]: !already }));
+    setPicking(false);
+    startTransition(() => {
+      // A reaction the server refused goes back the way it was, rather than
+      // staying on screen as something that never happened.
+      void reactToMessage(message.id, emoji, as).catch(() =>
+        setMinePressed((current) => ({ ...current, [emoji]: already }))
+      );
+    });
+  };
 
   return (
     <>
       {day && <DayHeading day={day} studio={studio} />}
 
       <div
+        id={`message-${message.id}`}
         className={cn(
           "group/msg relative z-10 flex gap-2",
           // The face sits beside the name it belongs to, at the top of what
@@ -939,25 +1071,206 @@ function Bubble({
             </button>
           )}
 
-          {(canDelete || mine) && !isAgent && !message.status && (
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm("Delete this message?")) startTransition(() => deleteChatMessage(message.id));
-              }}
-              aria-label="Delete message"
+          {/* What people said back without saying anything. */}
+          {rows.length > 0 && (
+            <div className="clear-both flex flex-wrap gap-1 pt-1.5">
+              {rows.map((one) => (
+                <button
+                  key={one.emoji}
+                  type="button"
+                  onClick={() => press(one.emoji)}
+                  title={one.names.join(", ")}
+                  aria-pressed={one.mine}
+                  aria-label={`${one.emoji} from ${one.names.join(", ")}`}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-1.5 py-0.5 leading-none transition-colors",
+                    one.mine
+                      ? studio
+                        ? "border-clay/40 bg-clay-soft text-bark"
+                        : "border-emerald-600/40 bg-emerald-50 text-ink"
+                      : studio
+                        ? "border-warm-line bg-paper-soft text-bark/70 hover:border-clay/40"
+                        : "border-ink/10 bg-ink/[0.03] text-ink/70 hover:border-ink/25"
+                  )}
+                >
+                  <span className="text-[13px]">{one.emoji}</span>
+                  <span className="text-[11px] tabular-nums">{one.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* The six, while somebody is choosing one. */}
+          {picking && !message.status && (
+            <div
               className={cn(
-                "absolute -top-2 rounded-full bg-white p-1 text-ink/35 opacity-0 shadow transition-opacity",
-                "hover:text-red-600 group-hover/msg:opacity-100",
+                "absolute -top-10 z-30 flex gap-0.5 rounded-full border px-1.5 py-1 shadow-lg",
+                studio ? "border-warm-line bg-card" : "border-ink/10 bg-white",
+                mine ? "right-0" : "left-0"
+              )}
+            >
+              {REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => press(emoji)}
+                  aria-label={`React with ${emoji}`}
+                  className="rounded-full px-1 text-lg leading-none transition-transform hover:scale-125"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* React, pin, delete — one cluster, and only on a message that exists. */}
+          {!isAgent && !message.status && (
+            <div
+              className={cn(
+                "absolute -top-3 flex items-center gap-0.5 rounded-full border p-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/msg:opacity-100",
+                studio ? "border-warm-line bg-card" : "border-ink/10 bg-white",
                 mine ? "-left-2" : "-right-2"
               )}
             >
-              <Trash2 size={11} strokeWidth={2} />
-            </button>
+              <button
+                type="button"
+                onClick={() => setPicking(!picking)}
+                aria-label="React to this message"
+                aria-expanded={picking}
+                className={cn(
+                  "rounded-full p-1 transition-colors",
+                  studio ? "text-bark/40 hover:bg-clay-soft hover:text-bark" : "text-ink/35 hover:bg-ink/5 hover:text-ink"
+                )}
+              >
+                <SmilePlus size={12} strokeWidth={2} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  startTransition(() => {
+                    void setMessagePinned(message.id, !pinned, as).catch(() => undefined);
+                  });
+                }}
+                aria-label={pinned ? "Unpin this message" : "Pin this message"}
+                aria-pressed={pinned}
+                className={cn(
+                  "rounded-full p-1 transition-colors",
+                  pinned
+                    ? studio
+                      ? "text-clay"
+                      : "text-emerald-700"
+                    : studio
+                      ? "text-bark/40 hover:bg-clay-soft hover:text-bark"
+                      : "text-ink/35 hover:bg-ink/5 hover:text-ink"
+                )}
+              >
+                <Pin size={12} strokeWidth={2} />
+              </button>
+
+              {(canDelete || mine) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("Delete this message?")) startTransition(() => deleteChatMessage(message.id));
+                  }}
+                  aria-label="Delete message"
+                  className={cn(
+                    "rounded-full p-1 transition-colors",
+                    studio ? "text-bark/40 hover:text-red-600" : "text-ink/35 hover:text-red-600"
+                  )}
+                >
+                  <Trash2 size={11} strokeWidth={2} />
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
     </>
+  );
+}
+
+/** What a pinned message is called in one line, when its words are not the point. */
+function pinnedPreview(one: PinnedView) {
+  if (one.body) return one.body;
+  if (one.attachmentName) return one.attachmentName;
+  if (one.kind === "IMAGE") return "Photo";
+  if (one.kind === "VOICE") return "Voice message";
+  if (one.kind === "FILE") return "File";
+  return "Message";
+}
+
+/**
+ * What this conversation has been asked to keep in view, above everything else
+ * in it. The newest pin is the one on show; the rest are behind a count, so a
+ * bar meant to be read on the way past stays one line high.
+ */
+function PinnedBar({ pinned, studio }: { pinned: PinnedView[]; studio: boolean }) {
+  const [open, setOpen] = useState(false);
+
+  const jump = (id: string) => {
+    const el = document.getElementById(`message-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    el.classList.add("task-flash");
+    setTimeout(() => el.classList.remove("task-flash"), 2600);
+  };
+
+  const line = (one: PinnedView, first: boolean) => (
+    <button
+      key={one.id}
+      type="button"
+      onClick={() => jump(one.id)}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors",
+        studio ? "hover:bg-clay-soft/60" : "hover:bg-ink/[0.04]"
+      )}
+    >
+      <Pin
+        size={13}
+        strokeWidth={2}
+        aria-hidden
+        className={cn("shrink-0", first ? (studio ? "text-clay" : "text-emerald-700") : studio ? "text-bark/30" : "text-ink/30")}
+      />
+      <span className="min-w-0 flex-1 truncate text-xs">
+        <span className={studio ? "font-semibold text-bark" : "font-semibold text-ink"}>{one.authorName}</span>
+        <span className={studio ? "text-bark/60" : "text-ink/60"}> · {pinnedPreview(one)}</span>
+      </span>
+      {one.pinnedByName && (
+        <span className={cn("shrink-0 text-[10px]", studio ? "text-bark/35" : "text-ink/35")}>
+          pinned by {one.pinnedByName}
+        </span>
+      )}
+    </button>
+  );
+
+  return (
+    <div
+      className={cn(
+        "sticky top-0 z-20 mb-3 rounded-xl border px-2 py-1.5 shadow-sm",
+        studio ? "border-warm-line bg-card" : "border-ink/10 bg-white/95"
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1">{line(pinned[0], true)}</span>
+        {pinned.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            aria-expanded={open}
+            className={cn(
+              "shrink-0 rounded-full px-2 py-1 text-[11px] font-medium transition-colors",
+              studio ? "text-bark/50 hover:bg-clay-soft hover:text-bark" : "text-ink/50 hover:bg-ink/5 hover:text-ink"
+            )}
+          >
+            {open ? "Hide" : `${pinned.length} pinned`}
+          </button>
+        )}
+      </div>
+
+      {open && <div className="mt-1 border-t pt-1">{pinned.slice(1).map((one) => line(one, false))}</div>}
+    </div>
   );
 }
 

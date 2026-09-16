@@ -1048,10 +1048,49 @@ model ChatMessage {
   // The card, when this message is a meeting.
   meeting ChatMeeting?
 
+  // What people said back without saying anything.
+  reactions ChatReaction[]
+
+  // Lifted to the top of its conversation, and by whom. All three are written
+  // together or none is: a pin with nobody behind it is a claim nobody made,
+  // and the name is kept here because the manager has no Employee row to join.
+  pinnedAt     DateTime?
+  pinnedBy     String?
+  pinnedByName String?
+
   createdAt DateTime @default(now())
 
   @@index([channelId, createdAt])
   @@index([channelId, managerOnly, createdAt])
+  @@index([channelId, pinnedAt])
+}
+
+// One person's one reaction to one message.
+//
+// Keyed the way ChatRead, ChatPresence and CallParticipant are — "admin" for
+// the manager, who has no Employee row, and the employee id otherwise — with
+// the name copied in rather than joined, for the same reason: the manager is
+// not in the Employee table, and somebody who has since left the studio should
+// still be readable under the reaction they gave.
+//
+// The unique is what makes pressing an emoji a toggle rather than a counter:
+// the same person cannot give the same emoji twice, but may give two different
+// ones to the same message.
+model ChatReaction {
+  id String @id @default(cuid())
+
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  memberKey  String
+  memberName String
+
+  emoji String
+
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, memberKey, emoji])
+  @@index([messageId])
 }
 
 // How far each person has read, for the unread badge.

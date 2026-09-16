@@ -178,7 +178,29 @@ export const messageSelect = {
   call: { select: { kind: true, endReason: true } },
   // A meeting message carries its card too, for the same reason a task does.
   meeting: { select: chatMeetingSelect },
+  // Whether this one has been lifted to the top of the conversation, and by whom.
+  pinnedAt: true,
+  pinnedByName: true,
 } as const;
+
+// Reactions are deliberately NOT read here, though they belong to a message.
+//
+// This select already reads four relations — the project, a task card, a call
+// and a meeting card, the last two of them deeply nested — and a fifth closes
+// the local `prisma dev` connection outright: "Server has closed the
+// connection" on every call, from a database that answers a plain query at the
+// same moment. It reads exactly like a dead database and is not one.
+//
+// It was measured rather than reasoned about: the pinned scalars above are
+// free, the reactions relation on its own is free, that relation with an
+// orderBy is free — and only all five together fall over. So the limit is the
+// number of relations in one read, not anything about reactions.
+//
+// Fetching them beside a message is the better shape anyway. A reaction
+// changes without the message changing, so it travels as its own event on the
+// live stream and is read by reactionSnapshot in chat-reaction-store.ts, while
+// every other caller of this select — notifications, the conversation list,
+// the assistant's read of the team chat — has no use for them at all.
 
 /** One conversation's messages, for a channel already resolved through channelFor. */
 export async function listMessages(viewer: ChatViewer, channelId: string, take = 200) {
