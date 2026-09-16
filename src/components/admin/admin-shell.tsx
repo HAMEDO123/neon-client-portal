@@ -79,7 +79,7 @@ export function AdminShell({
       <SoundCues side="ADMIN" />
       {/* Sizes the frame to what is visible, so the keyboard never covers a message box. */}
       <AppViewport />
-      <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-warm-line bg-paper-soft lg:block">
+      <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-rail-line bg-rail lg:block">
         <AdminNav badges={badges} />
       </aside>
 
@@ -174,14 +174,14 @@ export function AdminShell({
           {/* The panel scrolls, so Sign out at the foot of the list is
               reachable on a short screen. */}
           <div
-            className="absolute inset-y-0 left-0 w-72 max-w-[80vw] overflow-y-auto bg-paper pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-xl"
+            className="absolute inset-y-0 left-0 w-72 max-w-[80vw] overflow-y-auto bg-rail pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-xl"
             onClick={() => setOpen(false)}
           >
             <button
               type="button"
               aria-label="Close menu"
               onClick={() => setOpen(false)}
-              className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] rounded-lg p-2 text-bark/60 hover:bg-clay-soft/60"
+              className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] rounded-lg p-2 text-rail-dim hover:bg-rail-soft hover:text-rail-ink"
             >
               <X size={20} />
             </button>

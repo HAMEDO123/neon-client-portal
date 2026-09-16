@@ -30,6 +30,17 @@
   --clay-soft: #efe6d9;
   --bark: #2c2722;
   --warm-line: rgba(44, 39, 34, 0.09);
+
+  /* The rail down the left of the admin: near-black, but warm rather than
+     blue-black, so it sits under the same light as the paper beside it. Its own
+     tokens rather than inverted greys, because text on it needs contrast
+     decided once and kept — the clay pill marking where you are is the only
+     colour that crosses from the light side. */
+  --rail: #1c1917;
+  --rail-soft: #272220;
+  --rail-line: rgba(245, 242, 238, 0.09);
+  --rail-ink: #f5f2ee;
+  --rail-dim: rgba(245, 242, 238, 0.55);
 }
 
 @theme inline {
@@ -42,6 +53,11 @@
   --color-clay-soft: var(--clay-soft);
   --color-bark: var(--bark);
   --color-warm-line: var(--warm-line);
+  --color-rail: var(--rail);
+  --color-rail-soft: var(--rail-soft);
+  --color-rail-line: var(--rail-line);
+  --color-rail-ink: var(--rail-ink);
+  --color-rail-dim: var(--rail-dim);
 }
 
 @theme inline {

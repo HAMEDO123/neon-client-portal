@@ -4,17 +4,18 @@ import { DIRECT_KEY_PATTERN, TEAM_CHANNEL_KEY } from "@/lib/chat-conversations";
 // The counts beside the admin sidebar's links, in one round trip.
 //
 // The sidebar renders on every admin page, so this runs on every navigation —
-// the same reason the employee badges are one query rather than four.
+// the same reason the employee badges are one query rather than four. A new
+// count belongs in this statement as another subquery, never as a second call.
 //
 // The chat count covers every conversation the manager is in: the team's and
 // each private one, each measured against its own read marker.
 
-export type AdminBadges = { chat: number; requests: number; reviews: number; alerts: number };
+export type AdminBadges = { chat: number; requests: number; reviews: number; alerts: number; team: number };
 
 export async function getAdminBadges(): Promise<AdminBadges> {
   try {
     const rows = await prisma.$queryRaw<
-      { chat: bigint; requests: bigint; reviews: bigint; alerts: bigint }[]
+      { chat: bigint; requests: bigint; reviews: bigint; alerts: bigint; team: bigint }[]
     >`
       SELECT
         (
@@ -36,7 +37,13 @@ export async function getAdminBadges(): Promise<AdminBadges> {
         ) AS reviews,
         (
           SELECT COUNT(*) FROM "AdminNotification" WHERE "readAt" IS NULL
-        ) AS alerts
+        ) AS alerts,
+        (
+          -- How many people the studio actually has on the team. Not a seat
+          -- count against a plan: there is no plan, and nothing here is
+          -- limited by it.
+          SELECT COUNT(*) FROM "Employee" WHERE "active" = true AND "accessRole" = 'EMPLOYEE'
+        ) AS team
     `;
 
     const row = rows[0];
@@ -45,9 +52,10 @@ export async function getAdminBadges(): Promise<AdminBadges> {
       requests: Number(row?.requests ?? 0),
       reviews: Number(row?.reviews ?? 0),
       alerts: Number(row?.alerts ?? 0),
+      team: Number(row?.team ?? 0),
     };
   } catch {
     // A badge is not worth failing a page render over.
-    return { chat: 0, requests: 0, reviews: 0, alerts: 0 };
+    return { chat: 0, requests: 0, reviews: 0, alerts: 0, team: 0 };
   }
 }
