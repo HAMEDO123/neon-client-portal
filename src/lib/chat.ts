@@ -6,6 +6,7 @@ import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { avatarUrl } from "@/lib/avatar";
 import { chatTaskSelect } from "@/lib/chat-task-select";
+import { chatMeetingSelect } from "@/lib/chat-meeting-select";
 import {
   GROUP_AVATAR,
   TEAM_CHANNEL_KEY,
@@ -175,6 +176,8 @@ export const messageSelect = {
   task: { select: chatTaskSelect },
   // The line a call left: what kind of call, and how it ended.
   call: { select: { kind: true, endReason: true } },
+  // A meeting message carries its card too, for the same reason a task does.
+  meeting: { select: chatMeetingSelect },
 } as const;
 
 /** One conversation's messages, for a channel already resolved through channelFor. */

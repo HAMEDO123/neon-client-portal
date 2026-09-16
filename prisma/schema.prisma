@@ -134,6 +134,23 @@ enum ChatMessageKind {
   TASK
   // The line a call leaves when it ends: "Missed call", "Call ended · 4:32".
   CALL
+  // A meeting the manager set from the chat; the card is its ChatMeeting.
+  MEETING
+}
+
+enum MeetingMode {
+  // Everybody joins from wherever they are, so the card carries a call button.
+  ONLINE
+  // In a room, on site, at the client's: the card carries the place instead.
+  IN_PERSON
+}
+
+enum MeetingRsvp {
+  // Asked, and has not said either way. Never read as a refusal: the platform
+  // cannot tell somebody who will not come from somebody who has not looked.
+  INVITED
+  ACCEPTED
+  DECLINED
 }
 
 enum CallKind {
@@ -992,6 +1009,7 @@ model ChatChannel {
   reads    ChatRead[]
   tasks    ChatTask[]
   calls    Call[]
+  meetings ChatMeeting[]
 }
 
 model ChatMessage {
@@ -1027,6 +1045,8 @@ model ChatMessage {
   task ChatTask?
   // The call, when this message is the line a call left behind.
   call Call?
+  // The card, when this message is a meeting.
+  meeting ChatMeeting?
 
   createdAt DateTime @default(now())
 
@@ -1408,6 +1428,69 @@ model ChatTaskComment {
   createdAt DateTime @default(now())
 
   @@index([chatTaskId, createdAt])
+}
+
+// A meeting the manager sets from a conversation, shown there as a card.
+//
+// It holds no call of its own. An online meeting's card carries a Join button
+// that starts — or joins — an ordinary Call in the same conversation when
+// somebody presses it, because a call started by a scheduled job with no
+// browser behind it ends itself within seconds and is written down as missed.
+// So the platform says the moment has come; a person opens the call.
+model ChatMeeting {
+  id String @id @default(cuid())
+
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  // The message the card sits in. Deleting it calls the meeting off, with
+  // everybody's answer.
+  messageId String      @unique
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  title  String
+  agenda String?     @db.Text
+  mode   MeetingMode @default(ONLINE)
+  // Where an in-person meeting is. An online one carries no place.
+  place  String?
+
+  // A moment, not a day — the same distinction ChatTask.dueAt draws.
+  startsAt        DateTime
+  durationMinutes Int      @default(30)
+  // How long before it starts everybody is told. 0 means only at the time.
+  remindMinutes   Int      @default(10)
+
+  attendees ChatMeetingAttendee[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([channelId, createdAt])
+  @@index([startsAt])
+}
+
+// One person asked to a meeting, and what they answered.
+//
+// Keyed the way a call's participants and a chat's read marks are: "admin" for
+// the manager, who has no Employee row, and the employee id otherwise. A plain
+// string rather than a relation, exactly as CallParticipant does it.
+model ChatMeetingAttendee {
+  id String @id @default(cuid())
+
+  meetingId String
+  meeting   ChatMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  memberKey String
+  name      String
+  color     String?
+
+  rsvp        MeetingRsvp @default(INVITED)
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([meetingId, memberKey])
 }
 
 // A call in a conversation, audio or video, between the people in it.

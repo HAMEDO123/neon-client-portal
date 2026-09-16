@@ -96,5 +96,25 @@ services:
       app:
         condition: service_healthy
 
+  meeting-scheduler:
+    image: curlimages/curl:8.22.0
+    container_name: neon-meeting-scheduler
+    restart: unless-stopped
+    # Behind --profile live with the other one, for the same reason.
+    profiles: ["live"]
+    environment:
+      CRON_SECRET: ${CRON_SECRET:?run compose with --env-file .env.docker}
+    # Meetings only, every minute. A meeting reminder is worth little late: on
+    # the ten-minute pass a meeting at 2:30 could be announced at 2:38. The full
+    # pass is deliberately left alone rather than sped up — it carries the rules
+    # engine and the deadline sweep, which are the expensive jobs, and running
+    # those sixty times an hour would buy nothing.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'while true; do curl -sS -o /dev/null --max-time 50 -H "Authorization: Bearer $$CRON_SECRET" "http://app:3000/api/cron/notifications?job=meetings" || true; sleep 60; done'
+    depends_on:
+      app:
+        condition: service_healthy
+
 volumes:
   db-data:

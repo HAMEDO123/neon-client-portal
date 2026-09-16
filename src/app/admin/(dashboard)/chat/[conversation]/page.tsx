@@ -10,6 +10,8 @@ import {
 } from "@/lib/chat";
 import { taskMembers } from "@/lib/chat-task-store";
 import { defaultDue, mayCreateTasks } from "@/lib/chat-tasks";
+import { meetingMembers } from "@/lib/chat-meeting-store";
+import { defaultWhen, mayScheduleMeetings } from "@/lib/chat-meetings";
 import { projectPanelFor } from "@/lib/chat-project-panel";
 import { isAiConfigured } from "@/lib/ai/client";
 import { getTimezone, getWorkHours } from "@/lib/settings";
@@ -35,12 +37,12 @@ export default async function AdminConversationPage({
   searchParams,
 }: {
   params: Promise<{ conversation: string }>;
-  searchParams: Promise<{ task?: string | string[] }>;
+  searchParams: Promise<{ task?: string | string[]; meeting?: string | string[] }>;
 }) {
   const viewer = await requireChatViewer("ADMIN");
 
   const { conversation: slug } = await params;
-  const { task: focus } = await searchParams;
+  const { task: focus, meeting: focusMeeting } = await searchParams;
   const conversation = parseConversation(slug, viewer);
   const channel = conversation ? await channelFor(viewer, conversation) : null;
   if (!conversation || !channel) notFound();
@@ -77,10 +79,22 @@ export default async function AdminConversationPage({
   const personName = person?.name ?? channel.name;
 
   const now = new Date();
+  // Read once: both forms open on a sensible moment of the working day.
+  const hours = await getWorkHours();
+
   const taskSetup = mayCreateTasks(viewer, conversation)
     ? {
         members: await taskMembers(conversation),
-        defaultDue: defaultDue(await getWorkHours(), timezone, now),
+        defaultDue: defaultDue(hours, timezone, now),
+        today: dayKeyIn(timezone, now),
+        timeZone: timezone,
+      }
+    : null;
+
+  const meetingSetup = mayScheduleMeetings(viewer, conversation)
+    ? {
+        members: await meetingMembers(conversation),
+        defaultWhen: defaultWhen(hours, timezone, now),
         today: dayKeyIn(timezone, now),
         timeZone: timezone,
       }
@@ -117,7 +131,9 @@ export default async function AdminConversationPage({
           timeZone={timezone}
           initialNow={now.getTime()}
           taskSetup={taskSetup}
+          meetingSetup={meetingSetup}
           focusTaskId={typeof focus === "string" ? focus : null}
+          focusMeetingId={typeof focusMeeting === "string" ? focusMeeting : null}
           header={
             group
               ? {

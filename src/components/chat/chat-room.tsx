@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Bot,
+  CalendarClock,
   Camera,
   CheckCheck,
   ChevronLeft,
@@ -23,11 +24,15 @@ import {
 } from "lucide-react";
 import { deleteChatMessage, sendChatMessage } from "@/lib/actions/chat-actions";
 import { createChatTask } from "@/lib/actions/chat-task-actions";
+import { createChatMeeting } from "@/lib/actions/chat-meeting-actions";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { CallButtons } from "@/components/calls/call-buttons";
 import { PersonAvatar } from "@/components/chat/person-avatar";
 import { TaskCard } from "@/components/chat/task-card";
 import { TaskSheet, type TaskSetup } from "@/components/chat/task-sheet";
+import { MeetingCard } from "@/components/chat/meeting-card";
+import { MeetingSheet, type MeetingSetup } from "@/components/chat/meeting-sheet";
+import { slashMeeting } from "@/lib/chat-meetings";
 import { QuickReplies } from "@/components/chat/studio/quick-replies";
 import { shrinkPhoto } from "@/lib/client-image";
 import { mergeIncoming, pendingId, reconcile } from "@/lib/chat-sync";
@@ -44,6 +49,7 @@ import {
 import type { ChatMessageView } from "@/lib/chat";
 import type { ChatViewer } from "@/lib/chat-conversations";
 import type { ChatTaskView } from "@/lib/chat-task-store";
+import type { ChatMeetingView } from "@/lib/chat-meeting-store";
 import { cn } from "@/lib/utils";
 
 // A conversation — the team's, or a private one between two people — laid out
@@ -75,6 +81,9 @@ type Draft =
 
 /** The cards as the stream last described them: which exist, the newest in full, and when that was. */
 type LiveTasks = { at: number; ids: Set<string>; byId: Map<string, ChatTaskView> };
+
+/** The same, for meeting cards, which change when somebody says whether they are coming. */
+type LiveMeetings = { at: number; ids: Set<string>; byId: Map<string, ChatMeetingView> };
 
 const NAME_COLOURS = [
   "text-cyan-strong",
@@ -130,7 +139,9 @@ export function ChatRoom({
   timeZone,
   initialNow,
   taskSetup = null,
+  meetingSetup = null,
   focusTaskId = null,
+  focusMeetingId = null,
   variant = "phone",
 }: {
   initialMessages: Message[];
@@ -152,8 +163,12 @@ export function ChatRoom({
   initialNow: number;
   /** Present only where this viewer may hand out tasks: who to, and the due moment to start from. */
   taskSetup?: TaskSetup | null;
+  /** Present only where this viewer may set meetings: who can be asked, and when one would start. */
+  meetingSetup?: MeetingSetup | null;
   /** A card to scroll to and point out, when a notification or the Tasks list opened the chat for it. */
   focusTaskId?: string | null;
+  /** The same, for a meeting card a notification opened the chat for. */
+  focusMeetingId?: string | null;
   /** "phone" is the employees' portal; "studio" is the manager's three-column desk. */
   variant?: Variant;
 }) {
@@ -161,7 +176,9 @@ export function ChatRoom({
 
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [liveTasks, setLiveTasks] = useState<LiveTasks | null>(null);
+  const [liveMeetings, setLiveMeetings] = useState<LiveMeetings | null>(null);
   const [sheet, setSheet] = useState<{ key: number; title: string } | null>(null);
+  const [meetingSheet, setMeetingSheet] = useState<{ key: number; title: string } | null>(null);
   const [search, setSearch] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -215,6 +232,15 @@ export function ChatRoom({
       setLiveTasks({ at: data.at, ids: new Set(data.ids), byId: new Map(data.tasks.map((task) => [task.id, task])) });
     });
 
+    source.addEventListener("meetings", (event) => {
+      const data = JSON.parse((event as MessageEvent).data) as { at: number; ids: string[]; meetings: ChatMeetingView[] };
+      setLiveMeetings({
+        at: data.at,
+        ids: new Set(data.ids),
+        byId: new Map(data.meetings.map((meeting) => [meeting.id, meeting])),
+      });
+    });
+
     // The browser reconnects on its own; the next connection carries the
     // cursor from whatever this one delivered.
     return () => source.close();
@@ -227,12 +253,20 @@ export function ChatRoom({
   const present = useMemo(
     () =>
       messages.filter((message) => {
-        if (message.kind !== "TASK") return true;
-        if (!message.task) return false;
-        if (!liveTasks || liveTasks.ids.has(message.task.id)) return true;
-        return new Date(message.task.createdAt).getTime() > liveTasks.at;
+        if (message.kind === "TASK") {
+          if (!message.task) return false;
+          if (!liveTasks || liveTasks.ids.has(message.task.id)) return true;
+          return new Date(message.task.createdAt).getTime() > liveTasks.at;
+        }
+        // A meeting called off leaves the conversation the same way.
+        if (message.kind === "MEETING") {
+          if (!message.meeting) return false;
+          if (!liveMeetings || liveMeetings.ids.has(message.meeting.id)) return true;
+          return new Date(message.meeting.createdAt).getTime() > liveMeetings.at;
+        }
+        return true;
       }),
-    [messages, liveTasks]
+    [messages, liveTasks, liveMeetings]
   );
 
   // Searching narrows what is on screen to the messages that carry the words —
@@ -279,6 +313,19 @@ export function ChatRoom({
     return () => clearTimeout(timer);
   }, [focusTaskId]);
 
+  // The same, for a meeting a reminder opened the chat for.
+  useEffect(() => {
+    if (!focusMeetingId) return;
+    const card = document.getElementById(`meeting-${focusMeetingId}`);
+    if (!card) return;
+
+    pinnedToBottom.current = false;
+    card.scrollIntoView({ block: "center" });
+    card.classList.add("task-flash");
+    const timer = setTimeout(() => card.classList.remove("task-flash"), 2600);
+    return () => clearTimeout(timer);
+  }, [focusMeetingId]);
+
   const onScroll = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -313,6 +360,7 @@ export function ChatRoom({
         project: projects.find((project) => project.id === draft.projectId) ?? null,
         task: null,
         call: null,
+        meeting: null,
         status: "sending",
       };
 
@@ -351,6 +399,7 @@ export function ChatRoom({
 
   // --- tasks ---------------------------------------------------------------
   const openTaskSheet = useCallback((title: string) => setSheet({ key: Date.now(), title }), []);
+  const openMeetingSheet = useCallback((title: string) => setMeetingSheet({ key: Date.now(), title }), []);
 
   // The form stays open until the task is saved, then the card goes straight
   // into the conversation; the stream's copy of it later changes nothing.
@@ -365,6 +414,23 @@ export function ChatRoom({
           : [...current, { ...saved, createdAt: new Date(saved.createdAt) } as Message]
       );
       setSheet(null);
+    },
+    [conversation]
+  );
+
+  // The same path as a task card: the saved message is appended directly rather
+  // than waiting for the stream, so setting a meeting feels as quick as sending.
+  const createMeeting = useCallback(
+    async (formData: FormData) => {
+      formData.set("conversation", conversation);
+      const saved = await createChatMeeting(formData);
+      pinnedToBottom.current = true;
+      setMessages((current) =>
+        current.some((message) => message.id === saved.id)
+          ? current
+          : [...current, { ...saved, createdAt: new Date(saved.createdAt) } as Message]
+      );
+      setMeetingSheet(null);
     },
     [conversation]
   );
@@ -453,6 +519,23 @@ export function ChatRoom({
                 onDeleted={() => setMessages((current) => current.filter((item) => item.id !== message.id))}
               />
             </TaskMessage>
+          ) : message.kind === "MEETING" && message.meeting ? (
+            <TaskMessage
+              key={message.id}
+              day={dayHeadings[index]}
+              mine={isMine(message)}
+              time={timeLabel(new Date(message.createdAt))}
+              studio={studio}
+            >
+              <MeetingCard
+                meeting={liveMeetings?.byId.get(message.meeting.id) ?? message.meeting}
+                viewer={viewer}
+                conversation={conversation}
+                timeZone={timeZone}
+                initialNow={initialNow}
+                onCancelled={() => setMessages((current) => current.filter((item) => item.id !== message.id))}
+              />
+            </TaskMessage>
           ) : message.kind === "CALL" ? (
             // What a call left behind: one line across the conversation, not a bubble from somebody.
             <div key={message.id}>
@@ -507,6 +590,7 @@ export function ChatRoom({
         projects={projects}
         onSend={sendDraft}
         onTask={taskSetup ? openTaskSheet : undefined}
+        onMeeting={meetingSetup ? openMeetingSheet : undefined}
         studio={studio}
       />
 
@@ -517,6 +601,16 @@ export function ChatRoom({
           initialTitle={sheet.title}
           onClose={() => setSheet(null)}
           onCreate={createTask}
+        />
+      )}
+
+      {meetingSheet && meetingSetup && (
+        <MeetingSheet
+          key={meetingSheet.key}
+          setup={meetingSetup}
+          initialTitle={meetingSheet.title}
+          onClose={() => setMeetingSheet(null)}
+          onCreate={createMeeting}
         />
       )}
     </div>
@@ -887,12 +981,15 @@ function Composer({
   projects,
   onSend,
   onTask,
+  onMeeting,
   studio = false,
 }: {
   projects: { id: string; name: string }[];
   onSend: (draft: Draft) => Promise<void>;
   /** Opens the task form, with a title when "/task …" was typed. Only where tasks can be handed out. */
   onTask?: (title: string) => void;
+  /** Opens the meeting form, with a title when "/meet …" was typed. Only where meetings can be set. */
+  onMeeting?: (title: string) => void;
   studio?: boolean;
 }) {
   const [text, setText] = useState("");
@@ -953,6 +1050,13 @@ function Composer({
     const slash = onTask ? slashTask(trimmed) : null;
     if (slash && onTask) {
       onTask(slash.title);
+      return;
+    }
+
+    // "/meet …" does the same for a meeting.
+    const meet = onMeeting ? slashMeeting(trimmed) : null;
+    if (meet && onMeeting) {
+      onMeeting(meet.title);
       return;
     }
 
@@ -1090,6 +1194,18 @@ function Composer({
               }}
             >
               <ClipboardList size={18} strokeWidth={1.75} />
+            </AttachButton>
+          )}
+          {onMeeting && (
+            <AttachButton
+              label="Meeting"
+              studio={studio}
+              onClick={() => {
+                setShowAttach(false);
+                onMeeting("");
+              }}
+            >
+              <CalendarClock size={18} strokeWidth={1.75} />
             </AttachButton>
           )}
           <AttachButton label="Photo" studio={studio} onClick={() => photoRef.current?.click()}>

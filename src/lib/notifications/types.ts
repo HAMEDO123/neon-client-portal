@@ -279,5 +279,6 @@ export function chatPreview(
   if (kind === "FILE") return `📄 ${fileName?.trim() || text || "File"}`;
   if (kind === "TASK") return `📋 ${text || "Task"}`;
   if (kind === "CALL") return `📞 ${text || "Call"}`;
+  if (kind === "MEETING") return `📅 ${text || "Meeting"}`;
   return text;
 }

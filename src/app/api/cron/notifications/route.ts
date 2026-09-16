@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runDeadlineReminders, runScheduleNotifier, runStageReminders } from "@/lib/notifications/events";
 import { runFollowUps } from "@/lib/notifications/follow-up-events";
 import { runRules } from "@/lib/notifications/automation-events";
+import { runMeetingReminders } from "@/lib/notifications/meeting-events";
 import { getTimezone } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
 
@@ -70,6 +71,15 @@ async function handle(request: Request) {
   // at the day and says nothing.
   if (forced === "rules" || !forced) {
     ran.rules = await runRules();
+  }
+
+  // Meetings set from a chat: the warning before one starts, and the word that
+  // it has. Considered on every run like the follow-ups, and called on its own
+  // every minute by the meeting-scheduler — a meeting at 2:30 announced at 2:38
+  // is worth very little. Each notification carries the meeting's start in its
+  // key, so overlapping runs tell somebody once.
+  if (forced === "meetings" || !forced) {
+    ran.meetings = await runMeetingReminders(new Date(), timezone);
   }
 
   // Chasing against the stage periods is a daily conversation, not an hourly
