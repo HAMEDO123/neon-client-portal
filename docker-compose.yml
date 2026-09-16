@@ -111,7 +111,10 @@ services:
     # those sixty times an hour would buy nothing.
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - 'while true; do curl -sS -o /dev/null --max-time 50 -H "Authorization: Bearer $$CRON_SECRET" "http://app:3000/api/cron/notifications?job=meetings" || true; sleep 60; done'
+      # One line per run, like the other scheduler: a service that says nothing
+      # cannot be trusted, and `docker logs neon-meeting-scheduler` is the only
+      # window onto whether reminders are actually going out.
+      - 'while true; do status=$$(curl -sS -o /tmp/ran.json -w "%{http_code}" --max-time 50 -H "Authorization: Bearer $$CRON_SECRET" "http://app:3000/api/cron/notifications?job=meetings" || echo 000); echo "$$(date -u +%FT%TZ) HTTP $$status $$(head -c 200 /tmp/ran.json)"; sleep 60; done'
     depends_on:
       app:
         condition: service_healthy
