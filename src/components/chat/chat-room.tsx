@@ -36,6 +36,9 @@ import { slashMeeting } from "@/lib/chat-meetings";
 import { QuickReplies } from "@/components/chat/studio/quick-replies";
 import { shrinkPhoto } from "@/lib/client-image";
 import { mergeIncoming, pendingId, reconcile } from "@/lib/chat-sync";
+import { usePresence } from "@/lib/use-presence";
+import { isReadBy, lastSeenLabel } from "@/lib/presence";
+import { useMinuteNow } from "@/lib/use-minute-now";
 import { slashTask } from "@/lib/chat-tasks";
 import { playCue } from "@/lib/sound-cues";
 import {
@@ -177,6 +180,11 @@ export function ChatRoom({
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [liveTasks, setLiveTasks] = useState<LiveTasks | null>(null);
   const [liveMeetings, setLiveMeetings] = useState<LiveMeetings | null>(null);
+  // Who is writing in this conversation, and how far each person has read it.
+  const [people, setPeople] = useState<{ typing: { memberKey: string; name: string }[]; reads: Record<string, string> }>({
+    typing: [],
+    reads: {},
+  });
   const [sheet, setSheet] = useState<{ key: number; title: string } | null>(null);
   const [meetingSheet, setMeetingSheet] = useState<{ key: number; title: string } | null>(null);
   const [search, setSearch] = useState<string | null>(null);
@@ -199,6 +207,22 @@ export function ChatRoom({
       message.authorType === viewerType && (viewerType === "ADMIN" || message.authorId === viewerId),
     [viewerType, viewerId]
   );
+
+  // How this viewer is keyed everywhere else in the platform.
+  const myKey = viewerType === "ADMIN" ? "admin" : (viewerId ?? "");
+
+  // In a private chat the conversation is named by the other person — and
+  // "manager" is how an employee names the one person with no employee row.
+  const otherKey = showNames ? null : conversation === "manager" ? "admin" : conversation;
+
+  // The one shared clock, ticking each minute: "Last seen 2 min ago" has to age
+  // on its own, and a clock set in an effect is what use-minute-now exists to
+  // avoid.
+  const now = useMinuteNow() ?? initialNow;
+  const seenAt = usePresence();
+  // Said only where it means one person. In the group it would be a line about
+  // five people at once, which is a different thing and not this one.
+  const status = otherKey ? lastSeenLabel(seenAt.get(otherKey), now) : null;
 
   // --- live updates --------------------------------------------------------
   useEffect(() => {
@@ -230,6 +254,18 @@ export function ChatRoom({
     source.addEventListener("tasks", (event) => {
       const data = JSON.parse((event as MessageEvent).data) as { at: number; ids: string[]; tasks: ChatTaskView[] };
       setLiveTasks({ at: data.at, ids: new Set(data.ids), byId: new Map(data.tasks.map((task) => [task.id, task])) });
+    });
+
+    source.addEventListener("people", (event) => {
+      const data = JSON.parse((event as MessageEvent).data) as {
+        typing: { memberKey: string; name: string }[];
+        reads: { key: string; at: string }[];
+      };
+      setPeople({
+        // Never announce yourself as typing to yourself.
+        typing: data.typing.filter((one) => one.memberKey !== myKey),
+        reads: Object.fromEntries(data.reads.map((mark) => [mark.key, mark.at])),
+      });
     });
 
     source.addEventListener("meetings", (event) => {
@@ -452,6 +488,7 @@ export function ChatRoom({
           variant={variant}
           name={header.name}
           subtitle={header.subtitle}
+          status={status}
           avatar={header.avatar}
           backHref={header.backHref}
           actions={
@@ -574,6 +611,7 @@ export function ChatRoom({
               showName={showNames}
               canDelete={canDeleteAny}
               studio={studio}
+              readAt={otherKey ? people.reads[otherKey] : null}
               onDiscard={
                 message.status
                   ? () => setMessages((current) => current.filter((item) => item.id !== message.id))
@@ -586,8 +624,21 @@ export function ChatRoom({
         <div ref={bottomRef} />
       </div>
 
+      {people.typing.length > 0 && (
+        <p
+          aria-live="polite"
+          className={cn("shrink-0 px-4 pb-1 text-xs italic", studio ? "text-bark/50" : "text-ink/50")}
+        >
+          {people.typing.length === 1
+            ? `${people.typing[0].name} is writing…`
+            : `${people.typing.map((one) => one.name).join(", ")} are writing…`}
+        </p>
+      )}
+
       <Composer
         projects={projects}
+        conversation={conversation}
+        as={viewerType}
         onSend={sendDraft}
         onTask={taskSetup ? openTaskSheet : undefined}
         onMeeting={meetingSetup ? openMeetingSheet : undefined}
@@ -720,6 +771,7 @@ function Bubble({
   showName,
   canDelete,
   studio = false,
+  readAt = null,
   onDiscard,
 }: {
   message: Message;
@@ -729,6 +781,12 @@ function Bubble({
   showName: boolean;
   canDelete: boolean;
   studio?: boolean;
+  /**
+   * How far the other person has read this conversation, in a private chat —
+   * null in the group, where one pair of ticks cannot mean "everybody", and
+   * null before they have ever opened it, which is not the same as unread.
+   */
+  readAt?: string | null;
   /** Removes one of our own copies that never made it. */
   onDiscard?: () => void;
 }) {
@@ -856,11 +914,21 @@ function Bubble({
               <CircleAlert size={13} strokeWidth={2} className="text-red-500" aria-label="Not sent" />
             )}
             {mine && !isAgent && !message.status && (
+              // Two ticks mean saved; coloured, they mean the other person has
+              // opened the conversation since this arrived. In the group readAt
+              // is null and it stays at "Sent" — one pair of ticks cannot say
+              // "everybody", and claiming it would be the easiest lie here.
               <CheckCheck
                 size={13}
                 strokeWidth={2}
-                className={studio ? "text-clay-deep" : "text-cyan-strong"}
-                aria-label="Sent"
+                className={cn(
+                  isReadBy(message.createdAt, readAt)
+                    ? "text-sky-500"
+                    : studio
+                      ? "text-bark/35"
+                      : "text-ink/40"
+                )}
+                aria-label={isReadBy(message.createdAt, readAt) ? "Read" : "Sent"}
               />
             )}
           </span>
@@ -979,12 +1047,18 @@ function VoiceNote({
 
 function Composer({
   projects,
+  conversation,
+  as,
   onSend,
   onTask,
   onMeeting,
   studio = false,
 }: {
   projects: { id: string; name: string }[];
+  /** The conversation as its URL names it — what a typing note is about. */
+  conversation: string;
+  /** Which of the two sessions a browser may hold is writing. */
+  as: "ADMIN" | "EMPLOYEE";
   onSend: (draft: Draft) => Promise<void>;
   /** Opens the task form, with a title when "/task …" was typed. Only where tasks can be handed out. */
   onTask?: (title: string) => void;
@@ -994,6 +1068,27 @@ function Composer({
 }) {
   const [text, setText] = useState("");
   const [projectId, setProjectId] = useState("");
+
+  // "Wael is writing…" — at a cadence, not a keystroke. The note lives a few
+  // seconds on the server, so re-stamping every four keeps it alive without a
+  // request per letter. Nothing has to say "stopped": a note nobody refreshes
+  // ages out on its own, which is why stopping and closing the tab look the
+  // same — and both are true.
+  const lastPing = useRef(0);
+  const tellTyping = (typing: boolean) => {
+    if (typing) {
+      const at = Date.now();
+      if (at - lastPing.current < 4000) return;
+      lastPing.current = at;
+    } else {
+      lastPing.current = 0;
+    }
+    void fetch("/api/chat/typing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation, as, typing }),
+    }).catch(() => undefined);
+  };
   const [showAttach, setShowAttach] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -1042,6 +1137,7 @@ function Composer({
     if (!trimmed) return;
     // Cleared at once: the message is already on screen, waiting for its tick.
     setText("");
+    tellTyping(false);
     setShowAttach(false);
     setError(null);
     if (textRef.current) textRef.current.style.height = "auto";
@@ -1322,6 +1418,7 @@ function Composer({
                 aria-label="Message"
                 onChange={(event) => {
                   setText(event.target.value);
+                  tellTyping(event.target.value.trim().length > 0);
                   // Grow with the text, like a messaging app, up to a limit.
                   const el = event.target;
                   el.style.height = "auto";

@@ -9,6 +9,7 @@ import {
 } from "@/lib/chat";
 import { taskSignature, taskSnapshot } from "@/lib/chat-task-store";
 import { meetingSignature, meetingSnapshot } from "@/lib/chat-meeting-store";
+import { readMarksFor, typingIn } from "@/lib/presence-store";
 
 // Live chat, over Server-Sent Events.
 //
@@ -23,11 +24,13 @@ import { meetingSignature, meetingSnapshot } from "@/lib/chat-meeting-store";
 // chats, never somebody else's, and never the manager's private exchanges with
 // the assistant.
 //
-// Three kinds of news: `messages`, each new message once; `tasks`, the
+// Four kinds of news: `messages`, each new message once; `tasks`, the
 // conversation's task cards whenever anything about them changes — somebody
 // starting their part, a photo arriving or being reviewed, a comment — none of
-// which is a new message; and `meetings`, the same for meeting cards, which
-// change when somebody says whether they are coming.
+// which is a new message; `meetings`, the same for meeting cards, which change
+// when somebody says whether they are coming; and `people`, who is writing in
+// this conversation and how far each person has read it, which is what a
+// typing line and a read tick are drawn from.
 
 export const dynamic = "force-dynamic";
 // Streaming responses must not be buffered or collapsed by any cache.
@@ -70,6 +73,7 @@ export async function GET(request: Request) {
       // between the page being drawn and this connection opening is not missed.
       let tasksSeen = "";
       let meetingsSeen = "";
+      let peopleSeen = "";
 
       const send = (event: string, data: unknown) => {
         if (closed) return;
@@ -104,6 +108,26 @@ export async function GET(request: Request) {
         return true;
       };
 
+      // Who is writing, and how far each person has read. Both are about
+      // somebody other than the viewer, and neither is a new message — so like
+      // the cards, they are sent only when they actually move. One after the
+      // other, not together: this runs on every poll of every open conversation.
+      const syncPeople = async () => {
+        const typing = await typingIn(channel.id);
+        const reads = await readMarksFor(channel.id);
+        const signature = [
+          typing.map((one) => one.memberKey).join(","),
+          reads.map((mark) => `${mark.readerKey}:${mark.lastReadAt.getTime()}`).join(","),
+        ].join("|");
+        if (signature === peopleSeen) return false;
+        peopleSeen = signature;
+        send("people", {
+          typing,
+          reads: reads.map((mark) => ({ key: mark.readerKey, at: mark.lastReadAt.toISOString() })),
+        });
+        return true;
+      };
+
       request.signal.addEventListener("abort", finish);
 
       // Tells the browser to reconnect quickly, and proves the stream is open.
@@ -112,6 +136,7 @@ export async function GET(request: Request) {
       try {
         await syncTasks();
         await syncMeetings();
+        await syncPeople();
       } catch {
         finish();
         return;
@@ -140,8 +165,9 @@ export async function GET(request: Request) {
 
           const tasksChanged = await syncTasks();
           const meetingsChanged = await syncMeetings();
+          const peopleChanged = await syncPeople();
 
-          if (messages.length === 0 && !tasksChanged && !meetingsChanged && !closed) {
+          if (messages.length === 0 && !tasksChanged && !meetingsChanged && !peopleChanged && !closed) {
             // A comment frame keeps proxies from closing an idle connection.
             controller.enqueue(encoder.encode(": keep-alive\n\n"));
           }

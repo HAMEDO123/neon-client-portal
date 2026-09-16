@@ -1074,6 +1074,38 @@ model ChatRead {
   @@unique([channelId, readerKey])
 }
 
+// Who has the platform open, and who is writing a message right now.
+//
+// One row per person, not per session: "is Wael here" has one answer whatever
+// he has open. Keyed the way ChatRead and CallParticipant are — "admin" for the
+// manager, who has no Employee row, and the employee id otherwise — and with no
+// relation to Employee on purpose, as CallParticipant does it: a row left
+// behind by somebody who has left the studio says only that nobody has been
+// seen under that key since, which is true and harmless.
+//
+// The heartbeat is the /api/live connection every signed-in page already holds
+// open, written at intervals rather than on every poll. Deliberately NOT part
+// of liveSignature(): that signature is what makes every open page re-render,
+// and a heartbeat inside it would redraw the whole platform for everybody every
+// few seconds. Presence travels as its own event instead.
+model ChatPresence {
+  id String @id @default(cuid())
+
+  memberKey String @unique
+
+  // When this person was last known to have the platform open.
+  lastSeenAt DateTime @default(now())
+
+  // The conversation they are writing in, and when they were last seen typing.
+  // Both null unless they are mid-message; read together, never separately.
+  typingChannelId String?
+  typingAt        DateTime?
+
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([lastSeenAt])
+}
+
 // An employee asking for something to be bought for the office. The manager
 // decides; nothing is ordered on an employee's say-so.
 model SupplyRequest {

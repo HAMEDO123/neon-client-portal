@@ -30,6 +30,13 @@ export function ChatHeader({
   backHref?: string;
   /** Buttons at the end of the header: the calls, and the search. */
   actions?: ReactNode;
+  /**
+   * Where the other person is, when that is known: "Online", "Last seen 2 min
+   * ago". Replaces the subtitle while it is known, and is simply absent
+   * otherwise — the platform not having seen somebody is not the same as their
+   * being away, so nothing is said rather than "Offline".
+   */
+  status?: string | null;
   /** "phone" is the portal's own screen; "studio" is the manager's three-column desk. */
   variant?: "phone" | "studio";
 }) {
@@ -73,7 +80,12 @@ export function ChatHeader({
         <p className={cn("truncate font-semibold leading-tight", studio ? "text-[17px] text-bark" : "text-base text-ink")}>
           {name}
         </p>
-        <p className={cn("mt-0.5 truncate text-xs", studio ? "text-bark/45" : "text-ink/50")}>{subtitle}</p>
+        <p className={cn("mt-0.5 flex items-center gap-1.5 truncate text-xs", studio ? "text-bark/45" : "text-ink/50")}>
+          {status === "Online" && (
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+          )}
+          <span className="truncate">{status ?? subtitle}</span>
+        </p>
       </div>
 
       {actions}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { isConversationPath } from "@/lib/chat-conversations";
 import { UpdateRequired } from "@/components/update-required";
+import { publishPresence } from "@/lib/use-presence";
 
 /** Fired on window whenever the heartbeat says something changed. The sounds listen for it. */
 export const LIVE_CHANGED = "neon:live-changed";
@@ -45,6 +46,20 @@ export function LiveSync({ version }: { version?: string }) {
       }
     };
     source.addEventListener("ready", onReady as EventListener);
+
+    // Who has the platform open. This connection being open is what says the
+    // viewer is here, so the same stream is where everybody else's presence
+    // arrives — no second channel, and no polling of its own.
+    const onPeople = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data) as { online?: { key: string; at: string }[] };
+        publishPresence(data.online ?? []);
+      } catch {
+        // A payload we cannot read leaves presence as it was, which is better
+        // than telling every screen that everybody just went away.
+      }
+    };
+    source.addEventListener("people", onPeople as EventListener);
 
     const refresh = () => {
       // An open conversation has its own live connection that delivers each

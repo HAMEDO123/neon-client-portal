@@ -1,8 +1,8 @@
-import { cookies } from "next/headers";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
-import { getSessionEmployee } from "@/lib/employee-session";
+import { getChatViewer } from "@/lib/chat";
 import { liveSignature } from "@/lib/realtime";
 import { appVersion } from "@/lib/app-version";
+import { HEARTBEAT_MS } from "@/lib/presence";
+import { beat, memberKeyFor, onlineNow } from "@/lib/presence-store";
 
 // The platform's heartbeat.
 //
@@ -15,21 +15,32 @@ import { appVersion } from "@/lib/app-version";
 // Same shape as the chat stream: SSE, a bounded lifetime so the proxy never
 // cuts a connection mid-flight, and no payload beyond the signature — a client
 // learns that something changed, never what.
+//
+// This connection is also what presence means. Holding it open is the whole
+// definition of being here, so the server writes a heartbeat for whoever opened
+// it — every HEARTBEAT_MS rather than on every poll, because being here does
+// not change thirty times a minute.
+//
+// Presence travels as its own `people` event and is deliberately kept OUT of
+// liveSignature(): that signature is what makes every open page re-render, and
+// a heartbeat inside it would redraw the whole platform for everybody, for
+// every person, every few seconds.
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const POLL_MS = 2000;
 const MAX_LIFETIME_MS = 4 * 60_000;
-
-async function isSignedIn() {
-  const store = await cookies();
-  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return true;
-  return Boolean(await getSessionEmployee());
-}
+// Beat on this many polls, so the write rate is HEARTBEAT_MS however often the
+// signature is checked.
+const POLLS_PER_BEAT = Math.max(1, Math.round(HEARTBEAT_MS / POLL_MS));
 
 export async function GET(request: Request) {
-  if (!(await isSignedIn())) return new Response("Unauthorized", { status: 401 });
+  // Presence needs to know who, not merely whether — and the identity comes
+  // from the session cookie, never from the request.
+  const viewer = await getChatViewer();
+  if (!viewer) return new Response("Unauthorized", { status: 401 });
+  const me = memberKeyFor(viewer);
 
   const encoder = new TextEncoder();
 
@@ -39,6 +50,9 @@ export async function GET(request: Request) {
       // Seeded with the signature at connection time, so a client that has
       // just rendered the page is not told to render it again.
       let last = await liveSignature().catch(() => "");
+      // Empty, so the first look always sends who is here.
+      let peopleSeen = "";
+      let polls = 0;
 
       const send = (event: string, data: unknown) => {
         if (closed) return;
@@ -57,13 +71,29 @@ export async function GET(request: Request) {
         }
       };
 
+      /** Who is here, sent only when the set or their times actually move. */
+      const syncPeople = async () => {
+        const rows = await onlineNow();
+        const signature = rows.map((row) => `${row.memberKey}:${row.lastSeenAt.getTime()}`).join(",");
+        if (signature === peopleSeen) return;
+        peopleSeen = signature;
+        send("people", { online: rows.map((row) => ({ key: row.memberKey, at: row.lastSeenAt.toISOString() })) });
+      };
+
+      // Opening the page is being here.
+      await beat(me).catch(() => undefined);
+
       // The build this server is running, so a page drawn by the one before it
       // knows to reload rather than talk to a server that is gone.
       send("ready", { sig: last, version: appVersion() });
+      await syncPeople().catch(() => undefined);
 
       const timer = setInterval(async () => {
         if (closed) return;
         try {
+          polls += 1;
+          if (polls % POLLS_PER_BEAT === 0) await beat(me);
+
           const sig = await liveSignature();
           if (sig !== last) {
             last = sig;
@@ -71,6 +101,8 @@ export async function GET(request: Request) {
           } else {
             controller.enqueue(encoder.encode(": keep-alive\n\n"));
           }
+
+          await syncPeople();
         } catch {
           // Drop the stream rather than crash the route; the browser
           // reconnects on its own.
