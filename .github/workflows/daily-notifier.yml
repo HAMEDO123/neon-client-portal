@@ -5,11 +5,17 @@ name: Daily task notifier
 # 4:00 PM run follows the configured timezone, and changing that timezone does
 # not mean editing this cron expression.
 on:
-  schedule:
-    # Every ten minutes: the day's follow-ups are timed to the plan, and a
-    # question due at 11:30 is worth little at 12:05. The daily jobs inside the
-    # endpoint still run once, because each is keyed to the day it is about.
-    - cron: "*/10 * * * *"
+  # Switched off at the switch-over. The studio's own PC runs these jobs now —
+  # neon-scheduler in docker-compose.yml, every ten minutes — and Render is no
+  # longer the site, so this schedule would call a dead address for ever. It
+  # never succeeded anyway: the APP_URL and CRON_SECRET repository secrets were
+  # never set (see Known issues).
+  #
+  # schedule:
+  #   - cron: "*/10 * * * *"
+  #
+  # Run by hand stays, so the jobs can still be fired if Render is ever brought
+  # back while the tunnel is down.
   workflow_dispatch:
     inputs:
       job:
