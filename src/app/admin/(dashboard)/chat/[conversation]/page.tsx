@@ -100,6 +100,10 @@ export default async function AdminConversationPage({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-warm-line bg-card lg:rounded-3xl lg:border lg:shadow-[0_18px_40px_-30px_rgba(44,39,34,0.5)]">
+        {/* The conversation takes what is left rather than all of it: with
+            h-full it filled the column and pushed the assistant clean out of
+            the bottom, where overflow-hidden swallowed it. */}
+        <div className="flex min-h-0 flex-1 flex-col">
         <ChatRoom
           variant="studio"
           initialMessages={messages}
@@ -130,6 +134,7 @@ export default async function AdminConversationPage({
           }
           emptyText={group ? undefined : `No messages yet. Only you and ${personName} can see this chat.`}
         />
+        </div>
         {group && <AssistantPanel configured={isAiConfigured()} />}
       </div>
 

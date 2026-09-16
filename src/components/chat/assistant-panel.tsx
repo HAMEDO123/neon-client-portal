@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 
 // The manager's private line to the assistant. Employees never render this —
 // and even if they did, the action refuses anyone but the admin session.
+//
+// It sits under the manager's own conversation, so it wears the studio's warm
+// palette rather than a colour of its own.
 
 const SUGGESTIONS = [
   "What did the team report today?",
@@ -31,15 +34,15 @@ export function AssistantPanel({ configured }: { configured: boolean }) {
   }
 
   return (
-    <div className="border-t border-purple/20 bg-purple/[0.04] p-3">
+    <div className="shrink-0 border-t border-warm-line bg-clay-soft/40 p-3">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-wider text-purple-strong"
+        className="flex w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-wider text-clay-deep"
       >
         <Bot size={14} strokeWidth={2} />
         Ask the assistant
-        <span className="ml-auto font-normal normal-case tracking-normal text-ink/40">
+        <span className="ml-auto font-normal normal-case tracking-normal text-bark/40">
           {open ? "Hide" : "Only you can see this"}
         </span>
       </button>
@@ -63,7 +66,7 @@ export function AssistantPanel({ configured }: { configured: boolean }) {
                 }
               }}
               placeholder="Ask about anything the team has said…"
-              className="min-h-11 flex-1 rounded-2xl border border-purple/25 bg-white px-3 py-2.5 text-sm outline-none focus:border-purple"
+              className="min-h-11 flex-1 rounded-2xl border border-warm-line bg-card px-3 py-2.5 text-sm text-bark outline-none placeholder:text-bark/35 focus:border-clay"
             />
             <button
               type="button"
@@ -72,7 +75,7 @@ export function AssistantPanel({ configured }: { configured: boolean }) {
               aria-label="Ask"
               className={cn(
                 "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition-opacity",
-                "bg-purple-strong disabled:opacity-30"
+                "bg-clay disabled:opacity-30"
               )}
             >
               {pending ? <Sparkles size={17} className="animate-pulse" /> : <Send size={17} strokeWidth={2} />}
@@ -86,14 +89,14 @@ export function AssistantPanel({ configured }: { configured: boolean }) {
                 type="button"
                 onClick={() => ask(suggestion)}
                 disabled={pending}
-                className="rounded-full border border-purple/20 bg-white/70 px-2.5 py-1 text-[11px] text-ink/60 hover:text-ink disabled:opacity-40"
+                className="rounded-full border border-warm-line bg-card px-2.5 py-1 text-[11px] text-bark/60 hover:text-bark disabled:opacity-40"
               >
                 {suggestion}
               </button>
             ))}
           </div>
 
-          <p className="text-[11px] text-ink/40">
+          <p className="text-[11px] text-bark/40">
             It reads the team conversation only — your questions and its answers stay private to you.
           </p>
         </div>
