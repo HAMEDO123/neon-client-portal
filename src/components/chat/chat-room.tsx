@@ -559,7 +559,7 @@ export function ChatRoom({
   const pinnedIds = useMemo(() => new Set(pinned.map((one) => one.id)), [pinned]);
 
   return (
-    <div className={cn("flex h-full flex-col", studio ? "bg-canvas" : "bg-[#efeae2]")}>
+    <div className="flex h-full flex-col bg-canvas">
       {header && (
         <ChatHeader
           variant={variant}
@@ -663,7 +663,7 @@ export function ChatRoom({
                     message.call?.endReason === "completed"
                       ? studio
                         ? "bg-card text-bark/60"
-                        : "bg-white/90 text-ink/65"
+                        : "bg-card text-ink/65"
                       : "bg-red-50 text-red-700"
                   )}
                 >
@@ -811,7 +811,7 @@ function DayHeading({ day, studio = false }: { day: string; studio?: boolean }) 
       <span
         className={cn(
           "rounded-lg px-3 py-1 text-[11px] font-medium uppercase tracking-wide shadow-sm",
-          studio ? "bg-card text-bark/45" : "bg-white/80 text-ink/45"
+          "bg-card", studio ? "text-bark/45" : "text-bark/50"
         )}
       >
         {day}
@@ -961,8 +961,8 @@ function Bubble({
                   ? "border border-clay/20 bg-clay-soft/70"
                   : "border border-warm-line bg-card"
                 : mine
-                  ? "bg-[#d9fdd3]"
-                  : "bg-white"
+                  ? "border border-clay/20 bg-clay-soft/70"
+                  : "border border-warm-line bg-card"
           )}
         >
           {!mine && (showName || isAgent) && (
@@ -1087,7 +1087,7 @@ function Bubble({
                     one.mine
                       ? studio
                         ? "border-clay/40 bg-clay-soft text-bark"
-                        : "border-emerald-600/40 bg-emerald-50 text-ink"
+                        : "border-clay/40 bg-clay-soft/70 text-ink"
                       : studio
                         ? "border-warm-line bg-paper-soft text-bark/70 hover:border-clay/40"
                         : "border-ink/10 bg-ink/[0.03] text-ink/70 hover:border-ink/25"
@@ -1157,9 +1157,7 @@ function Bubble({
                 className={cn(
                   "rounded-full p-1 transition-colors",
                   pinned
-                    ? studio
-                      ? "text-clay"
-                      : "text-emerald-700"
+                    ? "text-clay"
                     : studio
                       ? "text-bark/40 hover:bg-clay-soft hover:text-bark"
                       : "text-ink/35 hover:bg-ink/5 hover:text-ink"
@@ -1231,7 +1229,7 @@ function PinnedBar({ pinned, studio }: { pinned: PinnedView[]; studio: boolean }
         size={13}
         strokeWidth={2}
         aria-hidden
-        className={cn("shrink-0", first ? (studio ? "text-clay" : "text-emerald-700") : studio ? "text-bark/30" : "text-ink/30")}
+        className={cn("shrink-0", first ? "text-clay" : studio ? "text-bark/30" : "text-ink/30")}
       />
       <span className="min-w-0 flex-1 truncate text-xs">
         <span className={studio ? "font-semibold text-bark" : "font-semibold text-ink"}>{one.authorName}</span>
@@ -1308,7 +1306,7 @@ function VoiceNote({
         aria-label={playing ? "Pause" : "Play"}
         className={cn(
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-          studio ? "bg-clay/15 text-clay-deep" : mine ? "bg-emerald-600/15 text-emerald-700" : "bg-ink/5 text-ink/60"
+          studio || mine ? "bg-clay/15 text-clay-deep" : "bg-ink/5 text-ink/60"
         )}
       >
         {playing ? (
@@ -1326,7 +1324,7 @@ function VoiceNote({
           <div
             className={cn(
               "h-full rounded-full transition-[width]",
-              studio ? "bg-clay" : mine ? "bg-emerald-600/60" : "bg-cyan-strong/60"
+              studio || mine ? "bg-clay" : "bg-clay/45"
             )}
             style={{ width: `${progress}%` }}
           />
@@ -1576,7 +1574,8 @@ function Composer({
     <div
       className={cn(
         "chat-composer select-none border-t",
-        studio ? "border-warm-line bg-card px-3 py-3 lg:px-5" : "border-ink/10 bg-[#f0f2f5] px-2 py-2"
+        "border-warm-line bg-card",
+        studio ? "px-3 py-3 lg:px-5" : "px-2 py-2"
       )}
     >
       {error && <p className="px-2 pb-1.5 text-xs text-red-600">{error}</p>}
@@ -1718,8 +1717,7 @@ function Composer({
 
             <div
               className={cn(
-                "flex min-w-0 flex-1 items-end rounded-3xl px-3 py-1.5",
-                studio ? "border border-warm-line bg-paper-soft" : "bg-white"
+                "flex min-w-0 flex-1 items-end rounded-3xl border border-warm-line bg-paper-soft px-3 py-1.5"
               )}
             >
               <textarea
@@ -1799,7 +1797,7 @@ function Composer({
             onContextMenu={(event) => event.preventDefault()}
             className={cn(
               "flex h-11 w-11 shrink-0 touch-none select-none items-center justify-center rounded-full text-white transition-transform [-webkit-touch-callout:none]",
-              studio ? "bg-clay hover:bg-clay-deep" : "bg-emerald-600",
+              "bg-clay hover:bg-clay-deep",
               recording && "scale-125 shadow-lg"
             )}
           >

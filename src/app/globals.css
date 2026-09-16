@@ -343,7 +343,7 @@ body[data-keyboard="open"] .chat-screen .chat-composer {
    over a band; everywhere else the page's colour already matches the tab bar. */
 html:has(.chat-screen),
 body:has(.chat-screen) {
-  background: #f0f2f5;
+  background: var(--card);
 }
 
 /* The tab bar keeps clear of the home indicator the same way. */
