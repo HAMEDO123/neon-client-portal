@@ -8,8 +8,9 @@ import {
   recordChatRead,
   requireChatViewer,
 } from "@/lib/chat";
-import { taskListFor, taskMembers } from "@/lib/chat-task-store";
-import { defaultDue, isOverdue, mayCreateTasks, progressOf } from "@/lib/chat-tasks";
+import { taskMembers } from "@/lib/chat-task-store";
+import { defaultDue, mayCreateTasks } from "@/lib/chat-tasks";
+import { projectPanelFor } from "@/lib/chat-project-panel";
 import { isAiConfigured } from "@/lib/ai/client";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { dayKeyIn } from "@/lib/time";
@@ -17,13 +18,15 @@ import { memberLine } from "@/lib/group-members";
 import { avatarUrl } from "@/lib/avatar";
 import { ChatRoom } from "@/components/chat/chat-room";
 import { AssistantPanel } from "@/components/chat/assistant-panel";
-import { ChatSidebar } from "@/components/chat/chat-sidebar";
-import { ConversationList } from "@/components/chat/conversation-list";
-import { TaskList } from "@/components/chat/task-list";
+import { ConversationPanel } from "@/components/chat/studio/conversation-panel";
+import { ProjectPanelCard } from "@/components/chat/studio/project-panel";
 
-// One conversation, filling the window: the team's group — with the manager's
-// assistant under it — or a private chat with one person. On a wide screen the
-// chats and the tasks stay beside it, so moving between them is one click.
+// The studio's chat, as three columns: the conversations on the left, the one
+// that is open in the middle, and on the right the project it is about — its
+// newest files and where its steps stand.
+//
+// On a phone it is the middle column alone, edge to edge (.chat-screen in
+// globals.css), which is the same screen the employees' portal uses.
 //
 // `?task=` opens it at one task card.
 
@@ -53,7 +56,7 @@ export default async function AdminConversationPage({
     select: { id: true, name: true },
   });
   const conversations = await conversationsFor(viewer);
-  const tasks = await taskListFor(viewer);
+  const panel = await projectPanelFor(channel.id);
   const timezone = await getTimezone();
 
   const group = conversation.kind === "team";
@@ -83,35 +86,22 @@ export default async function AdminConversationPage({
       }
     : null;
 
-  const open = tasks.filter((task) => !progressOf(task.assignments).complete);
-  const late = open.filter((task) => isOverdue(task.dueAt, task.assignments, now.getTime()));
-
   return (
-    // On a phone it is the whole screen, edge to edge, as a messaging app's is
-    // (.chat-screen in globals.css); on a computer it sits in the page beside the list.
-    <div className="chat-screen flex h-full gap-4 lg:p-6">
-      <aside className="hidden w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-white/60 lg:flex">
-        <ChatSidebar
-          className="flex min-h-0 flex-1 flex-col"
-          tabsClassName="m-3 mb-2"
-          panelClassName="min-h-0 flex-1 overflow-y-auto border-t border-ink/8"
-          openTasks={open.length}
-          lateTasks={late.length}
-          chats={<ConversationList items={conversations} basePath="/admin/chat" activeSlug={slug} timeZone={timezone} />}
-          tasks={
-            <TaskList
-              items={tasks}
-              basePath="/admin/chat"
-              timeZone={timezone}
-              initialNow={now.getTime()}
-              emptyText="Hand out a task from a chat with + or by typing /task."
-            />
-          }
+    <div className="chat-screen flex h-full gap-4 bg-paper lg:p-5">
+      <aside className="hidden w-[18rem] shrink-0 overflow-hidden rounded-3xl border border-warm-line bg-card shadow-[0_18px_40px_-30px_rgba(44,39,34,0.5)] lg:flex xl:w-[19rem]">
+        <ConversationPanel
+          items={conversations}
+          basePath="/admin/chat"
+          activeSlug={slug}
+          timeZone={timezone}
+          initialNow={now.getTime()}
+          tasksHref="/admin/chat?view=tasks"
         />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden lg:rounded-2xl lg:border lg:border-ink/10">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-warm-line bg-card lg:rounded-3xl lg:border lg:shadow-[0_18px_40px_-30px_rgba(44,39,34,0.5)]">
         <ChatRoom
+          variant="studio"
           initialMessages={messages}
           viewerType="ADMIN"
           viewerId={null}
@@ -142,6 +132,13 @@ export default async function AdminConversationPage({
         />
         {group && <AssistantPanel configured={isAiConfigured()} />}
       </div>
+
+      {/* The project beside the talk. The first thing to go when the window
+          narrows: the conversation matters more than the panel about it, and
+          three columns on a 1280-wide screen leave the middle one unreadable. */}
+      <aside className="hidden w-[19rem] shrink-0 overflow-y-auto 2xl:block">
+        <ProjectPanelCard panel={panel} timeZone={timezone} initialNow={now.getTime()} />
+      </aside>
     </div>
   );
 }

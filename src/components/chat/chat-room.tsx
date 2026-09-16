@@ -15,16 +15,20 @@ import {
   Phone,
   PhoneMissed,
   Plus,
+  Search,
   Send,
   Trash2,
   Video,
+  X,
 } from "lucide-react";
 import { deleteChatMessage, sendChatMessage } from "@/lib/actions/chat-actions";
 import { createChatTask } from "@/lib/actions/chat-task-actions";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { CallButtons } from "@/components/calls/call-buttons";
+import { PersonAvatar } from "@/components/chat/person-avatar";
 import { TaskCard } from "@/components/chat/task-card";
 import { TaskSheet, type TaskSetup } from "@/components/chat/task-sheet";
+import { QuickReplies } from "@/components/chat/studio/quick-replies";
 import { shrinkPhoto } from "@/lib/client-image";
 import { mergeIncoming, pendingId, reconcile } from "@/lib/chat-sync";
 import { slashTask } from "@/lib/chat-tasks";
@@ -47,10 +51,17 @@ import { cn } from "@/lib/utils";
 // right, everyone else's on the left (in the group with their name above, in
 // their own colour), and a composer pinned to the bottom.
 //
+// Two looks, one conversation. "phone" is the employees' portal, WhatsApp-like
+// and edge to edge. "studio" is the manager's desk: the warm palette, a face
+// beside every message, a line of quick replies over the composer and a search
+// through what was said — the same messages, the same stream, the same rules.
+//
 // Messages arrive over an event stream, so one person sending is visible to
 // everyone else without a refresh. So do the task cards: the same stream sends
 // them again whenever somebody's part moves, a photo arrives or a comment is
 // written, none of which is a new message.
+
+type Variant = "phone" | "studio";
 
 // A message on screen: saved, or one of ours still on its way.
 type Message = ChatMessageView & { status?: "sending" | "failed" };
@@ -73,11 +84,22 @@ const NAME_COLOURS = [
   "text-emerald-700",
 ];
 
-/** Same person, same colour, every time — from the name itself. */
-function nameColour(name: string) {
+/** The same five colours as faces, for the picture beside a message. */
+const FACE_COLOURS = ["cyan", "purple", "pink", "orange", "ink"];
+
+function hashOf(name: string) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return NAME_COLOURS[hash % NAME_COLOURS.length];
+  return hash;
+}
+
+/** Same person, same colour, every time — from the name itself. */
+function nameColour(name: string) {
+  return NAME_COLOURS[hashOf(name) % NAME_COLOURS.length];
+}
+
+function faceColour(name: string) {
+  return FACE_COLOURS[hashOf(name) % FACE_COLOURS.length];
 }
 
 function timeLabel(date: Date) {
@@ -109,6 +131,7 @@ export function ChatRoom({
   initialNow,
   taskSetup = null,
   focusTaskId = null,
+  variant = "phone",
 }: {
   initialMessages: Message[];
   viewerType: "ADMIN" | "EMPLOYEE";
@@ -131,10 +154,15 @@ export function ChatRoom({
   taskSetup?: TaskSetup | null;
   /** A card to scroll to and point out, when a notification or the Tasks list opened the chat for it. */
   focusTaskId?: string | null;
+  /** "phone" is the employees' portal; "studio" is the manager's three-column desk. */
+  variant?: Variant;
 }) {
+  const studio = variant === "studio";
+
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [liveTasks, setLiveTasks] = useState<LiveTasks | null>(null);
   const [sheet, setSheet] = useState<{ key: number; title: string } | null>(null);
+  const [search, setSearch] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
@@ -196,7 +224,7 @@ export function ChatRoom({
   // A task message whose card has gone — deleted by the manager — leaves the
   // conversation. One created after the stream's last look is simply newer
   // than it, not gone.
-  const visible = useMemo(
+  const present = useMemo(
     () =>
       messages.filter((message) => {
         if (message.kind !== "TASK") return true;
@@ -206,6 +234,16 @@ export function ChatRoom({
       }),
     [messages, liveTasks]
   );
+
+  // Searching narrows what is on screen to the messages that carry the words —
+  // the conversation itself is untouched, and clearing brings all of it back.
+  const needle = search?.trim().toLowerCase() ?? "";
+  const visible = useMemo(() => {
+    if (!needle) return present;
+    return present.filter((message) =>
+      `${message.body ?? ""} ${message.authorName} ${message.attachmentName ?? ""}`.toLowerCase().includes(needle)
+    );
+  }, [present, needle]);
 
   // --- scrolling -----------------------------------------------------------
   // Jump to the newest message, unless the reader has scrolled up to read
@@ -342,30 +380,59 @@ export function ChatRoom({
   );
 
   return (
-    <div className="flex h-full flex-col bg-[#efeae2]">
+    <div className={cn("flex h-full flex-col", studio ? "bg-canvas" : "bg-[#efeae2]")}>
       {header && (
         <ChatHeader
+          variant={variant}
           name={header.name}
           subtitle={header.subtitle}
           avatar={header.avatar}
           backHref={header.backHref}
-          actions={<CallButtons conversation={conversation} title={header.name} viewer={viewer} />}
+          actions={
+            <div className="flex shrink-0 items-center gap-1">
+              {studio && (
+                <SearchInHeader
+                  value={search}
+                  onChange={setSearch}
+                  found={needle ? visible.length : null}
+                />
+              )}
+              <CallButtons conversation={conversation} title={header.name} viewer={viewer} />
+            </div>
+          }
         />
       )}
       <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="flex-1 overflow-y-auto px-3 py-3"
+        className={cn("relative flex-1 overflow-y-auto", studio ? "px-4 py-4 lg:px-8" : "px-3 py-3")}
         // The faint tile behind a chat, drawn rather than fetched.
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 20% 30%, rgba(21,19,31,0.035) 1px, transparent 1px), radial-gradient(circle at 70% 80%, rgba(21,19,31,0.03) 1px, transparent 1px)",
-          backgroundSize: "56px 56px, 84px 84px",
-        }}
+        style={
+          studio
+            ? undefined
+            : {
+                backgroundImage:
+                  "radial-gradient(circle at 20% 30%, rgba(21,19,31,0.035) 1px, transparent 1px), radial-gradient(circle at 70% 80%, rgba(21,19,31,0.03) 1px, transparent 1px)",
+                backgroundSize: "56px 56px, 84px 84px",
+              }
+        }
       >
+        {studio && (
+          <p
+            aria-hidden
+            className="pointer-events-none sticky top-0 z-0 -mt-1 mb-2 ml-auto w-max whitespace-nowrap text-right font-display text-[11px] uppercase leading-4 tracking-[0.3em] text-bark/15"
+          >
+            Good design
+            <br />
+            better living
+          </p>
+        )}
+
         {visible.length === 0 && (
-          <p className="mt-12 text-center text-sm text-ink/40">
-            {emptyText ?? "No messages yet. Send an update, a photo from site, or a voice note."}
+          <p className={cn("mt-12 text-center text-sm", studio ? "text-bark/40" : "text-ink/40")}>
+            {needle
+              ? `Nothing in this conversation matches “${search?.trim()}”.`
+              : (emptyText ?? "No messages yet. Send an update, a photo from site, or a voice note.")}
           </p>
         )}
 
@@ -376,6 +443,7 @@ export function ChatRoom({
               day={dayHeadings[index]}
               mine={isMine(message)}
               time={timeLabel(new Date(message.createdAt))}
+              studio={studio}
             >
               <TaskCard
                 task={liveTasks?.byId.get(message.task.id) ?? message.task}
@@ -388,12 +456,16 @@ export function ChatRoom({
           ) : message.kind === "CALL" ? (
             // What a call left behind: one line across the conversation, not a bubble from somebody.
             <div key={message.id}>
-              {dayHeadings[index] ? <DayHeading day={dayHeadings[index] as string} /> : null}
+              {dayHeadings[index] ? <DayHeading day={dayHeadings[index] as string} studio={studio} /> : null}
               <p className="my-2 flex justify-center">
                 <span
                   className={cn(
                     "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-sm",
-                    message.call?.endReason === "completed" ? "bg-white/90 text-ink/65" : "bg-red-50 text-red-700"
+                    message.call?.endReason === "completed"
+                      ? studio
+                        ? "bg-card text-bark/60"
+                        : "bg-white/90 text-ink/65"
+                      : "bg-red-50 text-red-700"
                   )}
                 >
                   {message.call?.endReason !== "completed" ? (
@@ -404,7 +476,9 @@ export function ChatRoom({
                     <Phone size={14} aria-hidden />
                   )}
                   <span>{message.body}</span>
-                  <span className="text-ink/35">{timeLabel(new Date(message.createdAt))}</span>
+                  <span className={studio ? "text-bark/30" : "text-ink/35"}>
+                    {timeLabel(new Date(message.createdAt))}
+                  </span>
                 </span>
               </p>
             </div>
@@ -416,6 +490,7 @@ export function ChatRoom({
               mine={isMine(message)}
               showName={showNames}
               canDelete={canDeleteAny}
+              studio={studio}
               onDiscard={
                 message.status
                   ? () => setMessages((current) => current.filter((item) => item.id !== message.id))
@@ -428,7 +503,12 @@ export function ChatRoom({
         <div ref={bottomRef} />
       </div>
 
-      <Composer projects={projects} onSend={sendDraft} onTask={taskSetup ? openTaskSheet : undefined} />
+      <Composer
+        projects={projects}
+        onSend={sendDraft}
+        onTask={taskSetup ? openTaskSheet : undefined}
+        studio={studio}
+      />
 
       {sheet && taskSetup && (
         <TaskSheet
@@ -443,10 +523,69 @@ export function ChatRoom({
   );
 }
 
-function DayHeading({ day }: { day: string }) {
+/** Looking for something that was said: the header's search, open only while it is used. */
+function SearchInHeader({
+  value,
+  onChange,
+  found,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+  /** How many messages match, once something has been typed. */
+  found: number | null;
+}) {
+  if (value === null) {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange("")}
+        aria-label="Search this conversation"
+        title="Search this conversation"
+        className="flex h-10 w-10 items-center justify-center rounded-full text-bark/45 transition-colors hover:bg-clay-soft/70 hover:text-bark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/40"
+      >
+        <Search size={19} strokeWidth={2} />
+      </button>
+    );
+  }
+
   return (
-    <div className="my-3 flex justify-center">
-      <span className="rounded-lg bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-ink/45 shadow-sm">
+    <span className="relative flex items-center">
+      <Search size={14} aria-hidden className="pointer-events-none absolute left-3 text-bark/35" />
+      <input
+        autoFocus
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onChange(null);
+        }}
+        placeholder="Search this chat…"
+        aria-label="Search this conversation"
+        className="h-10 w-44 rounded-full border border-warm-line bg-paper-soft pl-8 pr-8 text-sm text-bark outline-none placeholder:text-bark/35 focus:border-clay lg:w-60"
+      />
+      {found !== null && (
+        <span className="pointer-events-none absolute right-9 text-[11px] tabular-nums text-bark/35">{found}</span>
+      )}
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        aria-label="Close the search"
+        className="absolute right-2 flex h-6 w-6 items-center justify-center rounded-full text-bark/40 hover:bg-bark/5 hover:text-bark"
+      >
+        <X size={14} />
+      </button>
+    </span>
+  );
+}
+
+function DayHeading({ day, studio = false }: { day: string; studio?: boolean }) {
+  return (
+    <div className="relative z-10 my-3 flex justify-center">
+      <span
+        className={cn(
+          "rounded-lg px-3 py-1 text-[11px] font-medium uppercase tracking-wide shadow-sm",
+          studio ? "bg-card text-bark/45" : "bg-white/80 text-ink/45"
+        )}
+      >
         {day}
       </span>
     </div>
@@ -458,20 +597,22 @@ function TaskMessage({
   day,
   mine,
   time,
+  studio = false,
   children,
 }: {
   day: string | null;
   mine: boolean;
   time: string;
+  studio?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <>
-      {day && <DayHeading day={day} />}
-      <div className={cn("mb-2 flex", mine ? "justify-end" : "justify-start")}>
+      {day && <DayHeading day={day} studio={studio} />}
+      <div className={cn("relative z-10 mb-2 flex", mine ? "justify-end" : "justify-start")}>
         <div className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
           {children}
-          <span className="mt-0.5 px-1 text-[11px] text-ink/40">{time}</span>
+          <span className={cn("mt-0.5 px-1 text-[11px]", studio ? "text-bark/35" : "text-ink/40")}>{time}</span>
         </div>
       </div>
     </>
@@ -484,6 +625,7 @@ function Bubble({
   mine,
   showName,
   canDelete,
+  studio = false,
   onDiscard,
 }: {
   message: Message;
@@ -492,30 +634,60 @@ function Bubble({
   /** In the group, whose message it is; in a private chat that goes without saying. */
   showName: boolean;
   canDelete: boolean;
+  studio?: boolean;
   /** Removes one of our own copies that never made it. */
   onDiscard?: () => void;
 }) {
   const [, startTransition] = useTransition();
   const isAgent = message.authorType === "AGENT";
   const created = new Date(message.createdAt);
+  // A face beside what somebody else said, so a long conversation reads at a glance.
+  const withFace = studio && !mine && !isAgent;
 
   return (
     <>
-      {day && <DayHeading day={day} />}
+      {day && <DayHeading day={day} studio={studio} />}
 
-      <div className={cn("group/msg mb-1.5 flex", mine && !isAgent ? "justify-end" : "justify-start")}>
+      <div
+        className={cn(
+          "group/msg relative z-10 flex gap-2",
+          // The face sits beside the name it belongs to, at the top of what
+          // was said, rather than at the foot of a long message.
+          studio ? "mb-3 items-start" : "mb-1.5 items-end",
+          mine && !isAgent ? "justify-end" : "justify-start"
+        )}
+      >
+        {withFace && (
+          <PersonAvatar
+            name={message.authorName || "?"}
+            color={faceColour(message.authorName || "?")}
+            size={32}
+            className="mt-1 shrink-0"
+          />
+        )}
+
         <div
           className={cn(
-            "relative max-w-[85%] rounded-xl px-2.5 py-1.5 shadow-sm sm:max-w-[70%]",
+            "relative shadow-sm",
+            studio ? "max-w-[85%] rounded-2xl px-3.5 py-2.5 lg:max-w-[68%]" : "max-w-[85%] rounded-xl px-2.5 py-1.5 sm:max-w-[70%]",
             isAgent
               ? "border border-purple/25 bg-purple/[0.08]"
-              : mine
-                ? "bg-[#d9fdd3]"
-                : "bg-white"
+              : studio
+                ? mine
+                  ? "border border-clay/20 bg-clay-soft/70"
+                  : "border border-warm-line bg-card"
+                : mine
+                  ? "bg-[#d9fdd3]"
+                  : "bg-white"
           )}
         >
           {!mine && (showName || isAgent) && (
-            <p className={cn("mb-0.5 text-[13px] font-semibold", isAgent ? "text-purple-strong" : nameColour(message.authorName))}>
+            <p
+              className={cn(
+                "mb-0.5 text-[13px] font-semibold",
+                isAgent ? "text-purple-strong" : nameColour(message.authorName)
+              )}
+            >
               {isAgent && <Bot size={12} strokeWidth={2.5} className="mr-1 inline" />}
               {message.authorName}
               {message.authorType === "ADMIN" && message.authorName !== "Manager" && " · Manager"}
@@ -544,7 +716,7 @@ function Bubble({
           )}
 
           {message.kind === "VOICE" && message.attachmentUrl && (
-            <VoiceNote url={message.attachmentUrl} seconds={message.durationSeconds} mine={mine} />
+            <VoiceNote url={message.attachmentUrl} seconds={message.durationSeconds} mine={mine} studio={studio} />
           )}
 
           {message.kind === "FILE" && message.attachmentUrl && (
@@ -554,32 +726,48 @@ function Bubble({
               rel="noreferrer"
               className={cn(
                 "mb-1 flex items-center gap-2 rounded-lg px-2 py-2 text-sm",
-                mine ? "bg-black/5" : "bg-ink/5"
+                studio ? "bg-bark/[0.04] text-bark/80" : mine ? "bg-black/5" : "bg-ink/5"
               )}
             >
-              <FileText size={18} strokeWidth={1.75} className="shrink-0 text-ink/50" />
+              <FileText size={18} strokeWidth={1.75} className={studio ? "shrink-0 text-bark/45" : "shrink-0 text-ink/50"} />
               <span className="min-w-0 flex-1 truncate">{message.attachmentName}</span>
             </a>
           )}
 
           {message.body && (
-            <p className="whitespace-pre-wrap break-words pr-12 text-[15px] leading-snug text-ink">
+            <p
+              dir="auto"
+              className={cn(
+                "whitespace-pre-wrap break-words pr-12 leading-snug",
+                studio ? "text-[15px] text-bark" : "text-[15px] text-ink"
+              )}
+            >
               {message.body}
             </p>
           )}
 
           {/* Time tucked into the bottom-right of the bubble. */}
-          <span className="pointer-events-none float-right -mb-0.5 ml-2 mt-1 inline-flex items-center gap-1 text-[11px] text-ink/40">
+          <span
+            className={cn(
+              "pointer-events-none float-right -mb-0.5 ml-2 mt-1 inline-flex items-center gap-1 text-[11px]",
+              studio ? "text-bark/35" : "text-ink/40"
+            )}
+          >
             {message.project && <span className="max-w-24 truncate">{message.project.name}</span>}
             {timeLabel(created)}
             {mine && !isAgent && message.status === "sending" && (
-              <Clock size={12} strokeWidth={2} className="text-ink/40" aria-label="Sending" />
+              <Clock size={12} strokeWidth={2} className={studio ? "text-bark/35" : "text-ink/40"} aria-label="Sending" />
             )}
             {mine && !isAgent && message.status === "failed" && (
               <CircleAlert size={13} strokeWidth={2} className="text-red-500" aria-label="Not sent" />
             )}
             {mine && !isAgent && !message.status && (
-              <CheckCheck size={13} strokeWidth={2} className="text-cyan-strong" aria-label="Sent" />
+              <CheckCheck
+                size={13}
+                strokeWidth={2}
+                className={studio ? "text-clay-deep" : "text-cyan-strong"}
+                aria-label="Sent"
+              />
             )}
           </span>
 
@@ -612,7 +800,17 @@ function Bubble({
 }
 
 /** A voice note: play, a scrubbable bar, and how long it runs. */
-function VoiceNote({ url, seconds, mine }: { url: string; seconds: number | null; mine: boolean }) {
+function VoiceNote({
+  url,
+  seconds,
+  mine,
+  studio = false,
+}: {
+  url: string;
+  seconds: number | null;
+  mine: boolean;
+  studio?: boolean;
+}) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -635,7 +833,7 @@ function VoiceNote({ url, seconds, mine }: { url: string; seconds: number | null
         aria-label={playing ? "Pause" : "Play"}
         className={cn(
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-          mine ? "bg-emerald-600/15 text-emerald-700" : "bg-ink/5 text-ink/60"
+          studio ? "bg-clay/15 text-clay-deep" : mine ? "bg-emerald-600/15 text-emerald-700" : "bg-ink/5 text-ink/60"
         )}
       >
         {playing ? (
@@ -649,13 +847,16 @@ function VoiceNote({ url, seconds, mine }: { url: string; seconds: number | null
       </button>
 
       <div className="min-w-0 flex-1">
-        <div className="h-1.5 overflow-hidden rounded-full bg-ink/10">
+        <div className={cn("h-1.5 overflow-hidden rounded-full", studio ? "bg-bark/10" : "bg-ink/10")}>
           <div
-            className={cn("h-full rounded-full transition-[width]", mine ? "bg-emerald-600/60" : "bg-cyan-strong/60")}
+            className={cn(
+              "h-full rounded-full transition-[width]",
+              studio ? "bg-clay" : mine ? "bg-emerald-600/60" : "bg-cyan-strong/60"
+            )}
             style={{ width: `${progress}%` }}
           />
         </div>
-        <p className="mt-1 text-[11px] text-ink/40">
+        <p className={cn("mt-1 text-[11px]", studio ? "text-bark/40" : "text-ink/40")}>
           {total ? `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}` : "voice"}
         </p>
       </div>
@@ -686,11 +887,13 @@ function Composer({
   projects,
   onSend,
   onTask,
+  studio = false,
 }: {
   projects: { id: string; name: string }[];
   onSend: (draft: Draft) => Promise<void>;
   /** Opens the task form, with a title when "/task …" was typed. Only where tasks can be handed out. */
   onTask?: (title: string) => void;
+  studio?: boolean;
 }) {
   const [text, setText] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -737,9 +940,9 @@ function Composer({
     setError(cause instanceof Error ? cause.message : "Could not send that.");
   }
 
-  function sendText() {
-    const body = text.trim();
-    if (!body) return;
+  function send(body: string) {
+    const trimmed = body.trim();
+    if (!trimmed) return;
     // Cleared at once: the message is already on screen, waiting for its tick.
     setText("");
     setShowAttach(false);
@@ -747,13 +950,13 @@ function Composer({
     if (textRef.current) textRef.current.style.height = "auto";
 
     // "/task …" opens the task form instead of sending the words.
-    const slash = onTask ? slashTask(body) : null;
+    const slash = onTask ? slashTask(trimmed) : null;
     if (slash && onTask) {
       onTask(slash.title);
       return;
     }
 
-    void onSend({ kind: "TEXT", body, projectId }).catch(fail);
+    void onSend({ kind: "TEXT", body: trimmed, projectId }).catch(fail);
   }
 
   function sendFile(kind: "IMAGE" | "FILE", file: File) {
@@ -857,15 +1060,30 @@ function Composer({
   const hasText = text.trim().length > 0;
 
   return (
-    <div className="chat-composer select-none border-t border-ink/10 bg-[#f0f2f5] px-2 py-2">
+    <div
+      className={cn(
+        "chat-composer select-none border-t",
+        studio ? "border-warm-line bg-card px-3 py-3 lg:px-5" : "border-ink/10 bg-[#f0f2f5] px-2 py-2"
+      )}
+    >
       {error && <p className="px-2 pb-1.5 text-xs text-red-600">{error}</p>}
-      {hint && !recording && <p className="px-2 pb-1.5 text-center text-xs text-ink/50">{hint}</p>}
+      {hint && !recording && (
+        <p className={cn("px-2 pb-1.5 text-center text-xs", studio ? "text-bark/50" : "text-ink/50")}>{hint}</p>
+      )}
+
+      {/* The four answers a team gives all day, one tap away. */}
+      {studio && !recording && !hasText && (
+        <div className="mb-2.5">
+          <QuickReplies onPick={send} />
+        </div>
+      )}
 
       {showAttach && !recording && (
         <div className="mb-2 flex flex-wrap gap-2 px-1">
           {onTask && (
             <AttachButton
               label="Task"
+              studio={studio}
               onClick={() => {
                 setShowAttach(false);
                 onTask("");
@@ -874,10 +1092,10 @@ function Composer({
               <ClipboardList size={18} strokeWidth={1.75} />
             </AttachButton>
           )}
-          <AttachButton label="Photo" onClick={() => photoRef.current?.click()}>
+          <AttachButton label="Photo" studio={studio} onClick={() => photoRef.current?.click()}>
             <Camera size={18} strokeWidth={1.75} />
           </AttachButton>
-          <AttachButton label="File" onClick={() => fileRef.current?.click()}>
+          <AttachButton label="File" studio={studio} onClick={() => fileRef.current?.click()}>
             <Paperclip size={18} strokeWidth={1.75} />
           </AttachButton>
           {projects.length > 0 && (
@@ -885,7 +1103,10 @@ function Composer({
               value={projectId}
               onChange={(event) => setProjectId(event.target.value)}
               aria-label="Project this is about"
-              className="min-w-0 flex-1 rounded-xl border border-ink/12 bg-white px-2 py-1.5 text-xs text-ink/70 outline-none"
+              className={cn(
+                "min-w-0 flex-1 rounded-xl border px-2 py-1.5 text-xs outline-none",
+                studio ? "border-warm-line bg-paper-soft text-bark/75" : "border-ink/12 bg-white text-ink/70"
+              )}
             >
               <option value="">No project</option>
               {projects.map((project) => (
@@ -934,11 +1155,18 @@ function Composer({
 
       <div className="flex items-end gap-1.5">
         {recording ? (
-          <div className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full bg-white px-4">
+          <div
+            className={cn(
+              "flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full px-4",
+              studio ? "bg-paper-soft" : "bg-white"
+            )}
+          >
             <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-500" />
-            <span className="font-mono text-sm tabular-nums text-ink/70">{formatDuration(elapsed)}</span>
+            <span className={cn("font-mono text-sm tabular-nums", studio ? "text-bark/70" : "text-ink/70")}>
+              {formatDuration(elapsed)}
+            </span>
             <span
-              className="flex flex-1 items-center justify-center gap-1 text-xs text-ink/45"
+              className={cn("flex flex-1 items-center justify-center gap-1 text-xs", studio ? "text-bark/45" : "text-ink/45")}
               style={{
                 transform: `translateX(${slide / 2}px)`,
                 opacity: Math.max(0.2, 1 + slide / SLIDE_TO_CANCEL_PX),
@@ -955,18 +1183,26 @@ function Composer({
               onClick={() => setShowAttach(!showAttach)}
               aria-label="Attach"
               aria-expanded={showAttach}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink/45 hover:bg-ink/5"
+              className={cn(
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors",
+                studio ? "text-bark/45 hover:bg-clay-soft/70 hover:text-bark" : "text-ink/45 hover:bg-ink/5"
+              )}
             >
               <Plus size={22} strokeWidth={2} className={cn("transition-transform", showAttach && "rotate-45")} />
             </button>
 
-            <div className="flex min-w-0 flex-1 items-end rounded-3xl bg-white px-3 py-1.5">
+            <div
+              className={cn(
+                "flex min-w-0 flex-1 items-end rounded-3xl px-3 py-1.5",
+                studio ? "border border-warm-line bg-paper-soft" : "bg-white"
+              )}
+            >
               <textarea
                 ref={textRef}
                 value={text}
                 rows={1}
                 dir="auto"
-                placeholder="Message"
+                placeholder={studio ? "Type a message…" : "Message"}
                 aria-label="Message"
                 onChange={(event) => {
                   setText(event.target.value);
@@ -978,16 +1214,32 @@ function Composer({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    sendText();
+                    send(text);
                   }
                 }}
-                className="max-h-30 min-h-6 w-full select-text resize-none bg-transparent py-1 text-base outline-none"
+                className={cn(
+                  "max-h-30 min-h-6 w-full select-text resize-none bg-transparent py-1 text-base outline-none",
+                  studio && "text-bark placeholder:text-bark/35"
+                )}
               />
+              {studio && (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  aria-label="Attach a file"
+                  className="mb-1 ml-2 shrink-0 text-bark/40 transition-colors hover:text-bark"
+                >
+                  <Paperclip size={19} strokeWidth={1.75} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => cameraRef.current?.click()}
                 aria-label="Take a photo"
-                className="mb-1 ml-2 shrink-0 text-ink/40 hover:text-ink"
+                className={cn(
+                  "mb-1 ml-2 shrink-0 transition-colors",
+                  studio ? "text-bark/40 hover:text-bark" : "text-ink/40 hover:text-ink"
+                )}
               >
                 <Camera size={20} strokeWidth={1.75} />
               </button>
@@ -998,11 +1250,14 @@ function Composer({
         {hasText && !recording ? (
           <button
             type="button"
-            onClick={sendText}
+            onClick={() => send(text)}
             // Keeps the keyboard up after sending, as WhatsApp does.
             onMouseDown={(event) => event.preventDefault()}
             aria-label="Send"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white active:scale-95"
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white transition-transform active:scale-95",
+              studio ? "bg-clay hover:bg-clay-deep" : "bg-emerald-600"
+            )}
           >
             <Send size={18} strokeWidth={2} />
           </button>
@@ -1017,7 +1272,8 @@ function Composer({
             onPointerCancel={() => finishRecording(true)}
             onContextMenu={(event) => event.preventDefault()}
             className={cn(
-              "flex h-11 w-11 shrink-0 touch-none select-none items-center justify-center rounded-full bg-emerald-600 text-white transition-transform [-webkit-touch-callout:none]",
+              "flex h-11 w-11 shrink-0 touch-none select-none items-center justify-center rounded-full text-white transition-transform [-webkit-touch-callout:none]",
+              studio ? "bg-clay hover:bg-clay-deep" : "bg-emerald-600",
               recording && "scale-125 shadow-lg"
             )}
           >
@@ -1032,17 +1288,24 @@ function Composer({
 function AttachButton({
   label,
   onClick,
+  studio = false,
   children,
 }: {
   label: string;
   onClick: () => void;
+  studio?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-xl border border-ink/12 bg-white px-3 py-1.5 text-xs font-medium text-ink/70 transition-colors hover:bg-ink/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-strong/40"
+      className={cn(
+        "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2",
+        studio
+          ? "border-warm-line bg-paper-soft text-bark/75 hover:bg-clay-soft/70 focus-visible:ring-clay/40"
+          : "border-ink/12 bg-white text-ink/70 hover:bg-ink/[0.03] focus-visible:ring-cyan-strong/40"
+      )}
     >
       {children}
       {label}

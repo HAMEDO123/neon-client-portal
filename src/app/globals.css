@@ -17,6 +17,33 @@
   --glass: rgba(255, 255, 255, 0.55);
 }
 
+/* The studio's warm palette, for the chat workspace.
+   Its own token names, so every existing screen keeps the colours it has:
+   nothing outside the chat refers to these. */
+:root {
+  --paper: #f6f2ec;
+  --paper-soft: #fbf9f5;
+  --card: #ffffff;
+  --canvas: #f2ede5;
+  --clay: #a9855f;
+  --clay-deep: #8d6c4a;
+  --clay-soft: #efe6d9;
+  --bark: #2c2722;
+  --warm-line: rgba(44, 39, 34, 0.09);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-soft: var(--paper-soft);
+  --color-card: var(--card);
+  --color-canvas: var(--canvas);
+  --color-clay: var(--clay);
+  --color-clay-deep: var(--clay-deep);
+  --color-clay-soft: var(--clay-soft);
+  --color-bark: var(--bark);
+  --color-warm-line: var(--warm-line);
+}
+
 @theme inline {
   --color-background: var(--bg);
   --color-bg: var(--bg);
