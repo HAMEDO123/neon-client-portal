@@ -40,9 +40,12 @@ function pageName(pathname: string) {
 export function AdminShell({
   children,
   badges,
+  version,
 }: {
   children: ReactNode;
   badges?: AdminBadges;
+  /** The build this page was drawn by, so a deploy can ask for a reload. */
+  version?: string;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -69,8 +72,9 @@ export function AdminShell({
     // Calls ring on every page of the admin, and a call keeps going while you move between them.
     <CallProvider side="ADMIN">
     <div className="admin-shell flex overflow-hidden bg-paper">
-      {/* Board, badges and review queue stay current on their own. */}
-      <LiveSync />
+      {/* Board, badges and review queue stay current on their own — and a
+          deploy asks for a reload, because this page is from the build before it. */}
+      <LiveSync version={version} />
       {/* One sound for a message, another for everything else. */}
       <SoundCues side="ADMIN" />
       {/* Sizes the frame to what is visible, so the keyboard never covers a message box. */}

@@ -7,6 +7,7 @@ import { getEmployeeBadges } from "@/lib/employee-badges";
 import { EmployeeNav } from "@/components/employee/employee-nav";
 import { AppViewport } from "@/components/employee/app-viewport";
 import { LiveSync } from "@/components/live-sync";
+import { appVersion } from "@/lib/app-version";
 import { SoundCues } from "@/components/sound-cues";
 import { DeviceGuard } from "@/components/employee/device-guard";
 import { CallProvider } from "@/components/calls/call-provider";
@@ -63,8 +64,9 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
 
       <EmployeeNav unreadChat={unreadChat} />
       <AppViewport />
-      {/* Badges, task states and review outcomes arrive without a reload. */}
-      <LiveSync />
+      {/* Badges, task states and review outcomes arrive without a reload — and
+          a deploy asks for one, because this page belongs to the build before it. */}
+      <LiveSync version={appVersion()} />
       {/* One sound for a message, another for everything else. */}
       <SoundCues side="EMPLOYEE" />
       {/* This phone belongs to whoever is signed in on it, not to whoever

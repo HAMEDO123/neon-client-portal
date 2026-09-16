@@ -404,6 +404,19 @@ body:has(.admin-shell) {
 .call-drop {
   animation: call-drop 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+/* The countdown on "a new version is ready": a bar that empties over the time
+   left before the page reloads itself. A bar rather than a ticking number,
+   because a number would mean setting state on an interval — which is what
+   react-hooks/set-state-in-effect refuses and use-minute-now exists to avoid. */
+@keyframes update-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @keyframes call-drop {
   from {
     opacity: 0;

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { liveSignature } from "@/lib/realtime";
+import { appVersion } from "@/lib/app-version";
 
 // The platform's heartbeat.
 //
@@ -56,7 +57,9 @@ export async function GET(request: Request) {
         }
       };
 
-      send("ready", { sig: last });
+      // The build this server is running, so a page drawn by the one before it
+      // knows to reload rather than talk to a server that is gone.
+      send("ready", { sig: last, version: appVersion() });
 
       const timer = setInterval(async () => {
         if (closed) return;

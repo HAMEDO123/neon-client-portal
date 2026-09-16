@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { isConversationPath } from "@/lib/chat-conversations";
+import { UpdateRequired } from "@/components/update-required";
 
 /** Fired on window whenever the heartbeat says something changed. The sounds listen for it. */
 export const LIVE_CHANGED = "neon:live-changed";
@@ -17,13 +18,33 @@ export const LIVE_CHANGED = "neon:live-changed";
 // Two things keep it from thrashing: refreshes are coalesced through a
 // transition, and a hidden tab does not refresh at all — it catches up the
 // moment it comes back into view.
-export function LiveSync() {
+export function LiveSync({ version }: { version?: string }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const stale = useRef(false);
+  const [outdated, setOutdated] = useState(false);
 
   useEffect(() => {
     const source = new EventSource("/api/live");
+
+    // A deploy replaces the server, so every open heartbeat drops and the
+    // browser reconnects — to the new build. Its first word says which build
+    // it is, and a page rendered by the one before it cannot be used safely:
+    // its server actions belong to a server that no longer exists.
+    const onReady = (event: MessageEvent) => {
+      if (!version) return;
+      try {
+        const serving = (JSON.parse(event.data) as { version?: string }).version;
+        if (serving && serving !== version) {
+          setOutdated(true);
+          // Nothing more to listen for; the page is about to be replaced.
+          source.close();
+        }
+      } catch {
+        // A payload we cannot read is not a reason to interrupt anybody.
+      }
+    };
+    source.addEventListener("ready", onReady as EventListener);
 
     const refresh = () => {
       // An open conversation has its own live connection that delivers each
@@ -57,7 +78,7 @@ export function LiveSync() {
       source.close();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [router]);
+  }, [router, version]);
 
-  return null;
+  return outdated ? <UpdateRequired /> : null;
 }
