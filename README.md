@@ -1,6 +1,6 @@
 # NEON — the studio's platform
 
-One Next.js app runs NEON's interior-design studio. It is live at **https://neon-client-portal.onrender.com**.
+One Next.js app runs NEON's interior-design studio. It is live at **https://clients.neonjo.com**, served from the studio's own PC (see "Running it on the studio's PC"). Render, at `neon-client-portal.onrender.com`, was the address until the switch-over.
 
 | Who | Where | What |
 |---|---|---|
@@ -23,7 +23,7 @@ One Next.js app runs NEON's interior-design studio. It is live at **https://neon
 ## How the owner works (agents, follow this)
 
 - **Push without asking.** Once a change is done and verified, commit it and push to `main`. Verified means `npx tsc --noEmit`, `npm run lint`, `npm test` and `npm run build` all pass. The owner, Hamed, tests on a phone against the live site, so an unpushed fix is one they can't see. Never force-push or rewrite history.
-- **Confirm the deploy.** Every page's asset URLs carry `?dpl=<commit SHA>` (set by `deploymentId` in `next.config.ts`). The deploy is live when `curl -s https://neon-client-portal.onrender.com/employee/login | grep -oE 'dpl=[A-Za-z0-9]+'` matches `git rev-parse HEAD`, usually 2–3 minutes after the push. Then tell the owner.
+- **Confirm the deploy.** On the studio's PC a push is not a deploy: nothing there watches GitHub. Rebuild it — `docker compose --env-file .env.docker --profile public up -d --build` — then confirm with `docker ps` (neon-app `healthy`) and a real request, `curl -s -o /dev/null -w '%{http_code}' https://clients.neonjo.com/employee/login`. **There is no `?dpl=` marker there**: `deploymentId` comes from `RENDER_GIT_COMMIT`, which only Render sets, so an empty marker on `clients.neonjo.com` is normal and proves nothing either way. To check what a container is actually running, compare its image's build time (`docker image inspect`) against `git log`. On Render, where it still applies, the deploy is live when `curl -s https://neon-client-portal.onrender.com/employee/login | grep -oE 'dpl=[A-Za-z0-9]+'` matches `git rev-parse HEAD`. Then tell the owner.
 - **Keep replies short and plain.** Requests are brief, sometimes in Arabic, and often come with phone screenshots. Answer in the language you were asked in.
 - **Lint is clean.** `npm run lint` passes with 0 errors (a few unused-variable warnings remain), so an error you see is one you introduced. A component that needs the current time ticking uses `lib/use-minute-now.ts` — one shared clock read through `useSyncExternalStore`, rather than setting state in an effect, which `react-hooks/set-state-in-effect` refuses.
 - **Next.js has breaking changes here.** This is not the Next.js you know (see AGENTS.md). Check `node_modules/next/dist/docs/` before using an API you're unsure of.

@@ -34,7 +34,7 @@ let cached: VapidKeys | null = null;
 // parses. A made-up address like mailto:admin@neon.local is exactly the kind
 // of thing that works on Android and fails on an iPhone, so the last resort is
 // the real public address rather than a placeholder.
-const PUBLIC_SITE = "https://neon-client-portal.onrender.com";
+const PUBLIC_SITE = "https://clients.neonjo.com";
 
 function subjectOf() {
   const configured = process.env.VAPID_SUBJECT?.trim();

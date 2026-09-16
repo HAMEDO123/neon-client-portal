@@ -10,7 +10,9 @@ enum APIError: Error {
 final class APIClient: ObservableObject {
     static let shared = APIClient()
 
-    private let baseURL = URL(string: "https://neon-client-portal.onrender.com/api/mobile")!
+    // The studio's own PC serves the platform now; Render was the address
+    // until the switch-over. Rebuild and sideload again for this to take hold.
+    private let baseURL = URL(string: "https://clients.neonjo.com/api/mobile")!
 
     // The token is the same signed session token the web login issues as a
     // cookie — this just carries it as a header instead. Session-lifetime

@@ -22,7 +22,7 @@ struct ProjectSummary: Codable, Identifiable {
     var resolvedCoverURL: URL? { resolvedMediaURL(coverImageUrl) }
 }
 
-let portalOrigin = URL(string: "https://neon-client-portal.onrender.com")!
+let portalOrigin = URL(string: "https://clients.neonjo.com")!
 
 // The API returns some file/image paths as web-relative (e.g. "/seed-images/…"),
 // which URL(string:) alone can't load — resolve those against the portal origin.
