@@ -1,5 +1,6 @@
 import ZKLib, { type ZKAttendance, type ZKUser } from "zkteco-js";
-import type { Punch } from "@/lib/attendance";
+import { deviceWallClock, type Punch } from "@/lib/attendance";
+import { dayKeyIn, instantAt, wallClockIn } from "@/lib/time";
 
 // Talking to the fingerprint machine on the studio's wall.
 //
@@ -8,6 +9,13 @@ import type { Punch } from "@/lib/attendance";
 // opens a socket, asks, and closes — so the rules stay testable without a
 // device, and a device that is unplugged can only ever make a sync say nothing
 // happened.
+//
+// **Every time this file handles a moment, it goes through the company's
+// timezone.** The library builds its Dates from the numbers the machine sends,
+// interpreted in whatever timezone the process happens to run in — Amman on a
+// laptop, UTC in the container. Treating those as instants put the whole
+// feature three hours out in production while it looked perfect in development,
+// and would have charged everybody three hours of lateness a day.
 //
 // Not "use server": every export of one of those is callable over the network,
 // and nothing here checks who is asking.
@@ -41,6 +49,17 @@ function rows<T>(answer: T[] | { data: T[] } | null | undefined): T[] {
   if (Array.isArray(answer)) return answer;
   if (answer && Array.isArray((answer as { data: T[] }).data)) return (answer as { data: T[] }).data;
   return [];
+}
+
+/**
+ * A moment the device reported, as the instant it actually happened.
+ *
+ * The device knows only wall clock. Which instant that was is a question about
+ * the studio's timezone, and is answered in exactly one place: here.
+ */
+function instantOf(reported: Date | string, timeZone: string): Date | null {
+  const wall = deviceWallClock(reported);
+  return wall ? instantAt(wall.dayKey, wall.time, timeZone) : null;
 }
 
 /**
@@ -92,7 +111,7 @@ export async function readDeviceUsers(at: DeviceAddress): Promise<DeviceUser[]> 
 }
 
 /**
- * Every read the device still holds, as punches.
+ * Every read the device still holds, as punches at the instants they happened.
  *
  * It keeps its own log — 50,000 of them on the machine here — and hands over
  * all of them every time, so a sync is naturally idempotent: the same days come
@@ -100,17 +119,40 @@ export async function readDeviceUsers(at: DeviceAddress): Promise<DeviceUser[]> 
  * the same numbers. Nothing here deletes from the device, which means a failed
  * sync loses nothing and can simply be run again.
  */
-export async function readPunches(at: DeviceAddress): Promise<Punch[]> {
+export async function readPunches(at: DeviceAddress, timeZone: string): Promise<Punch[]> {
   return withDevice(at, async (device) => {
     const found = rows<ZKAttendance>(await device.getAttendances());
 
-    return found
-      .map((row) => ({ deviceUserId: String(row.user_id), at: new Date(row.record_time) }))
-      .filter((punch) => punch.deviceUserId !== "" && !Number.isNaN(punch.at.getTime()));
+    return found.flatMap((row) => {
+      const when = instantOf(row.record_time, timeZone);
+      const deviceUserId = String(row.user_id ?? "");
+      // A read with no usable time is dropped rather than placed somewhere it
+      // might not belong — a punch on the wrong day is a deduction on the wrong day.
+      return when && deviceUserId !== "" ? [{ deviceUserId, at: when }] : [];
+    });
   });
 }
 
-export type DeviceClock = { deviceTime: Date; driftSeconds: number };
+export type DeviceClock = {
+  /** What the machine displays, as the instant that is in the studio's timezone. */
+  deviceTime: Date;
+  /** What it displays, as it displays it. */
+  wallClock: string;
+  driftSeconds: number;
+};
+
+function clockFrom(reported: Date | string, timeZone: string, now: Date): DeviceClock {
+  const wall = deviceWallClock(reported);
+  const instant = wall ? instantAt(wall.dayKey, wall.time, timeZone) : null;
+
+  return {
+    deviceTime: instant ?? new Date(NaN),
+    wallClock: wall ? `${wall.dayKey} ${wall.time}` : "unreadable",
+    // Unreadable counts as badly wrong rather than as agreement: a clock nobody
+    // can read must never pass a drift check by default.
+    driftSeconds: instant ? Math.round((instant.getTime() - now.getTime()) / 1000) : Number.MAX_SAFE_INTEGER,
+  };
+}
 
 /**
  * What the machine thinks the time is, and how far out it is.
@@ -120,24 +162,42 @@ export type DeviceClock = { deviceTime: Date; driftSeconds: number };
  * looks like. A clock that has drifted files today's arrivals under a day
  * nobody will look at, and the lateness they carry is meaningless.
  */
-export async function readClock(at: DeviceAddress, now = new Date()): Promise<DeviceClock> {
-  return withDevice(at, async (device) => {
-    const deviceTime = new Date(await device.getTime());
-    return {
-      deviceTime,
-      driftSeconds: Math.round((deviceTime.getTime() - now.getTime()) / 1000),
-    };
-  });
+export async function readClock(at: DeviceAddress, timeZone: string, now = new Date()): Promise<DeviceClock> {
+  return withDevice(at, async (device) => clockFrom(await device.getTime(), timeZone, now));
 }
 
-/** Puts the machine's clock right. */
-export async function setClock(at: DeviceAddress, now = new Date()): Promise<DeviceClock> {
+/**
+ * Puts the machine's clock right.
+ *
+ * The Date handed to the library is built from the studio's wall clock rather
+ * than passed straight through, because the library encodes whatever local
+ * components it is given: sending a real instant from a UTC container would set
+ * this device, in Amman, three hours slow.
+ */
+export async function setClock(at: DeviceAddress, timeZone: string, now = new Date()): Promise<DeviceClock> {
+  const dayKey = dayKeyIn(timeZone, now);
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const [hour, minute] = wallClockIn(timeZone, now).split(":").map(Number);
+  const asTheDeviceShouldShowIt = new Date(year, month - 1, day, hour, minute, 0);
+
   return withDevice(at, async (device) => {
-    await device.setTime(now);
-    const deviceTime = new Date(await device.getTime());
-    return {
-      deviceTime,
-      driftSeconds: Math.round((deviceTime.getTime() - now.getTime()) / 1000),
-    };
+    // Disabled first: the machine accepts a write to its clock and ignores it
+    // while it is serving.
+    try {
+      await device.disableDevice();
+    } catch {
+      // Not every firmware needs it; the write below is the thing that matters.
+    }
+
+    await device.setTime(asTheDeviceShouldShowIt);
+
+    try {
+      await device.enableDevice();
+    } catch {
+      // Leaving it disabled would stop people clocking in, so this is reported
+      // by the read-back below rather than swallowed silently.
+    }
+
+    return clockFrom(await device.getTime(), timeZone, now);
   });
 }

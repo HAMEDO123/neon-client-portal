@@ -135,6 +135,36 @@ export function attendanceFromPunches(
 }
 
 /**
+ * The wall clock a device reported, as a day and a time — nothing more.
+ *
+ * This exists because of a trap that cost a production release. The ZK library
+ * builds its Dates from the numbers the machine sends — year, month, day, hour,
+ * minute — through the *running process's* timezone. So the same device answer
+ * becomes a different instant on a developer's laptop in Amman than it does
+ * inside a container running UTC: three hours apart, silently.
+ *
+ * It read as harmless on the laptop and would have taken three hours off
+ * everybody's pay every day in production, because an 11:00 arrival arrives
+ * here as 14:00. The guard on clock drift is the only reason it never landed.
+ *
+ * The fix is to stop treating that Date as an instant at all. Reading its
+ * components back with the same local getters recovers exactly the wall clock
+ * the machine displayed, whatever timezone the process runs in — and the caller
+ * then places that wall clock in the company's timezone, which is the only
+ * place it ever meant anything.
+ */
+export function deviceWallClock(value: Date | string | null | undefined): { dayKey: string; time: string } | null {
+  const at = value instanceof Date ? value : value ? new Date(value) : null;
+  if (!at || Number.isNaN(at.getTime())) return null;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    dayKey: `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`,
+    time: `${pad(at.getHours())}:${pad(at.getMinutes())}`,
+  };
+}
+
+/**
  * The earliest day a sync may record, given what it was asked for.
  *
  * Anything missing or malformed becomes **today**, never "everything". The

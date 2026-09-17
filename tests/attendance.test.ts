@@ -5,6 +5,7 @@ import {
   MANUAL,
   attendanceFromPunches,
   cutoffFor,
+  deviceWallClock,
   groupPunches,
   lateHours,
   mayDeviceWrite,
@@ -142,6 +143,33 @@ describe("what a sync is allowed to overwrite", () => {
 
   it("leaves alone anything it does not recognise", () => {
     assert.equal(mayDeviceWrite("IMPORTED"), false);
+  });
+});
+
+describe("reading the clock a device displayed", () => {
+  it("recovers the wall clock whatever timezone this process runs in", () => {
+    // Built from local components, exactly as the ZK library builds its answer,
+    // so reading them back must give the same numbers on a laptop in Amman and
+    // inside a container running UTC. The instant differs between the two; the
+    // wall clock is the only part that ever meant anything.
+    const asTheDeviceShowedIt = new Date(2026, 8, 17, 11, 30, 45);
+    assert.deepEqual(deviceWallClock(asTheDeviceShowedIt), { dayKey: "2026-09-17", time: "11:30" });
+  });
+
+  it("pads single digits, so the day is always a key", () => {
+    assert.deepEqual(deviceWallClock(new Date(2026, 0, 5, 9, 7)), { dayKey: "2026-01-05", time: "09:07" });
+  });
+
+  it("reads a string the same way", () => {
+    assert.deepEqual(deviceWallClock("2026-09-17T11:30:00"), { dayKey: "2026-09-17", time: "11:30" });
+  });
+
+  it("says nothing rather than guessing at something that is not a time", () => {
+    assert.equal(deviceWallClock(null), null);
+    assert.equal(deviceWallClock(undefined), null);
+    assert.equal(deviceWallClock(""), null);
+    assert.equal(deviceWallClock("not a time"), null);
+    assert.equal(deviceWallClock(new Date("nonsense")), null);
   });
 });
 

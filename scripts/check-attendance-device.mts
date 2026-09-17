@@ -24,8 +24,12 @@ if (!at) {
 console.log(`device: ${at.ip}:${at.port}`);
 
 const now = new Date();
-const clock = await readClock(at, now);
-console.log(`clock : ${clock.deviceTime.toISOString()}  (out by ${clock.driftSeconds}s)`);
+// The timezone first: the device reports wall clock, and placing it takes the
+// studio's timezone — on a laptop in Amman and in a UTC container alike.
+const timeZone = await getTimezone();
+
+const clock = await readClock(at, timeZone, now);
+console.log(`clock : ${clock.wallClock} on the device  (out by ${clock.driftSeconds}s)`);
 if (Math.abs(clock.driftSeconds) > 600) {
   console.log("        ^ too far out — a sync would refuse to write anything.");
 }
@@ -44,9 +48,8 @@ const paired = [...mapped.values()];
 console.log(`\npaired in the platform (${paired.length}):`);
 for (const person of paired) console.log(`  ${person.name}${person.active ? "" : " (inactive)"}`);
 
-const punches = await readPunches(at);
+const punches = await readPunches(at, timeZone);
 const hours = await getWorkHours();
-const timeZone = await getTimezone();
 const all = attendanceFromPunches(punches, hours, timeZone);
 
 console.log(`\nlog: ${punches.length} punches → ${all.length} working days in the device's memory`);

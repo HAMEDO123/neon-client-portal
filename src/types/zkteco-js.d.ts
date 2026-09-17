@@ -49,5 +49,13 @@ declare module "zkteco-js" {
 
     getTime(): Promise<Date | string>;
     setTime(at: Date): Promise<unknown>;
+
+    /**
+     * The machine stops serving while it is disabled, so these always come in a
+     * pair with the write between them — leaving it disabled would stop people
+     * clocking in. The ZK protocol wants this around a write to the clock.
+     */
+    disableDevice(): Promise<unknown>;
+    enableDevice(): Promise<unknown>;
   }
 }

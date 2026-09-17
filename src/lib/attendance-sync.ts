@@ -60,22 +60,28 @@ export async function syncAttendance(options: SyncOptions = {}, now = new Date()
   if (!at) return { ran: false, reason: "no-device-configured" };
 
   try {
-    // The clock first, and on its own connection: if it is wrong there is no
-    // point reading the log at all, and the answer is the thing worth saying.
-    const clock = await readClock(at, now);
+    // The studio's timezone before anything else. The device knows only wall
+    // clock, and which instant that was is unanswerable without it — not even
+    // to tell whether the clock is right.
+    const timeZone = await getTimezone();
+
+    // The clock next, on its own connection: if it is wrong there is no point
+    // reading the log at all, and the answer is the thing worth saying.
+    const clock = await readClock(at, timeZone, now);
     if (Math.abs(clock.driftSeconds) > MAX_DRIFT_SECONDS) {
       return {
         ran: false,
         reason: "clock-wrong",
         driftSeconds: clock.driftSeconds,
-        deviceTime: clock.deviceTime.toISOString(),
+        // What the machine displays, not an instant: a clock nobody can read
+        // has no instant, and asking an invalid Date for one throws.
+        deviceTime: clock.wallClock,
       };
     }
 
-    const punches = await readPunches(at);
+    const punches = await readPunches(at, timeZone);
     // Read one after the other, like the other multi-query paths here.
     const hours = await getWorkHours();
-    const timeZone = await getTimezone();
 
     const all = attendanceFromPunches(punches, hours, timeZone);
     const since = cutoffFor(options.since, dayKeyIn(timeZone, now));
