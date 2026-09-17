@@ -59,7 +59,12 @@ function rows<T>(answer: T[] | { data: T[] } | null | undefined): T[] {
  */
 function instantOf(reported: Date | string, timeZone: string): Date | null {
   const wall = deviceWallClock(reported);
-  return wall ? instantAt(wall.dayKey, wall.time, timeZone) : null;
+  if (!wall) return null;
+
+  const minute = instantAt(wall.dayKey, wall.time, timeZone);
+  // instantAt speaks HH:MM, so the seconds are added back rather than lost:
+  // without this a correct clock reports as up to 59 seconds slow.
+  return minute ? new Date(minute.getTime() + wall.seconds * 1000) : null;
 }
 
 /**
@@ -143,11 +148,13 @@ export type DeviceClock = {
 
 function clockFrom(reported: Date | string, timeZone: string, now: Date): DeviceClock {
   const wall = deviceWallClock(reported);
-  const instant = wall ? instantAt(wall.dayKey, wall.time, timeZone) : null;
+  const instant = instantOf(reported, timeZone);
 
   return {
     deviceTime: instant ?? new Date(NaN),
-    wallClock: wall ? `${wall.dayKey} ${wall.time}` : "unreadable",
+    wallClock: wall
+      ? `${wall.dayKey} ${wall.time}:${String(wall.seconds).padStart(2, "0")}`
+      : "unreadable",
     // Unreadable counts as badly wrong rather than as agreement: a clock nobody
     // can read must never pass a drift check by default.
     driftSeconds: instant ? Math.round((instant.getTime() - now.getTime()) / 1000) : Number.MAX_SAFE_INTEGER,

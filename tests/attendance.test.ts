@@ -153,15 +153,34 @@ describe("reading the clock a device displayed", () => {
     // inside a container running UTC. The instant differs between the two; the
     // wall clock is the only part that ever meant anything.
     const asTheDeviceShowedIt = new Date(2026, 8, 17, 11, 30, 45);
-    assert.deepEqual(deviceWallClock(asTheDeviceShowedIt), { dayKey: "2026-09-17", time: "11:30" });
+    assert.deepEqual(deviceWallClock(asTheDeviceShowedIt), {
+      dayKey: "2026-09-17",
+      time: "11:30",
+      seconds: 45,
+    });
+  });
+
+  it("keeps the seconds, so a correct clock does not report as slow", () => {
+    // Dropping them made a device reading 17:31:41 look 41 seconds behind —
+    // a number produced by the reading, not found on the machine.
+    assert.equal(deviceWallClock(new Date(2026, 8, 17, 17, 31, 41))?.seconds, 41);
+    assert.equal(deviceWallClock(new Date(2026, 8, 17, 17, 31, 0))?.seconds, 0);
   });
 
   it("pads single digits, so the day is always a key", () => {
-    assert.deepEqual(deviceWallClock(new Date(2026, 0, 5, 9, 7)), { dayKey: "2026-01-05", time: "09:07" });
+    assert.deepEqual(deviceWallClock(new Date(2026, 0, 5, 9, 7, 3)), {
+      dayKey: "2026-01-05",
+      time: "09:07",
+      seconds: 3,
+    });
   });
 
   it("reads a string the same way", () => {
-    assert.deepEqual(deviceWallClock("2026-09-17T11:30:00"), { dayKey: "2026-09-17", time: "11:30" });
+    assert.deepEqual(deviceWallClock("2026-09-17T11:30:00"), {
+      dayKey: "2026-09-17",
+      time: "11:30",
+      seconds: 0,
+    });
   });
 
   it("says nothing rather than guessing at something that is not a time", () => {

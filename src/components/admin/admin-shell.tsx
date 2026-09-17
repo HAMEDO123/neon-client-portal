@@ -28,6 +28,7 @@ const PAGE_NAMES: Record<string, string> = {
   employees: "Employees",
   requests: "Requests",
   payroll: "Payroll",
+  attendance: "Attendance",
   settings: "Settings",
   projects: "Projects",
 };

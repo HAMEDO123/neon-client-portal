@@ -153,7 +153,9 @@ export function attendanceFromPunches(
  * then places that wall clock in the company's timezone, which is the only
  * place it ever meant anything.
  */
-export function deviceWallClock(value: Date | string | null | undefined): { dayKey: string; time: string } | null {
+export function deviceWallClock(
+  value: Date | string | null | undefined
+): { dayKey: string; time: string; seconds: number } | null {
   const at = value instanceof Date ? value : value ? new Date(value) : null;
   if (!at || Number.isNaN(at.getTime())) return null;
 
@@ -161,6 +163,11 @@ export function deviceWallClock(value: Date | string | null | undefined): { dayK
   return {
     dayKey: `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`,
     time: `${pad(at.getHours())}:${pad(at.getMinutes())}`,
+    // Carried separately because instantAt speaks HH:MM. Dropping them made a
+    // correct clock report as up to 59 seconds slow — a number invented by the
+    // reading rather than found on the device, and one I briefly mistook for a
+    // failing battery.
+    seconds: at.getSeconds(),
   };
 }
 
