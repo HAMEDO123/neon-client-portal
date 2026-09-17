@@ -140,6 +140,22 @@ export function employeeChatUrl(conversation: Conversation, recipientId: string)
   return `/employee/chat/${otherPeer(conversation, recipientId)}`;
 }
 
+/**
+ * Where the manager's phone opens a conversation from a notification.
+ *
+ * The mirror of employeeChatUrl, and the reason it exists: the manager cannot
+ * sign in to the employee portal at all — employee-auth refuses any non-EMPLOYEE
+ * account — so a notification carrying an /employee link would open a page that
+ * turns them away. A chat between two employees is not theirs either (mayOpen
+ * refuses it), so that gives the list rather than a conversation they will be
+ * refused; nothing addressed to them should reach it.
+ */
+export function adminChatUrl(conversation: Conversation) {
+  if (conversation.kind === "team") return "/admin/chat/team";
+  if (conversation.kind === "direct") return `/admin/chat/${conversation.employeeId}`;
+  return "/admin/chat";
+}
+
 /** An open conversation, which keeps its own live connection, rather than the list of them. */
 export function isConversationPath(pathname: string) {
   return /\/chat\/[^/]+\/?$/.test(pathname);

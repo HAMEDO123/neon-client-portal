@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  adminChatUrl,
   chatSide,
   conversationFromKey,
   conversationSlug,
@@ -94,6 +95,25 @@ describe("naming a conversation", () => {
     assert.equal(employeeChatUrl({ kind: "team" }, wael.id), "/employee/chat/team");
     assert.equal(employeeChatUrl(theirs, wael.id), `/employee/chat/${sally.id}`, "Wael's phone opens the chat with Sally");
     assert.equal(employeeChatUrl(theirs, sally.id), `/employee/chat/${wael.id}`, "and Sally's the chat with Wael");
+  });
+
+  it("sends the manager an admin link, never an employee one", () => {
+    const direct = { kind: "direct", employeeId: wael.id } as const;
+    const theirs = peerConversation(wael.id, sally.id);
+
+    assert.equal(adminChatUrl({ kind: "team" }), "/admin/chat/team");
+    assert.equal(adminChatUrl(direct), `/admin/chat/${wael.id}`);
+    // Not theirs to open — mayOpen refuses it — so it gives the list rather
+    // than a conversation the manager would be turned away from.
+    assert.equal(adminChatUrl(theirs), "/admin/chat");
+
+    // The whole point of the function: the manager cannot sign in to the
+    // employee portal at all, so nothing addressed to them may carry a link
+    // into it. A notification that opens a page rejecting you is worse than
+    // none, because it looks like the platform is broken.
+    for (const conversation of [{ kind: "team" } as const, direct, theirs]) {
+      assert.ok(!adminChatUrl(conversation).startsWith("/employee"), "no employee link for the manager");
+    }
   });
 
   it("reads a conversation back from its channel key, and nothing from a key that names none", () => {

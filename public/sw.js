@@ -27,7 +27,9 @@ self.addEventListener("push", (event) => {
   const options = {
     body: payload.body || "",
     // Same tag replaces an earlier notification of the same kind instead of
-    // stacking duplicates on the lock screen.
+    // stacking duplicates on the lock screen. The sender decides what counts as
+    // "the same kind": a second call must not silently replace the notification
+    // for a call somebody has not answered yet, so calls send their own tag.
     tag: payload.tag || "neon-task",
     renotify: true,
     // The sender's picture for a chat message, where the device shows one.

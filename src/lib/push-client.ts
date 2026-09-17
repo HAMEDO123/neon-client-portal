@@ -2,6 +2,7 @@
 
 import { savePushSubscription } from "@/lib/actions/employee-actions";
 import { releaseDevice } from "@/lib/actions/device-actions";
+import { removeAdminPushSubscription, saveAdminPushSubscription } from "@/lib/actions/admin-push-actions";
 
 // Turning push on, in one place.
 //
@@ -17,8 +18,47 @@ import { releaseDevice } from "@/lib/actions/device-actions";
 // hang there on first install.
 
 export const SW_SCOPE = "/employee";
+/** The manager's own registration, kept apart from the employee portal's. */
+export const ADMIN_SW_SCOPE = "/admin";
 
 export class PushSetupError extends Error {}
+
+/**
+ * Which portal a phone is being enabled for. The two differ in three ways and
+ * no more — where the worker is registered, what records the subscription, and
+ * what gives it up — so everything difficult here is written once and both
+ * portals get it: the iPhone wording, waiting for the worker, and replacing a
+ * subscription made under an older key.
+ */
+export type PushTarget = {
+  scope: string;
+  /** What this portal's Home Screen app is called, for the iPhone instructions. */
+  appName: string;
+  save: (input: { endpoint: string; p256dh: string; auth: string; userAgent: string }) => Promise<unknown>;
+  release: (endpoint: string) => Promise<unknown>;
+};
+
+export const EMPLOYEE_PUSH: PushTarget = {
+  scope: SW_SCOPE,
+  appName: "NEON Tasks",
+  save: savePushSubscription,
+  release: releaseDevice,
+};
+
+export const ADMIN_PUSH: PushTarget = {
+  scope: ADMIN_SW_SCOPE,
+  appName: "NEON Admin",
+  // The admin actions answer with a reason rather than throwing — so the reason
+  // is thrown here. A subscription that was refused must not leave the switch
+  // reading "on" with nothing recorded behind it.
+  save: async (input) => {
+    const result = await saveAdminPushSubscription(input);
+    if (!result.ok) throw new PushSetupError(result.error);
+  },
+  release: async (endpoint) => {
+    await removeAdminPushSubscription(endpoint);
+  },
+};
 
 function urlBase64ToUint8Array(base64: string) {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
@@ -47,9 +87,9 @@ export function isStandalone() {
   return displayMode || legacy;
 }
 
-export async function currentSubscription() {
+export async function currentSubscription(target: PushTarget = EMPLOYEE_PUSH) {
   if (!pushSupported()) return null;
-  const registration = await navigator.serviceWorker.getRegistration(SW_SCOPE);
+  const registration = await navigator.serviceWorker.getRegistration(target.scope);
   return (await registration?.pushManager.getSubscription()) ?? null;
 }
 
@@ -90,11 +130,11 @@ function sameKey(existing: ArrayBuffer | null | undefined, current: Uint8Array) 
 }
 
 /** Asks, registers, subscribes and records it. Throws with something readable. */
-export async function enablePush(publicKey: string) {
+export async function enablePush(publicKey: string, target: PushTarget = EMPLOYEE_PUSH) {
   if (!pushSupported()) {
     throw new PushSetupError(
       isIOS() && !isStandalone()
-        ? "On iPhone, notifications only work once NEON Tasks is on your Home Screen. In Safari tap Share, then Add to Home Screen, and open it from there."
+        ? `On iPhone, notifications only work once ${target.appName} is on your Home Screen. In Safari tap Share, then Add to Home Screen, and open it from there.`
         : isIOS()
           ? "This iPhone needs iOS 16.4 or later for notifications. Update it in Settings, General, Software Update."
           : "This browser cannot receive push notifications."
@@ -109,13 +149,13 @@ export async function enablePush(publicKey: string) {
     throw new PushSetupError(
       permission === "denied"
         ? isIOS()
-          ? "Notifications are turned off for NEON Tasks. Turn them on in Settings, Notifications, NEON Tasks."
+          ? `Notifications are turned off for ${target.appName}. Turn them on in Settings, Notifications, ${target.appName}.`
           : "Notifications are blocked for this site. Allow them in your browser settings and try again."
         : "Notification permission was not granted."
     );
   }
 
-  const registration = await activated(await navigator.serviceWorker.register("/sw.js", { scope: SW_SCOPE }));
+  const registration = await activated(await navigator.serviceWorker.register("/sw.js", { scope: target.scope }));
   const key = urlBase64ToUint8Array(publicKey);
 
   // A subscription made under an older key can never receive a push signed with
@@ -125,7 +165,7 @@ export async function enablePush(publicKey: string) {
   if (subscription && !sameKey(subscription.options.applicationServerKey, key)) {
     const stale = subscription.endpoint;
     await subscription.unsubscribe().catch(() => {});
-    await releaseDevice(stale).catch(() => {});
+    await target.release(stale).catch(() => {});
     subscription = null;
   }
 
@@ -139,7 +179,7 @@ export async function enablePush(publicKey: string) {
     throw new PushSetupError("The browser returned an incomplete subscription.");
   }
 
-  await savePushSubscription({
+  await target.save({
     endpoint: json.endpoint,
     p256dh: json.keys.p256dh,
     auth: json.keys.auth,

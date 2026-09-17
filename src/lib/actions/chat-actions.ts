@@ -14,7 +14,8 @@ import {
   type ChatViewer,
   type Conversation,
 } from "@/lib/chat";
-import { employeeChatUrl, otherPeer } from "@/lib/chat-conversations";
+import { adminChatUrl, employeeChatUrl, otherPeer } from "@/lib/chat-conversations";
+import { managerEmployeeId } from "@/lib/manager-account";
 import { askAssistant } from "@/lib/ai/assistant";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { chatCopy, chatKey, chatPreview } from "@/lib/notifications/types";
@@ -139,16 +140,29 @@ async function senderIcon(sender: ChatViewer) {
   return avatarUrl(sender.name, "ink");
 }
 
+/** Somebody to tell, and which portal their link belongs to. */
+type Recipient = { id: string; isManager?: boolean };
+
+/** The manager as a recipient, or nobody when this studio has no manager row. */
+async function managerRecipient(): Promise<Recipient[]> {
+  const id = await managerEmployeeId();
+  return id ? [{ id, isManager: true }] : [];
+}
+
 /**
  * In-app and push, to whoever the conversation is for: the rest of the team
  * for the group; the employee, for the manager's private message to them; the
- * other one, in a chat between two employees. The manager has no phone
- * registered to push to, so a private message for them waits in their chat
- * list, with its sound, instead.
+ * other one, in a chat between two employees; and the manager, for a private
+ * message written to them — which reached nobody until they had an employee
+ * row to address, and waited silently in their chat list instead.
+ *
+ * The team group is deliberately not pushed to the manager. They are in every
+ * one of them, so it would put the whole studio's chatter on their phone; the
+ * list and its sound are the right weight for that.
  */
 async function notifyOfMessage(messageId: string, sender: ChatViewer, conversation: Conversation, preview: string) {
   try {
-    const recipients =
+    const recipients: Recipient[] =
       conversation.kind === "team"
         ? await prisma.employee.findMany({
             where: {
@@ -164,7 +178,12 @@ async function notifyOfMessage(messageId: string, sender: ChatViewer, conversati
             : []
           : sender.type === "ADMIN"
             ? [{ id: conversation.employeeId }]
-            : [];
+            : // An employee writing to the manager. This was an empty list for as
+              // long as the manager had no employee row to address; they have one
+              // now, so their phone hears about a private message like everyone
+              // else's. Still empty when there is no such row — a message that
+              // was sent is sent either way.
+              await managerRecipient();
     if (recipients.length === 0) return;
 
     const copy = chatCopy(sender.name, preview);
@@ -177,7 +196,7 @@ async function notifyOfMessage(messageId: string, sender: ChatViewer, conversati
           type: "CHAT_MESSAGE",
           title: copy.title,
           message: copy.message,
-          url: employeeChatUrl(conversation, recipient.id),
+          url: recipient.isManager ? adminChatUrl(conversation) : employeeChatUrl(conversation, recipient.id),
           icon,
           // One notification per message per person, so a retry cannot double it.
           dedupeKey: chatKey(messageId, recipient.id),

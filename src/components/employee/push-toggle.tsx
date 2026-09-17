@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { BellOff, BellRing, Loader } from "lucide-react";
 import { removePushSubscription } from "@/lib/actions/employee-actions";
-import { currentSubscription, enablePush, pushSupported, SW_SCOPE } from "@/lib/push-client";
+import { currentSubscription, enablePush, pushSupported } from "@/lib/push-client";
 import { cn } from "@/lib/utils";
 
 // The switch itself. The work of turning push on lives in push-client, shared

@@ -5,7 +5,9 @@ import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
 import { capacityMinutes, spanMinutes } from "@/lib/work-hours";
 import { TextArea } from "@/components/admin/fields";
 import { isAiConfigured } from "@/lib/ai/client";
-import { isPushConfigured } from "@/lib/notifications/push";
+import { getPublicKey, isPushConfigured } from "@/lib/notifications/push";
+import { managerEmployeeId } from "@/lib/manager-account";
+import { AdminPushToggle } from "@/components/admin/admin-push-toggle";
 import { activeTransport, checkWhatsAppConnection, getCloudCredentials } from "@/lib/whatsapp";
 import { getWhatsAppConfig as getWorkerConfig } from "@/lib/whatsapp/worker";
 import { WhatsAppTest } from "@/components/admin/whatsapp-test";
@@ -61,6 +63,15 @@ export default async function AdminSettingsPage({
   const team = await getEmployees();
   const pushHealth = await getPushHealth();
 
+  // The manager's own phone. The row is the one the attendance device is paired
+  // to; without it there is nothing to attach a subscription to, and the card
+  // says so rather than failing on the tap. Read one after another, like
+  // everything else here — the local database falls over on a burst.
+  const managerId = await managerEmployeeId();
+  const managerDevices = managerId
+    ? await prisma.pushSubscription.count({ where: { employeeId: managerId, active: true } })
+    : 0;
+
   // The studio's own rules, and — only when asked for — what they would do
   // against today. The preview writes nothing: no state, no notification.
   const rules = await prisma.automationRule.findMany({ orderBy: [{ order: "asc" }, { createdAt: "asc" }] });
@@ -86,6 +97,17 @@ export default async function AdminSettingsPage({
       </div>
 
       <PushHealthCard health={pushHealth} timezone={timezone} />
+
+      {/* Under the health of everybody's push, because it is the same subject
+          seen from your own side: whether this phone is one of the ones that
+          hears anything. Above the sounds, which only play while the platform
+          is open — these are what arrive when it is closed. */}
+      <AdminPushToggle
+        publicKey={await getPublicKey()}
+        configured={await isPushConfigured()}
+        paired={Boolean(managerId)}
+        devices={managerDevices}
+      />
 
       <SoundToggle />
 

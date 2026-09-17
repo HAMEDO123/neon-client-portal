@@ -2,6 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import type { ChatViewer } from "@/lib/chat";
 import {
+  adminChatUrl,
   conversationFromKey,
   conversationSlug,
   employeeChatUrl,
@@ -18,6 +19,7 @@ import {
   type EndReason,
 } from "@/lib/calls";
 import { dispatchNotification } from "@/lib/notifications/engine";
+import { MANAGER_MEMBER_KEY, notifiableEmployeeId } from "@/lib/manager-account";
 import { avatarUrl } from "@/lib/avatar";
 
 // Calls in the database: starting one and ringing the people in the
@@ -112,22 +114,30 @@ export async function startCall(viewer: ChatViewer, conversation: Conversation, 
     select: { id: true },
   });
 
-  // A phone with the app closed hears about it the only way it can: a notification.
+  // A phone with the app closed hears about it the only way it can: a
+  // notification. The manager used to be filtered out here, because there was
+  // no employee row to address one to; there is now, so a call rings their
+  // phone like anybody else's — and the link goes to the admin, since they
+  // cannot sign in to the employee portal at all.
   void Promise.all(
-    others
-      .filter((member) => member.key !== "admin")
-      .map((member) =>
-        dispatchNotification({
-          employeeId: member.key,
-          type: "CHAT_MESSAGE",
-          title: kind === "VIDEO" ? "Incoming video call" : "Incoming call",
-          message:
-            conversation.kind === "team" ? `${viewer.name} started a call in the team chat.` : `${viewer.name} is calling you.`,
-          url: employeeChatUrl(conversation, member.key),
-          icon: viewer.type === "ADMIN" ? avatarUrl("Manager", "ink") : undefined,
-          dedupeKey: `CALL:${call.id}:${member.key}`,
-        }).catch(() => undefined)
-      )
+    others.map(async (member) => {
+      const forManager = member.key === MANAGER_MEMBER_KEY;
+      const employeeId = await notifiableEmployeeId(member.key);
+      // Nobody to tell — an installation with nobody paired as manager, say.
+      // Every other phone still rings.
+      if (!employeeId) return;
+
+      await dispatchNotification({
+        employeeId,
+        type: "CHAT_MESSAGE",
+        title: kind === "VIDEO" ? "Incoming video call" : "Incoming call",
+        message:
+          conversation.kind === "team" ? `${viewer.name} started a call in the team chat.` : `${viewer.name} is calling you.`,
+        url: forManager ? adminChatUrl(conversation) : employeeChatUrl(conversation, member.key),
+        icon: viewer.type === "ADMIN" ? avatarUrl("Manager", "ink") : undefined,
+        dedupeKey: `CALL:${call.id}:${member.key}`,
+      }).catch(() => undefined);
+    })
   );
 
   return { callId: call.id, joinedExisting: false };
