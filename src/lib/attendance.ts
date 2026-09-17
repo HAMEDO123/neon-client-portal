@@ -134,6 +134,22 @@ export function attendanceFromPunches(
   return days.sort((a, b) => a.dayKey.localeCompare(b.dayKey) || a.deviceUserId.localeCompare(b.deviceUserId));
 }
 
+/**
+ * The earliest day a sync may record, given what it was asked for.
+ *
+ * Anything missing or malformed becomes **today**, never "everything". The
+ * device holds years of logs — this one had two — and writing them would put
+ * lateness into payslips that were already paid, because payroll sums by
+ * period and a settled month would gain deductions nobody ever charged.
+ *
+ * So the failure mode is chosen rather than inherited: a caller that forgets
+ * the cutoff, or passes an empty box from a form, records one day. Reaching
+ * further back has to be spelled out, which is what makes it a decision.
+ */
+export function cutoffFor(since: string | undefined | null, today: string): string {
+  return typeof since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(since) ? since : today;
+}
+
 /** How an attendance row came to exist. */
 export const MANUAL = "MANUAL";
 export const DEVICE = "DEVICE";

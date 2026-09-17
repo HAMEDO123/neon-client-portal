@@ -3,12 +3,19 @@ import Link from "next/link";
 import { Coins, Wallet } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getAttendanceForPeriod, getPayrollForPeriod, getReceiptsForPeriod } from "@/lib/payroll-queries";
-import { setAttendance, setEmployeePay, correctReceipt, deleteAttendance } from "@/lib/actions/operations-actions";
+import {
+  setAttendance,
+  setEmployeePay,
+  correctReceipt,
+  deleteAttendance,
+  setDeviceUserId,
+} from "@/lib/actions/operations-actions";
 import { getTimezone } from "@/lib/settings";
 import { todayKey } from "@/lib/time";
 import { periodLabel, periodOf, previousPeriod, RECEIPT_CAP } from "@/lib/payroll";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
+import { AttendanceDeviceCard } from "@/components/admin/attendance-device";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +45,7 @@ export default async function AdminPayrollPage({
   const employees = await prisma.employee.findMany({
     where: { active: true, accessRole: "EMPLOYEE" },
     orderBy: { order: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, deviceUserId: true },
   });
 
   const totals = rows.reduce(
@@ -251,9 +258,39 @@ export default async function AdminPayrollPage({
       {/* --- Attendance --------------------------------------------------- */}
       <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-ink/40">Arrival delays</h2>
       <p className="mt-1 text-xs text-ink/45">
-        Recorded per day and per person. The attendance device can write these same rows later without changing
-        anything here.
+        Recorded per day and per person. The fingerprint device writes these same rows — and never writes over a
+        figure you have typed here yourself.
       </p>
+
+      <AttendanceDeviceCard
+        pairedCount={employees.filter((employee) => employee.deviceUserId).length}
+        teamCount={employees.length}
+      />
+
+      {/* Pairing is by the device's own user number, never by name: the device
+          knows people by a number, the two lists of names rarely match, and a
+          wrong pair deducts from the wrong person's pay with nothing on screen
+          to say why. */}
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {employees.map((employee) => (
+          <form
+            key={employee.id}
+            action={setDeviceUserId.bind(null, employee.id)}
+            className="flex items-center gap-2 rounded-xl border border-ink/8 bg-white/40 px-3 py-2"
+          >
+            <span className="min-w-0 flex-1 truncate text-sm text-ink">{employee.name}</span>
+            <input
+              name="deviceUserId"
+              defaultValue={employee.deviceUserId ?? ""}
+              placeholder="device no."
+              inputMode="numeric"
+              aria-label={`Device number for ${employee.name}`}
+              className="w-24 rounded-lg border border-ink/12 bg-white/70 px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
+            />
+            <SaveButton label="Pair" />
+          </form>
+        ))}
+      </div>
 
       <form action={setAttendance} className="glass mt-4 flex flex-wrap items-end gap-3 rounded-2xl p-5">
         <label className="min-w-40 flex-1">

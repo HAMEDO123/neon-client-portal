@@ -4,6 +4,7 @@ import {
   DEVICE,
   MANUAL,
   attendanceFromPunches,
+  cutoffFor,
   groupPunches,
   lateHours,
   mayDeviceWrite,
@@ -141,5 +142,31 @@ describe("what a sync is allowed to overwrite", () => {
 
   it("leaves alone anything it does not recognise", () => {
     assert.equal(mayDeviceWrite("IMPORTED"), false);
+  });
+});
+
+describe("how far back a sync may reach", () => {
+  const today = "2026-09-17";
+
+  it("uses the day it was given", () => {
+    assert.equal(cutoffFor("2026-09-01", today), "2026-09-01");
+  });
+
+  it("falls back to today when it was given nothing", () => {
+    // The device holds years of logs. Absent must never mean all of them, or a
+    // settled month gains deductions nobody ever charged.
+    assert.equal(cutoffFor(undefined, today), today);
+    assert.equal(cutoffFor(null, today), today);
+  });
+
+  it("falls back to today for an empty box on a form", () => {
+    assert.equal(cutoffFor("", today), today);
+    assert.equal(cutoffFor("   ", today), today);
+  });
+
+  it("refuses anything that is not a day, rather than reaching further than asked", () => {
+    assert.equal(cutoffFor("last tuesday", today), today);
+    assert.equal(cutoffFor("2026-9-1", today), today, "a real date badly written is still not a day key");
+    assert.equal(cutoffFor("2026-09", today), today);
   });
 });

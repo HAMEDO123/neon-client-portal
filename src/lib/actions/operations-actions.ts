@@ -9,6 +9,7 @@ import { readReceipt } from "@/lib/ai/receipts";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { countedReceiptAmount, periodOf } from "@/lib/payroll";
 import { MANUAL } from "@/lib/attendance";
+import { syncAttendance, type SyncReport } from "@/lib/attendance-sync";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
@@ -266,6 +267,48 @@ export async function deleteAttendance(id: string) {
   await requireAdmin();
   await prisma.attendanceRecord.delete({ where: { id } });
   refreshAdmin();
+}
+
+/**
+ * Pairs somebody with their number on the fingerprint device, or clears it.
+ *
+ * The number is taken off whoever else held it first. It is unique — two people
+ * must never share one finger, because attendance decides pay — but a manager
+ * re-pairing a number that somebody else had is an ordinary thing to do when
+ * staff change, and it should move rather than fail with a constraint error
+ * they cannot act on.
+ */
+export async function setDeviceUserId(employeeId: string, formData: FormData) {
+  await requireAdmin();
+
+  const raw = String(formData.get("deviceUserId") ?? "").trim().slice(0, 32);
+  const deviceUserId = raw === "" ? null : raw;
+
+  if (deviceUserId) {
+    await prisma.employee.updateMany({
+      where: { deviceUserId, NOT: { id: employeeId } },
+      data: { deviceUserId: null },
+    });
+  }
+
+  await prisma.employee.update({ where: { id: employeeId }, data: { deviceUserId } });
+  refreshAdmin();
+}
+
+/**
+ * Asks the device for today's arrivals now, rather than waiting for the pass
+ * that runs on its own.
+ *
+ * Today only, deliberately: the button is for "I have just enrolled somebody,
+ * does it work", and a button on a payroll screen should not be able to reach
+ * back into months that are settled. Reaching further is a decision, and a
+ * decision belongs somewhere it has to be typed.
+ */
+export async function syncAttendanceNow(): Promise<SyncReport> {
+  await requireAdmin();
+  const report = await syncAttendance();
+  refreshAdmin();
+  return report;
 }
 
 export async function setEmployeePay(id: string, formData: FormData) {

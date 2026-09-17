@@ -3,6 +3,7 @@ import { runDeadlineReminders, runScheduleNotifier, runStageReminders } from "@/
 import { runFollowUps } from "@/lib/notifications/follow-up-events";
 import { runRules } from "@/lib/notifications/automation-events";
 import { runMeetingReminders } from "@/lib/notifications/meeting-events";
+import { syncAttendance } from "@/lib/attendance-sync";
 import { getTimezone } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
 
@@ -80,6 +81,15 @@ async function handle(request: Request) {
   // key, so overlapping runs tell somebody once.
   if (forced === "meetings" || !forced) {
     ran.meetings = await runMeetingReminders(new Date(), timezone);
+  }
+
+  // What the fingerprint device saw. Considered on every run, like the
+  // follow-ups: it hands over its whole log each time and every day lands on
+  // the same (employee, day) row, so repeating a run writes the same numbers
+  // rather than doubling anything. It reports rather than throws — a device
+  // that is unplugged must not take the rest of this pass down with it.
+  if (forced === "attendance" || !forced) {
+    ran.attendance = await syncAttendance();
   }
 
   // Chasing against the stage periods is a daily conversation, not an hourly
