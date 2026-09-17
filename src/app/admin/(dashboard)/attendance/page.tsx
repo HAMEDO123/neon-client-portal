@@ -6,6 +6,7 @@ import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
 import { setDeviceUserId } from "@/lib/actions/operations-actions";
 import { getTimezone } from "@/lib/settings";
 import { AttendanceConsole } from "@/components/admin/attendance-console";
+import { DeviceUsers } from "@/components/admin/device-users";
 import { SaveButton } from "@/components/admin/form-buttons";
 
 // The fingerprint machine's own screen: is it there, is its clock right, who is
@@ -105,49 +106,21 @@ export default async function AttendanceDevicePage() {
 
       <AttendanceConsole />
 
-      {/* --- Who the device knows, and who they are here ------------------ */}
-      <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-bark/40">Enrolled on the device</h2>
-      {users.length === 0 ? (
-        <p className="mt-2 text-sm text-bark/50">
-          {at && !reachError ? "Nobody is enrolled yet." : "Cannot read the device just now."}
-        </p>
-      ) : (
-        <div className="mt-3 overflow-x-auto rounded-2xl border border-warm-line">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-clay-soft/40 text-xs uppercase tracking-wider text-bark/45">
-              <tr>
-                <th className="px-4 py-3">Number</th>
-                <th className="px-4 py-3">Name on the device</th>
-                <th className="px-4 py-3">In the platform</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => {
-                const person = mapped.get(user.deviceUserId);
-                return (
-                  <tr key={user.deviceUserId} className="border-t border-warm-line">
-                    <td className="px-4 py-3 tabular-nums text-bark/60">{user.deviceUserId}</td>
-                    <td className="px-4 py-3 font-medium text-bark">
-                      {user.name || "—"}
-                      {user.isAdmin && <span className="ml-2 text-[11px] text-bark/40">device admin</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {person ? (
-                        <span className="text-bark/70">
-                          {person.name}
-                          {!person.active && <span className="text-bark/40"> · no longer on the team</span>}
-                        </span>
-                      ) : (
-                        <span className="text-amber-700">not paired — nothing is recorded for this number</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* --- Who the device knows, and the three things that change it ---- */}
+      <DeviceUsers
+        users={users.map((user) => ({
+          uid: user.uid,
+          deviceUserId: user.deviceUserId,
+          name: user.name,
+          isAdmin: user.isAdmin,
+        }))}
+        paired={[...mapped.values()].map((person) => ({
+          deviceUserId: person.deviceUserId as string,
+          name: person.name,
+          active: person.active,
+        }))}
+        canReach={Boolean(at) && !reachError}
+      />
 
       {/* --- Pairing ------------------------------------------------------ */}
       <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-bark/40">Pair people</h2>

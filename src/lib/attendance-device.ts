@@ -94,6 +94,14 @@ async function withDevice<T>(at: DeviceAddress, run: (device: ZKLib) => Promise<
 }
 
 export type DeviceUser = {
+  /**
+   * The device's internal slot number.
+   *
+   * Carried because **deleteUser takes this, not the userid** — they are
+   * different numbers and often differ. Deleting by the wrong one removes
+   * somebody else.
+   */
+  uid: number;
   /** The number the attendance logs refer to — what Employee.deviceUserId holds. */
   deviceUserId: string;
   name: string;
@@ -107,6 +115,7 @@ export async function readDeviceUsers(at: DeviceAddress): Promise<DeviceUser[]> 
     const found = rows<ZKUser>(await device.getUsers());
     return found
       .map((user) => ({
+        uid: Number(user.uid),
         deviceUserId: String(user.userId ?? user.uid),
         name: (user.name ?? "").trim(),
         isAdmin: user.role === 14,
@@ -171,6 +180,103 @@ function clockFrom(reported: Date | string, timeZone: string, now: Date): Device
  */
 export async function readClock(at: DeviceAddress, timeZone: string, now = new Date()): Promise<DeviceClock> {
   return withDevice(at, async (device) => clockFrom(await device.getTime(), timeZone, now));
+}
+
+/**
+ * Runs a write with the machine disabled, and always re-enables it.
+ *
+ * The ZK protocol wants writes done while the device is not serving. Leaving it
+ * disabled would stop people clocking in — a worse fault than the one being
+ * fixed — so the re-enable is in a `finally` and never swallowed by an earlier
+ * failure.
+ */
+async function whileDisabled<T>(device: ZKLib, write: () => Promise<T>): Promise<T> {
+  try {
+    await device.disableDevice();
+  } catch {
+    // Not every firmware requires it; the write itself is what matters.
+  }
+  try {
+    return await write();
+  } finally {
+    try {
+      await device.enableDevice();
+    } catch {
+      // Nothing useful to do, and it must not mask the real error.
+    }
+  }
+}
+
+export type NewDeviceUser = {
+  /** The number attendance logs will refer to — what gets paired to an employee. */
+  deviceUserId: string;
+  name: string;
+};
+
+/**
+ * Creates a person on the device.
+ *
+ * **This makes the record, not the fingerprint.** A finger can only be enrolled
+ * at the machine itself, by the person putting it on the reader — nothing over
+ * the network can do it. So this is half of adding somebody, and any screen
+ * offering it has to say so, or a manager walks away believing a person is set
+ * up when the device will never recognise them.
+ *
+ * The slot number is chosen here rather than asked for: it is the device's own
+ * bookkeeping, it must not collide, and nobody should have to know it exists.
+ */
+export async function createDeviceUser(at: DeviceAddress, user: NewDeviceUser): Promise<{ uid: number }> {
+  const name = user.name.trim().slice(0, 24);
+  const deviceUserId = user.deviceUserId.trim();
+  if (!deviceUserId) throw new Error("Give the person a number.");
+  if (!name) throw new Error("Give the person a name.");
+
+  return withDevice(at, async (device) => {
+    const existing = rows<ZKUser>(await device.getUsers());
+
+    // Refused rather than overwritten: setUser on a number somebody already has
+    // replaces them, and the first sign would be their attendance appearing
+    // under the wrong name.
+    if (existing.some((row) => String(row.userId ?? row.uid) === deviceUserId)) {
+      throw new Error(`Number ${deviceUserId} is already used on the device.`);
+    }
+
+    const uid = existing.reduce((highest, row) => Math.max(highest, Number(row.uid) || 0), 0) + 1;
+    await whileDisabled(device, () => device.setUser(uid, deviceUserId, name, "", 0, 0));
+    return { uid };
+  });
+}
+
+/**
+ * Removes somebody from the device, by its internal slot number.
+ *
+ * Takes `uid` because that is what the protocol takes — the number shown to
+ * people, and stored against an employee, is `userId`, and they are not the
+ * same. Callers must pass the uid from readDeviceUsers rather than the paired
+ * number, or this deletes a different person.
+ *
+ * Their past punches stay in the device's log; only the person is removed.
+ */
+export async function removeDeviceUser(at: DeviceAddress, uid: number): Promise<void> {
+  if (!Number.isInteger(uid) || uid < 0) throw new Error("That is not a slot on the device.");
+
+  await withDevice(at, async (device) => {
+    await whileDisabled(device, () => device.deleteUser(uid));
+  });
+}
+
+/**
+ * Wipes the device's attendance log.
+ *
+ * **Irreversible, and it destroys history that was never imported.** A sync only
+ * records days on or after its cutoff — today, by default — so everything older
+ * lives nowhere but the machine. Clearing it is how two years of arrivals stop
+ * existing. Nothing calls this without a person deliberately asking for it.
+ */
+export async function clearDeviceLog(at: DeviceAddress): Promise<void> {
+  await withDevice(at, async (device) => {
+    await whileDisabled(device, () => device.clearAttendanceLog());
+  });
 }
 
 /**

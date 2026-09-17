@@ -57,5 +57,26 @@ declare module "zkteco-js" {
      */
     disableDevice(): Promise<unknown>;
     enableDevice(): Promise<unknown>;
+
+    /**
+     * Two different numbers, and the order matters: `uid` is the device's
+     * internal slot, `userid` is what the attendance log refers to and what an
+     * employee is paired with. Writing to a `userid` somebody already has
+     * replaces that person.
+     */
+    setUser(
+      uid: number,
+      userid: string,
+      name: string,
+      password: string,
+      role?: number,
+      cardno?: number
+    ): Promise<unknown>;
+
+    /** By the internal slot, **not** the userid — they differ, and this deletes. */
+    deleteUser(uid: number): Promise<unknown>;
+
+    /** Wipes every punch the device holds. Irreversible. */
+    clearAttendanceLog(): Promise<unknown>;
   }
 }

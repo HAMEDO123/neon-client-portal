@@ -10,7 +10,14 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 import { countedReceiptAmount, periodOf } from "@/lib/payroll";
 import { MANUAL } from "@/lib/attendance";
 import { syncAttendance, type SyncReport } from "@/lib/attendance-sync";
-import { deviceAddress, setClock } from "@/lib/attendance-device";
+import {
+  clearDeviceLog,
+  createDeviceUser,
+  deviceAddress,
+  removeDeviceUser,
+  setClock,
+  type DeviceAddress,
+} from "@/lib/attendance-device";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
@@ -310,6 +317,84 @@ export async function syncAttendanceNow(): Promise<SyncReport> {
   const report = await syncAttendance();
   refreshAdmin();
   return report;
+}
+
+export type DeviceWrite = { ok: true; message: string } | { ok: false; error: string };
+
+/** Everything that writes to the machine goes through here: admin only, and it never throws at a screen. */
+async function writeToDevice(work: (at: DeviceAddress) => Promise<string>): Promise<DeviceWrite> {
+  await requireAdmin();
+
+  const at = deviceAddress();
+  if (!at) return { ok: false, error: "No device is configured on this server." };
+
+  try {
+    const message = await work(at);
+    refreshAdmin();
+    return { ok: true, message };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Adds somebody to the device.
+ *
+ * Creates the record only — the finger has to be enrolled at the machine by the
+ * person themselves, and the message says so, because a manager who thinks this
+ * finished the job will wonder for a week why nothing is recorded.
+ */
+export async function addDeviceUser(formData: FormData): Promise<DeviceWrite> {
+  const deviceUserId = String(formData.get("deviceUserId") ?? "").trim().slice(0, 32);
+  const name = String(formData.get("name") ?? "").trim().slice(0, 24);
+
+  return writeToDevice(async (at) => {
+    await createDeviceUser(at, { deviceUserId, name });
+    return `${name} added as number ${deviceUserId}. Now enrol their finger at the device itself — that part cannot be done from here.`;
+  });
+}
+
+/**
+ * Removes somebody from the device, and unpairs them here.
+ *
+ * Both together on purpose: a pairing pointing at a slot that no longer exists
+ * is a person the platform believes is being recorded and who is not.
+ */
+export async function deleteDeviceUser(formData: FormData): Promise<DeviceWrite> {
+  // The uid comes from the form rather than being bound to the action, so the
+  // screen can report what happened — a destructive button whose only feedback
+  // is a row failing to disappear tells you nothing about why.
+  const uid = Number(formData.get("uid"));
+  const deviceUserId = String(formData.get("deviceUserId") ?? "");
+
+  return writeToDevice(async (at) => {
+    await removeDeviceUser(at, uid);
+    const unpaired = await prisma.employee.updateMany({
+      where: { deviceUserId },
+      data: { deviceUserId: null },
+    });
+    return unpaired.count > 0
+      ? `Removed from the device, and unpaired here.`
+      : `Removed from the device.`;
+  });
+}
+
+/**
+ * Wipes the device's attendance log.
+ *
+ * Guarded by a typed word rather than a boolean: this destroys arrivals that
+ * exist nowhere else, because a sync only ever records days from its cutoff
+ * onward. A stray call with a default argument must not be able to do it.
+ */
+export async function clearDeviceAttendanceLog(formData: FormData): Promise<DeviceWrite> {
+  if (String(formData.get("confirm") ?? "").trim().toUpperCase() !== "WIPE") {
+    return { ok: false, error: 'Type WIPE to confirm. Nothing was cleared.' };
+  }
+
+  return writeToDevice(async (at) => {
+    await clearDeviceLog(at);
+    return "The device's log is empty. Anything it held that was never synced is gone.";
+  });
 }
 
 export type ClockResult =
