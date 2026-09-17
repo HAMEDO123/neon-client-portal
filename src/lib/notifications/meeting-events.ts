@@ -1,6 +1,7 @@
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { meetingsStartingBetween, type MeetingToTellAbout } from "@/lib/chat-meeting-store";
-import { conversationFromKey, employeeChatUrl } from "@/lib/chat-conversations";
+import { adminChatUrl, conversationFromKey, employeeChatUrl } from "@/lib/chat-conversations";
+import { MANAGER_MEMBER_KEY, managerEmployeeId } from "@/lib/manager-account";
 import { endsAt, remindAt, whenLabel } from "@/lib/chat-meetings";
 import { avatarUrl } from "@/lib/avatar";
 
@@ -24,9 +25,13 @@ const LOOK_BACK_MINUTES = 90;
 const LOOK_AHEAD_MINUTES = 90;
 
 /** Where the notification opens it: the chat, scrolled to the card. */
-function urlFor(channelKey: string, meetingId: string, employeeId: string) {
+function urlFor(channelKey: string, meetingId: string, employeeId: string, forManager = false) {
   const conversation = conversationFromKey(channelKey);
-  return conversation ? `${employeeChatUrl(conversation, employeeId)}?meeting=${meetingId}` : "/employee/chat";
+  // The manager's link leads to the admin — they cannot sign in to the employee
+  // portal, so an /employee link would open a page that turns them away.
+  if (!conversation) return forManager ? "/admin/chat" : "/employee/chat";
+  const chat = forManager ? adminChatUrl(conversation) : employeeChatUrl(conversation, employeeId);
+  return `${chat}?meeting=${meetingId}`;
 }
 
 function clip(text: string, length = 140) {
@@ -44,6 +49,9 @@ export async function runMeetingReminders(now: Date, timeZone: string) {
   const to = new Date(now.getTime() + LOOK_AHEAD_MINUTES * 60_000);
 
   const meetings = await meetingsStartingBetween(from, to);
+  // Looked up once for the whole pass rather than once per attendee: this runs
+  // every minute, over every meeting in the window.
+  const managerId = await managerEmployeeId();
   const sending: Promise<unknown>[] = [];
   let warned = 0;
   let started = 0;
@@ -63,19 +71,24 @@ export async function runMeetingReminders(now: Date, timeZone: string) {
     const when = whenLabel(startsAt, now, timeZone);
 
     for (const person of meeting.attendees) {
-      // The manager has no Employee row and receives no push; they are told in
-      // the app, by the card itself.
-      if (person.memberKey === "admin") continue;
+      // The manager used to be skipped here, having no Employee row to address
+      // and so no phone to reach. They have one now, and a reminder ten minutes
+      // before is exactly what somebody wants on a phone even when they were
+      // the one who set the meeting. Null means nobody is paired as manager —
+      // then there is nothing to tell, and everybody else is still told.
+      const forManager = person.memberKey === MANAGER_MEMBER_KEY;
+      const employeeId = forManager ? managerId : person.memberKey;
+      if (!employeeId) continue;
       // Somebody who said they are not coming is not chased about it.
       if (person.rsvp === "DECLINED") continue;
 
-      const url = urlFor(meeting.channel.key, meeting.id, person.memberKey);
+      const url = urlFor(meeting.channel.key, meeting.id, person.memberKey, forManager);
 
       if (owesWarning) {
         warned++;
         sending.push(
           dispatchNotification({
-            employeeId: person.memberKey,
+            employeeId,
             // A meeting is a company matter rather than a convenience, so it is
             // not something a preference can silence.
             type: "SYSTEM_NOTIFICATION",
@@ -93,7 +106,7 @@ export async function runMeetingReminders(now: Date, timeZone: string) {
         started++;
         sending.push(
           dispatchNotification({
-            employeeId: person.memberKey,
+            employeeId,
             type: "SYSTEM_NOTIFICATION",
             title: "Meeting starting now",
             message: clip(`${meeting.title}. ${whereLine(meeting)}`),

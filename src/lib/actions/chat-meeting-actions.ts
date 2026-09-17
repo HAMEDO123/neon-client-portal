@@ -122,7 +122,10 @@ export async function createChatMeeting(formData: FormData) {
 
   // Telling people runs on its own, like a message: the card is on screen
   // already, and a failed push must never cost the meeting. The manager is not
-  // told — they are the one who just set it, and they receive no push anyway.
+  // told — they are the one who just set it, and the card is in front of them.
+  // That is the whole reason now: they can be pushed to since they were given
+  // an employee row, so leaving them out here is a decision, not a gap. The
+  // reminder before it starts does reach them.
   const label = whenLabel(when.startsAt, now, timezone);
   const where = mode === "IN_PERSON" ? (place ? ` at ${place}` : "") : "";
   void Promise.all(

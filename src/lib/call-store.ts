@@ -314,19 +314,28 @@ async function finish(
 
   if (reason === "completed" || !conversation) return;
 
-  // Whoever it rang and never picked up hears that they missed it.
-  const missed = call.participants.filter((part) => part.state === "INVITED" && part.memberKey !== "admin");
+  // Whoever it rang and never picked up hears that they missed it — the manager
+  // included, now that there is a row to address one to. A missed call is the
+  // one notification that matters most to somebody whose app was closed: it is
+  // the only trace left of a call they never saw.
+  const missed = call.participants.filter((part) => part.state === "INVITED");
   await Promise.all(
-    missed.map((part) =>
-      dispatchNotification({
-        employeeId: part.memberKey,
+    missed.map(async (part) => {
+      const forManager = part.memberKey === MANAGER_MEMBER_KEY;
+      const employeeId = await notifiableEmployeeId(part.memberKey);
+      if (!employeeId) return;
+
+      await dispatchNotification({
+        employeeId,
         type: "CHAT_MESSAGE",
         title: call.kind === "VIDEO" ? "Missed video call" : "Missed call",
         message: `From ${call.startedByName}.`,
-        url: employeeChatUrl(conversation, part.memberKey),
+        url: forManager ? adminChatUrl(conversation) : employeeChatUrl(conversation, part.memberKey),
+        // Keyed on the member key, not the row it resolves to: the key is what
+        // the call was rung on, and it does not move.
         dedupeKey: `CALL_MISSED:${call.id}:${part.memberKey}`,
-      }).catch(() => undefined)
-    )
+      }).catch(() => undefined);
+    })
   );
 }
 
