@@ -41,7 +41,10 @@ export default async function AttendanceDevicePage() {
 
   const mapped = await mappedByDeviceUser();
   const employees = await prisma.employee.findMany({
-    where: { active: true, accessRole: "EMPLOYEE" },
+    // Everybody the device can be paired to, the manager included — this screen
+    // is where that pairing is managed, so excluding them here would make their
+    // own number unpairable.
+    where: { active: true },
     orderBy: { order: "asc" },
     select: { id: true, name: true, role: true, deviceUserId: true },
   });

@@ -77,7 +77,9 @@ export async function createAssignedTask(formData: FormData) {
   const input = readForm(formData);
 
   const employee = await prisma.employee.findFirst({
-    where: { id: input.employeeId, active: true },
+    // Staff only. The manager has an employee row so attendance has something
+    // to point at; it is not somebody work can be handed to.
+    where: { id: input.employeeId, active: true, accessRole: "EMPLOYEE" },
     select: { id: true },
   });
   if (!employee) throw new Error("That employee is not available.");
@@ -189,7 +191,8 @@ export async function moveAssignedTask(id: string, input: { days: number; employ
 
   if (employeeId !== task.employeeId) {
     const employee = await prisma.employee.findFirst({
-      where: { id: employeeId, active: true },
+      // Staff only, for the same reason as the guard above.
+      where: { id: employeeId, active: true, accessRole: "EMPLOYEE" },
       select: { id: true },
     });
     if (!employee) throw new Error("That employee is not available.");

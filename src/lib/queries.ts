@@ -97,6 +97,11 @@ export type FullProject = NonNullable<Awaited<ReturnType<typeof getProjectById>>
 
 export function getEmployees() {
   return prisma.employee.findMany({
+    // The board is the team's own working surface, so it shows staff only. The
+    // manager has an employee row of their own now — for attendance, which
+    // needs one to point at — and a column for them here would be a column
+    // nobody ever works in.
+    where: { accessRole: "EMPLOYEE" },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     include: { _count: { select: { tasks: true } } },
   });

@@ -86,7 +86,9 @@ export async function applyDayPlan(
   if (kept.length === 0) return { ok: false, error: "Nothing is ticked to put on the day." };
 
   const employee = await prisma.employee.findFirst({
-    where: { id: employeeId, active: true },
+    // Staff only. The manager's row exists so attendance has something to point
+    // at, not so a day can be planned for them.
+    where: { id: employeeId, active: true, accessRole: "EMPLOYEE" },
     select: { id: true },
   });
   if (!employee) return { ok: false, error: "That employee is not available." };

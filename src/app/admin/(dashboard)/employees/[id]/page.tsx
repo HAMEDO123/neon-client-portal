@@ -51,7 +51,10 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
   // Everybody else, for "who reviews their work". Themselves excluded: nobody
   // reviews their own work, so it is not offered in the first place.
   const colleagues = await prisma.employee.findMany({
-    where: { active: true, NOT: { id: employee.id } },
+    // Staff only: the manager already reviews everything by default, and
+    // offering them here as though they were a colleague would be a second
+    // route to the same thing.
+    where: { active: true, accessRole: "EMPLOYEE", NOT: { id: employee.id } },
     select: { id: true, name: true },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });

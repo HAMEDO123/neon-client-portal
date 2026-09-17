@@ -99,7 +99,11 @@ export async function deleteEmployee(id: string) {
 
 export async function moveEmployee(id: string, direction: "left" | "right") {
   await requireAdmin();
-  const employees = await prisma.employee.findMany({ orderBy: [{ order: "asc" }, { createdAt: "asc" }] });
+  // Staff only, so the order here matches the columns the board actually draws.
+  const employees = await prisma.employee.findMany({
+    where: { accessRole: "EMPLOYEE" },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  });
   const index = employees.findIndex((e) => e.id === id);
   const target = index + (direction === "left" ? -1 : 1);
   if (index < 0 || target < 0 || target >= employees.length) return;

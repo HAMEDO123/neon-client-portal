@@ -12,7 +12,12 @@ import { dayKeyToDate } from "@/lib/time";
 /** Everybody who has been paired with a number on the device. */
 export async function mappedByDeviceUser() {
   const rows = await prisma.employee.findMany({
-    where: { deviceUserId: { not: null }, accessRole: "EMPLOYEE" },
+    // Deliberately **not** filtered by role, and the only query here that is
+    // not. Everywhere else in the platform "the team" means staff; attendance
+    // means whoever the machine reads, and the manager is paired to a number on
+    // it like anybody else. Their row exists for exactly this and is kept out
+    // of the team's working surfaces instead.
+    where: { deviceUserId: { not: null } },
     select: { id: true, name: true, active: true, deviceUserId: true },
   });
 
