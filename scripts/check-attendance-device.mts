@@ -1,7 +1,8 @@
-import { attendanceFromPunches } from "@/lib/attendance";
+import { attendanceFromPunches, cutoffFor } from "@/lib/attendance";
 import { deviceAddress, readClock, readDeviceUsers, readPunches } from "@/lib/attendance-device";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
 import { getTimezone, getWorkHours } from "@/lib/settings";
+import { dayKeyIn } from "@/lib/time";
 
 // Asks the fingerprint device what it knows and prints what a sync *would* do,
 // without writing a single row.
@@ -46,20 +47,33 @@ for (const person of paired) console.log(`  ${person.name}${person.active ? "" :
 const punches = await readPunches(at);
 const hours = await getWorkHours();
 const timeZone = await getTimezone();
-const days = attendanceFromPunches(punches, hours, timeZone);
+const all = attendanceFromPunches(punches, hours, timeZone);
 
-console.log(`\nlog: ${punches.length} punches → ${days.length} working days`);
+console.log(`\nlog: ${punches.length} punches → ${all.length} working days in the device's memory`);
 
 const byYear: Record<string, number> = {};
-for (const day of days) {
+for (const day of all) {
   const year = day.dayKey.slice(0, 4);
   byYear[year] = (byYear[year] ?? 0) + 1;
 }
 console.log(`days by year: ${JSON.stringify(byYear)}`);
 
-const wouldWrite = days.filter((day) => mapped.get(day.deviceUserId)?.active);
-const wouldSkip = days.filter((day) => !mapped.has(day.deviceUserId));
-console.log(`\nwould write ${wouldWrite.length} rows; ${wouldSkip.length} days belong to nobody paired.`);
+// The same cutoff the sync applies, and for the same reason: everything older
+// belongs to months that are settled. Reported through cutoffFor rather than
+// worked out again here, so this can never claim a sync will do something it
+// will not — which it did, saying "88 rows" when the answer was none.
+const since = cutoffFor(process.argv[2], dayKeyIn(timeZone));
+console.log(`\ncutoff: ${since}${process.argv[2] ? " (from the argument)" : " — today, the sync's own default"}`);
+
+const inScope = all.filter((day) => day.dayKey >= since);
+const wouldWrite = inScope.filter((day) => mapped.get(day.deviceUserId)?.active);
+const wouldSkip = inScope.filter((day) => !mapped.has(day.deviceUserId));
+
+console.log(
+  `a sync now would write ${wouldWrite.length} rows; ${wouldSkip.length} days in scope belong to nobody paired.`
+);
+console.log(`${all.length - inScope.length} older days are deliberately left alone.`);
+console.log("(pass a YYYY-MM-DD as the first argument to see what a wider sync would do.)");
 
 console.log("\nthe ten most recent days a sync would record:");
 for (const day of wouldWrite.slice(-10)) {
