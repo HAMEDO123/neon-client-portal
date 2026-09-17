@@ -1,4 +1,4 @@
-import { dayKeyIn, wallClockIn } from "@/lib/time";
+import { dayKeyIn, formatTimeIn, wallClockIn } from "@/lib/time";
 import { isWorkingDay, minutesOf, type WorkHours } from "@/lib/work-hours";
 
 // Turning a fingerprint device's punches into the one number payroll already
@@ -27,6 +27,15 @@ export type DayAttendance = {
   dayKey: string;
   /** The first read of the day: when they arrived. */
   arrivedAt: Date;
+  /**
+   * The same moment as the studio reads a clock — "6:37 PM".
+   *
+   * Carried rather than derived later because this is the only place that knows
+   * the timezone. Written as UTC once, it told a manager somebody arrived at
+   * 15:37 when the machine had said 18:37: unambiguous to a machine, and simply
+   * wrong to the person reading the screen.
+   */
+  arrivedLocal: string;
   /** The last read of the day. Recorded, but nothing is deducted for it. */
   lastAt: Date;
   /** How many reads that day — one means they never touched it again. */
@@ -124,6 +133,7 @@ export function attendanceFromPunches(
       deviceUserId,
       dayKey,
       arrivedAt,
+      arrivedLocal: formatTimeIn(timeZone, arrivedAt) ?? wallClockIn(timeZone, arrivedAt),
       lastAt,
       punches: sorted.length,
       delayHours: lateHours(hours, wallClockIn(timeZone, arrivedAt), graceMinutes),

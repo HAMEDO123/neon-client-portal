@@ -96,6 +96,15 @@ describe("a day's attendance from punches", () => {
     assert.equal(days[0].lastAt.toISOString(), `${THURSDAY}T16:00:00.000Z`);
   });
 
+  it("carries the arrival on the studio's clock, never UTC", () => {
+    // 15:37Z is 18:37 in Amman. Written as UTC, this line told a manager
+    // somebody arrived at 15:37 when the machine had said 18:37 — unambiguous
+    // to a machine, and simply wrong to the person reading it.
+    const days = attendanceFromPunches([at(THURSDAY, "15:37")], hours, TZ);
+    assert.match(days[0].arrivedLocal, /6:37\s?PM/);
+    assert.doesNotMatch(days[0].arrivedLocal, /15:37/);
+  });
+
   it("still counts a day somebody only touched once", () => {
     const days = attendanceFromPunches([at(THURSDAY, "09:00")], hours, TZ);
     assert.equal(days[0].punches, 1);

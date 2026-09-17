@@ -81,10 +81,12 @@ console.log("(pass a YYYY-MM-DD as the first argument to see what a wider sync w
 console.log("\nthe ten most recent days a sync would record:");
 for (const day of wouldWrite.slice(-10)) {
   const person = mapped.get(day.deviceUserId);
+  // The studio's clock, not UTC: this script exists to explain attendance to a
+  // person, and a UTC time is the wrong answer to the question they are asking.
   console.log(
-    `  ${day.dayKey}  ${(person?.name ?? "?").padEnd(14)} arrived ${day.arrivedAt
-      .toISOString()
-      .slice(11, 16)}Z  late ${day.delayHours}h  (${day.punches} reads)`
+    `  ${day.dayKey}  ${(person?.name ?? "?").padEnd(14)} arrived ${day.arrivedLocal.padEnd(9)} late ${
+      day.delayHours
+    }h  (${day.punches} reads)`
   );
 }
 

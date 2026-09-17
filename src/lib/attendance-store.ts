@@ -122,8 +122,11 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
  * disputed day is when the finger actually touched the machine.
  */
 function noteFor(day: DayAttendance) {
-  const time = day.arrivedAt.toISOString().slice(11, 16);
-  return `Device · arrived ${time} UTC · ${day.punches} ${day.punches === 1 ? "read" : "reads"}`;
+  // The studio's own clock, never UTC. This line is read by a person deciding
+  // whether a deduction is fair, and "arrived 15:37" for somebody the machine
+  // saw at 18:37 is not a detail — it is the wrong answer to the only question
+  // they are asking.
+  return `Device · arrived ${day.arrivedLocal} · ${day.punches} ${day.punches === 1 ? "read" : "reads"}`;
 }
 
 /** The newest day the device has already accounted for, so a sync can ask for less. */

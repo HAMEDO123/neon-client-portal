@@ -50,6 +50,7 @@ const day = (deviceUserId: string, delayHours: number, dayKey = DAY): DayAttenda
   deviceUserId,
   dayKey,
   arrivedAt: new Date(`${dayKey}T08:30:00.000Z`),
+  arrivedLocal: "11:30 AM",
   lastAt: new Date(`${dayKey}T16:00:00.000Z`),
   punches: 2,
   delayHours,
