@@ -10,6 +10,7 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 import { countedReceiptAmount, periodOf } from "@/lib/payroll";
 import { MANUAL } from "@/lib/attendance";
 import { syncAttendance, type SyncReport } from "@/lib/attendance-sync";
+import { deviceAddress, setClock } from "@/lib/attendance-device";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
@@ -309,6 +310,34 @@ export async function syncAttendanceNow(): Promise<SyncReport> {
   const report = await syncAttendance();
   refreshAdmin();
   return report;
+}
+
+export type ClockResult =
+  | { ok: false; reason: "no-device" | "failed"; error?: string }
+  | { ok: true; wallClock: string; driftSeconds: number };
+
+/**
+ * Puts the device's clock right from the server's own.
+ *
+ * Worth a button rather than a one-off script: this machine's backup battery is
+ * dead, so it loses the date at every power cut, and a device that thinks it is
+ * the year 2000 records arrivals nobody will ever look at. Setting it is the
+ * one repair a manager can make from their desk.
+ */
+export async function setDeviceClockNow(): Promise<ClockResult> {
+  await requireAdmin();
+
+  const at = deviceAddress();
+  if (!at) return { ok: false, reason: "no-device" };
+
+  try {
+    const timeZone = await getTimezone();
+    const clock = await setClock(at, timeZone);
+    refreshAdmin();
+    return { ok: true, wallClock: clock.wallClock, driftSeconds: clock.driftSeconds };
+  } catch (error) {
+    return { ok: false, reason: "failed", error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export async function setEmployeePay(id: string, formData: FormData) {

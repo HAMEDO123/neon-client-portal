@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   ChartNoAxesColumn,
   Bell,
+  Fingerprint,
   Users,
   MessagesSquare,
   ShoppingBag,
@@ -41,6 +42,7 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
   const isChat = pathname.startsWith("/admin/chat");
   const isRequests = pathname.startsWith("/admin/requests");
   const isPayroll = pathname.startsWith("/admin/payroll");
+  const isAttendance = pathname.startsWith("/admin/attendance");
   const isSettings = pathname.startsWith("/admin/settings");
 
   return (
@@ -94,6 +96,9 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
       </Item>
       <Item href="/admin/payroll" active={isPayroll} icon={<Wallet size={16} strokeWidth={1.75} />}>
         Payroll
+      </Item>
+      <Item href="/admin/attendance" active={isAttendance} icon={<Fingerprint size={16} strokeWidth={1.75} />}>
+        Attendance
       </Item>
       <Item href="/admin/projects/new" active={false} icon={<Plus size={16} strokeWidth={1.75} />}>
         New Project
