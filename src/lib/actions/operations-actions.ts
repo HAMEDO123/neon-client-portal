@@ -8,6 +8,7 @@ import { saveFile } from "@/lib/storage";
 import { readReceipt } from "@/lib/ai/receipts";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { countedReceiptAmount, periodOf } from "@/lib/payroll";
+import { MANUAL } from "@/lib/attendance";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
@@ -237,16 +238,23 @@ export async function setAttendance(formData: FormData) {
   const delayHours = Number.isFinite(hoursRaw) ? Math.max(0, Math.min(hoursRaw, 24)) : 0;
   const date = new Date(`${day}T00:00:00.000Z`);
 
+  // Written as MANUAL on both paths, and on update as well as create: editing a
+  // day the device recorded is the manager saying the device was wrong about
+  // it, so the row becomes theirs and the next sync leaves it alone
+  // (`mayDeviceWrite` in lib/attendance.ts). Relying on the column default
+  // would mark a corrected device row as DEVICE and let it be overwritten.
   await prisma.attendanceRecord.upsert({
     where: { employeeId_day: { employeeId, day: date } },
     create: {
       employeeId,
       day: date,
       delayHours,
+      source: MANUAL,
       note: String(formData.get("note") ?? "").trim().slice(0, 200) || null,
     },
     update: {
       delayHours,
+      source: MANUAL,
       note: String(formData.get("note") ?? "").trim().slice(0, 200) || null,
     },
   });

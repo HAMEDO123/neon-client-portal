@@ -455,6 +455,12 @@ model Employee {
   passwordHash String?
   phone        String?
   employeeCode String?   @unique
+  // The user number this person has on the fingerprint device, as the device
+  // itself knows them. Null until somebody maps them, and unique so two people
+  // can never be tied to one finger — attendance decides pay, and a name match
+  // would quietly deduct from the wrong person the first time two names are
+  // spelled alike.
+  deviceUserId String?   @unique
   // Only one access role exists today; the column keeps the check explicit
   // and leaves room for another role later.
   accessRole   String    @default("EMPLOYEE")
