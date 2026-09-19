@@ -72,12 +72,15 @@ function toHex(color: RGB) {
  * Returns null rather than throwing when it cannot be done, because the caller
  * has a worse option and a better one and should get to choose.
  */
-async function textAsImage(text: string, size: number, color: RGB): Promise<Buffer | null> {
+async function textAsImage(text: string, size: number, color: RGB, bold = false): Promise<Buffer | null> {
   try {
     return await sharp({
       text: {
         text: `<span foreground="${toHex(color)}">${text.replace(/[&<>"']/g, (ch) => MARKUP_ESCAPES[ch])}</span>`,
-        font: `sans ${size}`,
+        // The weight has to be carried across: the Helvetica path draws a room
+        // name in bold, and without this every Arabic heading in the document
+        // would be lighter than every Latin one beside it.
+        font: `sans ${bold ? "Bold " : ""}${size}`,
         // Renders at TEXT_SCALE times the printed size, so the glyphs stay
         // crisp when the page is zoomed or printed.
         dpi: 72 * TEXT_SCALE,
@@ -105,7 +108,7 @@ async function drawLine(
   pdf: PDFDocument,
   page: PDFPage,
   text: string,
-  options: { x: number; y: number; size: number; font: PDFFont; color: RGB }
+  options: { x: number; y: number; size: number; font: PDFFont; color: RGB; bold?: boolean }
 ) {
   const line = text.trim();
   if (!line) return;
@@ -115,7 +118,7 @@ async function drawLine(
     return;
   }
 
-  const png = await textAsImage(line, options.size, options.color);
+  const png = await textAsImage(line, options.size, options.color, options.bold);
   if (png) {
     try {
       const image = await pdf.embedPng(png);
@@ -196,7 +199,7 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
 
   // The project's own name, and the client's: both are theirs to write, so
   // both go through drawLine rather than straight at Helvetica.
-  await drawLine(pdf, cover, project.name, { x: MARGIN, y: PAGE_HEIGHT - 190, size: 40, font: bold, color: INK });
+  await drawLine(pdf, cover, project.name, { x: MARGIN, y: PAGE_HEIGHT - 190, size: 40, font: bold, color: INK, bold: true });
   cover.drawText("Design Gallery", { x: MARGIN, y: PAGE_HEIGHT - 232, size: 18, font: regular, color: MUTED });
 
   const coverLines = [
@@ -248,7 +251,7 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
 
       // The room's name and the caption are the studio's own words, and in this
       // studio they are often Arabic.
-      await drawLine(pdf, page, space.name, { x: MARGIN, y: MARGIN + 16, size: 12, font: bold, color: INK });
+      await drawLine(pdf, page, space.name, { x: MARGIN, y: MARGIN + 16, size: 12, font: bold, color: INK, bold: true });
       if (image.caption) {
         await drawLine(pdf, page, image.caption.slice(0, 120), {
           x: MARGIN,
