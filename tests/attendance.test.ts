@@ -30,11 +30,13 @@ const FRIDAY = "2026-09-18";
 const SUNDAY = "2026-09-20";
 
 describe("how late an arrival is", () => {
-  it("counts the minutes past the start of the day", () => {
-    // 08:30Z is 11:30 in Amman, half an hour after 11:00.
-    assert.equal(lateHours(hours, "11:30"), 0.5);
-    assert.equal(lateHours(hours, "12:00"), 1);
-    assert.equal(lateHours(hours, "11:07"), 0.12);
+  it("charges whole hours, rounded up", () => {
+    // The studio's rule: a part of an hour is an hour. Being late is meant to
+    // cost something worth avoiding rather than to be measured exactly.
+    assert.equal(lateHours(hours, "11:30"), 1);
+    assert.equal(lateHours(hours, "12:00"), 1, "exactly an hour is an hour, not two");
+    assert.equal(lateHours(hours, "12:01"), 2);
+    assert.equal(lateHours(hours, "11:07"), 1);
   });
 
   it("is nothing at all when somebody is on time", () => {
@@ -47,10 +49,24 @@ describe("how late an arrival is", () => {
     assert.equal(lateHours(hours, "07:15"), 0);
   });
 
-  it("forgives what the studio says to forgive, and no more", () => {
-    assert.equal(lateHours(hours, "11:05", 10), 0);
-    assert.equal(lateHours(hours, "11:10", 10), 0);
-    assert.equal(lateHours(hours, "11:25", 10), 0.25);
+  it("lets the studio's allowance past, and charges the first minute after it", () => {
+    // Five minutes here, so 11:05 is the last minute that is not late.
+    assert.equal(lateHours(hours, "11:05", 5), 0);
+    assert.equal(lateHours(hours, "11:06", 5), 1, "one minute past the allowance still costs an hour");
+    assert.equal(lateHours(hours, "12:40", 5), 2);
+    assert.equal(lateHours(hours, "14:20", 5), 4);
+  });
+
+  it("measures the hours from the end of the allowance, not from the start of the day", () => {
+    // 12:05 is 65 minutes after 11:00 but exactly 60 after the allowance, so it
+    // is one hour rather than two. Taking the grace off afterwards would round
+    // the same arrival up to two and quietly overcharge every late morning.
+    assert.equal(lateHours(hours, "12:05", 5), 1);
+  });
+
+  it("never charges more than a day, however wrong the reading", () => {
+    assert.equal(lateHours(hours, "23:59"), 13);
+    assert.equal(lateHours({ ...hours, start: "00:01" }, "23:59"), 24);
   });
 
   it("refuses a time it cannot read rather than guessing", () => {
@@ -91,7 +107,7 @@ describe("a day's attendance from punches", () => {
 
     assert.equal(days.length, 1);
     assert.equal(days[0].punches, 3);
-    assert.equal(days[0].delayHours, 0.33, "11:20 is twenty minutes late");
+    assert.equal(days[0].delayHours, 1, "11:20 is twenty minutes late, and part of an hour counts as one");
     assert.equal(days[0].arrivedAt.toISOString(), `${THURSDAY}T08:20:00.000Z`);
     assert.equal(days[0].lastAt.toISOString(), `${THURSDAY}T16:00:00.000Z`);
   });
@@ -122,10 +138,23 @@ describe("a day's attendance from punches", () => {
     assert.deepEqual(
       days.map((day) => [day.dayKey, day.delayHours]),
       [
-        ["2026-09-17", 1.5],
+        ["2026-09-17", 2],
         ["2026-09-20", 0],
       ]
     );
+  });
+
+  it("takes the allowance from the working day, so no caller can forget it", () => {
+    // The sync and the check script both call this with three arguments. If the
+    // fourth fell back to a constant instead of to these hours, every arrival
+    // would be charged from the first minute and nothing on screen would say so.
+    const withGrace: WorkHours = { ...hours, graceMinutes: 5 };
+    // 08:05Z is 11:05 in Amman — the last minute that is not late.
+    assert.equal(attendanceFromPunches([at(THURSDAY, "08:05")], withGrace, TZ)[0].delayHours, 0);
+    // 08:06Z is 11:06, one minute past it.
+    assert.equal(attendanceFromPunches([at(THURSDAY, "08:06")], withGrace, TZ)[0].delayHours, 1);
+    // The same punch against a day with no allowance is late from 11:01.
+    assert.equal(attendanceFromPunches([at(THURSDAY, "08:05")], hours, TZ)[0].delayHours, 1);
   });
 
   it("returns nothing for nothing", () => {

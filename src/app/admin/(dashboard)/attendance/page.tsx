@@ -3,9 +3,12 @@ import { prisma } from "@/lib/db";
 import { deviceAddress, readClock, readDeviceUsers, type DeviceClock, type DeviceUser } from "@/lib/attendance-device";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
 import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
+import { buildMonth, monthBounds, monthKeyFor, type MonthEntry } from "@/lib/attendance-month";
 import { setDeviceUserId } from "@/lib/actions/operations-actions";
-import { getTimezone } from "@/lib/settings";
+import { getTimezone, getWorkHours } from "@/lib/settings";
+import { dateToDayKey, dayKeyToDate, todayKey } from "@/lib/time";
 import { AttendanceConsole } from "@/components/admin/attendance-console";
+import { AttendanceMonth } from "@/components/admin/attendance-month";
 import { DeviceUsers } from "@/components/admin/device-users";
 import { SaveButton } from "@/components/admin/form-buttons";
 
@@ -20,7 +23,12 @@ import { SaveButton } from "@/components/admin/form-buttons";
 
 export const dynamic = "force-dynamic";
 
-export default async function AttendanceDevicePage() {
+export default async function AttendanceDevicePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const { month: askedMonth } = await searchParams;
   const at = deviceAddress();
   const timezone = await getTimezone();
 
@@ -48,11 +56,43 @@ export default async function AttendanceDevicePage() {
     orderBy: { order: "asc" },
     select: { id: true, name: true, role: true, deviceUserId: true },
   });
-  const recent = await prisma.attendanceRecord.findMany({
-    orderBy: [{ day: "desc" }],
-    take: 15,
-    include: { employee: { select: { name: true } } },
+  // The month on screen, and everything recorded in it. The bounds are day keys
+  // turned into the UTC midnights the `@db.Date` column actually stores, so the
+  // query never depends on the server's own offset — the same conversion the
+  // sync writes with.
+  const thisMonth = todayKey(timezone).slice(0, 7);
+  const monthKey = monthKeyFor(askedMonth, todayKey(timezone));
+  const bounds = monthBounds(monthKey);
+  const workHours = await getWorkHours();
+
+  const monthRecords = await prisma.attendanceRecord.findMany({
+    where: { day: { gte: dayKeyToDate(bounds.from), lte: dayKeyToDate(bounds.to) } },
+    orderBy: [{ day: "asc" }],
+    include: { employee: { select: { id: true, name: true, active: true } } },
   });
+
+  const entries: MonthEntry[] = monthRecords.flatMap((row) => {
+    const dayKey = dateToDayKey(row.day);
+    // A row with no readable day is left out rather than placed somewhere: a
+    // day in the wrong column is worse than a day missing from the grid.
+    return dayKey
+      ? [{ employeeId: row.employeeId, dayKey, delayHours: row.delayHours, source: row.source, note: row.note }]
+      : [];
+  });
+
+  // Everybody on the team now, plus anybody who has a day this month and has
+  // since left — their month must still read correctly rather than losing its
+  // days because they are no longer on the list.
+  const seen = new Set(employees.map((person) => person.id));
+  const people = [
+    ...employees.map((person) => ({ id: person.id, name: person.name, active: true })),
+    ...monthRecords
+      .map((row) => row.employee)
+      .filter((person) => !seen.has(person.id) && (seen.add(person.id), true))
+      .map((person) => ({ id: person.id, name: person.name, active: person.active })),
+  ];
+
+  const month = buildMonth({ monthKey, hours: workHours, todayKey: todayKey(timezone), people, entries });
 
   const driftBad = clock ? Math.abs(clock.driftSeconds) > MAX_DRIFT_SECONDS : false;
 
@@ -156,37 +196,8 @@ export default async function AttendanceDevicePage() {
         ))}
       </div>
 
-      {/* --- What it has recorded ----------------------------------------- */}
-      <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-bark/40">Recorded lately</h2>
-      {recent.length === 0 ? (
-        <p className="mt-2 text-sm text-bark/50">Nothing recorded yet.</p>
-      ) : (
-        <div className="mt-3 overflow-x-auto rounded-2xl border border-warm-line">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-clay-soft/40 text-xs uppercase tracking-wider text-bark/45">
-              <tr>
-                <th className="px-4 py-3">Day</th>
-                <th className="px-4 py-3">Who</th>
-                <th className="px-4 py-3">Hours late</th>
-                <th className="px-4 py-3">Where it came from</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map((row) => (
-                <tr key={row.id} className="border-t border-warm-line">
-                  <td className="px-4 py-3 text-bark/60">{row.day.toISOString().slice(0, 10)}</td>
-                  <td className="px-4 py-3 font-medium text-bark">{row.employee.name}</td>
-                  <td className="px-4 py-3 tabular-nums text-bark/60">{row.delayHours}</td>
-                  <td className="px-4 py-3 text-xs text-bark/45">
-                    {row.source === "DEVICE" ? "the device" : "typed by the manager"}
-                    {row.note && <span className="text-bark/35"> · {row.note}</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* --- What it has recorded, a month at a time ---------------------- */}
+      <AttendanceMonth month={month} thisMonth={thisMonth} />
     </div>
   );
 }

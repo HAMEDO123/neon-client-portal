@@ -46,6 +46,7 @@ export const WORK_HOURS_KEYS = {
   lunchMinutes: "work_lunch_minutes",
   lunchAt: "work_lunch_at",
   bufferMinutes: "work_buffer_minutes",
+  graceMinutes: "work_grace_minutes",
 } as const;
 
 /**
@@ -68,5 +69,6 @@ export async function getWorkHours(): Promise<WorkHours> {
     lunchMinutes: saved.get(WORK_HOURS_KEYS.lunchMinutes) ?? null,
     lunchAt: saved.get(WORK_HOURS_KEYS.lunchAt) ?? null,
     bufferMinutes: saved.get(WORK_HOURS_KEYS.bufferMinutes) ?? null,
+    graceMinutes: saved.get(WORK_HOURS_KEYS.graceMinutes) ?? null,
   });
 }

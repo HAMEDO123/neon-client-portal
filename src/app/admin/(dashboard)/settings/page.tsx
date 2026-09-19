@@ -2,7 +2,7 @@ import { CalendarClock, Clock, NotebookPen, Send, Sparkles } from "lucide-react"
 import { saveTimezone } from "@/lib/actions/whatsapp-actions";
 import { savePlanningNotes, saveWorkHours } from "@/lib/actions/settings-actions";
 import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
-import { capacityMinutes, spanMinutes } from "@/lib/work-hours";
+import { capacityMinutes, minutesOf, spanMinutes, timeOf } from "@/lib/work-hours";
 import { TextArea } from "@/components/admin/fields";
 import { isAiConfigured } from "@/lib/ai/client";
 import { getPublicKey, isPushConfigured } from "@/lib/notifications/push";
@@ -175,7 +175,7 @@ export default async function AdminSettingsPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
             <Field label="Starts" name="start" type="time" value={workHours.start} />
             <Field label="Ends" name="end" type="time" value={workHours.end} />
             <Field label="Lunch at" name="lunchAt" type="time" value={workHours.lunchAt} />
@@ -186,6 +186,7 @@ export default async function AdminSettingsPage({
               type="number"
               value={String(workHours.bufferMinutes)}
             />
+            <Field label="Allowed late (min)" name="graceMinutes" type="number" value={String(workHours.graceMinutes)} />
           </div>
 
           {/* The number that matters, worked out rather than typed: it is what
@@ -194,6 +195,19 @@ export default async function AdminSettingsPage({
             A day is <span className="font-medium text-ink/70">{describeMinutes(spanMinutes(workHours))}</span> long,
             so <span className="font-semibold text-ink">{capacityMinutes(workHours)} minutes</span> (
             {describeMinutes(capacityMinutes(workHours))}) can be planned after lunch and the margin.
+          </p>
+
+          {/* Said plainly because it is the one field here that takes money off
+              somebody, and the rounding is the part that surprises people. */}
+          <p className="text-xs text-ink/50">
+            Arriving by{" "}
+            <span className="font-medium text-ink/70">
+              {timeOf((minutesOf(workHours.start) ?? 0) + workHours.graceMinutes)}
+            </span>{" "}
+            is on time. After that, lateness is charged in{" "}
+            <span className="font-semibold text-ink">whole hours, rounded up</span> — a minute late costs an hour, an
+            hour and a half costs two. It applies to days the device records from now on; nothing already recorded is
+            rewritten.
           </p>
 
           <div>

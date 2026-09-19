@@ -45,32 +45,40 @@ export type DayAttendance = {
 };
 
 /**
- * Minutes of lateness the studio lets pass.
+ * Minutes of lateness the studio lets pass, when nobody has said.
  *
- * Zero until somebody says otherwise: a grace period is a policy about people's
- * pay, and inventing one here would quietly hand back money the studio never
- * agreed to give — or, read the other way, dock somebody for being ninety
- * seconds late. It is an argument rather than a constant so the answer lives in
- * one place when there is one.
+ * Zero on purpose: an allowance is a policy about people's pay, and inventing
+ * one here would quietly hand back money the studio never agreed to give — or,
+ * read the other way, dock somebody for being ninety seconds late.
+ *
+ * This studio has since said five minutes, and that answer lives where the rest
+ * of the working day lives: `WorkHours.graceMinutes`, edited in Settings. This
+ * stays zero as the fallback for an installation that has not chosen.
  */
 export const DEFAULT_GRACE_MINUTES = 0;
 
 /** The most a single day can count for, matching what the manager's form allows. */
 const MAX_DELAY_HOURS = 24;
 
-function round2(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
 /**
  * How late an arrival at this wall-clock time is, in hours.
+ *
+ * Two rules the studio set, and both cost money, so both are here rather than
+ * in a screen or a query:
+ *
+ * - **An allowance, then nothing forgiven.** Minutes up to `graceMinutes` past
+ *   the start are not late at all — 11:05 on an 11:00 day. A minute past it is.
+ * - **Charged in whole hours, rounded up.** 11:06 is an hour, 12:40 is two,
+ *   14:20 is four. The studio asked for this deliberately: the point is that
+ *   being late costs something worth avoiding, not that the arithmetic is
+ *   exact. Anything partial rounds against the latecomer, never the studio.
  *
  * Arriving early is not negative lateness — it is simply not late. Somebody who
  * comes in an hour before the day starts has not earned an hour back, and a
  * negative number here would silently pay them for it through payroll's
  * multiplication.
  */
-export function lateHours(hours: WorkHours, arrival: string, graceMinutes = DEFAULT_GRACE_MINUTES): number {
+export function lateHours(hours: WorkHours, arrival: string, graceMinutes = hours.graceMinutes ?? DEFAULT_GRACE_MINUTES): number {
   const arrivedAt = minutesOf(arrival);
   const startsAt = minutesOf(hours.start);
   if (arrivedAt == null || startsAt == null) return 0;
@@ -78,7 +86,8 @@ export function lateHours(hours: WorkHours, arrival: string, graceMinutes = DEFA
   const late = arrivedAt - startsAt - Math.max(0, graceMinutes);
   if (late <= 0) return 0;
 
-  return round2(Math.min(late / 60, MAX_DELAY_HOURS));
+  // Rounded up rather than to two decimals: a part of an hour is an hour.
+  return Math.min(Math.ceil(late / 60), MAX_DELAY_HOURS);
 }
 
 /**
@@ -116,7 +125,11 @@ export function attendanceFromPunches(
   punches: Punch[],
   hours: WorkHours,
   timeZone: string,
-  graceMinutes = DEFAULT_GRACE_MINUTES
+  // Taken from the working day it was handed, not from a constant: a caller who
+  // forgets this argument then gets the studio's real allowance rather than
+  // silently charging everybody from the first minute. The sync and the check
+  // script both rely on that.
+  graceMinutes = hours.graceMinutes ?? DEFAULT_GRACE_MINUTES
 ): DayAttendance[] {
   const grouped = groupPunches(punches, timeZone);
   const days: DayAttendance[] = [];

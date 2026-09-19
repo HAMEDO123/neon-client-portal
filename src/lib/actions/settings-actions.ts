@@ -36,6 +36,7 @@ export async function saveWorkHours(formData: FormData) {
     lunchMinutes: String(formData.get("lunchMinutes") ?? ""),
     lunchAt: String(formData.get("lunchAt") ?? ""),
     bufferMinutes: String(formData.get("bufferMinutes") ?? ""),
+    graceMinutes: String(formData.get("graceMinutes") ?? ""),
   });
 
   // One after another, like every other multi-write here.
@@ -45,10 +46,15 @@ export async function saveWorkHours(formData: FormData) {
   await setSetting(WORK_HOURS_KEYS.lunchMinutes, String(hours.lunchMinutes));
   await setSetting(WORK_HOURS_KEYS.lunchAt, hours.lunchAt);
   await setSetting(WORK_HOURS_KEYS.bufferMinutes, String(hours.bufferMinutes));
+  await setSetting(WORK_HOURS_KEYS.graceMinutes, String(hours.graceMinutes));
 
   revalidatePath("/admin/settings");
   revalidatePath("/admin/tasks");
   revalidatePath("/admin/employees", "layout");
+  // The allowance decides what the device's reads cost, so the screens that
+  // show attendance are stale the moment it changes.
+  revalidatePath("/admin/attendance");
+  revalidatePath("/admin/payroll");
 }
 
 export async function savePlanningNotes(formData: FormData) {

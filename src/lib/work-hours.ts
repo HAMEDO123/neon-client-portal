@@ -22,6 +22,14 @@ export type WorkHours = {
   lunchAt: string;
   /** Minutes deliberately left unplanned, for the day going wrong. */
   bufferMinutes: number;
+  /**
+   * Minutes past the start that still count as on time — the studio's own
+   * allowance, 5 here, so arriving by 11:05 is not late.
+   *
+   * It lives with the working day because it is part of what the day *is*, and
+   * because it decides pay: `lateHours` takes it off before charging anything.
+   */
+  graceMinutes: number;
 };
 
 /** What the studio runs on until somebody says otherwise. */
@@ -33,6 +41,10 @@ export const DEFAULT_WORK_HOURS: WorkHours = {
   lunchMinutes: 30,
   lunchAt: "14:00",
   bufferMinutes: 0,
+  // Zero until a studio says otherwise. An allowance is a policy about people's
+  // pay, and a default that invented one would hand back money nobody agreed to
+  // give; this studio's 5 minutes is saved in Settings, not written in here.
+  graceMinutes: 0,
 };
 
 const TIME = /^([01]?\d|2[0-3]):([0-5]\d)$/;
@@ -82,6 +94,7 @@ export function parseWorkHours(raw: Partial<Record<keyof WorkHours, string | nul
     lunchMinutes: minutesSetting(raw.lunchMinutes, DEFAULT_WORK_HOURS.lunchMinutes),
     lunchAt,
     bufferMinutes: minutesSetting(raw.bufferMinutes, DEFAULT_WORK_HOURS.bufferMinutes),
+    graceMinutes: minutesSetting(raw.graceMinutes, DEFAULT_WORK_HOURS.graceMinutes),
   };
 }
 
