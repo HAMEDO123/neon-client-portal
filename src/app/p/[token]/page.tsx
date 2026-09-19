@@ -5,6 +5,7 @@ import { StickyNav, MobileNav, type NavItem } from "@/components/client/sticky-n
 import { WelcomeOverlay } from "@/components/client/welcome-overlay";
 import { Hero } from "@/components/client/hero";
 import { OverviewSection } from "@/components/client/overview-section";
+import { MoodboardSection } from "@/components/client/moodboard-section";
 import { GallerySection } from "@/components/client/gallery-section";
 import { DrawingsSection } from "@/components/client/drawings-section";
 import { MaterialsSection } from "@/components/client/materials-section";
@@ -51,6 +52,16 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
   await logActivity(project.id, "viewed_project");
 
   const navItems: NavItem[] = [{ key: "overview", label: "Overview" }];
+  // The board is built from materials and furniture where they exist and from
+  // renders where they do not, so it is offered whenever any of the three has
+  // a picture to show.
+  if (
+    project.spaces.some((s) => s.images.length > 0) ||
+    project.materials.some((m) => m.imageUrl) ||
+    project.furniture.some((f) => f.imageUrl)
+  ) {
+    navItems.push({ key: "moodboard", label: "Moodboard" });
+  }
   if (project.spaces.some((s) => s.images.length > 0)) navItems.push({ key: "gallery", label: "Gallery" });
   if (project.drawings.length > 0) navItems.push({ key: "drawings", label: "Drawings" });
   if (project.materials.length > 0) navItems.push({ key: "materials", label: "Materials" });
@@ -105,6 +116,16 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
         completionPercent={project.completionPercent}
         currentStage={project.currentStage}
         deliveryDate={project.deliveryDate}
+      />
+
+      {/* Before the gallery, deliberately: the board is the glance and the
+          gallery is the whole set, and a client who opens one link sees the
+          character of the project before its contents. */}
+      <MoodboardSection
+        materials={project.materials}
+        furniture={project.furniture}
+        spaces={project.spaces}
+        watermark={project.watermarkEnabled}
       />
 
       {navItems.some((n) => n.key === "gallery") && (

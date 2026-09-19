@@ -13,6 +13,10 @@ const AR: Record<string, string> = {
   "Gallery": "المعرض",
   "Drawings": "المخططات",
   "Materials": "المواد",
+  "Moodboard": "لوحة الإلهام",
+  "The look": "الطابع",
+  "The materials, finishes and spaces that set the tone for your project.":
+    "المواد والتشطيبات والمساحات التي تحدد طابع مشروعك.",
   "Furniture": "الأثاث",
   "BOQ": "جدول الكميات",
   "Pricing": "التسعير",
