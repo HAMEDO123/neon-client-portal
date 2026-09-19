@@ -1,7 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb, degrees } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, degrees, type PDFPage, type PDFFont, type RGB } from "pdf-lib";
 import sharp from "sharp";
 import { prisma } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
@@ -24,6 +24,119 @@ const MAX_IMAGE_EDGE = 1600;
 
 const INK = rgb(0.08, 0.075, 0.12);
 const MUTED = rgb(0.45, 0.45, 0.5);
+
+/**
+ * Whether pdf-lib's standard fonts can draw this at all.
+ *
+ * Helvetica and its siblings are WinAnsi-encoded: Latin-1 and a handful of
+ * punctuation, and nothing else. Handed an Arabic letter, `drawText` does not
+ * draw a blank or a box — it **throws**, and takes the whole document with it.
+ * That is what made this route answer 500 after sixteen seconds: every render
+ * in the gallery was fetched, resized and re-encoded, and then one room called
+ * "الطابق الاول" threw the lot away.
+ */
+function isWinAnsi(text: string): boolean {
+  return /^[ -~ -ÿ€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]*$/.test(
+    text
+  );
+}
+
+/** How many times larger than its printed size rasterised text is rendered. */
+const TEXT_SCALE = 4;
+
+const MARKUP_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&apos;",
+};
+
+function toHex(color: RGB) {
+  const channel = (value: number) => Math.round(value * 255).toString(16).padStart(2, "0");
+  return `#${channel(color.red)}${channel(color.green)}${channel(color.blue)}`;
+}
+
+/**
+ * Text pdf-lib cannot encode, drawn as a picture of itself instead.
+ *
+ * sharp is libvips, which is pango and harfbuzz underneath — so Arabic comes
+ * out **joined and right-to-left**, which is the entire point. Embedding a
+ * Unicode font through fontkit would draw the same letters unjoined and in the
+ * wrong order: a PDF that builds successfully and is still wrong to anybody who
+ * can read it.
+ *
+ * The text goes in as pango markup, so it is escaped first — a room named
+ * "Kitchen & Bar" would otherwise fail to parse and lose its whole line.
+ *
+ * Returns null rather than throwing when it cannot be done, because the caller
+ * has a worse option and a better one and should get to choose.
+ */
+async function textAsImage(text: string, size: number, color: RGB): Promise<Buffer | null> {
+  try {
+    return await sharp({
+      text: {
+        text: `<span foreground="${toHex(color)}">${text.replace(/[&<>"']/g, (ch) => MARKUP_ESCAPES[ch])}</span>`,
+        font: `sans ${size}`,
+        // Renders at TEXT_SCALE times the printed size, so the glyphs stay
+        // crisp when the page is zoomed or printed.
+        dpi: 72 * TEXT_SCALE,
+        rgba: true,
+      },
+    })
+      .png()
+      .toBuffer();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One line of text on a page, drawn whichever way it can be.
+ *
+ * `y` is the baseline, as it is for drawText, so no caller has to know which of
+ * the two paths was taken — drawImage places a bottom edge, and the difference
+ * between the two is the descender.
+ *
+ * Nothing here is allowed to throw. A gallery of ninety renders must not be
+ * lost because of one character in a caption.
+ */
+async function drawLine(
+  pdf: PDFDocument,
+  page: PDFPage,
+  text: string,
+  options: { x: number; y: number; size: number; font: PDFFont; color: RGB }
+) {
+  const line = text.trim();
+  if (!line) return;
+
+  if (isWinAnsi(line)) {
+    page.drawText(line, options);
+    return;
+  }
+
+  const png = await textAsImage(line, options.size, options.color);
+  if (png) {
+    try {
+      const image = await pdf.embedPng(png);
+      page.drawImage(image, {
+        x: options.x,
+        y: options.y - options.size * 0.22,
+        width: image.width / TEXT_SCALE,
+        height: image.height / TEXT_SCALE,
+      });
+      return;
+    } catch {
+      // Fall through to the last resort below.
+    }
+  }
+
+  // No fonts on this machine, or pango refused the string. Whatever Helvetica
+  // can draw is drawn, and a name it can draw nothing of contributes nothing —
+  // rather than costing the client their entire gallery.
+  const stripped = [...line].filter((ch) => isWinAnsi(ch)).join("").trim();
+  if (stripped) page.drawText(stripped, options);
+}
 
 async function loadImage(url: string): Promise<Buffer | null> {
   try {
@@ -81,7 +194,9 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   cover.drawText("NEON", { x: MARGIN, y: PAGE_HEIGHT - 80, size: 34, font: bold, color: INK });
   cover.drawText("Design & Programming", { x: MARGIN + 96, y: PAGE_HEIGHT - 78, size: 12, font: regular, color: MUTED });
 
-  cover.drawText(project.name, { x: MARGIN, y: PAGE_HEIGHT - 190, size: 40, font: bold, color: INK });
+  // The project's own name, and the client's: both are theirs to write, so
+  // both go through drawLine rather than straight at Helvetica.
+  await drawLine(pdf, cover, project.name, { x: MARGIN, y: PAGE_HEIGHT - 190, size: 40, font: bold, color: INK });
   cover.drawText("Design Gallery", { x: MARGIN, y: PAGE_HEIGHT - 232, size: 18, font: regular, color: MUTED });
 
   const coverLines = [
@@ -91,9 +206,9 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
     `Prepared ${formatDate(new Date())}`,
   ].filter(Boolean);
 
-  coverLines.forEach((line, index) => {
-    cover.drawText(line, { x: MARGIN, y: 150 - index * 20, size: 11, font: regular, color: MUTED });
-  });
+  for (const [index, line] of coverLines.entries()) {
+    await drawLine(pdf, cover, line, { x: MARGIN, y: 150 - index * 20, size: 11, font: regular, color: MUTED });
+  }
 
   const totalImages = spaces.reduce((sum, space) => sum + space.images.length, 0);
   cover.drawText(`${totalImages} render${totalImages === 1 ? "" : "s"} · ${spaces.length} space${spaces.length === 1 ? "" : "s"}`, {
@@ -131,9 +246,11 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
         height,
       });
 
-      page.drawText(space.name, { x: MARGIN, y: MARGIN + 16, size: 12, font: bold, color: INK });
+      // The room's name and the caption are the studio's own words, and in this
+      // studio they are often Arabic.
+      await drawLine(pdf, page, space.name, { x: MARGIN, y: MARGIN + 16, size: 12, font: bold, color: INK });
       if (image.caption) {
-        page.drawText(image.caption.slice(0, 120), {
+        await drawLine(pdf, page, image.caption.slice(0, 120), {
           x: MARGIN,
           y: MARGIN,
           size: 10,

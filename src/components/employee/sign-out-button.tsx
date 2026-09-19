@@ -13,7 +13,7 @@ import { currentSubscription } from "@/lib/push-client";
 // whoever picks it up next. The server row goes first: if the browser
 // unsubscribes and the row survives, the account keeps pushing at an endpoint
 // nobody is listening to.
-export function SignOutButton() {
+export function SignOutButton({ variant = "card" }: { variant?: "card" | "rail" }) {
   const [pending, start] = useTransition();
   const [working, setWorking] = useState(false);
 
@@ -44,7 +44,12 @@ export function SignOutButton() {
       type="button"
       onClick={signOut}
       disabled={busy}
-      className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-ink/12 bg-white/60 text-sm font-medium text-ink/60 transition-colors hover:text-ink disabled:opacity-60"
+      className={
+        variant === "rail"
+          ? // In the dark rail it is a row like every other, not a pale pill.
+            "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-rail-dim transition-colors hover:bg-rail-soft hover:text-rail-ink disabled:opacity-60"
+          : "flex h-12 w-full items-center justify-center gap-2 rounded-full border border-ink/12 bg-white/60 text-sm font-medium text-ink/60 transition-colors hover:text-ink disabled:opacity-60"
+      }
     >
       {busy ? <Loader size={16} className="animate-spin" strokeWidth={2} /> : <LogOut size={16} strokeWidth={1.75} />}
       {busy ? "Signing out…" : "Sign out"}

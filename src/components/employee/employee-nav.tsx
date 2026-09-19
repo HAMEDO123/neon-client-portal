@@ -14,7 +14,11 @@ import { cn } from "@/lib/utils";
 // Notifications are still not among them: the bell in the header already
 // carries the unread count, so a tab for it would be a second door to the same
 // room. Chat stays at the right-hand end, under the thumb.
-const TABS = [
+//
+// Exported because the desktop rail shows the same destinations standing up
+// that this shows lying down. Two lists would be two things to keep in step,
+// and the one that drifts is always the one nobody is looking at.
+export const EMPLOYEE_DESTINATIONS = [
   { href: "/employee", label: "Home", icon: Home, exact: true },
   { href: "/employee/tasks", label: "Tasks", icon: ListChecks, exact: false },
   { href: "/employee/projects", label: "Projects", icon: Building2, exact: false },
@@ -23,11 +27,15 @@ const TABS = [
   { href: "/employee/chat", label: "Chat", icon: MessagesSquare, exact: false },
 ];
 
+const TABS = EMPLOYEE_DESTINATIONS;
+
 export function EmployeeNav({ unreadChat = 0 }: { unreadChat?: number }) {
   const pathname = usePathname();
 
   return (
-    <nav className="employee-tabbar shrink-0 border-t border-ink/8 bg-bg/95 backdrop-blur-lg">
+    // Thumb-reach on a phone; on a desktop the same destinations are in the
+    // rail down the left, where a mouse expects them.
+    <nav className="employee-tabbar shrink-0 border-t border-ink/8 bg-bg/95 backdrop-blur-lg lg:hidden">
       {/* .employee-tabbar-row keeps it clear of the home indicator (globals.css). */}
       <div className="employee-tabbar-row mx-auto flex w-full max-w-2xl items-stretch justify-around px-2">
         {TABS.map((tab) => {
