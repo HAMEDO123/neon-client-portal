@@ -18,9 +18,20 @@ const TABS = [
   { key: "analytics", label: "Analytics" },
 ];
 
-export function ProjectTabs({ projectId, className }: { projectId: string; className?: string }) {
+export function ProjectTabs({
+  projectId,
+  // Which portal is drawing them. The same tabs serve both, and the only thing
+  // that differs is where they point — so a hard-coded "/admin" here would send
+  // an employee to a page their session cannot open.
+  portal = "/admin",
+  className,
+}: {
+  projectId: string;
+  portal?: "/admin" | "/employee";
+  className?: string;
+}) {
   const pathname = usePathname();
-  const base = `/admin/projects/${projectId}`;
+  const base = `${portal}/projects/${projectId}`;
 
   return (
     <div className={cn("scrollbar-none flex gap-1 overflow-x-auto border-b border-ink/8", className)}>

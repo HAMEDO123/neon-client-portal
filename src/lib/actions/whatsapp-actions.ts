@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdmin, requireStaff } from "@/lib/admin-guard";
+import { refreshProject } from "@/lib/project-paths";
 import { logActivity } from "@/lib/activity";
 import { setSetting, TIMEZONE_SETTING_KEY } from "@/lib/settings";
 import { resolveTimezone } from "@/lib/time";
@@ -10,7 +11,13 @@ import { sendWhatsApp, sendWhatsAppFile } from "@/lib/whatsapp";
 import { lineStatus, startWhatsAppLink, stopWhatsAppLink } from "@/lib/whatsapp/worker";
 
 // Sending through the shared WhatsApp worker, plus the platform settings that
-// live beside it. Admin only — these send real messages to real clients.
+// live beside it. These send real messages to real clients.
+//
+// **Only sending a project its own link is open to the team.** Everything else
+// here is the manager's: the company timezone, a free-text test message to any
+// number, and linking or unlinking the studio's WhatsApp account — which would
+// take the whole platform's messaging down with it. The file is a mixture, so
+// the guard is chosen per export rather than once at the top.
 
 export type SendOutcome = { ok: boolean; message: string };
 
@@ -23,7 +30,7 @@ export async function sendProjectWhatsApp(
   kind: "sent_to_client" | "sent_update",
   formData?: FormData
 ): Promise<SendOutcome> {
-  await requireAdmin();
+  await requireStaff();
 
   const project = await prisma.project.findUniqueOrThrow({
     where: { id: projectId },
@@ -50,7 +57,7 @@ export async function sendProjectWhatsApp(
   // Logged the same way the manual WhatsApp buttons log, so the client
   // timeline reads the same however the message went out.
   await logActivity(projectId, kind, `WhatsApp to ${phone}`);
-  revalidatePath(`/admin/projects/${projectId}`);
+  refreshProject(projectId);
 
   return { ok: true, message: `Sent to ${phone}.` };
 }

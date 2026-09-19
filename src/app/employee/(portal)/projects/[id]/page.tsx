@@ -1,207 +1,168 @@
-import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Building2, FileText, FolderOpen, Images } from "lucide-react";
-import { prisma } from "@/lib/db";
+import { getProjectById } from "@/lib/queries";
 import { requireEmployee } from "@/lib/employee-session";
-import {
-  addProjectDocument,
-  addProjectDrawing,
-  addProjectSpace,
-} from "@/lib/actions/employee-project-actions";
-import { ProjectPhotoUpload } from "@/components/employee/project-photo-upload";
-import { TextInput, Select } from "@/components/admin/fields";
+import { updateProjectOverview, updateProjectSettings } from "@/lib/actions/project-actions";
+import { TextInput, TextArea, Select, Checkbox } from "@/components/admin/fields";
 import { SaveButton } from "@/components/admin/form-buttons";
-import { DOCUMENT_CATEGORIES, DRAWING_CATEGORIES, toOptions } from "@/lib/constants";
-import { formatFileSize } from "@/lib/format";
+import { PROJECT_STAGES, PIPELINE_STATUSES } from "@/lib/constants";
+import { sellers } from "@/lib/sales-queries";
 
-// One project, from the employee's side: what is on it, and how to add to it.
+// A project's details, from the team's side.
 //
-// Single column and big targets — this is used standing on a site, on a phone,
-// not at a desk. The admin's own version of these forms is three columns wide
-// and assumes a mouse.
+// The manager's own Overview screen with **one section removed**: the Danger
+// Zone, which permanently deletes the project and every file it holds — cover,
+// renders, drawings, documents, materials, furniture — and cannot be undone.
+//
+// That is why this tab is written out rather than re-exported like the others.
+// `deleteProject` deliberately kept `requireAdmin` when the rest of the project
+// actions moved to `requireStaff`, so re-exporting the manager's page would put
+// a button on this screen that throws Unauthorized on every press — which reads
+// as a broken platform rather than as a boundary, and is the worse of the two.
+//
+// Everything else is the same screen, calling the same actions.
+function toDateInput(date: Date | null) {
+  if (!date) return "";
+  return date.toISOString().slice(0, 10);
+}
 
-export default async function EmployeeProjectPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EmployeeProjectOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   await requireEmployee();
-  const { id } = await params;
 
-  const project = await prisma.project.findFirst({
-    where: { id, publishState: { not: "ARCHIVED" } },
-    select: {
-      id: true,
-      name: true,
-      clientName: true,
-      location: true,
-      publishState: true,
-      spaces: {
-        orderBy: { order: "asc" },
-        select: {
-          id: true,
-          name: true,
-          images: { orderBy: { order: "asc" }, select: { id: true, imageUrl: true, caption: true } },
-        },
-      },
-      drawings: {
-        orderBy: [{ category: "asc" }, { order: "asc" }],
-        select: { id: true, name: true, category: true, revision: true, fileUrl: true, fileType: true, fileSize: true },
-      },
-      documents: {
-        orderBy: [{ category: "asc" }, { order: "asc" }],
-        select: { id: true, title: true, category: true, version: true, fileUrl: true, fileType: true, fileSize: true },
-      },
-    },
-  });
+  const { id } = await params;
+  const project = await getProjectById(id);
   if (!project) notFound();
+  const team = await sellers();
 
   return (
-    <div className="flex flex-col gap-5">
-      <Link
-        href="/employee/projects"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-ink/45 hover:text-ink"
-      >
-        <ArrowLeft size={15} strokeWidth={2} />
-        Projects
-      </Link>
+    <div className="flex flex-col gap-8">
+      <section>
+        <h2 className="text-lg font-semibold text-ink">Project Details</h2>
+        <form
+          action={updateProjectOverview.bind(null, project.id)}
+          className="glass mt-4 flex flex-col gap-4 rounded-2xl p-6"
+        >
+          {/* Side by side where there is room; stacked on a phone, where the
+              file picker will not shrink below its own text. */}
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <div
+              className="h-24 w-36 shrink-0 rounded-xl bg-cover bg-center bg-ink/5"
+              style={project.coverImageUrl ? { backgroundImage: `url(${project.coverImageUrl})` } : undefined}
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <label className="mb-1 block text-xs font-medium text-ink/50">
+                {project.coverImageUrl ? "Replace cover image" : "Upload cover image"}
+              </label>
+              <input
+                type="file"
+                name="coverImage"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="w-full max-w-full text-xs"
+              />
+              {project.coverImageUrl && (
+                <label className="mt-1 flex items-center gap-2 text-xs text-ink/50">
+                  <input type="checkbox" name="removeCoverImage" className="h-3.5 w-3.5" />
+                  Remove current cover image
+                </label>
+              )}
+            </div>
+          </div>
 
-      <div>
-        <h1 className="text-xl font-semibold text-ink">{project.name}</h1>
-        <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-ink/50">
-          <Building2 size={14} strokeWidth={1.75} />
-          {project.clientName}
-          {project.location ? ` · ${project.location}` : ""}
-        </p>
-      </div>
+          <TextInput label="Project Name" name="name" defaultValue={project.name} />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <TextInput label="Client Name" name="clientName" defaultValue={project.clientName} />
+            <TextInput label="Client Email" name="clientEmail" defaultValue={project.clientEmail ?? ""} required={false} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <TextInput label="Client Phone" name="clientPhone" defaultValue={project.clientPhone ?? ""} required={false} />
+            <TextInput label="Delivery Date" name="deliveryDate" type="date" defaultValue={toDateInput(project.deliveryDate)} required={false} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <TextInput label="Location" name="location" defaultValue={project.location ?? ""} required={false} />
+            <TextInput label="Area" name="area" defaultValue={project.area ?? ""} required={false} />
+            <TextInput label="Project Type" name="projectType" defaultValue={project.projectType ?? ""} required={false} />
+          </div>
+          <TextArea label="Description" name="description" defaultValue={project.description ?? ""} />
 
-      {/* Said plainly, on the screen where the uploading happens: this is
-          publishing, not saving. */}
-      <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        {project.publishState === "PUBLISHED"
-          ? "Anything you add here is on the client’s page straight away."
-          : "This project is not published yet, so the client sees nothing until the manager publishes it."}
-      </p>
+          <div className="grid grid-cols-1 gap-4 border-t border-ink/8 pt-4 sm:grid-cols-3">
+            <Select label="Pipeline Status" name="pipelineStatus" defaultValue={project.pipelineStatus} options={[...PIPELINE_STATUSES]} />
+            <Select label="Journey Stage" name="currentStage" defaultValue={project.currentStage} options={[...PROJECT_STAGES]} />
+            <TextInput
+              label="Completion %"
+              name="completionPercent"
+              type="number"
+              defaultValue={project.completionPercent}
+              required={false}
+            />
+          </div>
 
-      {/* --- Photos ------------------------------------------------------- */}
-      <section className="glass rounded-2xl p-4">
-        <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
-          <Images size={13} strokeWidth={2} />
-          Photos
-        </h2>
-
-        {project.spaces.length === 0 ? (
-          <p className="mt-2 text-sm text-ink/45">
-            Photos go in a room — add one below, then you can add photos to it.
+          <div className="grid grid-cols-1 gap-4 border-t border-ink/8 pt-4 sm:grid-cols-2">
+            <Select
+              label="Sold by"
+              name="soldById"
+              defaultValue={project.soldById ?? ""}
+              options={[
+                { value: "", label: "Not recorded" },
+                ...team.map((person) => ({ value: person.id, label: person.name })),
+              ]}
+            />
+            <TextInput
+              label="Sold on"
+              name="soldOn"
+              type="date"
+              defaultValue={toDateInput(project.soldOn)}
+              required={false}
+            />
+          </div>
+          <p className="-mt-2 text-xs text-ink/45">
+            This project counts as a sale for whoever is picked here, in the month of the date beside it. Leave the
+            date empty and today is used.
           </p>
-        ) : (
-          <div className="mt-3 flex flex-col gap-4">
-            {project.spaces.map((space) => (
-              <div key={space.id}>
-                <p className="text-sm font-medium text-ink">{space.name}</p>
 
-                {space.images.length > 0 && (
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    {space.images.map((image) => (
-                      <div key={image.id} className="relative aspect-square overflow-hidden rounded-lg border border-ink/8">
-                        <Image
-                          src={image.imageUrl}
-                          alt={image.caption ?? space.name}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <ProjectPhotoUpload projectId={project.id} spaceId={space.id} />
-              </div>
-            ))}
+          <div>
+            <SaveButton label="Save Details" />
           </div>
-        )}
-
-        <form action={addProjectSpace.bind(null, project.id)} className="mt-4 flex flex-wrap items-end gap-2">
-          <TextInput label="Add a room" name="name" placeholder="Living Room" defaultValue="" className="min-w-40 flex-1" />
-          <SaveButton label="Add" />
         </form>
       </section>
 
-      {/* --- Drawings ----------------------------------------------------- */}
-      <section className="glass rounded-2xl p-4">
-        <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
-          <FileText size={13} strokeWidth={2} />
-          Drawings
-        </h2>
-
-        {project.drawings.length > 0 && (
-          <ul className="mt-3 flex flex-col gap-2">
-            {project.drawings.map((drawing) => (
-              <li key={drawing.id} className="flex items-center gap-2 rounded-xl border border-ink/8 bg-white/50 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink">{drawing.name}</p>
-                  <p className="text-[11px] text-ink/40">
-                    {drawing.category} · {drawing.revision} · {drawing.fileType.toUpperCase()}
-                    {drawing.fileSize ? ` · ${formatFileSize(drawing.fileSize)}` : ""}
-                  </p>
-                </div>
-                <a href={drawing.fileUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-cyan-strong">
-                  View
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <form action={addProjectDrawing.bind(null, project.id)} className="mt-3 flex flex-col gap-3">
-          <Select label="Category" name="category" defaultValue="Architectural" options={toOptions(DRAWING_CATEGORIES)} />
-          <TextInput label="Name" name="name" placeholder="Ground Floor Plan" defaultValue="" />
-          <div className="grid grid-cols-2 gap-3">
-            <TextInput label="Number" name="drawingNumber" placeholder="A-101" defaultValue="" required={false} />
-            <TextInput label="Revision" name="revision" defaultValue="R00" required={false} />
+      <section>
+        <h2 className="text-lg font-semibold text-ink">Client Visibility Settings</h2>
+        <p className="mt-1 text-sm text-ink/50">Control exactly what this client sees and can download.</p>
+        <form action={updateProjectSettings.bind(null, project.id)} className="glass mt-4 flex flex-col gap-3 rounded-2xl p-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Checkbox
+              label="Show Execution Pricing"
+              name="showPricing"
+              defaultChecked={project.showPricing}
+              description="Hide entirely until the proposal is ready."
+            />
+            <Checkbox
+              label="Show Detailed Pricing Breakdown"
+              name="showDetailedPricing"
+              defaultChecked={project.showDetailedPricing}
+              description="Otherwise only the total is shown."
+            />
+            <Checkbox
+              label="Show BOQ Quantities"
+              name="showBoqQuantities"
+              defaultChecked={project.showBoqQuantities}
+            />
+            <Checkbox label="Show BOQ Unit Prices" name="showBoqPrices" defaultChecked={project.showBoqPrices} />
+            <Checkbox
+              label="Allow File Downloads"
+              name="allowDownloads"
+              defaultChecked={project.allowDownloads}
+              description="Drawings, documents, and the handover package."
+            />
+            <Checkbox
+              label="Enable Watermark"
+              name="watermarkEnabled"
+              defaultChecked={project.watermarkEnabled}
+              description="Overlays “NEON DESIGN — CONFIDENTIAL” on renders."
+            />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink/50">File (PDF, DWG…)</label>
-            <input type="file" name="file" required className="text-xs" />
+            <SaveButton label="Save Settings" />
           </div>
-          <SaveButton label="Add drawing" />
-        </form>
-      </section>
-
-      {/* --- Documents ---------------------------------------------------- */}
-      <section className="glass rounded-2xl p-4">
-        <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
-          <FolderOpen size={13} strokeWidth={2} />
-          Documents
-        </h2>
-
-        {project.documents.length > 0 && (
-          <ul className="mt-3 flex flex-col gap-2">
-            {project.documents.map((document) => (
-              <li key={document.id} className="flex items-center gap-2 rounded-xl border border-ink/8 bg-white/50 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink">{document.title}</p>
-                  <p className="text-[11px] text-ink/40">
-                    {document.category}
-                    {document.version ? ` · ${document.version}` : ""} · {document.fileType.toUpperCase()}
-                    {document.fileSize ? ` · ${formatFileSize(document.fileSize)}` : ""}
-                  </p>
-                </div>
-                <a href={document.fileUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-cyan-strong">
-                  View
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <form action={addProjectDocument.bind(null, project.id)} className="mt-3 flex flex-col gap-3">
-          <Select label="Category" name="category" defaultValue="Specifications" options={toOptions(DOCUMENT_CATEGORIES)} />
-          <TextInput label="Title" name="title" placeholder="Site report" defaultValue="" />
-          <TextInput label="Version" name="version" placeholder="v1" defaultValue="" required={false} />
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink/50">File</label>
-            <input type="file" name="file" required className="text-xs" />
-          </div>
-          <SaveButton label="Add document" />
         </form>
       </section>
     </div>

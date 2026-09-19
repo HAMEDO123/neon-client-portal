@@ -1,16 +1,16 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaff } from "@/lib/admin-guard";
 import { deleteFile, saveFile } from "@/lib/storage";
+import { refreshProject } from "@/lib/project-paths";
 
 function refresh(projectId: string) {
-  revalidatePath(`/admin/projects/${projectId}/materials`);
+  refreshProject(projectId, { tab: "materials" });
 }
 
 export async function createMaterial(projectId: string, formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const imageFile = formData.get("image");
   const imageUrl = imageFile instanceof File && imageFile.size > 0 ? (await saveFile(imageFile, `projects/${projectId}/materials`, "image")).url : null;
   const count = await prisma.material.count({ where: { projectId } });
@@ -38,7 +38,7 @@ export async function createMaterial(projectId: string, formData: FormData) {
 }
 
 export async function deleteMaterial(projectId: string, id: string) {
-  await requireAdmin();
+  await requireStaff();
   const existing = await prisma.material.findUnique({ where: { id } });
   if (existing) await deleteFile(existing.imageUrl);
   await prisma.material.delete({ where: { id } });

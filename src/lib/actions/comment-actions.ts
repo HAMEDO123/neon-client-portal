@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaff } from "@/lib/admin-guard";
+import { refreshProject } from "@/lib/project-paths";
 import { logActivity } from "@/lib/activity";
 
 // Two audiences in one file, so each half says which it is. Adding an action
@@ -30,16 +31,20 @@ export async function createComment(token: string, formData: FormData) {
   revalidatePath(`/p/${token}`);
 }
 
-// ---------- Admin ----------
+// ---------- The studio ----------
+//
+// `requireStaff`, not `requireAdmin`: the team works a project the same way the
+// manager does. Everything above this line stays open, because the client has
+// no session to check.
 
 export async function resolveComment(projectId: string, id: string, status: "OPEN" | "RESOLVED") {
-  await requireAdmin();
+  await requireStaff();
   await prisma.comment.update({ where: { id }, data: { status } });
-  revalidatePath(`/admin/projects/${projectId}/comments`);
+  refreshProject(projectId, { tab: "comments" });
 }
 
 export async function deleteComment(projectId: string, id: string) {
-  await requireAdmin();
+  await requireStaff();
   await prisma.comment.delete({ where: { id } });
-  revalidatePath(`/admin/projects/${projectId}/comments`);
+  refreshProject(projectId, { tab: "comments" });
 }

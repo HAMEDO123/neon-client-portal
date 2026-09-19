@@ -1,16 +1,16 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaff } from "@/lib/admin-guard";
 import { deleteFile, saveFile } from "@/lib/storage";
+import { refreshProject } from "@/lib/project-paths";
 
 function refresh(projectId: string) {
-  revalidatePath(`/admin/projects/${projectId}/documents`);
+  refreshProject(projectId, { tab: "documents" });
 }
 
 export async function createDocument(projectId: string, formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) throw new Error("Select a file to upload.");
 
@@ -33,7 +33,7 @@ export async function createDocument(projectId: string, formData: FormData) {
 }
 
 export async function deleteDocument(projectId: string, id: string) {
-  await requireAdmin();
+  await requireStaff();
   const existing = await prisma.document.findUnique({ where: { id } });
   if (existing) await deleteFile(existing.fileUrl);
   await prisma.document.delete({ where: { id } });

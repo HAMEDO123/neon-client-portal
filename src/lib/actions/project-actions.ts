@@ -1,9 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdmin, requireStaff } from "@/lib/admin-guard";
+import { refreshProject, refreshProjectLists } from "@/lib/project-paths";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { generateProjectToken } from "@/lib/tokens";
 import { logActivity } from "@/lib/activity";
@@ -11,11 +11,18 @@ import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
 import type { PipelineStatus, ProjectStage, PublishState } from "@/generated/prisma/enums";
 
+// Two guards in this file, on purpose.
+//
+// The team works a project the same way the manager does — editing it,
+// publishing it, sending the client their link — so those carry `requireStaff`.
+// **Creating and deleting a project do not.** `deleteProject` takes the project
+// and every file it holds out of storage for good: the cover, every render,
+// every drawing, document, material and piece of furniture. That button is not
+// on the project screen at all, so nobody asked for it to be shared, and an
+// accidental tap should never be able to reach it.
 function refresh(id?: string) {
-  revalidatePath("/admin");
-  if (id) {
-    revalidatePath(`/admin/projects/${id}`, "layout");
-  }
+  refreshProjectLists();
+  if (id) refreshProject(id, { layout: true });
 }
 
 function optionalDate(value: FormDataEntryValue | null) {
@@ -60,7 +67,7 @@ export async function createProject(formData: FormData) {
 }
 
 export async function updateProjectOverview(id: string, formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const existing = await prisma.project.findUniqueOrThrow({ where: { id } });
   const coverFile = formData.get("coverImage");
   const removeCover = formData.get("removeCoverImage") === "on";
@@ -99,7 +106,7 @@ export async function updateProjectOverview(id: string, formData: FormData) {
 }
 
 export async function updateProjectSettings(id: string, formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   await prisma.project.update({
     where: { id },
     data: {
@@ -115,18 +122,18 @@ export async function updateProjectSettings(id: string, formData: FormData) {
 }
 
 export async function setPublishState(id: string, state: PublishState) {
-  await requireAdmin();
+  await requireStaff();
   await prisma.project.update({ where: { id }, data: { publishState: state } });
   refresh(id);
 }
 
 export async function logClientNotification(id: string, type: "sent_to_client" | "sent_update") {
-  await requireAdmin();
+  await requireStaff();
   await logActivity(id, type);
 }
 
 export async function regenerateProjectLink(id: string) {
-  await requireAdmin();
+  await requireStaff();
   const project = await prisma.project.findUniqueOrThrow({ where: { id } });
   await prisma.project.update({ where: { id }, data: { token: generateProjectToken(project.name) } });
   refresh(id);

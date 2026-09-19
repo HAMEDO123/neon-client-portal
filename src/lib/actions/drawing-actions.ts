@@ -1,16 +1,16 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireStaff } from "@/lib/admin-guard";
 import { deleteFile, saveFile } from "@/lib/storage";
+import { refreshProject } from "@/lib/project-paths";
 
 function refresh(projectId: string) {
-  revalidatePath(`/admin/projects/${projectId}/drawings`);
+  refreshProject(projectId, { tab: "drawings" });
 }
 
 export async function createDrawing(projectId: string, formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) throw new Error("Select a file to upload.");
 
@@ -37,7 +37,7 @@ export async function createDrawing(projectId: string, formData: FormData) {
 // Uploading a new revision archives the current file into DrawingRevision history,
 // then promotes the new upload to be the drawing's current file/revision.
 export async function addDrawingRevision(projectId: string, drawingId: string, formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) throw new Error("Select a file to upload.");
 
@@ -62,7 +62,7 @@ export async function addDrawingRevision(projectId: string, drawingId: string, f
 }
 
 export async function deleteRevision(projectId: string, id: string) {
-  await requireAdmin();
+  await requireStaff();
   const existing = await prisma.drawingRevision.findUnique({ where: { id } });
   if (existing) await deleteFile(existing.fileUrl);
   await prisma.drawingRevision.delete({ where: { id } });
@@ -70,7 +70,7 @@ export async function deleteRevision(projectId: string, id: string) {
 }
 
 export async function deleteDrawing(projectId: string, id: string) {
-  await requireAdmin();
+  await requireStaff();
   const existing = await prisma.drawing.findUnique({ where: { id } });
   if (existing) await deleteFile(existing.fileUrl);
   await prisma.drawing.delete({ where: { id } });
