@@ -21,6 +21,9 @@
 # misc
 .DS_Store
 *.pem
+# Apple signing keys — an APNs .p8 is downloadable exactly once and is a
+# credential for pushing to every device the studio has.
+*.p8
 
 # debug
 npm-debug.log*
