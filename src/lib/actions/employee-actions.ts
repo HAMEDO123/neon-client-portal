@@ -5,10 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
 import type { TaskState } from "@/generated/prisma/enums";
-import { notifyAdmin } from "@/lib/admin-notifications";
-import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
-import { recordStateChange } from "@/lib/task-state-log";
-import { canMove } from "@/lib/task-transitions";
+import { moveMyTask } from "@/lib/task-status";
 
 // Everything an employee is allowed to change, and nothing else.
 //
@@ -29,44 +26,11 @@ function refresh(entryId?: string) {
 export async function setMyTaskStatus(entryId: string, state: TaskState) {
   const employee = await requireEmployee();
 
-  const task = await taskForEmployee(employee.id, entryId);
-  if (!task) throw new Error("Task not found.");
-
-  // Who may move what is decided in one place now, so this action and the
-  // board can never drift apart on it.
-  if (task.state === state) return;
-  const move = canMove(task.state, state, "employee");
-  if (!move.ok) throw new Error(move.reason);
-
-  await prisma.projectTaskEntry.update({
-    where: { id: task.id },
-    data: {
-      state,
-      completedAt: null,
-      startedAt: state === "IN_PROGRESS" ? (task.startedAt ?? new Date()) : task.startedAt,
-    },
-  });
-
-  await recordStateChange({
-    entryId: task.id,
-    from: task.state,
-    to: state,
-    actor: "employee",
-    actorEmployeeId: employee.id,
-  });
-
-  // Nothing here is worth an alert if it did not actually change.
-  if (task.state !== state) {
-    await notifyAdmin({
-      type: "TASK_STATUS_CHANGED",
-      title: `${employee.name}: ${EMPLOYEE_STATE_LABEL[state]}`,
-      message: `${task.task.name} — ${task.project.name} moved from ${EMPLOYEE_STATE_LABEL[task.state]} to ${EMPLOYEE_STATE_LABEL[state]}.`,
-      url: "/admin/tasks",
-      dedupeKey: `TASK_STATUS:${task.id}:${state}:${Date.now()}`,
-      entryId: task.id,
-      employeeId: employee.id,
-    });
-  }
+  // The move itself, the state log and telling the manager all live in
+  // lib/task-status.ts, shared with the mobile API. This end only supplies the
+  // employee from the session and redraws the pages afterwards.
+  const result = await moveMyTask(employee, entryId, state);
+  if (!result.moved) throw new Error(result.reason ?? "That move is not allowed.");
 
   refresh(entryId);
 }
