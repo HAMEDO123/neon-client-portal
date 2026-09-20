@@ -52,3 +52,16 @@ export async function mobileViewer(request: Request): Promise<ChatViewer | null>
 
   return employee ? { type: "EMPLOYEE", id: employee.id, name: employee.name } : null;
 }
+
+/**
+ * The signed-in employee, for the parts of the app that are theirs alone —
+ * their day, their tasks, their notifications.
+ *
+ * The manager gets null here rather than somebody else's work: there is no
+ * "acting as" in this platform, and the admin's own screens are a different
+ * set of routes.
+ */
+export async function mobileEmployee(request: Request): Promise<{ id: string; name: string } | null> {
+  const viewer = await mobileViewer(request);
+  return viewer?.type === "EMPLOYEE" ? { id: viewer.id, name: viewer.name } : null;
+}
