@@ -7,9 +7,9 @@ import {
   parseConversation,
   recordChatRead,
   requireChatViewer,
-  type ChatViewer,
 } from "@/lib/chat";
-import { conversationFromKey, conversationSlug, employeeChatUrl, mayOpen } from "@/lib/chat-conversations";
+import { employeeMeetingUrl } from "@/lib/chat-meeting-urls";
+import { respondToMeeting } from "@/lib/meeting-rsvp";
 import {
   DEFAULT_DURATION,
   DEFAULT_REMIND,
@@ -19,9 +19,7 @@ import {
   MEETING_PLACE_MAX,
   MEETING_TITLE_MAX,
   REMIND_CHOICES,
-  mayRespond,
   mayScheduleMeetings,
-  memberKeyOf,
   readAttendees,
   readMinutes,
   readWhen,
@@ -31,7 +29,6 @@ import {
   chatMeetingForAction,
   createChatMeetingRecords,
   meetingMembers,
-  setRsvpRecord,
 } from "@/lib/chat-meeting-store";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { notifyAdmin } from "@/lib/admin-notifications";
@@ -51,19 +48,6 @@ import type { MeetingMode, MeetingRsvp } from "@/generated/prisma/enums";
 // through its conversation, and a conversation only through mayOpen.
 
 const MANAGER_ICON = avatarUrl("Manager", "ink");
-
-/** Where a notification about a meeting opens it on an employee's phone. */
-function employeeMeetingUrl(channelKey: string, meetingId: string, employeeId: string) {
-  const conversation = conversationFromKey(channelKey);
-  return conversation ? `${employeeChatUrl(conversation, employeeId)}?meeting=${meetingId}` : "/employee/chat";
-}
-
-/** The same, for the manager. */
-function adminMeetingUrl(channelKey: string, meetingId: string) {
-  const conversation = conversationFromKey(channelKey);
-  const manager: ChatViewer = { type: "ADMIN", id: null, name: "Manager" };
-  return conversation ? `/admin/chat/${conversationSlug(conversation, manager)}?meeting=${meetingId}` : "/admin/chat";
-}
 
 function clip(text: string, length = 140) {
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
@@ -190,33 +174,12 @@ export async function cancelChatMeeting(meetingId: string) {
 export async function setMeetingRsvp(formData: FormData) {
   const viewer = await requireChatViewer(chatSide(String(formData.get("as") ?? "")));
 
-  const meeting = await chatMeetingForAction(String(formData.get("meetingId") ?? ""));
-  if (!meeting) throw new Error("That meeting no longer exists.");
-
-  const conversation = conversationFromKey(meeting.channel.key);
-  const memberKeys = meeting.attendees.map((one) => one.memberKey);
-  if (!conversation || !mayOpen(viewer, conversation) || !mayRespond(viewer, memberKeys)) {
-    throw new Error("Only the people asked to this meeting can answer it.");
-  }
-
-  const answer = String(formData.get("rsvp") ?? "");
-  if (answer !== "ACCEPTED" && answer !== "DECLINED" && answer !== "INVITED") {
-    throw new Error("That is not an answer.");
-  }
-
-  const saved = await setRsvpRecord(meeting.id, memberKeyOf(viewer), answer as MeetingRsvp);
-
-  // The manager hears what each person said; nobody hears their own answer.
-  if (viewer.type === "EMPLOYEE") {
-    void notifyAdmin({
-      type: "CHAT_MESSAGE",
-      title: `${viewer.name} on "${clip(meeting.title, 60)}"`,
-      message: answer === "ACCEPTED" ? "Coming." : answer === "DECLINED" ? "Not coming." : "Has not answered yet.",
-      url: adminMeetingUrl(meeting.channel.key, meeting.id),
-      dedupeKey: `CHAT_MEETING_RSVP:${meeting.id}:${viewer.id}:${answer}`,
-      employeeId: viewer.id,
-    });
-  }
-
-  return saved;
+  // The checks, the write and telling the manager all live in
+  // lib/meeting-rsvp.ts, shared with the mobile API.
+  const result = await respondToMeeting(
+    viewer,
+    String(formData.get("meetingId") ?? ""),
+    String(formData.get("rsvp") ?? "")
+  );
+  if (!result.ok) throw new Error(result.reason);
 }
