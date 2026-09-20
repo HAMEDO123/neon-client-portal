@@ -491,6 +491,7 @@ The domain vocabulary, as the code defines it:
 | `R2_ACCOUNT_ID` `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` `R2_BUCKET_NAME` `R2_PUBLIC_URL` | Cloudflare R2 uploads (all five, or none) |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob uploads, used when R2 isn't configured |
 | `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `VAPID_SUBJECT` | Web push. Optional: generated and stored if absent |
+| `APNS_KEY_ID` `APNS_TEAM_ID` `APNS_PRIVATE_KEY` | Apple push for the iOS staff app (all three, or none — two out of three reads as off). `APNS_PRIVATE_KEY` is the `.p8` file's contents; a literal `\n` is accepted for the newlines |
 | `CRON_SECRET` | The hourly notifier's key; must match the GitHub secret |
 | `APP_TIMEZONE` | Company timezone (default `Asia/Amman`). The AppSetting `timezone` wins |
 | `ANTHROPIC_API_KEY` | The chat assistant and receipt reading |

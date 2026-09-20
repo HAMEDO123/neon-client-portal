@@ -175,6 +175,7 @@ enum CallParticipantState {
 enum DeliveryChannel {
   IN_APP
   WEB_PUSH
+  APNS
 }
 
 enum DeliveryStatus {
@@ -508,6 +509,7 @@ model Employee {
   assignedEntries ProjectTaskEntry[]         @relation("EntryAssignee")
   notifications   Notification[]
   subscriptions   PushSubscription[]
+  deviceTokens    DeviceToken[]
   preference      NotificationPreference?
   chatMessages    ChatMessage[]
   chatReads       ChatRead[]
@@ -977,6 +979,58 @@ model PushSubscription {
 }
 
 // Delivery attempts, kept so push failures are debuggable after the fact.
+enum DevicePlatform {
+  IOS
+}
+
+/// One Apple device signed in to the staff app.
+///
+/// Deliberately its own table rather than columns on PushSubscription: that row
+/// requires an `endpoint` (unique), a `p256dh` and an `auth`, none of which an
+/// APNs token has. Making all three nullable to share the table would leave
+/// every reader unable to tell which kind of row it was holding without asking
+/// a discriminator column — and would let a half-filled row of either kind be
+/// written. Two shapes, two tables, one engine sending to both.
+model DeviceToken {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// The APNs device token. Unique because Apple reissues it to whoever holds
+  /// it: the same token arriving for a second employee means the device changed
+  /// hands, and the row must move rather than being duplicated.
+  token String @unique
+
+  platform DevicePlatform @default(IOS)
+
+  /// The app's bundle id, sent to Apple as the `apns-topic`. Stored rather than
+  /// taken from configuration so one server can feed more than one app, and so
+  /// a token registered by an older build is not sent under a topic it was
+  /// never issued for.
+  bundleId String
+
+  /// Whether this token belongs to Apple's sandbox. A development build's token
+  /// is rejected by the production gateway and the reverse, with an error that
+  /// reads exactly like a dead device — so which gateway to use is a fact about
+  /// the token, recorded when it is registered, never a global setting.
+  sandbox Boolean @default(false)
+
+  deviceName String?
+  appVersion String?
+
+  /// Retired rather than deleted when Apple says the token is gone, so the
+  /// delivery log still points at something.
+  active       Boolean @default(true)
+  failureCount Int     @default(0)
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  deliveries NotificationDelivery[]
+
+  @@index([employeeId, active])
+}
+
 model NotificationDelivery {
   id             String       @id @default(cuid())
   notificationId String
@@ -984,6 +1038,14 @@ model NotificationDelivery {
 
   subscriptionId String?
   subscription   PushSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  // The Apple device a row is about, when the channel is APNS. A push row sets
+  // exactly one of subscriptionId and deviceTokenId, and an IN_APP row neither.
+  // The two transports keep separate device tables because a web subscription
+  // and an Apple device token share nothing but the word "token": one is a URL
+  // with two encryption keys, the other is 64 hex characters and a bundle id.
+  deviceTokenId String?
+  deviceToken   DeviceToken? @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
 
   channel DeliveryChannel
   status  DeliveryStatus
