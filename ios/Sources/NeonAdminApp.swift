@@ -33,11 +33,20 @@ struct RootTabs: View {
 
     var body: some View {
         TabView {
-            DashboardView()
-                .tabItem { Label(L("Projects"), systemImage: "folder") }
+            // The team's own day comes first for them: it is what they open the
+            // app to look at. The manager has no personal task list — their view
+            // of the work is the board — so the tab is absent rather than
+            // present and empty, which would read as "nothing to do".
+            if api.actor?.isManager == false {
+                TasksView()
+                    .tabItem { Label(L("My Work"), systemImage: "checklist") }
+            }
 
             ChatListView()
                 .tabItem { Label(L("Chats"), systemImage: "bubble.left.and.bubble.right") }
+
+            DashboardView()
+                .tabItem { Label(L("Projects"), systemImage: "folder") }
         }
         .tint(Color.neonPurple)
         // Asked on every launch, not just after signing in: a stored token says

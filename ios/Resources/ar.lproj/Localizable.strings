@@ -146,3 +146,23 @@
 "No conversations yet." = "ما في محادثات بعد.";
 "Couldn't load your chats." = "تعذّر تحميل المحادثات.";
 "Couldn't load this conversation." = "تعذّر تحميل هذه المحادثة.";
+
+/* Tasks */
+"My Work" = "شغلي";
+"Today" = "اليوم";
+"Tomorrow" = "بكرا";
+"All open" = "كل المفتوح";
+"Nothing planned for today." = "ما في شي مخطط لليوم.";
+"Couldn't load your work." = "تعذّر تحميل شغلك.";
+"To do" = "للعمل";
+"In progress" = "قيد التنفيذ";
+"Sent for review" = "أُرسل للمراجعة";
+"Done" = "منجز";
+"What to hand in" = "المطلوب تسليمه";
+"Counts as done when" = "يُعتبر منجزاً عند";
+"From the manager" = "من المدير";
+"Start working on this" = "ابدأ بهذه";
+"Stop working on this" = "أوقف العمل عليها";
+"This is with the manager for review." = "هذه عند المدير للمراجعة.";
+"The manager has approved this." = "المدير اعتمد هذه.";
+"That move wasn't allowed." = "هذه النقلة غير مسموحة.";

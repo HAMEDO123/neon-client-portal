@@ -139,12 +139,46 @@ final class APIClient: ObservableObject {
         return try JSONDecoder().decode(Response.self, from: data).message
     }
 
+    // MARK: - The day's work
+
+    /// `day` is "today", "tomorrow", "open" or "completed".
+    func fetchTasks(day: String = "today") async throws -> [EmployeeTask] {
+        struct Response: Codable { let tasks: [EmployeeTask] }
+        return try await get("tasks?day=\(day)", as: Response.self).tasks
+    }
+
+    func fetchTask(id: String) async throws -> EmployeeTask {
+        struct Response: Codable { let task: EmployeeTask }
+        return try await get("tasks/\(id)", as: Response.self).task
+    }
+
+    /// Start or un-start. The server refuses anything else, and says why.
+    func setTaskState(id: String, state: String) async throws {
+        guard let token else { throw APIError.unauthorized }
+        var request = URLRequest(url: baseURL.appendingPathComponent("tasks/\(id)"))
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["state": state])
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.network }
+        if http.statusCode == 401 { self.token = nil; throw APIError.unauthorized }
+        guard http.statusCode == 200 else { throw APIError.network }
+    }
+
     /// One authorized GET, since every read below is the same seven lines.
     /// A 401 clears the token so the app returns to the sign-in screen rather
     /// than showing an empty list it cannot explain.
     private func get<T: Decodable>(_ path: String, as type: T.Type) async throws -> T {
         guard let token else { throw APIError.unauthorized }
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        // Built by hand, not appendingPathComponent: that escapes "?" into
+        // %3F, so a path carrying a query would ask for a route whose name
+        // contains a question mark and come back 404 with nothing to explain it.
+        guard let url = URL(string: "\(baseURL.absoluteString)/\(path)") else {
+            throw APIError.network
+        }
+        var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
         let (data, response) = try await URLSession.shared.data(for: request)
