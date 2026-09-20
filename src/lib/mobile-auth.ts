@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { verifyEmployeeSessionToken, verifySessionToken } from "@/lib/auth";
 import type { Staff } from "@/lib/admin-guard";
+import type { ChatViewer } from "@/lib/chat-conversations";
 
 /** The Bearer token on a request, or null when there isn't one. */
 export function bearerToken(request: Request): string | null {
@@ -58,4 +59,22 @@ export async function mobileStaff(request: Request): Promise<Staff | null> {
   if (!employee) return null;
 
   return { type: "EMPLOYEE", id: employee.id, name: employee.name };
+}
+
+/**
+ * The same caller, as chat knows them.
+ *
+ * `ChatViewer` and `Staff` are the same fact in two vocabularies — chat was
+ * written before there was a second guard — and the conversion belongs here,
+ * once, rather than in each route that needs it. The manager is "Manager" with
+ * a null id on both sides: in chat they are a session rather than a person,
+ * which is what `readerKeyFor` turns into the member key "admin".
+ */
+export async function mobileChatViewer(request: Request): Promise<ChatViewer | null> {
+  const staff = await mobileStaff(request);
+  if (!staff) return null;
+
+  return staff.type === "ADMIN"
+    ? { type: "ADMIN", id: null, name: "Manager" }
+    : { type: "EMPLOYEE", id: staff.id, name: staff.name };
 }
