@@ -9,10 +9,13 @@ targets:
     platform: iOS
     sources:
       - path: Sources
-      # Plain PNG icons + CFBundleIcons instead of an asset catalog: actool
-      # in newer Xcodes refuses to compile xcassets when no simulator runtime
-      # matches the SDK, and PNG resources need no compiler at all.
-      - path: Resources/Icons
+      # The asset catalog, not the loose PNGs this used to carry. App Store
+      # Connect refuses a build without one — 90022 "no 120x120 icon" and
+      # 90713 "no CFBundleIconName" — however well the Home Screen renders.
+      # The note that used to be here said actool refused to compile xcassets
+      # when no simulator runtime matched the SDK; iOS 26.5 is installed now
+      # and it compiles, and for an upload there is no alternative anyway.
+      - path: Resources/Assets.xcassets
         buildPhase: resources
       - path: Resources/ar.lproj
         buildPhase: resources
@@ -20,11 +23,14 @@ targets:
       path: Info.plist
       properties:
         CFBundleDisplayName: "NEON"
+        # Written out rather than left to Xcode. Setting
+        # ASSETCATALOG_COMPILER_APPICON_NAME normally makes Xcode inject this
+        # during packaging, but not when the Info.plist is generated from this
+        # file — and App Store Connect rejects the upload without it (90713),
+        # after the build has already succeeded and been signed.
+        CFBundleIconName: AppIcon
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ar]
-        CFBundleIcons:
-          CFBundlePrimaryIcon:
-            CFBundleIconFiles: [AppIcon60x60]
         UILaunchScreen: {}
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
@@ -39,6 +45,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Signed for real now — TestFlight first, an Apple Business Manager
         # Custom App later. `ios-build.yml` still passes CODE_SIGNING_ALLOWED=NO
         # on the command line, which overrides these, so CI keeps producing the
