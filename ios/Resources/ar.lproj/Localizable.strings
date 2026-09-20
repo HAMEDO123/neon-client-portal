@@ -135,3 +135,14 @@
 "approval.PENDING" = "معلّق";
 "approval.APPROVED" = "معتمد";
 "approval.CHANGES_REQUESTED" = "طُلبت تعديلات";
+
+/* Chat */
+"Chats" = "المحادثات";
+"Projects" = "المشاريع";
+"Message" = "رسالة";
+"You" = "أنت";
+"Photo" = "صورة";
+"Voice message" = "رسالة صوتية";
+"No conversations yet." = "ما في محادثات بعد.";
+"Couldn't load your chats." = "تعذّر تحميل المحادثات.";
+"Couldn't load this conversation." = "تعذّر تحميل هذه المحادثة.";
