@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- TestFlight and, later, an Apple Business Manager Custom App. Never a
+	     public App Store listing: see the README's iOS section. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>teamID</key>
+	<string>745F9U99BC</string>
+	<!-- Let Xcode make and refresh the distribution profile itself. The archive
+	     is signed for development; the export is what re-signs it for Apple. -->
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<!-- Bitcode has been dead since Xcode 14; stating it keeps the export from
+	     warning about a key it would otherwise infer. -->
+	<key>stripSwiftSymbols</key>
+	<true/>
+</dict>
+</plist>
