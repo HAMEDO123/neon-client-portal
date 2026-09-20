@@ -1,9 +1,8 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { verifyEmployeeCredentials } from "@/lib/employee-credentials";
 import {
   createEmployeeSessionToken,
   EMPLOYEE_SESSION_COOKIE_NAME,
@@ -24,21 +23,11 @@ export async function employeeLogin(
     return { error: "Enter your email and password." };
   }
 
-  const employee = await prisma.employee.findUnique({ where: { email } });
-
   // One message for every failure: a wrong password, an unknown address and a
-  // disabled account must be indistinguishable from outside.
-  const invalid = { error: "Invalid email or password." };
-  if (!employee?.passwordHash || !employee.active || employee.accessRole !== "EMPLOYEE") {
-    // Spend the time anyway so a missing account is not detectably faster.
-    await bcrypt.compare(password, "$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva");
-    return invalid;
-  }
-
-  const valid = await bcrypt.compare(password, employee.passwordHash);
-  if (!valid) return invalid;
-
-  await prisma.employee.update({ where: { id: employee.id }, data: { lastLoginAt: new Date() } });
+  // disabled account must be indistinguishable from outside. The check itself
+  // lives in lib/employee-credentials.ts, shared with the mobile API.
+  const employee = await verifyEmployeeCredentials(email, password);
+  if (!employee) return { error: "Invalid email or password." };
 
   const store = await cookies();
   store.set(EMPLOYEE_SESSION_COOKIE_NAME, createEmployeeSessionToken(employee.id), {
