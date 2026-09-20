@@ -54,6 +54,7 @@ next-env.d.ts
 /ios/Info.plist
 /ios/build
 /ios/build-device
+/ios/build-archive
 /ios/buildsim
 /ios/Payload
 /ios/*.ipa

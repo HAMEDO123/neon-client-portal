@@ -15,11 +15,13 @@ final class APIClient: ObservableObject {
     private let baseURL = URL(string: "https://clients.neonjo.com/api/mobile")!
 
     // The token is the same signed session token the web login issues as a
-    // cookie — this just carries it as a header instead. Session-lifetime
-    // sensitivity, same as a browser cookie file, so UserDefaults is fine
-    // rather than Keychain for this first pass.
+    // cookie — this just carries it as a header instead. It is kept in the
+    // Keychain (see TokenStore), not UserDefaults: this build is signed and
+    // installed by the whole team rather than sideloaded onto one phone.
     @Published private(set) var token: String? {
-        didSet { UserDefaults.standard.set(token, forKey: "session_token") }
+        didSet {
+            if let token { TokenStore.write(token) } else { TokenStore.delete() }
+        }
     }
 
     #if DEBUG
@@ -29,7 +31,7 @@ final class APIClient: ObservableObject {
     #endif
 
     private init() {
-        token = UserDefaults.standard.string(forKey: "session_token")
+        token = TokenStore.read()
         #if DEBUG
         if Self.uiTestMode { token = "preview" }
         #endif
