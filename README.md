@@ -118,6 +118,10 @@ docker compose --env-file .env.docker --profile public --profile live up -d   # 
 ```
 
 - **`--env-file .env.docker` is required.** It holds the database password and the site's secrets (git-ignored, generated from `.env.local`). Without it Compose refuses to start rather than starting wrong.
+  - **Git-ignored means git cannot give it back.** On 2026-09-21 the working tree was emptied — 571 tracked files, and `.env`, `.env.local` and `.env.docker` with them. `git restore .` brought back everything that was committed; the three env files existed in no commit and were simply gone.
+  - **The running containers were the only surviving copy.** They hold every value in their environment from when they started, which is what `scripts/rebuild-env-from-containers.mjs` reads. It is a recovery tool, not a backup: after a reboot with no env file the app cannot start, so there is nothing left to read from. **Keep a copy of `.env.docker` off this machine.**
+  - **`SESSION_SECRET` cannot simply be regenerated** to get out of trouble: changing it signs out every employee and invalidates the iOS token.
+  - The same event emptied `local-backup/docker/` — all fifteen database dumps. The data itself was untouched, because `neon-db` keeps it on a Docker volume rather than in the working tree.
 - **Everything restarts by itself** (`restart: unless-stopped`), and Docker Desktop starts at sign-in — so after a reboot the site is back once Windows is signed in.
 - **The tunnel sits behind `--profile public`**, so a plain `up` never puts anything on the internet, and **the scheduler behind `--profile live`**, so nothing notifies anybody until the switch-over.
 - **`.env.local` still points at the development database, on purpose.** `npm run dev` and the tests must never touch the database clients use. With the development database stopped, the `*.db.test.ts` files skip — that is the right outcome, not a failure.
