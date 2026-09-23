@@ -9,7 +9,7 @@ import { LiveSync } from "@/components/live-sync";
 import { SoundCues } from "@/components/sound-cues";
 import { AppViewport } from "@/components/employee/app-viewport";
 import { CallProvider } from "@/components/calls/call-provider";
-import { isConversationPath } from "@/lib/chat-conversations";
+import { fillsWindow } from "@/lib/full-window";
 import type { AdminBadges } from "@/lib/admin-badges";
 import { cn } from "@/lib/utils";
 
@@ -55,9 +55,10 @@ export function AdminShell({
   // matrix — it gets the whole window so it fits without sideways scrolling.
   const wide = pathname.startsWith("/admin/tasks");
 
-  // An open conversation fills the window and scrolls inside itself, the way
-  // a messaging app does; every other page scrolls as a page.
-  const fill = isConversationPath(pathname);
+  // An open conversation and the WhatsApp tab fill the window and scroll
+  // inside themselves, the way a messaging app does; every other page scrolls
+  // as a page.
+  const fill = fillsWindow(pathname);
 
   // On a phone the counts sit inside the closed menu, so the menu button
   // carries a dot when anything is waiting.

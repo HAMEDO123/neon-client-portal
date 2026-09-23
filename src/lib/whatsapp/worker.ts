@@ -304,3 +304,32 @@ export function whatsAppMessageMedia(messageId: string) {
     45_000
   );
 }
+
+/**
+ * Answers in one of the company number's conversations, as the studio.
+ *
+ * Addressed by the chat's own id rather than by digits, which is what makes a
+ * modern `@lid` conversation reachable at all — its `user` is a LID, not a
+ * phone number, so rebuilding an address from digits would send to nobody.
+ * The library keeps a JID intact and resolves it; a group's `@g.us` it refuses
+ * outright, which is a rule of its own and left alone (see `toJid`).
+ *
+ * `kind` is the library's whole safety model and the caller decides it, so it
+ * is a required argument here rather than a default: "reply" is uncapped and
+ * true of a conversation somebody else has written in, "notification" is for
+ * one where only we have. Nothing from this screen is ever "cold" — a person
+ * is typing into a conversation that already exists.
+ *
+ * Queued, not sent: the answer is 202 and the message leaves when the queue's
+ * pacing allows. Whoever shows this has to say "sending" rather than "sent".
+ */
+export function sendWhatsAppChatMessage(chatId: string, text: string, kind: "reply" | "notification") {
+  const config = getWhatsAppConfig();
+  if (!config) return Promise.resolve<WhatsAppResult>({ ok: false, error: "No WhatsApp worker is configured." });
+
+  return call(`/lines/${encodeURIComponent(config.line)}/send-text`, {
+    method: "POST",
+    body: { phone: chatId, text, kind },
+    timeoutMs: 30_000,
+  });
+}

@@ -66,14 +66,19 @@ export async function requireStaff(): Promise<Staff> {
  * A third guard rather than a widening of `requireStaff`, because the company's
  * WhatsApp is not the project board: it carries client prices, complaints and
  * supplier terms, and everyone on the team can already reach the board. Being
- * on the team therefore says nothing about whether you should read it — this is
+ * on the team therefore says nothing about whether you should have it — this is
  * granted one person at a time, in the admin, and defaults to nobody.
+ *
+ * **Reading and replying are one permission**, decided by the studio: whoever
+ * may read the studio's conversations may answer in them, from the same screen,
+ * as the studio's number. The column is still called `canReadWhatsApp` because
+ * renaming it is a migration for a word; what it grants is this.
  *
  * Read fresh from the database on every call, like `requireStaff`, so taking
  * the permission away takes effect on that person's next request rather than
  * whenever their session happens to expire.
  */
-export async function requireWhatsAppReader(): Promise<Staff> {
+export async function requireWhatsAppAccess(): Promise<Staff> {
   const store = await cookies();
   if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return { type: "ADMIN" };
 

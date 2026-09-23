@@ -10,32 +10,45 @@ import {
   Mic,
   RefreshCw,
   Search,
+  Send,
   Users,
   Video,
 } from "lucide-react";
 import type { WhatsAppChat, WhatsAppChatMessage } from "@/lib/whatsapp/worker";
 import { cn } from "@/lib/utils";
 
-// The company number's WhatsApp, read from the portal.
+// The company number's WhatsApp, inside the portal.
 //
 // A window onto the account the worker already holds, not a copy of it: every
 // list and every message below comes from the live session when it is asked
-// for, so there is no second inbox to drift. Three things follow from that and
+// for, so there is no second inbox to drift. Four things follow from that and
 // are deliberate:
 //
-//   - **It is read-only.** Nothing here can send, and opening a chat does not
-//     mark it read on the phone — the worker never calls sendSeen for a read.
-//     Somebody looking through the portal must not change what the person
-//     holding the handset sees.
+//   - **It owns the window.** Both shells put this page in their fill mode
+//     (`lib/full-window.ts`), so the page itself never scrolls — the list and
+//     the conversation scroll inside themselves, the way a messaging app
+//     behaves. Everything here is sized from `h-full` for that reason; a fixed
+//     height would be a second guess at the shell's.
+//   - **Opening a chat changes nothing on the phone.** The worker never calls
+//     sendSeen for a read, so looking through the portal leaves the handset's
+//     unread badges exactly as they were.
 //   - **A closed session is said out loud.** When the number is not linked the
 //     tab says so, rather than showing an empty list that reads as "no
 //     messages".
-//   - **It refreshes itself.** Someone watching this tab is watching for a
-//     client's reply, and a list that only moves when you press a button is a
-//     list you stop trusting.
+//   - **It refreshes itself.** Someone watching this is watching for a reply,
+//     and a list that only moves when you press a button is a list you stop
+//     trusting.
+//
+// Replying is the one thing that leaves. It goes through the same queue as
+// every other outbound message, so a message is queued rather than sent, and
+// this says "Sending" until the account itself hands it back.
 
 const CHAT_REFRESH_MS = 20_000;
 const THREAD_REFRESH_MS = 10_000;
+/** How soon to look again after queueing something, so it appears promptly. */
+const AFTER_SEND_MS = 3_000;
+
+type Pending = { key: number; text: string; at: number };
 
 export function WhatsAppInbox({
   initialChats,
@@ -98,15 +111,15 @@ export function WhatsAppInbox({
   }
 
   return (
-    <div className="glass flex h-[calc(100dvh-9rem)] overflow-hidden rounded-2xl">
+    <div className="flex h-full min-h-0 overflow-hidden bg-paper">
       {/* The list. On a phone it gives way to the conversation; on a desk they sit side by side. */}
       <div
         className={cn(
-          "flex w-full flex-col border-ink/10 lg:w-80 lg:shrink-0 lg:border-r",
+          "flex h-full min-h-0 w-full flex-col border-ink/10 lg:w-80 lg:shrink-0 lg:border-r",
           openId && "hidden lg:flex"
         )}
       >
-        <div className="flex items-center gap-2 border-b border-ink/10 p-3">
+        <div className="flex shrink-0 items-center gap-2 border-b border-ink/10 p-3">
           <div className="relative flex-1">
             <Search size={14} strokeWidth={2} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/35" />
             <input
@@ -127,7 +140,7 @@ export function WhatsAppInbox({
           </button>
         </div>
 
-        <ul className="flex-1 overflow-y-auto">
+        <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {shown.length === 0 && (
             <li className="p-6 text-center text-xs text-ink/45">
               {chats.length === 0 ? "No conversations on this number yet." : "Nothing matches that."}
@@ -173,10 +186,10 @@ export function WhatsAppInbox({
       {open ? (
         <Thread key={open.id} chat={open} timeZone={timeZone} onBack={() => setOpenId(null)} />
       ) : (
-        <div className="hidden flex-1 items-center justify-center p-8 text-center lg:flex">
+        <div className="hidden min-w-0 flex-1 items-center justify-center p-8 text-center lg:flex">
           <p className="max-w-xs text-sm text-ink/40">
-            Pick a conversation to read it. Nothing here sends a message, and opening a chat does not mark it read on
-            the phone.
+            Pick a conversation to read it, and to answer as the studio. Opening a chat does not mark it read on the
+            phone.
           </p>
         </div>
       )}
@@ -195,6 +208,7 @@ function Thread({
 }) {
   const [messages, setMessages] = useState<WhatsAppChatMessage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<Pending[]>([]);
   const bottom = useRef<HTMLDivElement>(null);
   const count = useRef(0);
 
@@ -208,7 +222,11 @@ function Thread({
         setError(body?.error ?? "That conversation could not be read.");
         return;
       }
-      setMessages(body.messages ?? []);
+      const arrived: WhatsAppChatMessage[] = body.messages ?? [];
+      setMessages(arrived);
+      // Anything queued that the account is now handing back has left, and its
+      // own bubble replaces ours.
+      setPending((waiting) => stillWaiting(waiting, arrived));
       setError(null);
     } catch {
       setError("Could not reach the server.");
@@ -231,17 +249,25 @@ function Thread({
 
   // Scroll on arrival and when something new lands, but not on every poll —
   // being dragged to the bottom while reading older messages is maddening.
+  const total = (messages?.length ?? 0) + pending.length;
   useEffect(() => {
     if (!messages) return;
-    if (messages.length !== count.current) {
-      count.current = messages.length;
+    if (total !== count.current) {
+      count.current = total;
       bottom.current?.scrollIntoView({ block: "end" });
     }
-  }, [messages]);
+  }, [messages, total]);
+
+  function queued(text: string) {
+    setPending((waiting) => [...waiting, { key: Date.now() + waiting.length, text, at: Date.now() }]);
+    // Look again shortly, so a message the queue releases quickly shows as
+    // itself instead of sitting on "Sending" until the next poll.
+    setTimeout(load, AFTER_SEND_MS);
+  }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-ink/10 px-3 py-2.5">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-ink/10 bg-paper px-3 py-2.5">
         <button
           type="button"
           onClick={onBack}
@@ -260,7 +286,7 @@ function Thread({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
         {error && <p className="text-center text-xs font-medium text-pink-strong">{error}</p>}
         {!messages && !error && (
           <p className="flex items-center justify-center gap-2 py-8 text-xs text-ink/40">
@@ -268,7 +294,9 @@ function Thread({
             Reading the conversation…
           </p>
         )}
-        {messages?.length === 0 && <p className="py-8 text-center text-xs text-ink/40">Nothing in this chat yet.</p>}
+        {messages?.length === 0 && pending.length === 0 && (
+          <p className="py-8 text-center text-xs text-ink/40">Nothing in this chat yet.</p>
+        )}
 
         <ul className="flex flex-col gap-1.5">
           {messages?.map((message, index) => (
@@ -279,15 +307,150 @@ function Thread({
               showAuthor={chat.isGroup && !message.fromMe}
             />
           ))}
+          {pending.map((waiting) => (
+            <li key={waiting.key} className="flex justify-end">
+              <div className="max-w-[min(32rem,85%)] rounded-2xl bg-emerald-600/60 px-3 py-2 text-sm text-white">
+                <p dir="auto" className="whitespace-pre-wrap break-words">
+                  {waiting.text}
+                </p>
+                <p className="mt-0.5 flex items-center gap-1 text-[10px] text-white/80">
+                  <Loader2 size={10} className="animate-spin" strokeWidth={2.5} />
+                  Sending
+                </p>
+              </div>
+            </li>
+          ))}
         </ul>
         <div ref={bottom} />
       </div>
 
-      <p className="border-t border-ink/10 px-3 py-2 text-center text-[11px] text-ink/40">
-        Read-only. Replies go out from the phone, or from the client&rsquo;s own project page.
+      <Composer chat={chat} onQueued={queued} />
+    </div>
+  );
+}
+
+/**
+ * Writing back, as the studio's own number.
+ *
+ * A group is refused here rather than at the end of a send, because the
+ * library will not post into one — saying so after somebody has typed their
+ * message is saying it too late.
+ */
+function Composer({ chat, onQueued }: { chat: WhatsAppChat; onQueued: (text: string) => void }) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+
+  async function send() {
+    const body = text.trim();
+    if (!body || sending) return;
+
+    setSending(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/whatsapp/chats/${encodeURIComponent(chat.id)}/send`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: body }),
+      });
+      const answer = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(answer?.error ?? "It could not be sent.");
+        return;
+      }
+      setText("");
+      onQueued(body);
+      box.current?.focus();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (chat.isGroup) {
+    return (
+      <p className="shrink-0 border-t border-ink/10 bg-paper px-3 py-3 text-center text-[11px] text-ink/45">
+        Reading only in a group. WhatsApp is hard on a linked session that posts into groups, so the studio&rsquo;s
+        number answers people rather than groups.
+      </p>
+    );
+  }
+
+  return (
+    <div className="shrink-0 border-t border-ink/10 bg-paper px-3 py-2.5">
+      {error && <p className="mb-1.5 text-xs font-medium text-pink-strong">{error}</p>}
+      <div className="flex items-end gap-2">
+        <textarea
+          ref={box}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            // Enter sends, the way it does in WhatsApp; Shift+Enter is a new line.
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void send();
+            }
+          }}
+          rows={1}
+          dir="auto"
+          placeholder="Write a message"
+          className="max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-ink/12 bg-white/80 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+        />
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={sending || !text.trim()}
+          aria-label="Send"
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors",
+            text.trim() && !sending ? "bg-emerald-600 text-white" : "bg-ink/8 text-ink/35"
+          )}
+        >
+          {sending ? <Loader2 size={16} className="animate-spin" strokeWidth={2.5} /> : <Send size={16} strokeWidth={2} />}
+        </button>
+      </div>
+      <p className="mt-1 text-[10px] text-ink/35">
+        Sent as the studio&rsquo;s WhatsApp number. The queue paces what leaves it, so a message can take a moment.
       </p>
     </div>
   );
+}
+
+/**
+ * Which queued messages are still queued.
+ *
+ * A message sent from here comes back from WhatsApp's own store on a later
+ * read, and the two must not both be on screen. Matching is by text and
+ * consumes one arrival per waiting message, so sending the same words twice
+ * shows two bubbles and loses neither; only arrivals from around the time we
+ * sent count, or an identical sentence from last week would swallow a new one.
+ */
+function stillWaiting(waiting: Pending[], arrived: WhatsAppChatMessage[]): Pending[] {
+  if (waiting.length === 0) return waiting;
+
+  const left: Pending[] = [];
+  const seen = new Map<string, number>();
+  for (const message of arrived) {
+    if (!message.fromMe) continue;
+    const body = message.body.trim();
+    seen.set(body, (seen.get(body) ?? 0) + 1);
+  }
+
+  for (const one of waiting) {
+    const available = seen.get(one.text) ?? 0;
+    const recent = arrived.some(
+      (message) => message.fromMe && message.body.trim() === one.text && (message.timestamp ?? 0) >= one.at - 120_000
+    );
+    if (available > 0 && recent) {
+      seen.set(one.text, available - 1);
+      continue;
+    }
+    left.push(one);
+  }
+
+  return left;
 }
 
 function Bubble({
@@ -321,9 +484,7 @@ function Bubble({
           </p>
         )}
 
-        {!message.body && !message.hasMedia && (
-          <p className="italic opacity-60">{describeType(message.type)}</p>
-        )}
+        {!message.body && !message.hasMedia && <p className="italic opacity-60">{describeType(message.type)}</p>}
 
         <p className={cn("mt-0.5 text-[10px]", message.fromMe ? "text-white/70" : "text-ink/40")}>
           {whenShort(message.timestamp, timeZone)}
@@ -338,8 +499,8 @@ function Bubble({
  *
  * A photo is shown; anything else is a link, because a spreadsheet drawn as an
  * image is a broken icon and a voice note is not something a thumbnail can
- * say. The download itself goes through the portal, so the file never has to
- * be carried in the page.
+ * say. The download goes through the portal, so the file is never carried in
+ * the page.
  */
 function Attachment({ message }: { message: WhatsAppChatMessage }) {
   const href = `/api/whatsapp/media/${encodeURIComponent(message.id ?? "")}`;
@@ -433,7 +594,7 @@ function Unavailable({ message, onRetry, busy }: { message: string; onRetry: () 
   const notLinked = /not linked/i.test(message);
 
   return (
-    <div className="glass flex flex-col items-center justify-center gap-3 rounded-2xl p-10 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center">
       <MessageSquare size={28} strokeWidth={1.5} className="text-ink/25" />
       <p className="text-sm font-semibold text-ink/70">
         {notLinked ? "The studio's number is not linked yet" : "WhatsApp cannot be read right now"}

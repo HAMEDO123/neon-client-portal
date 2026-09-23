@@ -119,13 +119,13 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
 
         {/* Off for everyone until you tick it. The studio's WhatsApp carries
             client prices, complaints and supplier terms, so being on the team
-            does not imply it. */}
+            does not imply it — and this grants answering as well as reading. */}
         <Checkbox
           className="sm:col-span-2"
-          label="Can read the company WhatsApp"
+          label="Can use the company WhatsApp"
           name="canReadWhatsApp"
           defaultChecked={employee.canReadWhatsApp}
-          description="Adds a WhatsApp tab to their portal showing the studio's conversations, read-only."
+          description="Adds a WhatsApp tab to their portal: they can read the studio's conversations and reply in them, as the studio's number."
         />
 
         {/* In your own words, because this is what a proposed day is built

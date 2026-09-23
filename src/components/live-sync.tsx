@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { isConversationPath } from "@/lib/chat-conversations";
+import { fillsWindow } from "@/lib/full-window";
 import { UpdateRequired } from "@/components/update-required";
 import { publishPresence } from "@/lib/use-presence";
 
@@ -63,10 +63,11 @@ export function LiveSync({ version }: { version?: string }) {
 
     const refresh = () => {
       // An open conversation has its own live connection that delivers each
-      // message as it arrives. Redrawing the whole page on top of that, for
-      // every change from anyone, was a second full render nobody needed. The
-      // list of conversations is a page like any other and keeps up.
-      if (isConversationPath(window.location.pathname)) return;
+      // message as it arrives, and the WhatsApp tab polls the studio's number
+      // for itself. Redrawing the whole page on top of either, for every change
+      // from anyone, was a second full render nobody needed. The list of
+      // conversations is a page like any other and keeps up.
+      if (fillsWindow(window.location.pathname)) return;
 
       if (document.visibilityState === "hidden") {
         stale.current = true;

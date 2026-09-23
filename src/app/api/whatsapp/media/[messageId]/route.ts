@@ -1,4 +1,4 @@
-import { requireWhatsAppReader } from "@/lib/admin-guard";
+import { requireWhatsAppAccess } from "@/lib/admin-guard";
 import { whatsAppMessageMedia } from "@/lib/whatsapp/worker";
 
 // One message's attachment, as bytes.
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, context: { params: Promise<{ messageId: string }> }) {
   try {
-    await requireWhatsAppReader();
+    await requireWhatsAppAccess();
   } catch {
     return new Response("Unauthorized", { status: 401 });
   }

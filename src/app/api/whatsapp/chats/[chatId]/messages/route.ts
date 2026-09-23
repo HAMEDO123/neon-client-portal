@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireWhatsAppReader } from "@/lib/admin-guard";
+import { requireWhatsAppAccess } from "@/lib/admin-guard";
 import { whatsAppChatMessages } from "@/lib/whatsapp/worker";
 
 // One conversation, oldest message first.
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: { params: Promise<{ chatId: string }> }) {
   try {
-    await requireWhatsAppReader();
+    await requireWhatsAppAccess();
   } catch {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }

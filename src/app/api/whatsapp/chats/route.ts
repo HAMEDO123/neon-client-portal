@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireWhatsAppReader } from "@/lib/admin-guard";
+import { requireWhatsAppAccess } from "@/lib/admin-guard";
 import { whatsAppChats } from "@/lib/whatsapp/worker";
 
 // The company number's conversations, for the portal's WhatsApp tab.
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    await requireWhatsAppReader();
+    await requireWhatsAppAccess();
   } catch {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
