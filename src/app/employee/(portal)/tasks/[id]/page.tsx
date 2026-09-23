@@ -29,6 +29,7 @@ import { submissionsForEntry } from "@/lib/submissions";
 import { planForTasks } from "@/lib/stage-deadlines";
 import { Countdown } from "@/components/employee/countdown";
 import { SaveButton } from "@/components/admin/form-buttons";
+import { AttachmentPreview } from "@/components/ui/attachment-preview";
 
 export default async function EmployeeTaskDetail({ params }: { params: Promise<{ id: string }> }) {
   const employee = await requireEmployee();
@@ -231,12 +232,18 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
           <ul className="mt-3 flex flex-col gap-3">
             {submissions.map((submission) => (
               <li key={submission.id} className="flex gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={submission.imageUrl}
-                  alt=""
-                  className="h-16 w-16 shrink-0 rounded-lg border border-ink/10 object-cover"
-                />
+                <a
+                  href={submission.imageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0"
+                >
+                  <AttachmentPreview
+                    url={submission.imageUrl}
+                    alt="What you sent"
+                    className="h-16 w-16 rounded-lg border border-ink/10 object-cover"
+                  />
+                </a>
                 <div className="min-w-0 flex-1">
                   <span
                     className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${

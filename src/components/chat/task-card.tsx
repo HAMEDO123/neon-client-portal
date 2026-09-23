@@ -41,6 +41,8 @@ import { setAssignedTaskState } from "@/lib/actions/assigned-task-actions";
 import { shrinkPhoto } from "@/lib/client-image";
 import { useMinuteNow } from "@/lib/use-minute-now";
 import { PersonAvatar } from "@/components/chat/person-avatar";
+import { AttachmentPreview } from "@/components/ui/attachment-preview";
+import { isPictureFile, PROOF_ACCEPT } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 
 // A task the manager handed out, as a card in the conversation.
@@ -589,19 +591,22 @@ function ProofForm({ onSend, onCancel }: { onSend: (formData: FormData) => Promi
     if (!chosen) return;
     setError(null);
     setFile(chosen);
-    setPreview(URL.createObjectURL(chosen));
+    // Only a picture gets an object URL — an <img> pointed at a PDF draws a
+    // broken icon, which reads as "it did not work".
+    setPreview(isPictureFile(chosen) ? URL.createObjectURL(chosen) : null);
   }
 
   function send() {
     if (!file) {
-      setError("Take a photo or choose one first.");
+      setError("Take a photo or choose a file first.");
       return;
     }
     start(async () => {
       try {
         const formData = new FormData();
-        // Shrunk on the phone first: uploading the full photo was most of the wait.
-        formData.set("photo", await shrinkPhoto(file));
+        // Shrunk on the phone first: uploading the full photo was most of the
+        // wait. Anything that is not a picture goes up as it is.
+        formData.set("photo", isPictureFile(file) ? await shrinkPhoto(file) : file);
         if (note.trim()) formData.set("note", note.trim());
         await onSend(formData);
       } catch (cause) {
@@ -612,15 +617,22 @@ function ProofForm({ onSend, onCancel }: { onSend: (formData: FormData) => Promi
 
   return (
     <div className="neon-rise mt-2 rounded-xl bg-ink/[0.03] p-2.5 ring-1 ring-ink/[0.06]">
-      <p className="text-xs font-medium text-ink/60">A photo of the finished work, for the manager to review.</p>
+      <p className="text-xs font-medium text-ink/60">A photo of the finished work, or the file itself, for the manager to review.</p>
 
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => pick(event.target.files?.[0])} />
-      <input ref={libraryRef} type="file" accept="image/*" hidden onChange={(event) => pick(event.target.files?.[0])} />
+      <input ref={libraryRef} type="file" accept={PROOF_ACCEPT} hidden onChange={(event) => pick(event.target.files?.[0])} />
 
-      {preview ? (
+      {file ? (
         <div className="relative mt-2 overflow-hidden rounded-lg ring-1 ring-ink/10">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="The photo you are sending" className="aspect-[4/3] max-h-56 w-full object-cover" />
+          {preview ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={preview} alt="The photo you are sending" className="aspect-[4/3] max-h-56 w-full object-cover" />
+          ) : (
+            <div className="flex items-center gap-2.5 bg-white px-3 py-4">
+              <FileText size={20} strokeWidth={1.75} className="shrink-0 text-ink/45" aria-hidden />
+              <p className="min-w-0 truncate text-xs font-medium text-ink/75">{file.name}</p>
+            </div>
+          )}
           <button
             type="button"
             disabled={sending}
@@ -628,7 +640,7 @@ function ProofForm({ onSend, onCancel }: { onSend: (formData: FormData) => Promi
               setFile(null);
               setPreview(null);
             }}
-            aria-label="Remove photo"
+            aria-label="Remove what you picked"
             className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ink/70 text-white backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <X size={15} strokeWidth={2.5} />
@@ -650,7 +662,7 @@ function ProofForm({ onSend, onCancel }: { onSend: (formData: FormData) => Promi
             className="flex h-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-ink/15 bg-white text-xs font-medium text-ink/60 transition-colors hover:bg-ink/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-strong/50"
           >
             <ImageUp size={18} strokeWidth={1.75} aria-hidden />
-            Choose photo
+            Choose file
           </button>
         </div>
       )}
@@ -710,8 +722,7 @@ function Review({
         rel="noreferrer"
         className="block overflow-hidden rounded-xl ring-1 ring-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-strong"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} alt="Photo sent for review" loading="lazy" className="aspect-[4/3] w-full bg-ink/[0.04] object-cover" />
+        <AttachmentPreview url={imageUrl} alt="Sent for review" className="aspect-[4/3] w-full bg-ink/[0.04] object-cover" />
       </a>
       {note && (
         <p dir="auto" className="mt-1.5 text-xs text-ink/60">

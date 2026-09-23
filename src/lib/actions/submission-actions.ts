@@ -51,10 +51,14 @@ export async function submitTaskCompletion(entryId: string, formData: FormData) 
 
   const photo = formData.get("photo");
   if (!(photo instanceof File) || photo.size === 0) {
-    throw new Error("Attach a photo of the finished work.");
+    throw new Error("Attach a photo or a file of the finished work.");
   }
 
-  const saved = await saveFile(photo, `submissions/${employee.id}`, "image");
+  // A PDF, a drawing or a spreadsheet is proof too, and the "image" rule would
+  // reject every one of them. The kind follows the file: photos keep their EXIF
+  // rotation and recompression, anything else is stored as it was sent.
+  const kind = photo.type.startsWith("image/") ? "image" : "document";
+  const saved = await saveFile(photo, `submissions/${employee.id}`, kind);
   const note = String(formData.get("note") ?? "").trim().slice(0, 1000) || null;
 
   const submission = await prisma.taskSubmission.create({

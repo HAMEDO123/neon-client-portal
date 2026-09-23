@@ -4,9 +4,10 @@ import { prisma } from "@/lib/db";
 import { verifySubmission } from "@/lib/ai/verify-submission";
 
 // The paths worth proving are the ones that must never flatter the work: no
-// criteria to check against, and a photo the model cannot open. Both end at
-// "waiting for the manager", and neither needs a key or a network — which is
-// exactly why they are the ones a test can pin down.
+// criteria to check against, a photo the model cannot open, and proof that is a
+// file rather than a picture. All three end at "waiting for the manager", and
+// none of them needs a key or a network — which is exactly why they are the
+// ones a test can pin down.
 
 let reachable = false;
 let employeeId = "";
@@ -134,6 +135,32 @@ describe("when the photo cannot be opened", () => {
     await verifySubmission(submission.id);
 
     assert.equal(await prisma.submissionCheck.count({ where: { submissionId: submission.id } }), 2);
+  });
+});
+
+describe("when the proof is a file rather than a photo", () => {
+  it("sends it to the manager instead of handing a PDF to the model", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    await prisma.projectTaskEntry.update({
+      where: { id: entryId },
+      data: { acceptance: "Quotation sent to the client" },
+    });
+    // Signed, the way storage hands them back: still a PDF.
+    const submission = await submit("https://files.example.com/quote.pdf?token=abc");
+
+    const result = await verifySubmission(submission.id);
+
+    assert.equal(result.ok && result.outcome, "human-review");
+    assert.equal(result.ok && result.checks.length, 1);
+    assert.equal(result.ok && result.checks[0].verdict, "cannot-tell");
+
+    const rows = await prisma.submissionCheck.findMany({ where: { submissionId: submission.id } });
+    assert.equal(rows.length, 1);
+    // Named as what it is, and not called unreadable: the work is probably fine,
+    // it simply has to be read by a person.
+    assert.match(rows[0].gap ?? "", /PDF/);
+    assert.doesNotMatch(rows[0].gap ?? "", /could not be opened/i);
   });
 });
 

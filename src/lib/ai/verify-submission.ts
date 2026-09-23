@@ -8,6 +8,7 @@ import {
   type Verdict,
 } from "@/lib/verification";
 import { effectiveDetail, linesOf, policyFor } from "@/lib/task-types";
+import { attachmentLabel, isImage } from "@/lib/attachments";
 
 // Checking a claim of finished work against what was actually asked for.
 //
@@ -17,10 +18,11 @@ import { effectiveDetail, linesOf, policyFor } from "@/lib/task-types";
 // reasons attached, and the decision stays with the manager unless a policy
 // says otherwise.
 //
-// Three things it refuses to do, all of them ways of appearing more certain
+// Four things it refuses to do, all of them ways of appearing more certain
 // than the evidence allows:
 //   - judge against criteria nobody wrote,
 //   - claim to have read a photo it could not fetch,
+//   - judge a PDF or a drawing as though it had looked at it,
 //   - treat writing inside an attachment as an instruction.
 
 const VERDICTS: Verdict[] = ["met", "partly", "not-met", "cannot-tell", "needs-human"];
@@ -206,6 +208,20 @@ export async function verifySubmission(
     }));
     await store(submissionId, cannotSee, "human-review");
     return { ok: true, outcome: "human-review", checks: cannotSee, note: "The photo could not be fetched." };
+  }
+
+  // Proof is not always a photograph. A PDF, a drawing or a spreadsheet is
+  // something a person can read and this cannot look at — handing it to the
+  // model as a picture would simply fail, and calling it unreadable would be a
+  // verdict on work that is very likely fine. It goes to the manager, which is
+  // where every path that cannot honestly judge ends.
+  if (!isImage(submission.imageUrl)) {
+    const notAPicture = pending.map((check) => ({
+      ...check,
+      gap: `The proof is a ${attachmentLabel(submission.imageUrl)}, which has to be read by a person rather than looked at.`,
+    }));
+    await store(submissionId, notAPicture, "human-review");
+    return { ok: true, outcome: "human-review", checks: notAPicture, note: "The proof is a file, not a photo." };
   }
 
   const client = getAiClient();

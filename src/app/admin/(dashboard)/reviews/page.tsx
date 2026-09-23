@@ -5,6 +5,7 @@ import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ReviewActions } from "@/components/admin/review-actions";
 import { SubmissionChecks } from "@/components/admin/submission-checks";
+import { AttachmentPreview } from "@/components/ui/attachment-preview";
 
 // The evidence queue.
 //
@@ -47,9 +48,8 @@ export default async function ReviewsPage() {
                   rel="noreferrer"
                   className="block shrink-0 overflow-hidden rounded-xl border border-ink/10 sm:w-56"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={submission.imageUrl}
+                  <AttachmentPreview
+                    url={submission.imageUrl}
                     alt={`Proof for ${name}`}
                     className="h-44 w-full object-cover sm:h-40"
                   />

@@ -25,6 +25,7 @@ import { EMPLOYEE_STATE_LABEL, PRIORITY_LABEL } from "@/lib/task-board";
 import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
 import { Countdown } from "@/components/employee/countdown";
+import { AttachmentPreview } from "@/components/ui/attachment-preview";
 
 // One job the manager handed out directly.
 //
@@ -173,12 +174,18 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
           <ul className="mt-3 flex flex-col gap-3">
             {submissions.map((submission) => (
               <li key={submission.id} className="flex gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={submission.imageUrl}
-                  alt=""
-                  className="h-16 w-16 shrink-0 rounded-lg border border-ink/10 object-cover"
-                />
+                <a
+                  href={submission.imageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0"
+                >
+                  <AttachmentPreview
+                    url={submission.imageUrl}
+                    alt="What you sent"
+                    className="h-16 w-16 rounded-lg border border-ink/10 object-cover"
+                  />
+                </a>
                 <div className="min-w-0 flex-1">
                   <span
                     className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${

@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Camera, CheckCircle2, ImageUp, Loader2, X } from "lucide-react";
+import { Camera, CheckCircle2, FileText, ImageUp, Loader2, X } from "lucide-react";
 import { submitTaskCompletion } from "@/lib/actions/submission-actions";
 import { submitAssignedTaskCompletion } from "@/lib/actions/my-assigned-actions";
 import { cn } from "@/lib/utils";
 import { shrinkPhoto } from "@/lib/client-image";
+import { isPictureFile, PROOF_ACCEPT } from "@/lib/attachments";
 
 // Finishing a task means showing it.
 //
@@ -13,6 +14,11 @@ import { shrinkPhoto } from "@/lib/client-image";
 // a photo — the camera on a phone, a screenshot from the gallery — and sends
 // it to the manager. The task then reads "sent for review" until the manager
 // looks at the picture.
+//
+// Not all proof is a picture. A quotation, a drawing, a material schedule: the
+// finished thing *is* the file, and photographing a screen of it was the only
+// way to hand it in. Anything storage accepts as a document can be sent now,
+// and only actual images go through the shrinker on the way.
 
 export function CompletionForm({
   entryId,
@@ -55,7 +61,10 @@ export function CompletionForm({
     if (!chosen) return;
     setError(null);
     setFile(chosen);
-    setPreview(URL.createObjectURL(chosen));
+    // Only a picture gets an object URL. Pointing an <img> at a PDF draws a
+    // broken icon, which reads as "it did not work" — the file gets its name
+    // on a card instead.
+    setPreview(isPictureFile(chosen) ? URL.createObjectURL(chosen) : null);
   }
 
   function clear() {
@@ -68,13 +77,15 @@ export function CompletionForm({
 
   function send(formData: FormData) {
     if (!file) {
-      setError("Take a photo or pick a screenshot first.");
+      setError("Take a photo or pick a file first.");
       return;
     }
     start(async () => {
       try {
         // Shrunk on the phone first: uploading a 4MB photo was most of the wait.
-        formData.set("photo", await shrinkPhoto(file));
+        // A PDF goes up as it is — shrinkPhoto draws to a canvas, which would
+        // turn any other kind of file into a blank image or throw.
+        formData.set("photo", isPictureFile(file) ? await shrinkPhoto(file) : file);
         if (kind === "assigned") await submitAssignedTaskCompletion(entryId, formData);
         else await submitTaskCompletion(entryId, formData);
         clear();
@@ -87,12 +98,12 @@ export function CompletionForm({
   return (
     <form action={send} className="glass rounded-2xl p-4">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">
-        {state === "SUBMITTED" ? "Send another photo" : "Finished? Send the proof"}
+        {state === "SUBMITTED" ? "Send something else" : "Finished? Send the proof"}
       </h2>
       <p className="mt-1 text-xs text-ink/50">
         {state === "SUBMITTED"
-          ? "Your photo is with the manager. You can add a better one while you wait."
-          : "A photo of the finished work, or a screenshot of it. The manager reviews it and marks the task complete."}
+          ? "What you sent is with the manager. You can add a better photo or file while you wait."
+          : "A photo of the finished work, a screenshot, or the file itself — PDF, drawing or spreadsheet. The manager reviews it and marks the task complete."}
       </p>
 
       {evidence && (
@@ -113,19 +124,29 @@ export function CompletionForm({
       <input
         ref={libraryRef}
         type="file"
-        accept="image/*"
+        accept={PROOF_ACCEPT}
         hidden
         onChange={(event) => pick(event.target.files?.[0])}
       />
 
-      {preview ? (
+      {file ? (
         <div className="relative mt-3 overflow-hidden rounded-xl border border-ink/10">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="The work you are sending" className="max-h-64 w-full object-cover" />
+          {preview ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={preview} alt="The work you are sending" className="max-h-64 w-full object-cover" />
+          ) : (
+            <div className="flex items-center gap-3 bg-white/60 px-4 py-5">
+              <FileText size={22} strokeWidth={1.75} className="shrink-0 text-ink/45" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-ink/80">{file.name}</p>
+                <p className="text-xs text-ink/45">Ready to send</p>
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={clear}
-            aria-label="Remove photo"
+            aria-label="Remove what you picked"
             className="absolute right-2 top-2 rounded-full bg-ink/70 p-1.5 text-white backdrop-blur"
           >
             <X size={14} strokeWidth={2.5} />
