@@ -59,3 +59,26 @@ export async function requireStaff(): Promise<Staff> {
 
   throw new Error("Unauthorized");
 }
+
+/**
+ * The manager, or somebody the manager has trusted with the company WhatsApp.
+ *
+ * A third guard rather than a widening of `requireStaff`, because the company's
+ * WhatsApp is not the project board: it carries client prices, complaints and
+ * supplier terms, and everyone on the team can already reach the board. Being
+ * on the team therefore says nothing about whether you should read it — this is
+ * granted one person at a time, in the admin, and defaults to nobody.
+ *
+ * Read fresh from the database on every call, like `requireStaff`, so taking
+ * the permission away takes effect on that person's next request rather than
+ * whenever their session happens to expire.
+ */
+export async function requireWhatsAppReader(): Promise<Staff> {
+  const store = await cookies();
+  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return { type: "ADMIN" };
+
+  const employee = await getSessionEmployee();
+  if (employee?.canReadWhatsApp) return { type: "EMPLOYEE", id: employee.id, name: employee.name };
+
+  throw new Error("Unauthorized");
+}

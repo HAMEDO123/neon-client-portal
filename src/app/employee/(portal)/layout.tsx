@@ -41,6 +41,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
           role={employee.role}
           unread={unread}
           unreadChat={unreadChat}
+          canReadWhatsApp={employee.canReadWhatsApp}
         />
       </aside>
 
@@ -84,7 +85,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
           {children}
         </main>
 
-        <EmployeeNav unreadChat={unreadChat} />
+        <EmployeeNav unreadChat={unreadChat} canReadWhatsApp={employee.canReadWhatsApp} />
       </div>
       <AppViewport />
       {/* Badges, task states and review outcomes arrive without a reload — and

@@ -11,6 +11,7 @@ import {
   Bell,
   Fingerprint,
   Users,
+  MessageCircle,
   MessagesSquare,
   ShoppingBag,
   Wallet,
@@ -43,6 +44,7 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
   const isRequests = pathname.startsWith("/admin/requests");
   const isPayroll = pathname.startsWith("/admin/payroll");
   const isAttendance = pathname.startsWith("/admin/attendance");
+  const isWhatsApp = pathname.startsWith("/admin/whatsapp");
   const isSettings = pathname.startsWith("/admin/settings");
 
   return (
@@ -82,6 +84,9 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
       </Item>
       <Item href="/admin/chat" active={isChat} icon={<MessagesSquare size={16} strokeWidth={1.75} />} count={badges?.chat ?? 0}>
         Chat
+      </Item>
+      <Item href="/admin/whatsapp" active={isWhatsApp} icon={<MessageCircle size={16} strokeWidth={1.75} />}>
+        WhatsApp
       </Item>
       <Item href="/admin/employees" active={isEmployees} icon={<Users size={16} strokeWidth={1.75} />}>
         Team

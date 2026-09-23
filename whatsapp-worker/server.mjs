@@ -16,11 +16,19 @@
 //   POST /lines/:line/send-text      { phone, text, kind?, idempotencyKey? } → 202
 //   POST /lines/:line/send-media     { phone, fileBase64, mimeType, filename, asDocument? } → 204
 //   POST /lines/:line/check-number   { phone } → { reachable }
+//   GET  /lines/:line/chats          ?limit= → { chats }
+//   GET  /lines/:line/chats/:id/messages ?limit= → { chat, messages }
+//   GET  /lines/:line/messages/:id/media → { base64, mimeType, filename }
 //
 // Everything except /health requires the header `x-worker-key`.
+//
+// The three reads are the portal's WhatsApp tab: the studio's managers see the
+// company number's conversations without passing the phone around. They are
+// reads and nothing else — no sendSeen, so opening a chat in the portal does
+// not mark it read on the handset, and nothing here can send.
 
 import { createServer } from "node:http";
-import { createWhatsApp, localSessionKey } from "nexora-whatsapp";
+import { createWhatsApp, liveLocalLineClient, localSessionKey } from "nexora-whatsapp";
 
 const COMPANY_ID = process.env.WHATSAPP_COMPANY_ID || "neon";
 const API_KEY = process.env.WORKER_API_KEY;
@@ -85,6 +93,66 @@ function readJson(request) {
 function send(response, status, body) {
   response.writeHead(status, body === undefined ? undefined : { "content-type": "application/json" });
   response.end(body === undefined ? undefined : JSON.stringify(body));
+}
+
+/**
+ * How many chats and messages a read hands back by default.
+ *
+ * Bounded because every one of these is answered out of a real browser page:
+ * an unbounded fetch on an account with years of history would hold the
+ * session busy long enough for a send to queue behind it.
+ */
+const CHAT_LIMIT = 50;
+const MESSAGE_LIMIT = 50;
+const MAX_LIMIT = 200;
+
+function limitFrom(url, fallback) {
+  const asked = Number(url.searchParams.get("limit"));
+  if (!Number.isFinite(asked) || asked < 1) return fallback;
+  return Math.min(Math.floor(asked), MAX_LIMIT);
+}
+
+/** Seconds since the epoch, the way WhatsApp counts, as milliseconds. */
+function msOf(seconds) {
+  return typeof seconds === "number" && seconds > 0 ? seconds * 1000 : null;
+}
+
+/** What a chat looks like in a list: enough to choose one, and nothing more. */
+function chatRow(chat) {
+  const last = chat.lastMessage ?? null;
+  return {
+    id: chat.id?._serialized ?? String(chat.id ?? ""),
+    name: chat.name ?? null,
+    number: chat.id?.user ?? null,
+    isGroup: Boolean(chat.isGroup),
+    unreadCount: Number(chat.unreadCount ?? 0),
+    archived: Boolean(chat.archived),
+    pinned: Boolean(chat.pinned),
+    timestamp: msOf(chat.timestamp),
+    lastMessage: last
+      ? {
+          body: typeof last.body === "string" ? last.body.slice(0, 500) : "",
+          fromMe: Boolean(last.fromMe),
+          type: last.type ?? "chat",
+          hasMedia: Boolean(last.hasMedia),
+          timestamp: msOf(last.timestamp),
+        }
+      : null,
+  };
+}
+
+function messageRow(message) {
+  return {
+    id: message.id?._serialized ?? null,
+    body: typeof message.body === "string" ? message.body.slice(0, 4000) : "",
+    fromMe: Boolean(message.fromMe),
+    // In a group, who said it. Null in a one-to-one chat, where it is the
+    // person the chat is with.
+    author: message.author ?? null,
+    type: message.type ?? "chat",
+    hasMedia: Boolean(message.hasMedia),
+    timestamp: msOf(message.timestamp),
+  };
 }
 
 const server = createServer(async (request, response) => {
@@ -171,6 +239,58 @@ const server = createServer(async (request, response) => {
         Boolean(body.asDocument)
       );
       return send(response, 204);
+    }
+
+    // Reading the account's own chats. A line that is not connected has no
+    // page to ask, which is a different answer from "no chats" and says so.
+    if (request.method === "GET" && action === "chats" && parts.length === 3) {
+      const client = liveLocalLineClient(line);
+      if (!client) return send(response, 409, { error: "line is not linked" });
+
+      const chats = await client.getChats();
+      const rows = chats
+        .slice()
+        .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+        .slice(0, limitFrom(url, CHAT_LIMIT))
+        .map(chatRow);
+      return send(response, 200, { chats: rows });
+    }
+
+    if (request.method === "GET" && action === "chats" && parts[4] === "messages" && parts.length === 5) {
+      const client = liveLocalLineClient(line);
+      if (!client) return send(response, 409, { error: "line is not linked" });
+
+      const chat = await client.getChatById(decodeURIComponent(parts[3]));
+      if (!chat) return send(response, 404, { error: "no such chat" });
+
+      // Newest last, the way a conversation reads. Deliberately no sendSeen():
+      // looking at a chat in the portal must not mark it read on the phone.
+      const messages = await chat.fetchMessages({ limit: limitFrom(url, MESSAGE_LIMIT) });
+      const rows = messages.map(messageRow).sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+      return send(response, 200, {
+        chat: { id: chat.id?._serialized ?? null, name: chat.name ?? null, isGroup: Boolean(chat.isGroup) },
+        messages: rows,
+      });
+    }
+
+    // One message's attachment, asked for only when somebody opens it. Fetching
+    // media for a whole conversation up front would download years of photos to
+    // draw a list of names.
+    if (request.method === "GET" && action === "messages" && parts[4] === "media" && parts.length === 5) {
+      const client = liveLocalLineClient(line);
+      if (!client) return send(response, 409, { error: "line is not linked" });
+
+      const message = await client.getMessageById(decodeURIComponent(parts[3]));
+      if (!message) return send(response, 404, { error: "no such message" });
+      if (!message.hasMedia) return send(response, 404, { error: "that message has no attachment" });
+
+      const media = await message.downloadMedia();
+      if (!media?.data) return send(response, 502, { error: "the attachment could not be downloaded" });
+      return send(response, 200, {
+        base64: media.data,
+        mimeType: media.mimetype ?? "application/octet-stream",
+        filename: media.filename ?? null,
+      });
     }
 
     if (request.method === "POST" && action === "check-number") {

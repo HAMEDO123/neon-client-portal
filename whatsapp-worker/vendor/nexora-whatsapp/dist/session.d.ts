@@ -153,6 +153,13 @@ export declare function getLocalSessionStatus(companyId: string): LocalSessionSn
 export declare function hasLiveLocalLine(ref: LocalLineRef): boolean;
 export declare function hasLiveLocalSession(companyId: string): boolean;
 /**
+ * The live whatsapp-web.js client for a line, or null when it is not connected.
+ * Reading a chat list means asking WhatsApp Web's own store, which is the one
+ * thing this module otherwise keeps to itself. Read-only by contract: sending
+ * still goes through the queue.
+ */
+export declare function liveLocalLineClient(ref: LocalLineRef): Client | null;
+/**
  * Whether a saved login exists on disk for this line, even if no browser is
  * currently running for it. Used to decide whether a send should transparently
  * relaunch an evicted session rather than reporting "not connected".

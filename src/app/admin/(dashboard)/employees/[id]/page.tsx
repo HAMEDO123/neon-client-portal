@@ -8,7 +8,7 @@ import {
   setEmployeeActive,
   updateEmployeeAccount,
 } from "@/lib/actions/admin-employee-actions";
-import { TextInput, TextArea } from "@/components/admin/fields";
+import { Checkbox, TextInput, TextArea } from "@/components/admin/fields";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/buttons";
@@ -115,6 +115,17 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           type="number"
           defaultValue={employee.monthlySalesTarget}
           required={false}
+        />
+
+        {/* Off for everyone until you tick it. The studio's WhatsApp carries
+            client prices, complaints and supplier terms, so being on the team
+            does not imply it. */}
+        <Checkbox
+          className="sm:col-span-2"
+          label="Can read the company WhatsApp"
+          name="canReadWhatsApp"
+          defaultChecked={employee.canReadWhatsApp}
+          description="Adds a WhatsApp tab to their portal showing the studio's conversations, read-only."
         />
 
         {/* In your own words, because this is what a proposed day is built

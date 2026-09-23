@@ -455,6 +455,25 @@ export function hasLiveLocalSession(companyId) {
     return hasLiveLocalLine({ companyId });
 }
 /**
+ * The live whatsapp-web.js client for a line, or null.
+ *
+ * Reading is not sending: the portal's WhatsApp tab lists the chats this
+ * account already has, and every one of those lives in WhatsApp Web's own
+ * store rather than anywhere this library keeps. Exposing the client is the
+ * only way to ask it, and the null-unless-connected shape is deliberate — a
+ * caller cannot accidentally reach into a session that is still launching.
+ *
+ * Read-only by contract. Sending still goes through the queue, which is what
+ * enforces the pacing and the caps that keep the number out of trouble.
+ */
+export function liveLocalLineClient(ref) {
+    const key = lookupKey(ref);
+    const entry = key ? sessions.get(key) : null;
+    if (!entry?.client || entry.snapshot.status !== "connected")
+        return null;
+    return entry.client;
+}
+/**
  * Whether a saved login exists on disk for this line, even if no browser is
  * currently running for it. Used to decide whether a send should transparently
  * relaunch an evicted session rather than reporting "not connected".

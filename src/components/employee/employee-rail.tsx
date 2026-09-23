@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell } from "lucide-react";
-import { EMPLOYEE_DESTINATIONS } from "@/components/employee/employee-nav";
+import { employeeDestinations } from "@/components/employee/employee-nav";
 import { SignOutButton } from "@/components/employee/sign-out-button";
 import { cn } from "@/lib/utils";
 
@@ -24,14 +24,18 @@ export function EmployeeRail({
   role,
   unread = 0,
   unreadChat = 0,
+  canReadWhatsApp = false,
 }: {
   name: string;
   role: string | null;
   /** Unread notifications, shown on the bell at the foot. */
   unread?: number;
   unreadChat?: number;
+  /** Whether this person may read the company WhatsApp. */
+  canReadWhatsApp?: boolean;
 }) {
   const pathname = usePathname();
+  const destinations = employeeDestinations(canReadWhatsApp);
 
   return (
     <nav className="flex min-h-full flex-col gap-0.5 p-4">
@@ -40,7 +44,7 @@ export function EmployeeRail({
         <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.28em] text-clay">Tasks</span>
       </Link>
 
-      {EMPLOYEE_DESTINATIONS.map((destination) => {
+      {destinations.map((destination) => {
         const active = destination.exact
           ? pathname === destination.href
           : pathname.startsWith(destination.href);

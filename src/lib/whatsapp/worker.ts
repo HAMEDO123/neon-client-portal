@@ -225,3 +225,82 @@ export function stopWhatsAppLink() {
   }
   return call(`/lines/${encodeURIComponent(config.line)}/stop`, { method: "POST", timeoutMs: 30_000 });
 }
+
+// Reading the company number's conversations.
+//
+// The portal's WhatsApp tab is a window onto the account the worker already
+// holds, not a copy of it: every read below asks WhatsApp Web's own store
+// through the live session, so there is no second inbox to keep in step and
+// nothing on this side to go stale. It also means the tab is only as available
+// as the session — a line that is not linked answers "not linked", which is
+// the truth and not an empty list.
+//
+// Read-only, all the way down. The worker never calls sendSeen for these, so
+// opening a chat here does not mark it read on the phone.
+
+export type WhatsAppChat = {
+  id: string;
+  name: string | null;
+  /** The other party's number, digits only. Null for a group. */
+  number: string | null;
+  isGroup: boolean;
+  unreadCount: number;
+  archived: boolean;
+  pinned: boolean;
+  /** When the chat last moved, in milliseconds. */
+  timestamp: number | null;
+  lastMessage: {
+    body: string;
+    fromMe: boolean;
+    type: string;
+    hasMedia: boolean;
+    timestamp: number | null;
+  } | null;
+};
+
+export type WhatsAppChatMessage = {
+  id: string | null;
+  body: string;
+  fromMe: boolean;
+  /** In a group, who said it. Null in a one-to-one chat. */
+  author: string | null;
+  type: string;
+  hasMedia: boolean;
+  timestamp: number | null;
+};
+
+function lineCall<T>(path: string, timeoutMs: number) {
+  const config = getWhatsAppConfig();
+  if (!config) {
+    return Promise.resolve<WhatsAppResult<T>>({ ok: false, error: "No WhatsApp worker is configured." });
+  }
+  return call<T>(`/lines/${encodeURIComponent(config.line)}${path}`, { method: "GET", timeoutMs });
+}
+
+/** The account's conversations, most recently active first. */
+export function whatsAppChats(limit = 50) {
+  // Asking a real browser page for its chat list is slower than a database
+  // read and much faster than launching anything.
+  return lineCall<{ chats: WhatsAppChat[] }>(`/chats?limit=${limit}`, 20_000);
+}
+
+/** One conversation, oldest message first — the way it reads on a phone. */
+export function whatsAppChatMessages(chatId: string, limit = 50) {
+  return lineCall<{
+    chat: { id: string | null; name: string | null; isGroup: boolean };
+    messages: WhatsAppChatMessage[];
+  }>(`/chats/${encodeURIComponent(chatId)}/messages?limit=${limit}`, 25_000);
+}
+
+/**
+ * One message's attachment, fetched only when somebody opens it.
+ *
+ * Downloading media for a whole conversation up front would pull years of
+ * photos through the session to draw a list of names.
+ */
+export function whatsAppMessageMedia(messageId: string) {
+  return lineCall<{ base64: string; mimeType: string; filename: string | null }>(
+    `/messages/${encodeURIComponent(messageId)}/media`,
+    45_000
+  );
+}

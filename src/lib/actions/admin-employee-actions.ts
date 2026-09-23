@@ -32,6 +32,10 @@ function readAccountFields(formData: FormData) {
   const examples = String(formData.get("examples") ?? "").trim().slice(0, 2000) || null;
   const reviewerId = String(formData.get("reviewerId") ?? "") || null;
   const capacityRaw = String(formData.get("dailyCapacityMinutes") ?? "").trim();
+  // A checkbox: present means ticked, absent means cleared. Read from the same
+  // form as everything else, so taking the permission away is a save like any
+  // other rather than a separate button somebody has to find.
+  const canReadWhatsApp = formData.get("canReadWhatsApp") !== null;
 
   if (!name) throw new Error("Full name is required.");
   if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
@@ -59,6 +63,7 @@ function readAccountFields(formData: FormData) {
     phone: phone || null,
     employeeCode: employeeCode || null,
     monthlySalesTarget: target,
+    canReadWhatsApp,
     playbook,
     skills,
     examples,

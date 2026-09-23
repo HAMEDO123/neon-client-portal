@@ -15,6 +15,8 @@ export type SessionEmployee = {
   phone: string | null;
   employeeCode: string | null;
   color: string;
+  /** Whether this person may read the company WhatsApp — see requireWhatsAppReader. */
+  canReadWhatsApp: boolean;
 };
 
 export async function getSessionEmployee(): Promise<SessionEmployee | null> {
@@ -35,6 +37,7 @@ export async function getSessionEmployee(): Promise<SessionEmployee | null> {
       phone: true,
       employeeCode: true,
       color: true,
+      canReadWhatsApp: true,
     },
   });
 

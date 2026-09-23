@@ -464,6 +464,12 @@ model Employee {
   // Only one access role exists today; the column keeps the check explicit
   // and leaves room for another role later.
   accessRole   String    @default("EMPLOYEE")
+  // Whether this person may read the company WhatsApp number's conversations
+  // in the portal. Off for everyone by default and granted one person at a
+  // time: the studio's WhatsApp carries client prices, complaints and supplier
+  // terms, so this is nearer to payroll than to the project board, and it is
+  // not something a job title should imply.
+  canReadWhatsApp Boolean @default(false)
   lastLoginAt  DateTime?
 
   // Payroll. The amount is per pay period: a month for monthly staff, a week

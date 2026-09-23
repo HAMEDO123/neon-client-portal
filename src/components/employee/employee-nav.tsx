@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Home, ListChecks, MessagesSquare, ShoppingBag, User } from "lucide-react";
+import { Building2, Home, ListChecks, MessageCircle, MessagesSquare, ShoppingBag, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Six destinations. This said five for a long time, and the sixth was added
@@ -27,10 +27,34 @@ export const EMPLOYEE_DESTINATIONS = [
   { href: "/employee/chat", label: "Chat", icon: MessagesSquare, exact: false },
 ];
 
-const TABS = EMPLOYEE_DESTINATIONS;
+/**
+ * The company WhatsApp, for the few people who may read it.
+ *
+ * Kept out of the list above rather than hidden inside the rail, because the
+ * question "who sees this" has exactly one answer — `canReadWhatsApp` on the
+ * employee — and it is asked in two places. A door drawn for somebody who
+ * cannot open it is worse than no door.
+ */
+export const WHATSAPP_DESTINATION = {
+  href: "/employee/whatsapp",
+  label: "WhatsApp",
+  icon: MessageCircle,
+  exact: false,
+};
 
-export function EmployeeNav({ unreadChat = 0 }: { unreadChat?: number }) {
+export function employeeDestinations(canReadWhatsApp: boolean) {
+  return canReadWhatsApp ? [...EMPLOYEE_DESTINATIONS, WHATSAPP_DESTINATION] : EMPLOYEE_DESTINATIONS;
+}
+
+export function EmployeeNav({
+  unreadChat = 0,
+  canReadWhatsApp = false,
+}: {
+  unreadChat?: number;
+  canReadWhatsApp?: boolean;
+}) {
   const pathname = usePathname();
+  const TABS = employeeDestinations(canReadWhatsApp);
 
   return (
     // Thumb-reach on a phone; on a desktop the same destinations are in the
