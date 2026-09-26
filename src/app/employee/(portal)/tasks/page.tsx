@@ -3,14 +3,17 @@ import { ListChecks } from "lucide-react";
 import { requireEmployee } from "@/lib/employee-session";
 import { allTasks, type EmployeeTask } from "@/lib/employee-tasks";
 import { getTimezone } from "@/lib/settings";
-import { dayKeyIn } from "@/lib/time";
+import { dayKeyIn, shiftDayKey } from "@/lib/time";
 import { TaskCard } from "@/components/employee/task-card";
 import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
 import { planForTasks } from "@/lib/stage-deadlines";
 import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
-import { StudioTasks } from "@/components/tasks/studio-tasks";
+import { AssignWork } from "@/components/tasks/assign-work";
+import { assignedTasksForWeek } from "@/lib/assigned-tasks";
+import { weekDayKeys, weekLabel, weekStartKey } from "@/lib/week";
+import { prisma } from "@/lib/db";
 
 const FILTERS = [
   { key: "open", label: "Open" },
@@ -38,22 +41,43 @@ export default async function EmployeeTasksPage({
   const timezone = await getTimezone();
   const { filter, view, week } = await searchParams;
 
-  // Whoever the manager has trusted to hand work out gets the studio's own two
-  // tables in this tab as well — the same screen the manager has, mounted
-  // without the rights that were not handed over. Two views of one tab rather
-  // than a seventh destination: the phone's tab bar is already full, and this
-  // is the Tasks tab either way.
-  const studio = employee.canAssignTasks && view === "studio";
+  // Whoever the manager has trusted to hand work out gets a second view of
+  // this tab. Not the manager's two tables — those are a project-by-step
+  // matrix and a seven-day grid, read on a desk, and on a phone they drag the
+  // page sideways under their own headings. This is the same job without
+  // them: a button, and the form asking who it is for and what it is.
+  //
+  // A view of the Tasks tab rather than a seventh destination, because the
+  // phone's tab bar is already full and this is tasks either way.
+  const assigning = employee.canAssignTasks && view === "studio";
 
-  if (studio) {
+  if (assigning) {
+    const anchor = /^\d{4}-\d{2}-\d{2}$/.test(week ?? "") ? week! : dayKeyIn(timezone, new Date());
+    const keys = weekDayKeys(anchor);
+    const start = weekStartKey(anchor);
+
+    const [team, tasks] = await Promise.all([
+      prisma.employee.findMany({
+        where: { active: true, accessRole: "EMPLOYEE" },
+        orderBy: [{ order: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, color: true, role: true },
+      }),
+      assignedTasksForWeek(anchor),
+    ]);
+
     return (
-      // `wide-frame` lifts the portal's reading width for this page only: the
-      // board is a project-by-step matrix and a 5xl column puts half of it off
-      // the side. The selector matches a **direct** child of `.employee-main`,
-      // like `fills-frame` beside it, so this div cannot be wrapped.
-      <div className="wide-frame">
+      <div className="flex flex-col gap-4">
         <ViewSwitch studio />
-        <StudioTasks week={week} basePath="/employee/tasks" asManager={false} />
+        <AssignWork
+          team={team}
+          tasks={tasks}
+          todayKey={dayKeyIn(timezone, new Date())}
+          weekLabel={weekLabel(keys)}
+          previousWeek={`/employee/tasks?view=studio&week=${shiftDayKey(start, -7)}`}
+          nextWeek={`/employee/tasks?view=studio&week=${shiftDayKey(start, 7)}`}
+          thisWeek="/employee/tasks?view=studio"
+          isThisWeek={start === weekStartKey(dayKeyIn(timezone, new Date()))}
+        />
       </div>
     );
   }
@@ -78,7 +102,11 @@ export default async function EmployeeTasksPage({
 
   return (
     <div className="flex flex-col gap-4">
-      {employee.canAssignTasks ? <ViewSwitch studio={false} /> : <h1 className="text-xl font-semibold text-ink">My Tasks</h1>}
+      {employee.canAssignTasks ? (
+        <ViewSwitch studio={false} />
+      ) : (
+        <h1 className="text-xl font-semibold text-ink">My Tasks</h1>
+      )}
 
       <div className="flex gap-2">
         {FILTERS.map((option) => (
@@ -128,16 +156,16 @@ export default async function EmployeeTasksPage({
 }
 
 /**
- * Mine, or the studio's.
+ * My own work, or handing work out.
  *
  * Only drawn for somebody who may hand work out — for everyone else this tab
- * has one view and a switch with a single destination is a control that asks a
- * question with one answer.
+ * has one view, and a switch with a single destination is a control that asks
+ * a question with one answer.
  */
 function ViewSwitch({ studio }: { studio: boolean }) {
   const options = [
     { key: "mine", label: "My tasks", href: "/employee/tasks" },
-    { key: "studio", label: "Studio", href: "/employee/tasks?view=studio" },
+    { key: "studio", label: "Assign", href: "/employee/tasks?view=studio" },
   ];
 
   return (

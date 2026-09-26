@@ -300,15 +300,6 @@ body:has(.employee-shell) {
   min-height: 0;
 }
 
-/* A page that needs more than the portal's reading width — the studio's task
-   board, which is a project-by-step matrix. It keeps the padding and the
-   scrolling; it only lifts the cap, the way the admin's own Tasks page does.
-   Same rule as `fills-frame` above: a **direct** child, so wrapping the page
-   in a div quietly puts the width back. */
-.employee-main:has(> .wide-frame) {
-  max-width: none;
-}
-
 /* Typing is a full-screen activity, and five destinations are not worth the
    room mid-word. */
 body[data-keyboard="open"] .employee-tabbar {

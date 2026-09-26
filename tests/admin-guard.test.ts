@@ -18,10 +18,10 @@ import { join } from "node:path";
 //     contents of a project. The studio decided the team works a project the
 //     way the manager does, including removing a file and not only adding one.
 //   - `requireTaskAssigner` is the manager **or one ticked person at a time**,
-//     for handing work out: the week board, and ticking a cell of the project
-//     board. The studio moved the week board here deliberately; it is not
-//     `requireStaff`, because what somebody else spends their day on is not
-//     the same kind of thing as the contents of a project.
+//     for handing work out — the week board, and nothing else. The studio
+//     moved it here deliberately; it is not `requireStaff`, because what
+//     somebody else spends their day on is not the same kind of thing as the
+//     contents of a project.
 //
 // The dangerous direction is one-way: an action that quietly moves from the
 // first to the second hands the whole team something meant for the manager.
@@ -263,37 +263,22 @@ describe("one definition of each check, not twenty-five", () => {
 
   it("keeps handing work out on the assigner's guard, not the manager's and not the team's", () => {
     // The studio widened who may give the team work, and the shape of that
-    // matters more than the fact of it:
-    //
-    //   - every export of the week board carries the assigner's guard, so one
-    //     of the five left behind on `requireAdmin` is a screen that half
-    //     works for the person who was given it;
-    //   - `setTaskState` carries it too, because ticking a cell is moving the
-    //     studio's work along;
-    //   - and everything else in task-actions.ts stays the manager's, because
-    //     it *defines* the process — a step added there appears on every
-    //     project the studio runs.
-    //
-    // The last one is the quiet disaster: `requireTaskAssigner` spreading down
-    // that file would hand the shape of the studio's delivery process to
-    // somebody who was trusted with a week of work.
+    // matters more than the fact of it: every export of the week board carries
+    // the assigner's guard — one left behind on `requireAdmin` is a screen
+    // that half works for the person who was given it — and nothing else does.
     const week = exportedActions(read("assigned-task-actions.ts"));
     assert.ok(week.length > 0, "assigned-task-actions.ts has no exports — has it moved?");
     for (const action of week) {
       assert.ok(action.body.includes(ASSIGNER), `${action.name} must carry ${ASSIGNER.trim()}`);
     }
 
+    // And the project board is untouched: it is not on the screen the
+    // assigner was given, and most of that file *defines* the process — a step
+    // added there appears on every project the studio runs. A guard spreading
+    // into it would be handing over the shape of the studio's delivery.
     const board = exportedActions(read("task-actions.ts"));
-    const assigners = board.filter((action) => action.body.includes(ASSIGNER)).map((action) => action.name);
-    assert.deepEqual(assigners, ["setTaskState"], "only ticking a cell is the assigner's in task-actions.ts");
-
-    // And nothing in there is left with no check at all.
-    for (const action of board) {
-      assert.ok(
-        action.body.includes(ADMIN) || action.body.includes(ASSIGNER),
-        `task-actions.ts: ${action.name} has no session check`
-      );
-    }
+    const loosened = board.filter((action) => !action.body.includes(ADMIN)).map((action) => action.name);
+    assert.deepEqual(loosened, [], `task-actions.ts is the manager's: ${loosened.join(", ")}`);
   });
 
   it("holds the employee's own project actions to the same standard", () => {

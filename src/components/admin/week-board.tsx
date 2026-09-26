@@ -433,8 +433,15 @@ export function WeekBoard({
   );
 }
 
-/** Writing a job down, or changing one. */
-function TaskDialog({
+/**
+ * Writing a job down, or changing one.
+ *
+ * Exported because the same form is the whole of the Assign screen in the
+ * employee portal, for whoever the manager has trusted to hand work out. They
+ * get no week grid — one button and this dialog — and a second copy of the
+ * form would be a second place for "counts as done when" to go missing from.
+ */
+export function TaskDialog({
   team,
   task,
   initial,
