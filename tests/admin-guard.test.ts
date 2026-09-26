@@ -9,13 +9,19 @@ import { join } from "node:path";
 // that notices is somebody calling the action, and by then it has happened. So
 // the check that used to be a paragraph in the README is a test instead.
 //
-// There are two guards now, and which one an action carries is the whole point:
+// There are several guards now, and which one an action carries is the whole
+// point:
 //
-//   - `requireAdmin` is the manager alone: payroll, employees, settings, the
-//     week board, automation, warnings — and creating or deleting a project.
-//   - `requireStaff` is the manager **or** somebody on the team, for the
+//   - `requireAdmin` is the manager alone: payroll, employees, settings,
+//     automation, warnings — and creating or deleting a project.
+//   - `requireStaff` is the manager **or** anybody on the team, for the
 //     contents of a project. The studio decided the team works a project the
 //     way the manager does, including removing a file and not only adding one.
+//   - `requireTaskAssigner` is the manager **or one ticked person at a time**,
+//     for handing work out: the week board, and ticking a cell of the project
+//     board. The studio moved the week board here deliberately; it is not
+//     `requireStaff`, because what somebody else spends their day on is not
+//     the same kind of thing as the contents of a project.
 //
 // The dangerous direction is one-way: an action that quietly moves from the
 // first to the second hands the whole team something meant for the manager.
@@ -30,6 +36,7 @@ const DIR = join(process.cwd(), "src", "lib", "actions");
 
 const ADMIN = "await requireAdmin();";
 const STAFF = "await requireStaff();";
+const ASSIGNER = "await requireTaskAssigner();";
 
 /** How many of each file's exports carry each check. */
 const EXPECTED: Record<string, { admin: number; staff: number }> = {
@@ -126,6 +133,21 @@ function read(file: string): string {
   return readFileSync(join(DIR, file), "utf8");
 }
 
+/**
+ * The file with its comments taken out.
+ *
+ * Because a sweep for a guard's *name* cannot tell a call from an explanation
+ * of why that guard is deliberately not used — and the moment an action file
+ * says "this is not requireStaff, because…", the check fails something that is
+ * right. The same trap this file already documents for the "use server"
+ * directive, met a second time from the other direction.
+ */
+function code(file: string): string {
+  return read(file)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
 /** Each exported action, as its name and its body. */
 function exportedActions(source: string): { name: string; body: string }[] {
   return source
@@ -196,6 +218,8 @@ describe("every action checks the session itself", () => {
     assert.deepEqual(directives, [], "admin-guard.ts must not be a 'use server' module");
     assert.ok(guard.includes("export async function requireAdmin"));
     assert.ok(guard.includes("export async function requireStaff"));
+    assert.ok(guard.includes("export async function requireTaskAssigner"));
+    assert.ok(guard.includes("export async function requireWhatsAppAccess"));
   });
 });
 
@@ -222,13 +246,54 @@ describe("one definition of each check, not twenty-five", () => {
 
   it("lets the studio-wide guard nowhere near the manager's own tools", () => {
     // The one regression this change made possible, and the one nothing else
-    // would catch: payroll, employees, settings, the week board, automation and
-    // warnings are the manager's. An action there reaching for the nearer guard
-    // hands the whole team something that was never theirs, and it would
-    // typecheck, lint, build and pass every other test on the way through.
-    const reaching = files.filter((file) => !MAY_USE_STAFF.has(file) && read(file).includes("requireStaff")).sort();
+    // would catch: payroll, employees, settings, automation and warnings are
+    // the manager's. An action there reaching for the nearer guard hands the
+    // whole team something that was never theirs, and it would typecheck,
+    // lint, build and pass every other test on the way through.
+    //
+    // The week board used to be on that list and is not any more — it is
+    // `requireTaskAssigner` now, which is one ticked person rather than the
+    // team. That is a narrowing of this rule, not a hole in it: the sweep
+    // below still refuses `requireStaff` everywhere outside MAY_USE_STAFF, and
+    // the assigner's own files are pinned by their own test.
+    const reaching = files.filter((file) => !MAY_USE_STAFF.has(file) && code(file).includes("requireStaff")).sort();
 
     assert.deepEqual(reaching, [], `these are the manager's alone and must not use requireStaff: ${reaching.join(", ")}`);
+  });
+
+  it("keeps handing work out on the assigner's guard, not the manager's and not the team's", () => {
+    // The studio widened who may give the team work, and the shape of that
+    // matters more than the fact of it:
+    //
+    //   - every export of the week board carries the assigner's guard, so one
+    //     of the five left behind on `requireAdmin` is a screen that half
+    //     works for the person who was given it;
+    //   - `setTaskState` carries it too, because ticking a cell is moving the
+    //     studio's work along;
+    //   - and everything else in task-actions.ts stays the manager's, because
+    //     it *defines* the process — a step added there appears on every
+    //     project the studio runs.
+    //
+    // The last one is the quiet disaster: `requireTaskAssigner` spreading down
+    // that file would hand the shape of the studio's delivery process to
+    // somebody who was trusted with a week of work.
+    const week = exportedActions(read("assigned-task-actions.ts"));
+    assert.ok(week.length > 0, "assigned-task-actions.ts has no exports — has it moved?");
+    for (const action of week) {
+      assert.ok(action.body.includes(ASSIGNER), `${action.name} must carry ${ASSIGNER.trim()}`);
+    }
+
+    const board = exportedActions(read("task-actions.ts"));
+    const assigners = board.filter((action) => action.body.includes(ASSIGNER)).map((action) => action.name);
+    assert.deepEqual(assigners, ["setTaskState"], "only ticking a cell is the assigner's in task-actions.ts");
+
+    // And nothing in there is left with no check at all.
+    for (const action of board) {
+      assert.ok(
+        action.body.includes(ADMIN) || action.body.includes(ASSIGNER),
+        `task-actions.ts: ${action.name} has no session check`
+      );
+    }
   });
 
   it("holds the employee's own project actions to the same standard", () => {

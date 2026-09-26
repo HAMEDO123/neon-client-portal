@@ -87,3 +87,31 @@ export async function requireWhatsAppAccess(): Promise<Staff> {
 
   throw new Error("Unauthorized");
 }
+
+/**
+ * The manager, or somebody the manager has trusted to hand work out.
+ *
+ * A fourth guard, and narrow on purpose. `requireStaff` is "anybody on the
+ * team", which is right for the contents of a project and wrong for this: the
+ * week board decides what other people spend their day on, and a board cell's
+ * state is what payroll's progress figures are counted from. So this is one
+ * person at a time, ticked on their own page, exactly like the WhatsApp one.
+ *
+ * What it deliberately does NOT carry, all of it still `requireAdmin`:
+ * creating or deleting a project, editing the shared delivery process (a step
+ * added here appears on every project the studio runs), resetting a project's
+ * board, payroll, employees, settings — and approving finished work, which
+ * stays the manager's word.
+ *
+ * Read fresh from the database on every call, like the others, so taking the
+ * permission away takes effect on that person's next request.
+ */
+export async function requireTaskAssigner(): Promise<Staff> {
+  const store = await cookies();
+  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return { type: "ADMIN" };
+
+  const employee = await getSessionEmployee();
+  if (employee?.canAssignTasks) return { type: "EMPLOYEE", id: employee.id, name: employee.name };
+
+  throw new Error("Unauthorized");
+}

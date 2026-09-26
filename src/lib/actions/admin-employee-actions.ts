@@ -36,6 +36,7 @@ function readAccountFields(formData: FormData) {
   // form as everything else, so taking the permission away is a save like any
   // other rather than a separate button somebody has to find.
   const canReadWhatsApp = formData.get("canReadWhatsApp") !== null;
+  const canAssignTasks = formData.get("canAssignTasks") !== null;
 
   if (!name) throw new Error("Full name is required.");
   if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
@@ -64,6 +65,7 @@ function readAccountFields(formData: FormData) {
     employeeCode: employeeCode || null,
     monthlySalesTarget: target,
     canReadWhatsApp,
+    canAssignTasks,
     playbook,
     skills,
     examples,

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdmin, requireTaskAssigner } from "@/lib/admin-guard";
 import { EMPLOYEE_COLORS } from "@/lib/task-board";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
@@ -10,12 +10,21 @@ import type { TaskState } from "@/generated/prisma/enums";
 
 function refresh() {
   revalidatePath("/admin/tasks");
+  // The same board is now open in the employee portal for whoever may hand
+  // work out. Revalidating only the manager's copy would refresh the screen
+  // nobody is looking at and leave the tick on the other one until a reload —
+  // which reads as "it did not save" while the database is perfectly right.
+  revalidatePath("/employee", "layout");
 }
 
 const VALID_STATES: TaskState[] = ["TODO", "DONE", "TOMORROW"];
 
 export async function setTaskState(projectId: string, taskId: string, state: TaskState) {
-  await requireAdmin();
+  // The one export here that is not the manager's alone. Ticking a cell is
+  // moving the studio's work along, which is what the week board is for;
+  // everything else in this file *defines* the process — a step added here
+  // appears on every project the studio runs — and stays with the manager.
+  await requireTaskAssigner();
   if (!VALID_STATES.includes(state)) throw new Error("Unknown task state.");
 
   // Read first: a tick on the board used to leave nothing behind, so there was

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireTaskAssigner } from "@/lib/admin-guard";
 import { dayKeyToDate } from "@/lib/time";
 import { daysBetween } from "@/lib/week";
 import { dispatchNotification } from "@/lib/notifications/engine";
@@ -16,6 +16,12 @@ import type { TaskPriority } from "@/generated/prisma/enums";
 // last part is the whole point of the week view: "two days to go and negotiate
 // with the supplier" fills two cells, and everyone can see what those two days
 // are already spent on.
+//
+// `requireTaskAssigner` rather than `requireAdmin`, because the studio decided
+// the manager is not the only person who hands work out — see the guard, which
+// is one person at a time and not the team. It is deliberately not
+// `requireStaff`: what someone else spends their day on is not the same kind
+// of thing as the contents of a project.
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -73,7 +79,7 @@ function readForm(formData: FormData) {
 }
 
 export async function createAssignedTask(formData: FormData) {
-  await requireAdmin();
+  await requireTaskAssigner();
   const input = readForm(formData);
 
   const employee = await prisma.employee.findFirst({
@@ -117,7 +123,7 @@ export async function createAssignedTask(formData: FormData) {
 }
 
 export async function updateAssignedTask(id: string, formData: FormData) {
-  await requireAdmin();
+  await requireTaskAssigner();
   const input = readForm(formData);
 
   const before = await prisma.assignedTask.findUnique({
@@ -163,7 +169,7 @@ export async function updateAssignedTask(id: string, formData: FormData) {
 }
 
 export async function deleteAssignedTask(id: string) {
-  await requireAdmin();
+  await requireTaskAssigner();
   await prisma.assignedTask.delete({ where: { id } }).catch(() => {});
   refresh();
 }
@@ -176,7 +182,7 @@ export async function deleteAssignedTask(id: string) {
  * how long it takes. Duration is changed by editing it.
  */
 export async function moveAssignedTask(id: string, input: { days: number; employeeId?: string }) {
-  await requireAdmin();
+  await requireTaskAssigner();
 
   const task = await prisma.assignedTask.findUnique({
     where: { id },
@@ -225,7 +231,7 @@ export async function moveAssignedTask(id: string, input: { days: number; employ
 
 /** The manager ticking one off from the week view. */
 export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGRESS" | "DONE") {
-  await requireAdmin();
+  await requireTaskAssigner();
 
   const before = await prisma.assignedTask.findUnique({ where: { id }, select: { state: true } });
 

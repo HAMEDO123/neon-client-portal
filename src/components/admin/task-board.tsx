@@ -45,10 +45,25 @@ export function TaskBoard({
   board,
   todayKey,
   tomorrowKey,
+  canEditProcess = true,
 }: {
   board: TaskBoardData;
   todayKey: string;
   tomorrowKey: string;
+  /**
+   * Whether the viewer may change the process itself — add, rename, reorder or
+   * delete a step, and clear a project's row.
+   *
+   * False for somebody trusted with handing work out but not with the shape of
+   * the studio's delivery process: a step added here appears on every project
+   * the studio runs, and deleting one takes its ticks on all of them.
+   *
+   * The controls are not rendered rather than rendered-and-refused, which is
+   * the same choice the employee project screens made about the Danger Zone: a
+   * button that throws Unauthorized reads as a broken platform rather than as a
+   * boundary. The actions behind them still check for themselves.
+   */
+  canEditProcess?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [employeeFilter, setEmployeeFilter] = useState<string | null>(null);
@@ -208,29 +223,33 @@ export function TaskBoard({
                       section.real ? columnTone(section.color) : "bg-bg-soft/60"
                     )}
                   >
-                    <StepHeader step={step} team={board.team} run={run} />
+                    <StepHeader step={step} team={board.team} run={run} editable={canEditProcess} />
                   </th>
                 )),
-                <th
-                  key={`${section.id}-add`}
-                  className={cn(
-                    "border-b border-l border-ink/8 p-0 align-middle",
-                    section.steps.length === 0 ? "w-24" : "w-8",
-                    section.real ? columnTone(section.color) : "bg-bg-soft/60"
-                  )}
-                >
-                  <InlineAdd
-                    title={`Add a step to ${section.name}`}
-                    placeholder="Step"
-                    label={section.steps.length === 0 ? "First step" : undefined}
-                    onSubmit={(value) =>
-                      run(() => createProcessTask(value, null, section.real ? section.id : null))
-                    }
-                  />
-                </th>,
+                ...(canEditProcess
+                  ? [
+                      <th
+                        key={`${section.id}-add`}
+                        className={cn(
+                          "border-b border-l border-ink/8 p-0 align-middle",
+                          section.steps.length === 0 ? "w-24" : "w-8",
+                          section.real ? columnTone(section.color) : "bg-bg-soft/60"
+                        )}
+                      >
+                        <InlineAdd
+                          title={`Add a step to ${section.name}`}
+                          placeholder="Step"
+                          label={section.steps.length === 0 ? "First step" : undefined}
+                          onSubmit={(value) =>
+                            run(() => createProcessTask(value, null, section.real ? section.id : null))
+                          }
+                        />
+                      </th>,
+                    ]
+                  : []),
               ])}
 
-              {board.sections.length === 0 && (
+              {board.sections.length === 0 && canEditProcess && (
                 <th className="border-b border-l border-ink/8 bg-bg-soft p-0 align-middle">
                   <InlineAdd
                     title="Add a step"
@@ -341,19 +360,21 @@ export function TaskBoard({
                     <td className="border-b border-l border-ink/8 px-1.5 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <ProgressPill done={done} total={counted.length} tomorrow={tomorrow} working={working} />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`Clear every tick on “${row.project.name}”?`)) {
-                              run(() => resetProjectTasks(row.project.id));
-                            }
-                          }}
-                          aria-label={`Clear all ticks on ${row.project.name}`}
-                          title="Clear this row"
-                          className="rounded-md p-1 text-ink/25 opacity-0 transition-opacity hover:bg-ink/5 hover:text-ink/60 focus-visible:opacity-100 group-hover/row:opacity-100"
-                        >
-                          <RotateCcw size={13} strokeWidth={1.75} />
-                        </button>
+                        {canEditProcess && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Clear every tick on “${row.project.name}”?`)) {
+                                run(() => resetProjectTasks(row.project.id));
+                              }
+                            }}
+                            aria-label={`Clear all ticks on ${row.project.name}`}
+                            title="Clear this row"
+                            className="rounded-md p-1 text-ink/25 opacity-0 transition-opacity hover:bg-ink/5 hover:text-ink/60 focus-visible:opacity-100 group-hover/row:opacity-100"
+                          >
+                            <RotateCcw size={13} strokeWidth={1.75} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   )}
@@ -604,18 +625,46 @@ function ProjectRowHeader({
 // Hyphenate first, break as a last resort — a long name should read as
 // "Require-ments", but it must never overflow into the neighbouring column,
 // which is what happens if nothing can break it at all.
+/**
+ * A step's column heading. Written along the row like any other heading:
+ * sideways text was compact and unreadable, and the column is wide enough now.
+ *
+ * Its own component because it is drawn twice — as the popover's trigger for
+ * the manager, and on its own for everybody else — and two copies of a heading
+ * are two things to keep in step.
+ */
+function StepLabel({ name }: { name: string }) {
+  return (
+    <span className="flex min-h-14 items-end justify-center px-1.5 py-2">
+      <span
+        className="line-clamp-3 w-full break-words text-center text-[11px] font-semibold leading-tight tracking-tight text-ink/70"
+        title={name}
+      >
+        {name}
+      </span>
+    </span>
+  );
+}
+
 function StepHeader({
   step,
   team,
   run,
+  editable = true,
 }: {
   step: TaskBoardStep;
   team: TaskBoardMember[];
   run: (action: () => Promise<unknown>) => void;
+  editable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(step.name);
   const [owner, setOwner] = useState(step.defaultOwnerId ?? "");
+
+  // Without the right to change the process, the heading is a heading: the
+  // same markup, minus the popover that renames, reassigns, reorders and
+  // deletes the step on every project at once.
+  if (!editable) return <StepLabel name={step.name} />;
 
   return (
     <Popover
@@ -627,18 +676,7 @@ function StepHeader({
           setOwner(step.defaultOwnerId ?? "");
         }
       }}
-      trigger={
-        // Written along the row like any other heading: sideways text was
-        // compact and unreadable, and the column is wide enough now.
-        <span className="flex min-h-14 items-end justify-center px-1.5 py-2">
-          <span
-            className="line-clamp-3 w-full break-words text-center text-[11px] font-semibold leading-tight tracking-tight text-ink/70"
-            title={step.name}
-          >
-            {step.name}
-          </span>
-        </span>
-      }
+      trigger={<StepLabel name={step.name} />}
       triggerLabel={`Edit ${step.name}`}
       align="center"
     >

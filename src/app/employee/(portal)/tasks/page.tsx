@@ -10,6 +10,7 @@ import { planForTasks } from "@/lib/stage-deadlines";
 import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
+import { StudioTasks } from "@/components/tasks/studio-tasks";
 
 const FILTERS = [
   { key: "open", label: "Open" },
@@ -31,11 +32,31 @@ const NO_DATE = "9999-12-31";
 export default async function EmployeeTasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; view?: string; week?: string }>;
 }) {
   const employee = await requireEmployee();
   const timezone = await getTimezone();
-  const { filter } = await searchParams;
+  const { filter, view, week } = await searchParams;
+
+  // Whoever the manager has trusted to hand work out gets the studio's own two
+  // tables in this tab as well — the same screen the manager has, mounted
+  // without the rights that were not handed over. Two views of one tab rather
+  // than a seventh destination: the phone's tab bar is already full, and this
+  // is the Tasks tab either way.
+  const studio = employee.canAssignTasks && view === "studio";
+
+  if (studio) {
+    return (
+      // `wide-frame` lifts the portal's reading width for this page only: the
+      // board is a project-by-step matrix and a 5xl column puts half of it off
+      // the side. The selector matches a **direct** child of `.employee-main`,
+      // like `fills-frame` beside it, so this div cannot be wrapped.
+      <div className="wide-frame">
+        <ViewSwitch studio />
+        <StudioTasks week={week} basePath="/employee/tasks" asManager={false} />
+      </div>
+    );
+  }
 
   const active = FILTERS.find((f) => f.key === filter)?.key ?? "open";
   const tasks = await allTasks(employee.id, active === "all" ? undefined : active);
@@ -57,7 +78,7 @@ export default async function EmployeeTasksPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-ink">My Tasks</h1>
+      {employee.canAssignTasks ? <ViewSwitch studio={false} /> : <h1 className="text-xl font-semibold text-ink">My Tasks</h1>}
 
       <div className="flex gap-2">
         {FILTERS.map((option) => (
@@ -102,6 +123,40 @@ export default async function EmployeeTasksPage({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Mine, or the studio's.
+ *
+ * Only drawn for somebody who may hand work out — for everyone else this tab
+ * has one view and a switch with a single destination is a control that asks a
+ * question with one answer.
+ */
+function ViewSwitch({ studio }: { studio: boolean }) {
+  const options = [
+    { key: "mine", label: "My tasks", href: "/employee/tasks" },
+    { key: "studio", label: "Studio", href: "/employee/tasks?view=studio" },
+  ];
+
+  return (
+    <div className="flex gap-2">
+      {options.map((option) => {
+        const active = studio ? option.key === "studio" : option.key === "mine";
+        return (
+          <Link
+            key={option.key}
+            href={option.href}
+            className={cn(
+              "rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
+              active ? "border-ink bg-ink text-bg" : "border-ink/12 bg-white/60 text-ink/60"
+            )}
+          >
+            {option.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }

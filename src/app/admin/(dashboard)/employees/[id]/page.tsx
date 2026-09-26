@@ -128,6 +128,17 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           description="Adds a WhatsApp tab to their portal: they can read the studio's conversations and reply in them, as the studio's number."
         />
 
+        {/* Handing work out, not running the studio: they get the board and
+            the week, and not starting a project, editing the delivery process
+            or approving finished work. */}
+        <Checkbox
+          className="sm:col-span-2"
+          label="Can hand out tasks"
+          name="canAssignTasks"
+          defaultChecked={employee.canAssignTasks}
+          description="Adds a Studio view to their Tasks tab: the project board and the week board, so they can give work to the team and tick it along. Approving finished work stays yours."
+        />
+
         {/* In your own words, because this is what a proposed day is built
             from: the trade, what they are normally given, what they never
             are, and how much fits in a day. */}

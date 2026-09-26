@@ -473,6 +473,13 @@ model Employee {
   // are one permission by the studio's decision, and renaming a column is a
   // migration for a word.
   canReadWhatsApp Boolean @default(false)
+  // Whether this person may hand work out to the rest of the team: the week
+  // board, and ticking a project's steps. Off for everyone by default and
+  // granted one person at a time, like the WhatsApp tick above it. It does not
+  // make them the manager — creating or deleting a project, editing the shared
+  // delivery process, payroll, settings and approving finished work all stay
+  // where they were.
+  canAssignTasks  Boolean @default(false)
   lastLoginAt  DateTime?
 
   // Payroll. The amount is per pay period: a month for monthly staff, a week
