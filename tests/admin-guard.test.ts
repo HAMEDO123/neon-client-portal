@@ -37,6 +37,7 @@ const DIR = join(process.cwd(), "src", "lib", "actions");
 const ADMIN = "await requireAdmin();";
 const STAFF = "await requireStaff();";
 const ASSIGNER = "await requireTaskAssigner();";
+const VISITOR = "await requireSiteVisitor();";
 
 /** How many of each file's exports carry each check. */
 const EXPECTED: Record<string, { admin: number; staff: number }> = {
@@ -220,6 +221,7 @@ describe("every action checks the session itself", () => {
     assert.ok(guard.includes("export async function requireStaff"));
     assert.ok(guard.includes("export async function requireTaskAssigner"));
     assert.ok(guard.includes("export async function requireWhatsAppAccess"));
+    assert.ok(guard.includes("export async function requireSiteVisitor"));
   });
 });
 
@@ -279,6 +281,18 @@ describe("one definition of each check, not twenty-five", () => {
     const board = exportedActions(read("task-actions.ts"));
     const loosened = board.filter((action) => !action.body.includes(ADMIN)).map((action) => action.name);
     assert.deepEqual(loosened, [], `task-actions.ts is the manager's: ${loosened.join(", ")}`);
+  });
+
+  it("keeps the site-visit diary behind its own guard", () => {
+    // Every export writes to the studio's record of where it has been, and
+    // each one re-reads the row it is about to change — an id in a form is
+    // not evidence of whose visit it is.
+    const actions = exportedActions(read("site-visit-actions.ts"));
+    assert.ok(actions.length > 0, "site-visit-actions.ts has no exports — has it moved?");
+
+    for (const action of actions) {
+      assert.ok(action.body.includes(VISITOR), `${action.name} must carry ${VISITOR.trim()}`);
+    }
   });
 
   it("holds the employee's own project actions to the same standard", () => {

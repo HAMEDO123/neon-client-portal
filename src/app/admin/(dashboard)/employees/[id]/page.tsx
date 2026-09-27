@@ -139,6 +139,16 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           description="Adds an Assign view to their Tasks tab: they choose who a job is for, what it is and which days it runs over. Approving finished work stays yours."
         />
 
+        {/* The diary is written by whoever goes; you read it under Site
+            visits. Nothing there lets you fill in a visit for them. */}
+        <Checkbox
+          className="sm:col-span-2"
+          label="Keeps the site-visit diary"
+          name="canLogSiteVisits"
+          defaultChecked={employee.canLogSiteVisits}
+          description="Adds a Site visits view to their Tasks tab: they schedule a visit, then say afterwards whether they went and what came of it. You see all of it."
+        />
+
         {/* In your own words, because this is what a proposed day is built
             from: the trade, what they are normally given, what they never
             are, and how much fits in a day. */}

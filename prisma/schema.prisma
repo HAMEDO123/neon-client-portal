@@ -235,6 +235,7 @@ model Project {
   taskEntries  ProjectTaskEntry[]
   chatMessages ChatMessage[]
   sectionTeam  ProjectSectionAssignment[]
+  siteVisits   SiteVisit[]
 
   @@index([soldById, soldOn])
 }
@@ -480,6 +481,10 @@ model Employee {
   // delivery process, payroll, settings and approving finished work all stay
   // where they were.
   canAssignTasks  Boolean @default(false)
+  // Whether this person keeps the studio's site-visit diary: scheduling a
+  // visit, saying afterwards whether they went, and writing up what came of
+  // it. Off by default and granted one person at a time, like the two above.
+  canLogSiteVisits Boolean @default(false)
   lastLoginAt  DateTime?
 
   // Payroll. The amount is per pay period: a month for monthly staff, a week
@@ -542,6 +547,7 @@ model Employee {
   // Work waiting on this person to unstick it.
   blockedEntries  ProjectTaskEntry[]         @relation("EntryBlockedBy")
   blockedJobs     AssignedTask[]             @relation("JobBlockedBy")
+  siteVisits      SiteVisit[]
 }
 
 // A formal warning from the manager, with the reason the employee is shown at
@@ -1662,4 +1668,54 @@ model CallSignal {
 
   @@index([toKey, id])
   @@index([callId])
+}
+
+/// Where a visit stands. PLANNED is the only one the platform sets by itself;
+/// the other three are somebody saying what happened, which is the whole point
+/// — nothing here infers that a visit took place.
+enum SiteVisitState {
+  PLANNED
+  VISITED
+  MISSED
+  CANCELLED
+}
+
+/// A visit to a site, written down before it happens and answered after.
+///
+/// The studio's visits lived in somebody's head and in WhatsApp: what was
+/// planned was not written anywhere the manager could read, and what came of
+/// it was told once, out loud. This is both halves in one row — the plan, and
+/// the answer — because a plan with no answer is exactly the thing worth
+/// seeing, and it is only visible if the two live together.
+///
+/// A visit is not a task. It is not on the board, it has no proof to send and
+/// nothing about it is approved: the manager reads it, and that is the whole
+/// of it.
+model SiteVisit {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// The project it is for, where it is for one. Null on purpose: a first
+  /// visit often happens before there is a project to attach it to.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  title     String
+  /// Where it is, in the words somebody would give a driver.
+  location  String?
+  /// What they are going to do there, written before they go.
+  purpose   String? @db.Text
+  scheduledAt DateTime
+
+  state      SiteVisitState @default(PLANNED)
+  /// What came of it — or, on a visit that did not happen, why not.
+  report     String?   @db.Text
+  reportedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([state, scheduledAt])
+  @@index([employeeId, scheduledAt])
 }

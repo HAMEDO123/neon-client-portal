@@ -37,6 +37,7 @@ function readAccountFields(formData: FormData) {
   // other rather than a separate button somebody has to find.
   const canReadWhatsApp = formData.get("canReadWhatsApp") !== null;
   const canAssignTasks = formData.get("canAssignTasks") !== null;
+  const canLogSiteVisits = formData.get("canLogSiteVisits") !== null;
 
   if (!name) throw new Error("Full name is required.");
   if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
@@ -66,6 +67,7 @@ function readAccountFields(formData: FormData) {
     monthlySalesTarget: target,
     canReadWhatsApp,
     canAssignTasks,
+    canLogSiteVisits,
     playbook,
     skills,
     examples,

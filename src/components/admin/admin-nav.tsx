@@ -11,6 +11,7 @@ import {
   Bell,
   Fingerprint,
   Users,
+  MapPinned,
   MessageCircle,
   MessagesSquare,
   ShoppingBag,
@@ -45,6 +46,7 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
   const isPayroll = pathname.startsWith("/admin/payroll");
   const isAttendance = pathname.startsWith("/admin/attendance");
   const isWhatsApp = pathname.startsWith("/admin/whatsapp");
+  const isVisits = pathname.startsWith("/admin/site-visits");
   const isSettings = pathname.startsWith("/admin/settings");
 
   return (
@@ -87,6 +89,9 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
       </Item>
       <Item href="/admin/whatsapp" active={isWhatsApp} icon={<MessageCircle size={16} strokeWidth={1.75} />}>
         WhatsApp
+      </Item>
+      <Item href="/admin/site-visits" active={isVisits} icon={<MapPinned size={16} strokeWidth={1.75} />}>
+        Site visits
       </Item>
       <Item href="/admin/employees" active={isEmployees} icon={<Users size={16} strokeWidth={1.75} />}>
         Team

@@ -11,6 +11,8 @@ import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { AssignWork } from "@/components/tasks/assign-work";
+import { SiteVisits } from "@/components/tasks/site-visits";
+import { projectsForVisits, siteVisitsFor } from "@/lib/site-visit-queries";
 import { assignedTasksForWeek } from "@/lib/assigned-tasks";
 import { weekDayKeys, weekLabel, weekStartKey } from "@/lib/week";
 import { prisma } from "@/lib/db";
@@ -51,6 +53,20 @@ export default async function EmployeeTasksPage({
   // phone's tab bar is already full and this is tasks either way.
   const assigning = employee.canAssignTasks && view === "studio";
 
+  // The site-visit diary, for whoever keeps it. A third view of this tab
+  // rather than a destination of its own, for the same reason Assign is one:
+  // the phone's tab bar is full, and all three are this person's work.
+  if (employee.canLogSiteVisits && view === "visits") {
+    const [visits, projects] = await Promise.all([siteVisitsFor(employee.id), projectsForVisits()]);
+
+    return (
+      <div className="flex flex-col gap-4">
+        <ViewSwitch view="visits" canAssign={employee.canAssignTasks} canVisit />
+        <SiteVisits visits={visits} projects={projects} />
+      </div>
+    );
+  }
+
   if (assigning) {
     const anchor = /^\d{4}-\d{2}-\d{2}$/.test(week ?? "") ? week! : dayKeyIn(timezone, new Date());
     const keys = weekDayKeys(anchor);
@@ -67,7 +83,7 @@ export default async function EmployeeTasksPage({
 
     return (
       <div className="flex flex-col gap-4">
-        <ViewSwitch studio />
+        <ViewSwitch view="studio" canAssign canVisit={employee.canLogSiteVisits} />
         <AssignWork
           team={team}
           tasks={tasks}
@@ -102,8 +118,12 @@ export default async function EmployeeTasksPage({
 
   return (
     <div className="flex flex-col gap-4">
-      {employee.canAssignTasks ? (
-        <ViewSwitch studio={false} />
+      {employee.canAssignTasks || employee.canLogSiteVisits ? (
+        <ViewSwitch
+          view="mine"
+          canAssign={employee.canAssignTasks}
+          canVisit={employee.canLogSiteVisits}
+        />
       ) : (
         <h1 className="text-xl font-semibold text-ink">My Tasks</h1>
       )}
@@ -156,35 +176,41 @@ export default async function EmployeeTasksPage({
 }
 
 /**
- * My own work, or handing work out.
+ * My own work, handing work out, and the site-visit diary.
  *
- * Only drawn for somebody who may hand work out — for everyone else this tab
- * has one view, and a switch with a single destination is a control that asks
- * a question with one answer.
+ * Only the views this person actually has are drawn — for somebody with
+ * neither extra, the tab has one view, and a switch with a single destination
+ * is a control that asks a question with one answer.
  */
-function ViewSwitch({ studio }: { studio: boolean }) {
+function ViewSwitch({
+  view,
+  canAssign,
+  canVisit,
+}: {
+  view: "mine" | "studio" | "visits";
+  canAssign: boolean;
+  canVisit: boolean;
+}) {
   const options = [
-    { key: "mine", label: "My tasks", href: "/employee/tasks" },
-    { key: "studio", label: "Assign", href: "/employee/tasks?view=studio" },
-  ];
+    { key: "mine", label: "My tasks", href: "/employee/tasks", shown: true },
+    { key: "studio", label: "Assign", href: "/employee/tasks?view=studio", shown: canAssign },
+    { key: "visits", label: "Site visits", href: "/employee/tasks?view=visits", shown: canVisit },
+  ].filter((option) => option.shown);
 
   return (
-    <div className="flex gap-2">
-      {options.map((option) => {
-        const active = studio ? option.key === "studio" : option.key === "mine";
-        return (
-          <Link
-            key={option.key}
-            href={option.href}
-            className={cn(
-              "rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
-              active ? "border-ink bg-ink text-bg" : "border-ink/12 bg-white/60 text-ink/60"
-            )}
-          >
-            {option.label}
-          </Link>
-        );
-      })}
+    <div className="flex flex-wrap gap-2">
+      {options.map((option) => (
+        <Link
+          key={option.key}
+          href={option.href}
+          className={cn(
+            "rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
+            view === option.key ? "border-ink bg-ink text-bg" : "border-ink/12 bg-white/60 text-ink/60"
+          )}
+        >
+          {option.label}
+        </Link>
+      ))}
     </div>
   );
 }

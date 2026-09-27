@@ -19,6 +19,8 @@ export type SessionEmployee = {
   canReadWhatsApp: boolean;
   /** Whether this person may hand work out to the team — see requireTaskAssigner. */
   canAssignTasks: boolean;
+  /** Whether this person keeps the site-visit diary — see requireSiteVisitor. */
+  canLogSiteVisits: boolean;
 };
 
 export async function getSessionEmployee(): Promise<SessionEmployee | null> {
@@ -41,6 +43,7 @@ export async function getSessionEmployee(): Promise<SessionEmployee | null> {
       color: true,
       canReadWhatsApp: true,
       canAssignTasks: true,
+      canLogSiteVisits: true,
     },
   });
 

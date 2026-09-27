@@ -115,3 +115,25 @@ export async function requireTaskAssigner(): Promise<Staff> {
 
   throw new Error("Unauthorized");
 }
+
+/**
+ * The manager, or somebody the manager has asked to keep the site-visit diary.
+ *
+ * The fifth guard, and the same shape as the two before it: one ticked person
+ * at a time, read fresh on every call. It is not `requireStaff` for the
+ * ordinary reason — a visit is the studio going to a client's building, and
+ * what gets written about one is read by the manager as an account of the
+ * business, not as somebody's own notes.
+ *
+ * It says who is acting, which the actions need: a visitor may only answer for
+ * their own visits, and the manager reads all of them and answers for none.
+ */
+export async function requireSiteVisitor(): Promise<Staff> {
+  const store = await cookies();
+  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return { type: "ADMIN" };
+
+  const employee = await getSessionEmployee();
+  if (employee?.canLogSiteVisits) return { type: "EMPLOYEE", id: employee.id, name: employee.name };
+
+  throw new Error("Unauthorized");
+}
