@@ -80,13 +80,14 @@ All of these are live. Anything not on this list does not exist yet.
 |---|---|
 | `GET /api/mobile/tasks` | The employee's own tasks |
 | `GET /api/mobile/tasks/[id]` | One task: what to hand in, what counts as done, what it waits on |
-| `POST /api/mobile/tasks/[id]/status` | `{ state }` — see the limit below |
+| `POST /api/mobile/tasks/[id]/status` | `{ state }` — a state change with no file |
+| `POST /api/mobile/tasks/[id]/proof` | **Multipart.** Hand in finished work: `photo` (required — an image, PDF, drawing, spreadsheet or ZIP) and `note`. Takes either kind of work, a board cell or a job handed out by hand. Answers `{ ok, submissionId, state: "SUBMITTED" }` |
 
 **Chat**
 | Route | What it is |
 |---|---|
 | `GET /api/mobile/chat/conversations` | The list, with unread counts |
-| `GET/POST /api/mobile/chat/messages` | Read and send text |
+| `GET/POST /api/mobile/chat/messages` | Read, and send. **POST takes JSON or multipart**: `{ conversation, body }` as JSON for text, or multipart with `photo`, `document` or `voice` (+ `durationSeconds`) to attach something |
 | `POST /api/mobile/chat/read` | Mark a conversation read |
 
 **Manager only** (an admin token)
@@ -107,19 +108,24 @@ server says.
 
 Be honest about these in your plan rather than working around them.
 
-1. **No file upload on chat or task proof.** `/chat/messages` takes text only,
-   and `/tasks/[id]/status` takes a state with no photo. **This breaks the main
-   loop of the employee app**: finishing a task at NEON means sending a photo of
-   the finished work, and a state change without one is not how the platform
-   works. The project gallery routes show the multipart shape to copy. Until
-   these exist, do not fake it and do not send a bare `SUBMITTED` — say the
-   endpoint is needed.
+1. **Do not send a bare `SUBMITTED`.** `/tasks/[id]/status` will take it and it
+   is the wrong call: finishing a task at NEON means sending a photo of the
+   finished work, and the manager's review queue would fill with claims and no
+   evidence. Use `/tasks/[id]/proof` with the file. "Done" is still only ever
+   written by the manager, after reviewing it — never build a control that lets
+   somebody complete their own work.
 2. **No push notifications.** There is no APNs key and nowhere to store a device
    token; the web app uses web push, which a native app cannot receive. If you
    want push, that is server work plus an Apple key, and it needs asking for.
 3. **Not everything the web has is exposed.** The WhatsApp inbox, the site-visit
    diary, payroll, attendance, reviews and the week board have no mobile routes.
    Build against what exists; list what you would need.
+
+Both upload routes were built and tested against the live server on
+2026-09-27: a PDF handed in as proof comes back `SUBMITTED` with the manager
+notified, and a photo posted to a chat comes back as an `IMAGE` message with
+its attachment stored. The shapes above are what the server actually answers,
+not what it is supposed to.
 
 When you need an endpoint, write down the exact route, method, request and
 response you want, and hand that to Hamed — the server is changed on the Windows
