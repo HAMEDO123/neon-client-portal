@@ -5,6 +5,7 @@ import { managerEmployeeId } from "@/lib/manager-account";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { chatCopy, chatKey, chatPreview } from "@/lib/notifications/types";
 import { avatarUrl } from "@/lib/avatar";
+import { saveFile } from "@/lib/storage";
 import type { ChatMessageKind } from "@/generated/prisma/enums";
 
 // What happens when a message is posted, wherever it was posted from.
@@ -111,6 +112,81 @@ async function notifyOfMessage(messageId: string, sender: ChatViewer, conversati
   } catch {
     // A message that was sent is sent; telling people is best effort.
   }
+}
+
+/**
+ * What was attached to a message, read out of a form.
+ *
+ * One reading for both ways in. The web posts a form from the chat box and the
+ * phone posts a multipart body at `/api/mobile/chat/messages`; before this,
+ * only the web could attach anything, and the obvious fix — a second copy of
+ * these forty lines in the route — is how a photo ends up saved under the
+ * wrong rule on one of the two.
+ *
+ * The order matters and is deliberate: a voice note, then a photo, then a
+ * file. A message carries one attachment, and these are the three the chat
+ * knows how to draw.
+ */
+export async function readChatAttachment(formData: FormData): Promise<{
+  kind: ChatMessageKind;
+  attachmentUrl: string | null;
+  attachmentName: string | null;
+  attachmentType: string | null;
+  attachmentSize: number | null;
+  durationSeconds: number | null;
+}> {
+  const voice = formData.get("voice");
+  const photo = formData.get("photo");
+  const document = formData.get("document");
+
+  const none = {
+    kind: "TEXT" as ChatMessageKind,
+    attachmentUrl: null,
+    attachmentName: null,
+    attachmentType: null,
+    attachmentSize: null,
+    durationSeconds: null,
+  };
+
+  if (voice instanceof File && voice.size > 0) {
+    const saved = await saveFile(voice, "chat/voice", "audio", false);
+    const durationRaw = Number(formData.get("durationSeconds") ?? 0);
+    return {
+      ...none,
+      kind: "VOICE",
+      attachmentUrl: saved.url,
+      attachmentName: "Voice message",
+      attachmentType: saved.fileType,
+      attachmentSize: saved.fileSize,
+      durationSeconds: Number.isFinite(durationRaw) && durationRaw > 0 ? Math.round(durationRaw) : null,
+    };
+  }
+
+  if (photo instanceof File && photo.size > 0) {
+    const saved = await saveFile(photo, "chat/photos", "image");
+    return {
+      ...none,
+      kind: "IMAGE",
+      attachmentUrl: saved.url,
+      attachmentName: photo.name || "Photo",
+      attachmentType: saved.fileType,
+      attachmentSize: saved.fileSize,
+    };
+  }
+
+  if (document instanceof File && document.size > 0) {
+    const saved = await saveFile(document, "chat/files", "document");
+    return {
+      ...none,
+      kind: "FILE",
+      attachmentUrl: saved.url,
+      attachmentName: document.name || "File",
+      attachmentType: saved.fileType,
+      attachmentSize: saved.fileSize,
+    };
+  }
+
+  return none;
 }
 
 export type PostedMessage = {

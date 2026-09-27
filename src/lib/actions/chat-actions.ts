@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { saveFile } from "@/lib/storage";
 import {
   channelFor,
   chatSide,
@@ -15,9 +14,8 @@ import {
 // Writing the message, marking it read and telling people lives in chat-send,
 // shared with the mobile API: a server action cannot be called by the phone
 // app, and a second copy of that sequence would drift from this one.
-import { postChatMessage } from "@/lib/chat-send";
+import { postChatMessage, readChatAttachment } from "@/lib/chat-send";
 import { askAssistant } from "@/lib/ai/assistant";
-import type { ChatMessageKind } from "@/generated/prisma/enums";
 
 // Posting to a conversation: the team's, or a private one between two people.
 // Both portals call these. The author is always taken from the session, never
@@ -47,44 +45,13 @@ export async function sendChatMessage(formData: FormData) {
 
   const body = String(formData.get("body") ?? "").trim().slice(0, 4000);
   const projectId = String(formData.get("projectId") ?? "") || null;
-  const photo = formData.get("photo");
-  const voice = formData.get("voice");
-  const document = formData.get("document");
-  const durationRaw = Number(formData.get("durationSeconds") ?? 0);
 
-  let kind: ChatMessageKind = "TEXT";
-  let attachmentUrl: string | null = null;
-  let attachmentName: string | null = null;
-  let attachmentType: string | null = null;
-  let attachmentSize: number | null = null;
-  let durationSeconds: number | null = null;
-
-  if (voice instanceof File && voice.size > 0) {
-    const saved = await saveFile(voice, "chat/voice", "audio", false);
-    kind = "VOICE";
-    attachmentUrl = saved.url;
-    attachmentName = "Voice message";
-    attachmentType = saved.fileType;
-    attachmentSize = saved.fileSize;
-    durationSeconds = Number.isFinite(durationRaw) && durationRaw > 0 ? Math.round(durationRaw) : null;
-  } else if (photo instanceof File && photo.size > 0) {
-    const saved = await saveFile(photo, "chat/photos", "image");
-    kind = "IMAGE";
-    attachmentUrl = saved.url;
-    attachmentName = photo.name || "Photo";
-    attachmentType = saved.fileType;
-    attachmentSize = saved.fileSize;
-  } else if (document instanceof File && document.size > 0) {
-    const saved = await saveFile(document, "chat/files", "document");
-    kind = "FILE";
-    attachmentUrl = saved.url;
-    attachmentName = document.name || "File";
-    attachmentType = saved.fileType;
-    attachmentSize = saved.fileSize;
-  }
+  // The same reading the phone gets, in lib/chat-send.ts: one place decides
+  // what an attachment is and which rule it is stored under.
+  const attachment = await readChatAttachment(formData);
 
   // Nothing to say and nothing attached — do not write an empty row.
-  if (kind === "TEXT" && !body) return;
+  if (attachment.kind === "TEXT" && !body) return;
 
   // No page redraw. Every open chat receives this over its live stream, and
   // the sender's screen already shows it; redrawing the whole conversation on
@@ -92,13 +59,8 @@ export async function sendChatMessage(formData: FormData) {
   //
   // The sender's screen swaps its pending copy for what comes back.
   return postChatMessage(viewer, conversation, channel.id, {
-    kind,
+    ...attachment,
     body: body || null,
-    attachmentUrl,
-    attachmentName,
-    attachmentType,
-    attachmentSize,
-    durationSeconds,
     projectId,
   });
 }

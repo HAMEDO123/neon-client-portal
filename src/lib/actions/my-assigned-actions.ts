@@ -3,12 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireEmployee } from "@/lib/employee-session";
-import { saveFile } from "@/lib/storage";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
-import { verifySubmission } from "@/lib/ai/verify-submission";
+import { submitProof } from "@/lib/task-proof";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // What an employee can do with a job the manager handed to them directly.
@@ -79,48 +78,14 @@ export async function submitAssignedTaskCompletion(id: string, formData: FormDat
   const task = await mine(employee.id, id);
   if (!task) throw new Error("Task not found.");
 
-  const move = canMove(task.state, "SUBMITTED", "employee", true);
-  if (!move.ok) throw new Error(move.reason);
-
-  const photo = formData.get("photo");
-  if (!(photo instanceof File) || photo.size === 0) {
-    throw new Error("Attach a photo or a file of the finished work.");
-  }
-
-  // A PDF, a drawing or a spreadsheet is proof too, and the "image" rule would
-  // reject every one of them. The kind follows the file: photos keep their EXIF
-  // rotation and recompression, anything else is stored as it was sent.
-  const kind = photo.type.startsWith("image/") ? "image" : "document";
-  const saved = await saveFile(photo, `submissions/${employee.id}`, kind);
-  const note = String(formData.get("note") ?? "").trim().slice(0, 1000) || null;
-
-  const submission = await prisma.taskSubmission.create({
-    data: { assignedTaskId: task.id, employeeId: employee.id, imageUrl: saved.url, note },
-  });
-
-  // Not DONE — that word belongs to the manager.
-  await prisma.assignedTask.update({ where: { id }, data: { state: "SUBMITTED", completedAt: null } });
-
-  await recordStateChange({
-    assignedTaskId: id,
-    from: task.state,
-    to: "SUBMITTED",
-    actor: "employee",
-    actorEmployeeId: employee.id,
-  });
-
-  await notifyAdmin({
-    type: "TASK_SUBMITTED",
-    title: `${employee.name} finished a task`,
-    message: `${task.title}. A photo is waiting for your review.`,
-    url: "/admin/reviews",
-    dedupeKey: `TASK_SUBMITTED:${submission.id}`,
-    employeeId: employee.id,
-  });
-
-  // The same check as a cell on the board, in the background, writing only its
-  // own verdicts.
-  void verifySubmission(submission.id).catch(() => null);
+  // The same path a board cell takes — see lib/task-proof.ts.
+  const result = await submitProof(
+    employee,
+    { kind: "assigned", id: task.id, state: task.state, name: task.title },
+    formData.get("photo") as File,
+    String(formData.get("note") ?? "").trim().slice(0, 1000) || null
+  );
+  if (!result.ok) throw new Error(result.error);
 
   refresh(id);
 }

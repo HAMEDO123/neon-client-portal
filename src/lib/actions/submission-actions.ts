@@ -5,13 +5,10 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-guard";
 import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
-import { saveFile } from "@/lib/storage";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { taskUrl } from "@/lib/notifications/types";
-import { notifyAdmin } from "@/lib/admin-notifications";
 import { recordStateChange } from "@/lib/task-state-log";
-import { canMove } from "@/lib/task-transitions";
-import { verifySubmission } from "@/lib/ai/verify-submission";
+import { submitProof } from "@/lib/task-proof";
 
 // Finishing a task is a claim, not a fact.
 //
@@ -43,57 +40,16 @@ export async function submitTaskCompletion(entryId: string, formData: FormData) 
   const task = await taskForEmployee(employee.id, entryId);
   if (!task) throw new Error("Task not found.");
 
-  // Sending proof is a move like any other, and it was the one place that
-  // checked nothing: work already with the manager, or already approved, could
-  // be submitted again.
-  const move = canMove(task.state, "SUBMITTED", "employee", true);
-  if (!move.ok) throw new Error(move.reason);
-
-  const photo = formData.get("photo");
-  if (!(photo instanceof File) || photo.size === 0) {
-    throw new Error("Attach a photo or a file of the finished work.");
-  }
-
-  // A PDF, a drawing or a spreadsheet is proof too, and the "image" rule would
-  // reject every one of them. The kind follows the file: photos keep their EXIF
-  // rotation and recompression, anything else is stored as it was sent.
-  const kind = photo.type.startsWith("image/") ? "image" : "document";
-  const saved = await saveFile(photo, `submissions/${employee.id}`, kind);
-  const note = String(formData.get("note") ?? "").trim().slice(0, 1000) || null;
-
-  const submission = await prisma.taskSubmission.create({
-    data: { entryId: task.id, employeeId: employee.id, imageUrl: saved.url, note },
-  });
-
-  // Not DONE — that word belongs to the manager.
-  await prisma.projectTaskEntry.update({
-    where: { id: task.id },
-    data: { state: "SUBMITTED", completedAt: null },
-  });
-
-  await recordStateChange({
-    entryId: task.id,
-    from: task.state,
-    to: "SUBMITTED",
-    actor: "employee",
-    actorEmployeeId: employee.id,
-  });
-
-  await notifyAdmin({
-    type: "TASK_SUBMITTED",
-    title: `${employee.name} finished a task`,
-    message: `${task.task.name} — ${task.project.name}. A photo is waiting for your review.`,
-    url: "/admin/reviews",
-    dedupeKey: `TASK_SUBMITTED:${submission.id}`,
-    entryId: task.id,
-    employeeId: employee.id,
-  });
-
-  // Checked against what was asked, in the background: reading a photo takes
-  // long enough that waiting for it would leave the employee looking at a
-  // spinner, and a check that fails must never undo work already handed in.
-  // It writes only its own verdicts — never the task's state.
-  void verifySubmission(submission.id).catch(() => null);
+  // The rest is the same for a cell, a hand-assigned job and the phone, so it
+  // lives in lib/task-proof.ts — the move check, the storage rule, SUBMITTED
+  // rather than DONE, the record of the change, and the check that follows.
+  const result = await submitProof(
+    employee,
+    { kind: "entry", id: task.id, state: task.state, name: `${task.task.name} — ${task.project.name}` },
+    formData.get("photo") as File,
+    String(formData.get("note") ?? "").trim().slice(0, 1000) || null
+  );
+  if (!result.ok) throw new Error(result.error);
 
   refresh({ entryId, assignedTaskId: null });
 }
