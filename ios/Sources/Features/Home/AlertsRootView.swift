@@ -8,6 +8,8 @@ struct AlertsRootView: View {
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @State private var clearing = false
+    @State private var destination: HomeLinkDestination?
+    @State private var chatRoute: ChatRoute?
 
     var body: some View {
         LoadStateView(value: data, error: errorMessage, cachedAt: cachedAt, retry: load) {
@@ -31,7 +33,7 @@ struct AlertsRootView: View {
                                 Task { await markRead(alert) }
                             }
                             .contentShape(Rectangle())
-                            .onTapGesture { Task { await markRead(alert) } }
+                            .onTapGesture { Task { await open(alert) } }
                     }
                 }
                 .neonListStyle()
@@ -55,7 +57,27 @@ struct AlertsRootView: View {
                 }
             }
         }
+        .navigationDestination(isPresented: Binding(get: { destination != nil }, set: { if !$0 { destination = nil } })) {
+            destinationView
+        }
+        .navigationDestination(isPresented: Binding(get: { chatRoute != nil }, set: { if !$0 { chatRoute = nil } })) {
+            if let chatRoute { ChatRoomView(route: chatRoute) }
+        }
         .task { await load() }
+    }
+
+    @ViewBuilder
+    private var destinationView: some View {
+        switch destination {
+        case .tasksBoard: TasksRootView()
+        case .reviews: ReviewsRootView()
+        case .employees: EmployeesRootView()
+        case .employee(let id): EmployeeDetailView(employeeId: id)
+        case .project(let id): ProjectDetailView(projectId: id)
+        case .requests: RequestsRootView()
+        case .siteVisits: SiteVisitsRootView()
+        case .chat, .unsupported, .none: EmptyView()
+        }
     }
 
     private var subtitle: String {
@@ -92,6 +114,50 @@ struct AlertsRootView: View {
         do {
             try await api.markHomeAlertRead(alert.id)
             await load()
+        } catch {
+            Toast.error(error)
+        }
+    }
+
+    /// Tapping a row: mark it read (same as before), then open the native
+    /// screen its `url` points at — the tasks board, Reviews, an employee, a
+    /// project, or the chat it happened in. Anything this app can't open
+    /// natively says so instead of falling back to a browser.
+    private func open(_ alert: HomeAlert) async {
+        Haptic.tap()
+        if alert.readAt == nil {
+            do {
+                try await api.markHomeAlertRead(alert.id)
+                await load()
+            } catch {
+                Toast.error(error)
+            }
+        }
+
+        guard let parsed = parseAdminLink(alert.url) else { return }
+        switch parsed {
+        case .chat(let slug):
+            await openChat(slug: slug)
+        case .unsupported:
+            Toast.info(L("This isn't open in the app yet."))
+        default:
+            destination = parsed
+        }
+    }
+
+    /// Resolves a chat slug from a link ("team", an employee id, …) against
+    /// the manager's own conversation list, since a `ChatRoute` needs more
+    /// than the id a web url carries (its title, avatar, whether it's a group).
+    private func openChat(slug: String) async {
+        do {
+            let loaded = try await api.fetchConversations()
+            if let match = loaded.value.conversations.first(where: { $0.slug == slug }) {
+                chatRoute = ChatRoute(slug: match.slug, title: match.title, subtitle: match.subtitle, avatar: match.avatar, isGroup: match.isGroup)
+            } else if slug == "team" {
+                chatRoute = ChatRoute(slug: "team", title: L("Team chat"), subtitle: nil, avatar: "/admin-icon-192.png", isGroup: true)
+            } else {
+                Toast.info(L("That conversation isn't available."))
+            }
         } catch {
             Toast.error(error)
         }

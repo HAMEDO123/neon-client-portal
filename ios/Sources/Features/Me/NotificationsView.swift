@@ -13,6 +13,8 @@ struct NotificationsView: View {
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @State private var openTask: TaskRoute?
+    @State private var openJob: JobRoute?
+    @State private var chatRoute: ChatRoute?
 
     var body: some View {
         Group {
@@ -55,10 +57,16 @@ struct NotificationsView: View {
             .navigationDestination(isPresented: Binding(get: { openTask != nil }, set: { if !$0 { openTask = nil } })) {
                 if let openTask { TaskDetailView(taskId: openTask.id) }
             }
+            .navigationDestination(isPresented: Binding(get: { openJob != nil }, set: { if !$0 { openJob = nil } })) {
+                if let openJob { JobDetailView(jobId: openJob.id) }
+            }
+            .navigationDestination(isPresented: Binding(get: { chatRoute != nil }, set: { if !$0 { chatRoute = nil } })) {
+                if let chatRoute { ChatRoomView(route: chatRoute) }
+            }
             .neonAmbientBackground()
         }
-        .task(id: openTask == nil) {
-            guard openTask == nil else { return }
+        .task(id: openTask == nil && openJob == nil && chatRoute == nil) {
+            guard openTask == nil, openJob == nil, chatRoute == nil else { return }
             await load()
         }
     }
@@ -82,11 +90,49 @@ struct NotificationsView: View {
             await load()
             await store.refresh()
         }
+
+        // A board task's own id, when the row carries one, beats parsing the
+        // url — it is the same TaskDetailView either way.
         if let entryId = item.entryId {
             openTask = TaskRoute(id: entryId)
-        } else if item.type == "CHAT_MESSAGE" || item.url?.contains("/chat") == true {
-            openChat()
+            return
         }
+
+        switch employeeLinkDestination(item.url) {
+        case .task(let id):
+            openTask = TaskRoute(id: id)
+        case .job(let id):
+            openJob = JobRoute(id: id)
+        case .chat(let slug):
+            await openConversation(slug: slug)
+        case .none:
+            // No id this screen can open on its own — a job handed out by
+            // hand notifies with just "/employee/chat" when it has no
+            // conversation to point at, and a plain CHAT_MESSAGE the same;
+            // the Chat tab is the closest thing to open for either.
+            if item.type == "CHAT_MESSAGE" || item.url?.contains("/chat") == true {
+                openChat()
+            }
+        }
+    }
+
+    /// Resolves a chat slug ("team", "manager", a colleague's id) from a link
+    /// against this person's own conversations, since `ChatRoute` needs more
+    /// than the id a web url carries (its title, avatar, whether it's a group).
+    private func openConversation(slug: String) async {
+        do {
+            let loaded = try await api.fetchConversations()
+            if let match = loaded.value.conversations.first(where: { $0.slug == slug }) {
+                chatRoute = ChatRoute(slug: match.slug, title: match.title, subtitle: match.subtitle, avatar: match.avatar, isGroup: match.isGroup)
+                return
+            }
+        } catch {
+            Toast.error(error)
+            return
+        }
+        // Not in the list (a stale link, or a conversation that no longer
+        // applies) — the Chat tab is still the honest fallback.
+        openChat()
     }
 
     private func markAll() async {
@@ -94,6 +140,29 @@ struct NotificationsView: View {
         Haptic.success()
         await load()
         await store.refresh()
+    }
+}
+
+/// What a notification's `url` (an employee web path — see
+/// `src/lib/notifications/types.ts` `taskUrl`, and `/employee/assigned/[id]`
+/// for a job handed out by hand) means as a screen already in this app.
+private enum EmployeeLinkDestination: Equatable {
+    case task(id: String)
+    case job(id: String)
+    case chat(slug: String)
+    case none
+}
+
+private func employeeLinkDestination(_ raw: String?) -> EmployeeLinkDestination {
+    guard let raw, let components = URLComponents(string: raw) else { return .none }
+    let parts = components.path.split(separator: "/").map(String.init)
+    guard parts.first == "employee" else { return .none }
+    let rest = Array(parts.dropFirst())
+    switch rest.first {
+    case "tasks" where rest.count >= 2: return .task(id: rest[1])
+    case "assigned" where rest.count >= 2: return .job(id: rest[1])
+    case "chat" where rest.count >= 2: return .chat(slug: rest[1])
+    default: return .none
     }
 }
 

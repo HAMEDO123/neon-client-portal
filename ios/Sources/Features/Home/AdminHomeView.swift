@@ -11,6 +11,8 @@ struct AdminHomeView: View {
     @State private var day: HomeDay?
     @State private var dayCachedAt: Date?
     @State private var dayError: String?
+    @State private var showNewProject = false
+    @State private var newProjectId: String?
 
     var body: some View {
         NavigationStack {
@@ -65,7 +67,29 @@ struct AdminHomeView: View {
             }
             .navigationTitle(L("Home"))
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { AccountMenu() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: NeonSpace.sm) {
+                        Button {
+                            Haptic.tap()
+                            showNewProject = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .foregroundStyle(Color.neonInk)
+                        AccountMenu()
+                    }
+                }
+            }
+            .sheet(isPresented: $showNewProject) {
+                // The projects area's own new-project form, reused rather than
+                // rebuilt: same fields, same action ("projects" → createProject).
+                NewProjectSheet { newId in
+                    newProjectId = newId
+                    Task { await loadOverview() }
+                }
+            }
+            .navigationDestination(isPresented: Binding(get: { newProjectId != nil }, set: { if !$0 { newProjectId = nil } })) {
+                if let newProjectId { ProjectDetailView(projectId: newProjectId) }
             }
         }
         .task { await load() }
