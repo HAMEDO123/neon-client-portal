@@ -7,22 +7,16 @@ struct TasksView: View {
     @EnvironmentObject var api: APIClient
     @State private var filter: TaskFilter = .open
     @State private var tasks: [StaffTask]?
+    @State private var jobs: [AssignedJob]?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @StateObject private var cards = ChatCardsLoader()
     @State private var proofFor: ProofTarget?
-    @State private var web: WebPortalLink?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    // Jobs handed out on the week board have no phone route
-                    // yet (ios/SERVER-REQUEST.md); the website's list has them.
-                    WebTile(title: L("My week on the web"), symbol: "calendar") {
-                        web = WebPortalLink(path: "/employee/tasks", title: L("My week"))
-                    }
-
                     Picker(L("Show"), selection: $filter) {
                         ForEach(TaskFilter.allCases) { Text($0.label).tag($0) }
                     }
@@ -41,6 +35,18 @@ struct TasksView: View {
                             .glassCard(radius: 18)
                         } else {
                             TaskList(tasks: tasks)
+                        }
+
+                        if let jobs, !jobs.isEmpty {
+                            SectionLabel(L("From the manager"))
+                            VStack(spacing: 10) {
+                                ForEach(jobs) { job in
+                                    NavigationLink(value: JobRoute(id: job.id)) {
+                                        JobRow(job: job)
+                                    }
+                                    .buttonStyle(.pressableCard)
+                                }
+                            }
                         }
 
                         MyChatJobsSection(filter: filter, cards: cards, viewer: api.identity) { part, card in
@@ -66,11 +72,15 @@ struct TasksView: View {
             .navigationDestination(for: TaskRoute.self) { route in
                 TaskDetailView(taskId: route.id)
             }
+            .navigationDestination(for: JobRoute.self) { route in
+                JobDetailView(jobId: route.id)
+            }
             .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
             .neonAmbientBackground()
         }
         .task(id: filter) {
             tasks = nil
+            jobs = nil
             await load()
         }
         .task { await cards.load(api) }
@@ -79,14 +89,16 @@ struct TasksView: View {
                 Task { await cards.load(api) }
             }
         }
-        .fullScreenCover(item: $web) { WebPortalSheet(link: $0) }
     }
 
     private func load() async {
+        async let tasksLoad = api.fetchTasks(filter: filter)
+        async let jobsLoad = api.fetchJobs(filter: filter)
         do {
-            let loaded = try await api.fetchTasks(filter: filter)
-            tasks = loaded.value.tasks
-            cachedAt = loaded.cachedAt
+            let (loadedTasks, loadedJobs) = try await (tasksLoad, jobsLoad)
+            tasks = loadedTasks.value.tasks
+            jobs = loadedJobs.value
+            cachedAt = loadedTasks.cachedAt
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
