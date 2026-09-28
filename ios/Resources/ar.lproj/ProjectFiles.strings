@@ -17,6 +17,7 @@
 "No drawings yet" = "لا توجد مخططات بعد";
 "Upload the first technical drawing." = "ارفع أول مخطط فني.";
 "Drawing added" = "تمت إضافة المخطط";
+"Delete" = "حذف";
 "Delete “%@”?" = "حذف «%@»؟";
 "This removes every revision on file too." = "هذا يحذف كل مراجعة مسجّلة أيضًا.";
 "No earlier revisions." = "لا توجد مراجعات سابقة.";
