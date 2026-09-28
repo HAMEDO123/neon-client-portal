@@ -59,7 +59,13 @@ struct AttendanceRootView: View {
         .refreshable { await loadAll() }
         .navigationTitle(L("Attendance"))
         .navigationDestination(for: AttendancePersonRoute.self) { route in
-            AttendancePersonDetail(row: route.row, days: month?.days ?? [], monthKey: route.monthKey)
+            AttendancePersonDetail(
+                row: route.row,
+                days: month?.days ?? [],
+                monthKey: route.monthKey,
+                recordIds: month?.recordIds ?? [:],
+                onChanged: { await loadMonth() }
+            )
         }
         .neonAmbientBackground()
         .task { await loadAll() }
@@ -522,10 +528,18 @@ private struct RecordedDay: Identifiable {
 }
 
 /// One person's month, day by day — the drill-down from the summary list.
+/// Tapping a recorded day, or "Correct a day" for one with nothing on it,
+/// opens `AttendanceCorrectionSheet` — the payroll screen's own
+/// `setAttendance`/`deleteAttendance`, carried over unchanged.
 struct AttendancePersonDetail: View {
     let row: AttendanceMonth.Row
     let days: [AttendanceMonth.Day]
     let monthKey: String
+    let recordIds: [String: String]
+    let onChanged: () async -> Void
+
+    @State private var correcting: RecordedDay?
+    @State private var addingDayKey: String?
 
     var body: some View {
         NeonScroll {
@@ -538,21 +552,59 @@ struct AttendancePersonDetail: View {
             if recorded.isEmpty {
                 EmptyState(symbol: "calendar.badge.clock", title: L("Nothing recorded this month"), detail: L("An empty day means nothing was recorded — not that they were absent."))
             } else {
-                CardList(recorded) { row in
-                    ListRow(
-                        formattedDayKey(row.day.dayKey),
-                        subtitle: row.entry.note,
-                        leading: .icon(row.day.worked ? "calendar" : "calendar.badge.exclamationmark", tint: row.day.worked ? .neonCyanStrong : .neonTextFaint),
-                        value: attendanceSummary(row.entry),
-                        badge: row.entry.source == "MANUAL" ? L("Manual") : nil,
-                        badgeTone: .neutral
-                    )
+                CardList(recorded) { entry in
+                    Button {
+                        Haptic.selection()
+                        correcting = entry
+                    } label: {
+                        ListRow(
+                            formattedDayKey(entry.day.dayKey),
+                            subtitle: entry.entry.note,
+                            leading: .icon(entry.day.worked ? "calendar" : "calendar.badge.exclamationmark", tint: entry.day.worked ? .neonCyanStrong : .neonTextFaint),
+                            value: attendanceSummary(entry.entry),
+                            badge: entry.entry.source == "MANUAL" ? L("Manual") : nil,
+                            badgeTone: .neutral,
+                            chevron: true
+                        )
+                    }
+                    .buttonStyle(.pressableCard)
                 }
             }
         }
         .navigationTitle(row.name)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                IconButton("plus", label: L("Correct a day")) {
+                    addingDayKey = days.first(where: { $0.isToday })?.dayKey ?? days.last?.dayKey ?? monthKey
+                }
+            }
+        }
+        .sheet(item: $correcting) { entry in
+            AttendanceCorrectionSheet(
+                employeeId: row.employeeId,
+                employeeName: row.name,
+                dayKey: entry.day.dayKey,
+                recordId: recordIds["\(row.employeeId)|\(entry.day.dayKey)"],
+                entry: entry.entry,
+                onSaved: onChanged
+            )
+        }
+        .sheet(item: Binding(get: { addingDayKey.map { IdentifiedDayKey($0) } }, set: { addingDayKey = $0?.value })) { boxed in
+            AttendanceCorrectionSheet(
+                employeeId: row.employeeId,
+                employeeName: row.name,
+                dayKey: boxed.value,
+                onSaved: onChanged
+            )
+        }
         .neonAmbientBackground()
     }
+}
+
+private struct IdentifiedDayKey: Identifiable {
+    let value: String
+    var id: String { value }
+    init(_ value: String) { self.value = value }
 }
 
 /// A recorded day as the admin page reads it: late in, early out, or neither.

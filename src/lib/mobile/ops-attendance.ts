@@ -62,7 +62,17 @@ export async function attendanceOverview(): Promise<AttendanceOverview> {
   };
 }
 
-export type AttendanceMonthResponse = Month & { thisMonth: string };
+export type AttendanceMonthResponse = Month & {
+  thisMonth: string;
+  /**
+   * `AttendanceRecord.id`, keyed by `"<employeeId>|<dayKey>"` — `MonthEntry`
+   * itself carries no id (attendance-month.ts is shared, pure and knows
+   * nothing of the database), so this rides alongside it for the one thing
+   * the app's correction sheet needs that the desk grid never did: something
+   * to hand `deleteAttendance` when it wants to remove a day it has open.
+   */
+  recordIds: Record<string, string>;
+};
 
 export async function attendanceMonthFor(askedMonth: string | null): Promise<AttendanceMonthResponse> {
   const timezone = await getTimezone();
@@ -111,6 +121,12 @@ export async function attendanceMonthFor(askedMonth: string | null): Promise<Att
       .map((person) => ({ id: person.id, name: person.name, active: person.active })),
   ];
 
+  const recordIds: Record<string, string> = {};
+  for (const row of monthRecords) {
+    const dayKey = dateToDayKey(row.day);
+    if (dayKey) recordIds[`${row.employeeId}|${dayKey}`] = row.id;
+  }
+
   const month = buildMonth({ monthKey, hours: workHours, todayKey: todayKey(timezone), people, entries });
-  return { ...month, thisMonth };
+  return { ...month, thisMonth, recordIds };
 }

@@ -1,4 +1,5 @@
 import { RpcError, bool, guarded, guardedAction, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { prisma } from "@/lib/db";
 import { channelFor, parseConversation, requireChatViewer } from "@/lib/chat";
 import { taskListFor, taskMembers } from "@/lib/chat-task-store";
 import { meetingListFor, meetingMembers } from "@/lib/chat-meeting-store";
@@ -25,6 +26,28 @@ import { approveSubmission, rejectSubmission } from "@/lib/actions/submission-ac
 // pure `taskListFor` / `meetingListFor` the web's own tabs read), who a task or
 // meeting in a conversation can go to, reactions and pins, typing, and the
 // manager's assistant.
+
+/**
+ * Rebuilds a task-creation form so `createChatTask` sees an ordinary
+ * repeated "assignee" field regardless of which transport it arrived on.
+ * `performUpload` on the phone (multipart, used only when the task carries
+ * a file) can send just one string per field, so it joins every assignee id
+ * into "assignee" with commas; the JSON path never does this, so a value
+ * with no comma — one id, or none — round-trips through here unchanged.
+ */
+function expandAssignees(form: FormData): FormData {
+  const ids = form
+    .getAll("assignee")
+    .flatMap((value) => (typeof value === "string" ? value.split(",").map((id) => id.trim()).filter(Boolean) : []));
+  if (ids.length <= 1) return form;
+
+  const expanded = new FormData();
+  for (const [key, value] of form.entries()) {
+    if (key !== "assignee") expanded.append(key, value);
+  }
+  for (const id of ids) expanded.append("assignee", id);
+  return expanded;
+}
 
 /** The conversation a request names, opened for this viewer — the same door every other read and action uses. */
 async function openConversation(params: URLSearchParams, viewer: Awaited<ReturnType<typeof requireChatViewer>>) {
@@ -64,6 +87,18 @@ export const reads: ReadRegistry = {
     const channel = await openConversation(params, viewer);
     return reactionSnapshot(channel.id);
   }),
+
+  // The composer's project picker — both conversation pages compute this
+  // inline (the same query, admin and employee alike) rather than reading it
+  // from a projects-area query, so it is reproduced here rather than adding a
+  // dependency on that area's registry.
+  "chat/projects": guarded(requireChatViewer, async () => ({
+    projects: await prisma.project.findMany({
+      where: { publishState: { not: "ARCHIVED" } },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, name: true },
+    }),
+  })),
 };
 
 export const actions: ActionRegistry = {
@@ -93,12 +128,16 @@ export const actions: ActionRegistry = {
   }),
 
   // Hands out work from a chat — the manager's + → Task. Its own guard refuses
-  // anybody else. Attaching a file from the app is not offered: the form's
-  // "assignee" is posted as a repeated field the JSON path already carries as
-  // an array, but a file forces multipart, where the shared upload helper
-  // takes one value per field name and cannot repeat "assignee" — so a task
-  // handed out from the phone carries no attachment.
-  "chat/tasks/create": (input) => createChatTask(input.form),
+  // anybody else. The JSON path already carries "assignee" as a repeated
+  // field (an array in the phone's request becomes one form.append per id —
+  // see do/[...name]/route.ts), which createChatTask reads with
+  // formData.getAll("assignee") unchanged. An attachment forces multipart,
+  // where the app's own upload helper sends one string per field, so a task
+  // with a file joins every assignee id into that one field, comma-separated;
+  // expandAssignees below splits it back out before the website's own action
+  // ever sees the request, and leaves an ordinary single- or multi-assignee
+  // JSON request untouched.
+  "chat/tasks/create": (input) => createChatTask(expandAssignees(input.form)),
   "chat/tasks/delete": (input) => deleteChatTask(str(input.args[0], "taskId")),
   "chat/tasks/comment": (input) => addChatTaskComment(input.form),
   // The manager's approve / send-back on a card, exactly where the web review

@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 // The manager's + menu: handing out a task and setting a meeting from a
@@ -20,6 +21,12 @@ struct ChatTaskComposeSheet: View {
     @State private var members: [TaskMember] = []
     @State private var loadingMembers = true
     @State private var loadError: String?
+    @State private var attachment: UploadFile?
+    @State private var attachError: String?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showPhotos = false
+    @State private var showCamera = false
+    @State private var showFiles = false
 
     var body: some View {
         SheetScaffold(
@@ -44,9 +51,56 @@ struct ChatTaskComposeSheet: View {
                 }
                 if let loadError { ValidationMessage(loadError) }
             }
+            FormSection(L("Attachment")) {
+                if let attachment {
+                    PickedAttachmentRow(filename: attachment.filename) { self.attachment = nil }
+                } else {
+                    Menu {
+                        if CameraPicker.isAvailable {
+                            Button { showCamera = true } label: { Label(L("Camera"), systemImage: "camera") }
+                        }
+                        Button { showPhotos = true } label: { Label(L("Photo"), systemImage: "photo") }
+                        Button { showFiles = true } label: { Label(L("File"), systemImage: "doc") }
+                    } label: {
+                        Label(L("Attach a photo or file"), systemImage: "paperclip")
+                            .font(.neonCallout)
+                            .foregroundStyle(Color.neonCyanStrong)
+                    }
+                }
+                if let attachError { ValidationMessage(attachError) }
+            }
         }
         .neonSheet([.large])
         .task { await loadMembers() }
+        .photosPicker(isPresented: $showPhotos, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { item in
+            guard let item else { return }
+            photoItem = nil
+            Task {
+                guard let file = await UploadMaker.photo(item) else {
+                    attachError = L("That photo could not be read.")
+                    return
+                }
+                attachError = nil
+                attachment = file
+            }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { image in
+                attachError = nil
+                attachment = UploadMaker.photo(image)
+            }
+            .ignoresSafeArea()
+        }
+        .fileImporter(isPresented: $showFiles, allowedContentTypes: UploadMaker.documentTypes) { result in
+            guard case .success(let url) = result else { return }
+            guard let file = UploadMaker.file(url, field: "attachment") else {
+                attachError = L("That file could not be read.")
+                return
+            }
+            attachError = nil
+            attachment = file
+        }
     }
 
     private var isValid: Bool {
@@ -70,7 +124,8 @@ struct ChatTaskComposeSheet: View {
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines),
                 priority: priority ?? "MEDIUM",
                 assignees: assignees.map(\.id),
-                due: due
+                due: due,
+                attachment: attachment
             )
             Haptic.success()
             dismiss()
@@ -79,6 +134,34 @@ struct ChatTaskComposeSheet: View {
             Toast.error(error)
             Haptic.error()
         }
+    }
+}
+
+/// A file picked for the task, not yet sent — mirrors the web task sheet's
+/// own "attach a photo or file" pill, one attachment at a time.
+private struct PickedAttachmentRow: View {
+    let filename: String
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.fill")
+                .foregroundStyle(Color.neonTextTertiary)
+            Text(filename)
+                .font(.neonCallout)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 8)
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(Color.neonTextTertiary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L("Remove %@", filename))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .neonSurface(.sunken, radius: NeonRadius.md)
     }
 }
 

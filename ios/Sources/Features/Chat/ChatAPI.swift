@@ -8,13 +8,43 @@ import Foundation
 // rather than through the action registry.
 
 extension APIClient {
+    // MARK: - Tagging a message to a project
+    //
+    // `sendMessage`/`sendAttachment` in Core/APIClient.swift carry no
+    // projectId — the composer's project picker is this area's, not Core's —
+    // but the route they both already post to (api/mobile/chat/messages)
+    // reads one on every path. These overloads add it from here rather than
+    // touching Core, and fall through to the plain ones when there is none.
+
+    func fetchChatProjects() async throws -> [ChatMessage.ProjectTag] {
+        struct Wrapper: Decodable { let projects: [ChatMessage.ProjectTag] }
+        return try await read("chat/projects", as: Wrapper.self).value.projects
+    }
+
+    @discardableResult
+    func sendMessage(conversation: String, text: String, projectId: String?) async throws -> ChatMessage {
+        guard let projectId, !projectId.isEmpty else { return try await sendMessage(conversation: conversation, text: text) }
+        let data = try await post("chat/messages", json: ["conversation": conversation, "body": text, "projectId": projectId])
+        return try JSONDecoder().decode(APIClient.SentMessage.self, from: data).message
+    }
+
+    @discardableResult
+    func sendAttachment(conversation: String, text: String, file: UploadFile, projectId: String?) async throws -> ChatMessage {
+        guard let projectId, !projectId.isEmpty else { return try await sendAttachment(conversation: conversation, text: text, file: file) }
+        var fields = ["conversation": conversation, "projectId": projectId]
+        if !text.isEmpty { fields["body"] = text }
+        let data = try await postMultipart("chat/messages", fields: fields, files: [file])
+        return try JSONDecoder().decode(APIClient.SentMessage.self, from: data).message
+    }
+
     // MARK: - Voice notes
 
     /// A recording, exactly as the web chat box's own field name and duration
     /// are read by readChatAttachment: "voice" plus "durationSeconds".
     @discardableResult
-    func sendVoice(conversation: String, file: UploadFile, durationSeconds: Int) async throws -> ChatMessage {
-        let fields = ["conversation": conversation, "durationSeconds": String(durationSeconds)]
+    func sendVoice(conversation: String, file: UploadFile, durationSeconds: Int, projectId: String? = nil) async throws -> ChatMessage {
+        var fields = ["conversation": conversation, "durationSeconds": String(durationSeconds)]
+        if let projectId, !projectId.isEmpty { fields["projectId"] = projectId }
         let data = try await postMultipart("chat/messages", fields: fields, files: [file])
         return try JSONDecoder().decode(APIClient.SentMessage.self, from: data).message
     }
@@ -64,15 +94,39 @@ extension APIClient {
 
     // MARK: - Task cards
 
+    /// `attachment` mirrors what the web task sheet offers: one optional file,
+    /// posted under the same field name `createChatTask` (chat-task-actions.ts)
+    /// reads with `formData.get("attachment")`. Carrying one forces multipart,
+    /// whose fields are one string per key — so every assignee id travels
+    /// joined by commas, and registry/chat.ts's `expandAssignees` splits it
+    /// back out server-side before the website's own action ever sees it.
+    @discardableResult
     func createChatTask(
         conversation: String,
         title: String,
         description: String,
         priority: String,
         assignees: [String],
-        due: Date
+        due: Date,
+        attachment: UploadFile? = nil
     ) async throws -> ActionOutcome {
-        try await perform("chat/tasks/create", form: [
+        if let attachment {
+            let file = UploadFile(field: "attachment", filename: attachment.filename, mimeType: attachment.mimeType, data: attachment.data)
+            return try await performUpload(
+                "chat/tasks/create",
+                fields: [
+                    "conversation": conversation,
+                    "title": title,
+                    "description": description,
+                    "priority": priority,
+                    "assignee": assignees.joined(separator: ","),
+                    "dueDay": NeonFormat.dayKey(due),
+                    "dueTime": timeKey(due),
+                ],
+                files: [file]
+            )
+        }
+        return try await perform("chat/tasks/create", form: [
             "conversation": conversation,
             "title": title,
             "description": description,
