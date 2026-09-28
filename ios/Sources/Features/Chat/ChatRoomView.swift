@@ -308,11 +308,6 @@ struct ChatRoomView: View {
     }
 }
 
-struct ProofTarget: Identifiable {
-    let id: String
-    let title: String
-    let detail: String?
-}
 
 private struct DaySeparator: View {
     let iso: String

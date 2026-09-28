@@ -36,10 +36,25 @@ private let arabicBundle: Bundle? = Bundle.main
     .path(forResource: "ar", ofType: "lproj")
     .flatMap(Bundle.init(path:))
 
-// English strings are the keys themselves, so only ar.lproj ships a table.
+// Every table ar.lproj ships: Localizable first, then one per feature area
+// (Projects.strings, Chat.strings, …), so each area keeps its own file.
+private let arabicTables: [String] = {
+    guard let arabicBundle else { return [] }
+    let names = arabicBundle.paths(forResourcesOfType: "strings", inDirectory: nil)
+        .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent }
+        .filter { $0 != "Localizable" }
+        .sorted()
+    return ["Localizable"] + names
+}()
+
+// English strings are the keys themselves, so only ar.lproj ships tables.
 func L(_ key: String) -> String {
     guard AppLanguage.current == .arabic, let arabicBundle else { return key }
-    return arabicBundle.localizedString(forKey: key, value: key, table: nil)
+    for table in arabicTables {
+        let found = arabicBundle.localizedString(forKey: key, value: "\u{0}", table: table)
+        if found != "\u{0}" { return found }
+    }
+    return key
 }
 
 func L(_ key: String, _ args: CVarArg...) -> String {

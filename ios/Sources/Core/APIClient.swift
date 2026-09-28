@@ -352,12 +352,56 @@ final class APIClient: ObservableObject {
     }
 
     @discardableResult
-    private func sendJSON(_ method: String, _ path: String, _ json: [String: Any]) async throws -> Data {
+    func sendJSON(_ method: String, _ path: String, _ json: [String: Any]) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: json)
         return try await send(request)
+    }
+
+    // MARK: - The registry routes (src/lib/mobile/rpc.ts)
+    //
+    // Everything beyond the original handful of routes goes through two:
+    // `get/<area>/<name>` for reads and `do/<area>/<name>` for actions. An
+    // action calls the website's own server action, so its rules, guard and
+    // notifications are the website's.
+
+    /// A read, e.g. `read("team/employees")` or `read("projects/detail", ["id": id])`.
+    func read<T: Decodable>(_ name: String, _ params: [String: String?] = [:], as type: T.Type = T.self) async throws -> Loaded<T> {
+        let query = params
+            .compactMap { key, value in value.map { URLQueryItem(name: key, value: $0) } }
+            .sorted { $0.name < $1.name }
+        return try await load("get/\(name)", query: query, as: T.self)
+    }
+
+    /// An action with JSON arguments (in the order the server action takes
+    /// them) and/or the fields a website form would post. Use `NSNull()` for
+    /// a null argument. Posts `.neonDataChanged` on success so open screens
+    /// can re-read.
+    @discardableResult
+    func perform(_ name: String, args: [Any] = [], form: [String: Any] = [:]) async throws -> ActionOutcome {
+        var body: [String: Any] = ["args": args]
+        if !form.isEmpty { body["form"] = form }
+        let data = try await post("do/\(name)", json: body)
+        return finish(name, data)
+    }
+
+    /// An action that carries files: multipart, with the arguments as `__args`.
+    @discardableResult
+    func performUpload(_ name: String, args: [Any] = [], fields: [String: String] = [:], files: [UploadFile]) async throws -> ActionOutcome {
+        var all = fields
+        if !args.isEmpty, let encoded = try? JSONSerialization.data(withJSONObject: args) {
+            all["__args"] = String(data: encoded, encoding: .utf8)
+        }
+        let data = try await postMultipart("do/\(name)", fields: all, files: files)
+        return finish(name, data)
+    }
+
+    private func finish(_ name: String, _ data: Data) -> ActionOutcome {
+        let outcome = ActionOutcome(data: data)
+        NotificationCenter.default.post(name: .neonDataChanged, object: name)
+        return outcome
     }
 
     // MARK: - The employee's own work
@@ -466,4 +510,39 @@ enum ResponseCache {
     static func clear() {
         try? FileManager.default.removeItem(at: directory)
     }
+}
+
+/// What an action answered: `{ ok, result, redirect }`.
+struct ActionOutcome {
+    let data: Data
+
+    private struct Envelope<T: Decodable>: Decodable {
+        let result: T?
+        let redirect: String?
+    }
+
+    /// Where the website would go next after this, e.g. "/admin/projects/<id>".
+    var redirect: String? {
+        (try? JSONDecoder().decode(Envelope<IgnoredValue>.self, from: data))?.redirect
+    }
+
+    /// The action's return value, decoded.
+    func result<T: Decodable>(_ type: T.Type = T.self) throws -> T? {
+        do {
+            return try JSONDecoder().decode(Envelope<T>.self, from: data).result
+        } catch {
+            throw APIError.decoding
+        }
+    }
+}
+
+/// Decodes anything and keeps nothing.
+struct IgnoredValue: Decodable {
+    init(from decoder: Decoder) throws {}
+}
+
+extension Notification.Name {
+    /// Posted after any successful action; `object` is the action's name
+    /// ("projects/update"). Screens re-read when something they show changed.
+    static let neonDataChanged = Notification.Name("neonDataChanged")
 }

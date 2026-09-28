@@ -22,15 +22,6 @@ struct ProjectSummary: Codable, Identifiable {
     var resolvedCoverURL: URL? { resolvedMediaURL(coverImageUrl) }
 }
 
-let portalOrigin = URL(string: "https://clients.neonjo.com")!
-
-// The API returns some file/image paths as web-relative (e.g. "/seed-images/…"),
-// which URL(string:) alone can't load — resolve those against the portal origin.
-func resolvedMediaURL(_ raw: String?) -> URL? {
-    guard let raw, !raw.isEmpty else { return nil }
-    return URL(string: raw, relativeTo: portalOrigin)
-}
-
 struct ProjectDetail: Codable {
     let id: String
     // Share token for the public client page (/p/<token>).
@@ -165,21 +156,6 @@ struct ProjectDetail: Codable {
 }
 
 // Visual journey stages shown on the client page timeline (ProjectStage enum).
-let projectStages = [
-    "CONCEPT", "DESIGN", "VISUALIZATION", "TECHNICAL_DRAWINGS",
-    "BOQ", "PRICING", "APPROVAL", "HANDOVER",
-]
-
-func formattedISODate(_ iso: String?) -> String? {
-    guard let iso else { return nil }
-    let parser = ISO8601DateFormatter()
-    parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    guard let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return nil }
-    // Follows the in-app language, not the phone's, so the toggle covers dates too.
-    return date.formatted(
-        Date.FormatStyle(date: .abbreviated, time: .shortened, locale: AppLanguage.current.locale)
-    )
-}
 
 struct DashboardResponse: Codable {
     let stats: DashboardStats

@@ -12,10 +12,10 @@ struct NotificationsView: View {
     @State private var unread = 0
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
-    @State private var path: [TaskRoute] = []
+    @State private var openTask: TaskRoute?
 
     var body: some View {
-        NavigationStack(path: $path) {
+        Group {
             ScrollView {
                 VStack(spacing: 8) {
                     if let cachedAt { OfflineBanner(savedAt: cachedAt).padding(.bottom, 4) }
@@ -51,15 +51,14 @@ struct NotificationsView: View {
                             .font(.system(size: 14, weight: .medium))
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) { AccountMenu() }
             }
-            .navigationDestination(for: TaskRoute.self) { route in
-                TaskDetailView(taskId: route.id)
+            .navigationDestination(isPresented: Binding(get: { openTask != nil }, set: { if !$0 { openTask = nil } })) {
+                if let openTask { TaskDetailView(taskId: openTask.id) }
             }
             .neonAmbientBackground()
         }
-        .task(id: path.isEmpty) {
-            guard path.isEmpty else { return }
+        .task(id: openTask == nil) {
+            guard openTask == nil else { return }
             await load()
         }
     }
@@ -84,7 +83,7 @@ struct NotificationsView: View {
             await store.refresh()
         }
         if let entryId = item.entryId {
-            path.append(TaskRoute(id: entryId))
+            openTask = TaskRoute(id: entryId)
         } else if item.type == "CHAT_MESSAGE" || item.url?.contains("/chat") == true {
             openChat()
         }

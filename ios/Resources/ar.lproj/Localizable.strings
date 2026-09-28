@@ -306,3 +306,23 @@
 "Press + in the chat and choose Task. For one person, open their chat instead." = "اضغط + في المحادثة واختر «مهمة». ولشخص واحد، افتح محادثته بدلًا من ذلك.";
 "Set a meeting" = "حدّد اجتماعًا";
 "Press + in the chat and choose Meeting. For one person, open their chat instead." = "اضغط + في المحادثة واختر «اجتماع». ولشخص واحد، افتح محادثته بدلًا من ذلك.";
+
+/* Navigation shell */
+"Home" = "الرئيسية";
+"More" = "المزيد";
+"Work" = "العمل";
+"Studio" = "الاستوديو";
+"Employees" = "الموظفون";
+"Payroll" = "الرواتب";
+"Attendance" = "الحضور";
+"Requests" = "الطلبات";
+"Site visits" = "زيارات المواقع";
+"Analytics" = "التحليلات";
+"Settings" = "الإعدادات";
+"My requests" = "طلباتي";
+"Given to you" = "صلاحيات مُنحت لك";
+"Assign work" = "توزيع العمل";
+"Profile" = "الملف الشخصي";
+"Signed in as the manager" = "مسجّل الدخول كمدير";
+"Signed in as %@" = "مسجّل الدخول باسم %@";
+"Delivery process" = "مراحل التسليم";

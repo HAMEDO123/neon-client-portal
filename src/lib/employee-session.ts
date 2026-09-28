@@ -1,11 +1,11 @@
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { EMPLOYEE_SESSION_COOKIE_NAME, verifyEmployeeSessionToken } from "@/lib/auth";
+import { sessionEmployeeId } from "@/lib/session-token";
 
 // The single place an employee's identity is derived. Nothing in the employee
 // portal takes an employee id from the client — every read and write starts
-// here, from the signed cookie, so one employee can never address another's
-// data by changing an id in a request.
+// here, from the signed token (the cookie, or the phone app's bearer header —
+// lib/session-token.ts), so one employee can never address another's data by
+// changing an id in a request.
 
 export type SessionEmployee = {
   id: string;
@@ -24,8 +24,7 @@ export type SessionEmployee = {
 };
 
 export async function getSessionEmployee(): Promise<SessionEmployee | null> {
-  const store = await cookies();
-  const employeeId = verifyEmployeeSessionToken(store.get(EMPLOYEE_SESSION_COOKIE_NAME)?.value);
+  const employeeId = await sessionEmployeeId();
   if (!employeeId) return null;
 
   // A valid token is not enough: the account must still exist, still be

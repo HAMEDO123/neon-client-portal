@@ -14,7 +14,7 @@ struct NeonAdminApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
+            ZStack {
                 if api.isLoggedIn {
                     // One app, two sides: the server's `side` at sign-in decides.
                     if api.side == .employee {
@@ -26,6 +26,8 @@ struct NeonAdminApp: App {
                     LoginView()
                 }
             }
+            // A ringing or running call sits above every screen.
+            .overlay { if api.isLoggedIn { CallOverlay() } }
             .environmentObject(api)
             .tint(.neonPurpleStrong)
             .preferredColorScheme(.light)
@@ -39,7 +41,7 @@ struct NeonAdminApp: App {
 // MARK: - The team
 
 enum EmployeeTab: Hashable {
-    case today, tasks, chat, meetings, alerts
+    case today, tasks, chat, projects, more
 }
 
 struct EmployeeHome: View {
@@ -62,18 +64,18 @@ struct EmployeeHome: View {
             ChatListView(onUnreadChange: { total in
                 if total != store.badges.unreadChat { Task { await store.refresh() } }
             })
-                .tabItem { Label(L("Chat"), systemImage: "bubble.left.and.bubble.right") }
-                .badge(store.badges.unreadChat)
-                .tag(EmployeeTab.chat)
+            .tabItem { Label(L("Chat"), systemImage: "bubble.left.and.bubble.right") }
+            .badge(store.badges.unreadChat)
+            .tag(EmployeeTab.chat)
 
-            MeetingsView()
-                .tabItem { Label(L("Meetings"), systemImage: "calendar") }
-                .tag(EmployeeTab.meetings)
+            ProjectsRootView()
+                .tabItem { Label(L("Projects"), systemImage: "square.grid.2x2") }
+                .tag(EmployeeTab.projects)
 
-            NotificationsView(openChat: { tab = .chat })
-                .tabItem { Label(L("Alerts"), systemImage: "bell") }
+            EmployeeMoreView(openChat: { tab = .chat })
+                .tabItem { Label(L("More"), systemImage: "ellipsis.circle") }
                 .badge(store.badges.unread)
-                .tag(EmployeeTab.alerts)
+                .tag(EmployeeTab.more)
         }
         .environmentObject(store)
         .task { await store.poll() }
@@ -86,22 +88,26 @@ struct EmployeeHome: View {
 // MARK: - The manager
 
 enum AdminTab: Hashable {
-    case projects, tasks, chat, meetings
+    case home, projects, tasks, chat, more
 }
 
 struct AdminHome: View {
     @EnvironmentObject var api: APIClient
-    @State private var tab: AdminTab = .projects
+    @State private var tab: AdminTab = .home
     @State private var unreadChat = 0
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: $tab) {
-            DashboardView()
+            AdminHomeView()
+                .tabItem { Label(L("Home"), systemImage: "house") }
+                .tag(AdminTab.home)
+
+            ProjectsRootView()
                 .tabItem { Label(L("Projects"), systemImage: "square.grid.2x2") }
                 .tag(AdminTab.projects)
 
-            ManagerTasksView()
+            TasksRootView()
                 .tabItem { Label(L("Tasks"), systemImage: "checklist") }
                 .tag(AdminTab.tasks)
 
@@ -110,9 +116,9 @@ struct AdminHome: View {
                 .badge(unreadChat)
                 .tag(AdminTab.chat)
 
-            MeetingsView()
-                .tabItem { Label(L("Meetings"), systemImage: "calendar") }
-                .tag(AdminTab.meetings)
+            AdminMoreView()
+                .tabItem { Label(L("More"), systemImage: "ellipsis.circle") }
+                .tag(AdminTab.more)
         }
         .task { await pollUnread() }
         .onChange(of: scenePhase) { phase in

@@ -1,8 +1,7 @@
-import { cookies } from "next/headers";
 import { Prisma } from "@/generated/prisma/client";
 import type { ChatMessageKind } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { hasAdminSession } from "@/lib/session-token";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { avatarUrl } from "@/lib/avatar";
 import { chatTaskSelect } from "@/lib/chat-task-select";
@@ -55,9 +54,7 @@ export {
  * session comes first, as it always has.
  */
 export async function getChatViewer(side?: ChatSide): Promise<ChatViewer | null> {
-  const store = await cookies();
-
-  if (side !== "EMPLOYEE" && verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
+  if (side !== "EMPLOYEE" && (await hasAdminSession())) {
     return { type: "ADMIN", id: null, name: "Manager" };
   }
   if (side === "ADMIN") return null;

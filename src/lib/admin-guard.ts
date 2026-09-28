@@ -1,6 +1,5 @@
-import { cookies } from "next/headers";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
 import { getSessionEmployee } from "@/lib/employee-session";
+import { hasAdminSession } from "@/lib/session-token";
 
 // One definition of "is this the manager".
 //
@@ -14,10 +13,14 @@ import { getSessionEmployee } from "@/lib/employee-session";
 // This file is deliberately NOT a "use server" module. Every export of one of
 // those becomes callable over the network, and a guard that can itself be
 // called is not a guard.
+//
+// The session is read through lib/session-token.ts, which takes it from the
+// browser's cookie or from the phone app's bearer header — the same signed
+// value either way — so every action behind these guards serves the app too,
+// through /api/mobile/do, without a second copy of any of them.
 
 export async function requireAdmin(): Promise<void> {
-  const store = await cookies();
-  if (!verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) {
+  if (!(await hasAdminSession())) {
     throw new Error("Unauthorized");
   }
 }
@@ -51,8 +54,7 @@ export type Staff = { type: "ADMIN" } | { type: "EMPLOYEE"; id: string; name: st
  * the rest of the portal.
  */
 export async function requireStaff(): Promise<Staff> {
-  const store = await cookies();
-  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return { type: "ADMIN" };
+  if (await hasAdminSession()) return { type: "ADMIN" };
 
   const employee = await getSessionEmployee();
   if (employee) return { type: "EMPLOYEE", id: employee.id, name: employee.name };
@@ -79,8 +81,7 @@ export async function requireStaff(): Promise<Staff> {
  * whenever their session happens to expire.
  */
 export async function requireWhatsAppAccess(): Promise<Staff> {
-  const store = await cookies();
-  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return { type: "ADMIN" };
+  if (await hasAdminSession()) return { type: "ADMIN" };
 
   const employee = await getSessionEmployee();
   if (employee?.canReadWhatsApp) return { type: "EMPLOYEE", id: employee.id, name: employee.name };
@@ -107,8 +108,7 @@ export async function requireWhatsAppAccess(): Promise<Staff> {
  * permission away takes effect on that person's next request.
  */
 export async function requireTaskAssigner(): Promise<Staff> {
-  const store = await cookies();
-  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return { type: "ADMIN" };
+  if (await hasAdminSession()) return { type: "ADMIN" };
 
   const employee = await getSessionEmployee();
   if (employee?.canAssignTasks) return { type: "EMPLOYEE", id: employee.id, name: employee.name };
@@ -129,8 +129,7 @@ export async function requireTaskAssigner(): Promise<Staff> {
  * their own visits, and the manager reads all of them and answers for none.
  */
 export async function requireSiteVisitor(): Promise<Staff> {
-  const store = await cookies();
-  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return { type: "ADMIN" };
+  if (await hasAdminSession()) return { type: "ADMIN" };
 
   const employee = await getSessionEmployee();
   if (employee?.canLogSiteVisits) return { type: "EMPLOYEE", id: employee.id, name: employee.name };
