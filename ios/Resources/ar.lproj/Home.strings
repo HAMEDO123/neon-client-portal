@@ -18,6 +18,8 @@
 "An unanswered question is a question, not a verdict: nobody here is marked as having done nothing." = "السؤال بلا رد يبقى سؤالاً، لا حكمًا: لا أحد هنا يُعتبر أنه لم يفعل شيئًا.";
 "%@ more than the day holds (%@ planned, %@ available)" = "%@ أكثر مما يتّسع له اليوم (%@ مخطَّط، %@ متاح)";
 "%@ can clear it" = "بإمكان %@ حلّها";
+"This isn't open in the app yet." = "هذا غير متاح داخل التطبيق بعد.";
+"That conversation isn't available." = "هذه المحادثة غير متاحة.";
 "%@: said started, the board still says pending" = "%@: قال إنه بدأ، لكن اللوحة ما زالت تقول معلّق";
 "Their day" = "يومهم";
 
