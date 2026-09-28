@@ -19,10 +19,9 @@ targets:
         # guide beside the code; none of it belongs in the app bundle.
         excludes:
           - "**/*.md"
-      # Plain PNG icons + CFBundleIcons instead of an asset catalog: actool
-      # in newer Xcodes refuses to compile xcassets when no simulator runtime
-      # matches the SDK, and PNG resources need no compiler at all.
-      - path: Resources/Icons
+      # The icon as an asset catalog: App Store Connect refuses an upload
+      # without one (90022 "no 120x120 icon", 90713 "no CFBundleIconName").
+      - path: Resources/Assets.xcassets
         buildPhase: resources
       - path: Resources/ar.lproj
         buildPhase: resources
@@ -34,11 +33,19 @@ targets:
         # One app for the whole studio now — the manager and the team sign in
         # to the same build and the server's `side` decides what they see.
         CFBundleDisplayName: "NEON"
+        # From the build settings, so an upload can carry its own build number
+        # (xcodebuild … CURRENT_PROJECT_VERSION=<n>) — TestFlight refuses one
+        # it has seen before.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ar]
-        CFBundleIcons:
-          CFBundlePrimaryIcon:
-            CFBundleIconFiles: [AppIcon60x60]
+        # Written out: generated Info.plists do not get it injected, and App
+        # Store Connect rejects the upload without it (90713).
+        CFBundleIconName: AppIcon
+        # HTTPS and WebRTC's standard DTLS-SRTP only — exempt, so TestFlight
+        # does not stop every build to ask.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         # Proof of finished work is usually a photo taken on site, there and
         # then. The picker for existing photos needs no permission at all.
@@ -55,20 +62,21 @@ targets:
     settings:
       base:
         PRODUCT_NAME: NeonAdmin
-        PRODUCT_BUNDLE_IDENTIFIER: com.neon.admin
+        PRODUCT_BUNDLE_IDENTIFIER: com.neonjo.staff
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
-        # Left unsigned on purpose — this build is meant to be re-signed by
-        # AltStore/AltServer on the sideloader's own machine using their own
-        # free Apple ID, not signed here.
-        CODE_SIGN_IDENTITY: ""
-        CODE_SIGNING_REQUIRED: "NO"
-        CODE_SIGNING_ALLOWED: "NO"
-        # Except on the simulator, which is signed locally ("Sign to Run
-        # Locally", no Apple ID involved). A simulator app with no signature at
-        # all has no application identifier, so the Keychain refuses it and
-        # the session token is gone on every relaunch.
+        # Signed with the studio's paid team for TestFlight (and later an Apple
+        # Business Manager Custom App). ios-build.yml passes
+        # CODE_SIGNING_ALLOWED=NO on the command line for its device build,
+        # which overrides this, so CI still produces the unsigned IPA.
+        DEVELOPMENT_TEAM: 745F9U99BC
+        CODE_SIGN_STYLE: Automatic
+        # The simulator is always signed locally ("Sign to Run Locally", no
+        # Apple ID involved), however the device build is signed. A simulator
+        # app with no signature at all has no application identifier, so the
+        # Keychain refuses it and the session token is gone on every relaunch.
         "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"
         "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"

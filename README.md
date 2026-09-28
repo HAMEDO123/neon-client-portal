@@ -7,7 +7,7 @@ One Next.js app runs NEON's interior-design studio. It is live at **https://clie
 | Clients | `/p/<token>` | A project's page: renders, drawings, documents, BOQ, pricing, materials, furniture, approvals, comments and downloads. There is no login; the link is the key. |
 | The manager | `/admin` | Projects, the team's task board and week board, reviews, alerts, chat, analytics, payroll, requests, employees and settings. |
 | Employees | `/employee` | A phone web app added to the Home Screen: the day's work, photo proof, chat, requests and push notifications. |
-| The studio, native | `ios/` | "NEON" (target `NeonAdmin`), a SwiftUI app for the manager and the team alike, on `/api/mobile/*`. It is sideloaded with AltStore. |
+| The studio, native | `ios/` | "NEON" (target `NeonAdmin`), a SwiftUI app for the manager and the team alike, on `/api/mobile/*`. Distributed through TestFlight. |
 | WhatsApp | `whatsapp-worker/` | An optional separate service that sends messages from a linked WhatsApp number. |
 
 **Stack:**
@@ -441,7 +441,9 @@ The domain vocabulary, as the code defines it:
 - **What the phone API cannot do yet, the app opens as the website's own page, signed in** (`WebPortal.swift`): calls, the task board, reviews, setting a meeting. The app's token is the session cookie's value, so it is set as that cookie in a non-persistent web view. No check is loosened, and nothing is copied.
 - The token is in the Keychain (`TokenStore.swift`); a 401 signs out and wipes the on-disk cache of GET answers, which is only ever shown under an "Offline" banner.
 - **Simulator builds are signed locally** (`CODE_SIGN_IDENTITY[sdk=iphonesimulator*]: "-"` in `project.yml`). A completely unsigned simulator app is refused by the Keychain, so it forgets the session on every relaunch — which reads as broken sign-in and is not. Device builds stay unsigned.
-- The app (`ios/Sources/*.swift`) has the production URL hard-coded in `APIClient.swift`. It is unsigned and meant to be re-signed with AltStore using a free Apple ID, which also means it can't receive push notifications.
+- The app (`ios/Sources/*.swift`) has the production URL hard-coded in `APIClient.swift`.
+- **It ships through TestFlight**: bundle id `com.neonjo.staff`, team `745F9U99BC`, automatic signing. From `ios/`: `xcodegen generate`, then `xcodebuild -project NeonAdmin.xcodeproj -scheme NeonAdmin -configuration Release -destination 'generic/platform=iOS' -archivePath <path>.xcarchive -allowProvisioningUpdates CURRENT_PROJECT_VERSION=$(date +%Y%m%d%H%M) archive`, then `xcodebuild -exportArchive -archivePath <path>.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath <dir> -allowProvisioningUpdates` — which uploads. **Every upload needs a new build number** (App Store Connect refuses one it has seen; `Info.plist` takes it from `CURRENT_PROJECT_VERSION`). CI still builds the unsigned IPA (`CODE_SIGNING_ALLOWED=NO` on its command line).
+- No push yet: that needs an APNs key and device-token storage on the server (see `ios/PLAN.md`).
 
 ### Tests
 - `npm test` runs `node --test` over `tests/**/*.test.ts` through tsx, loading `.env` and `.env.local`.
