@@ -3,6 +3,12 @@ options:
   bundleIdPrefix: com.neon
   deploymentTarget:
     iOS: "16.0"
+packages:
+  # Google's WebRTC, prebuilt as an xcframework by stasel/WebRTC (the calls
+  # area's only dependency; nothing else in the app needs it).
+  WebRTC:
+    url: https://github.com/stasel/WebRTC
+    exactVersion: 153.0.0
 targets:
   NeonAdmin:
     type: application
@@ -16,6 +22,8 @@ targets:
         buildPhase: resources
       - path: Resources/ar.lproj
         buildPhase: resources
+    dependencies:
+      - package: WebRTC
     info:
       path: Info.plist
       properties:

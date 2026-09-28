@@ -1,0 +1,57 @@
+/* Native voice and video calls (ios/Sources/Features/Calls). */
+
+/* Call buttons in a conversation's header */
+"Call %@" = "اتصال بـ %@";
+"Video call %@" = "مكالمة فيديو مع %@";
+"Back to call" = "الرجوع للمكالمة";
+"Join call" = "الانضمام للمكالمة";
+
+/* Incoming call */
+"Incoming call…" = "مكالمة واردة…";
+"Incoming video call…" = "مكالمة فيديو واردة…";
+"%@ started a %@" = "بدأ %@ %@";
+"call" = "مكالمة";
+"video call" = "مكالمة فيديو";
+"Answering ends the call you are in." = "الرد ينهي المكالمة التي أنت فيها الآن.";
+"Decline" = "رفض";
+"Answer" = "رد";
+"Answer with sound only" = "الرد بالصوت فقط";
+
+/* Pre-join */
+"Call" = "مكالمة";
+"Video call" = "مكالمة فيديو";
+"Start call" = "بدء المكالمة";
+"Start video call" = "بدء مكالمة الفيديو";
+"Camera off" = "الكاميرا مغلقة";
+"Microphone" = "الميكروفون";
+"Camera" = "الكاميرا";
+"Flip camera" = "قلب الكاميرا";
+"A device isn't available" = "جهاز غير متاح";
+
+/* The call screen */
+"Minimise" = "تصغير";
+"People" = "الأشخاص";
+"Connecting…" = "جارٍ الاتصال…";
+"Reconnecting…" = "إعادة الاتصال…";
+"Connected" = "متصل";
+"Call ended" = "انتهت المكالمة";
+"Ringing the team…" = "جارٍ الاتصال بالفريق…";
+"Calling %@…" = "جارٍ الاتصال بـ %@…";
+"You" = "أنت";
+"Mute" = "كتم الصوت";
+"Speaker" = "مكبر الصوت";
+"Close" = "إغلاق";
+"In the call" = "في المكالمة";
+"Ringing" = "يرن";
+"Declined" = "مرفوضة";
+"Left" = "غادر";
+"In call" = "في مكالمة";
+
+/* Media problems */
+"The microphone and camera are blocked for this app. Allow them in Settings, then try again." = "الميكروفون والكاميرا محظوران لهذا التطبيق. فعّلهما من الإعدادات ثم حاول مرة أخرى.";
+"No microphone was found. You can still join and listen." = "لم يتم العثور على ميكروفون. يمكنك الانضمام والاستماع فقط.";
+"The camera is not available. You can join with sound only." = "الكاميرا غير متاحة. يمكنك الانضمام بالصوت فقط.";
+"The camera is not available." = "الكاميرا غير متاحة.";
+"This device cannot make calls." = "هذا الجهاز لا يمكنه إجراء المكالمات.";
+"Calls are still connecting. Try again in a moment." = "المكالمات ما زالت تتصل. حاول مرة أخرى بعد قليل.";
+"The call has ended." = "انتهت المكالمة.";
