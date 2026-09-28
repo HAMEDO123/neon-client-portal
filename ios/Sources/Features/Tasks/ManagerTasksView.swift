@@ -23,7 +23,6 @@ struct ManagerTasksView: View {
     @EnvironmentObject var api: APIClient
     @StateObject private var cards = ChatCardsLoader()
     @State private var filter: CardFilter = .open
-    @State private var web: WebPortalLink?
 
     var body: some View {
         ScrollView {
@@ -48,10 +47,32 @@ struct ManagerTasksView: View {
                 }
                 .buttonStyle(.pressable)
 
-                WebTile(title: L("Hand out a task"), symbol: "plus.circle") {
-                    web = WebPortalLink(path: "/admin/chat/team", title: L("Hand out a task"),
-                                        hint: L("Press + in the chat and choose Task. For one person, open their chat instead."))
+                // A task card is handed out from a conversation's + (the chat
+                // area builds it); this opens the team's, natively.
+                NavigationLink(value: ChatRoute(slug: "team", title: L("Team chat"), subtitle: nil, avatar: "/admin-icon-192.png", isGroup: true)) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(Color.neonPurpleStrong)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L("Hand out a task"))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color.neonInk)
+                            Text(L("Press + in the chat and choose Task. For one person, open their chat instead."))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.neonInk.opacity(0.55))
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.forward")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.neonInk.opacity(0.3))
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .glassCard(radius: 16)
                 }
+                .buttonStyle(.pressable)
 
                 SectionLabel(L("Handed out in chat"))
                 Picker(L("Show"), selection: $filter) {
@@ -85,7 +106,6 @@ struct ManagerTasksView: View {
         }
         .refreshable { await cards.load(api) }
         .task { await cards.load(api) }
-        .fullScreenCover(item: $web) { WebPortalSheet(link: $0) }
     }
 
     private var reviewCount: Int {

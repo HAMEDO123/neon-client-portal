@@ -7,7 +7,7 @@ struct TasksView: View {
     @EnvironmentObject var api: APIClient
     @State private var filter: TaskFilter = .open
     @State private var tasks: [StaffTask]?
-    @State private var jobs: [AssignedJob]?
+    @State private var jobs: [MyAssignedJob]?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @StateObject private var cards = ChatCardsLoader()

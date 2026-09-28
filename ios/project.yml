@@ -9,6 +9,10 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+        # Each area keeps its feature inventory (FEATURES.md) and the kit its
+        # guide beside the code; none of it belongs in the app bundle.
+        excludes:
+          - "**/*.md"
       # Plain PNG icons + CFBundleIcons instead of an asset catalog: actool
       # in newer Xcodes refuses to compile xcassets when no simulator runtime
       # matches the SDK, and PNG resources need no compiler at all.

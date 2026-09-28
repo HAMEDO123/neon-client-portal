@@ -13,7 +13,7 @@ struct JobRoute: Hashable {
 /// One job in a list — the board's `TaskRow`, shaped for a job instead of a
 /// board cell.
 struct JobRow: View {
-    let job: AssignedJob
+    let job: MyAssignedJob
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -66,7 +66,7 @@ struct JobDetailView: View {
     let jobId: String
 
     @EnvironmentObject var api: APIClient
-    @State private var job: AssignedJob?
+    @State private var job: MyAssignedJob?
     @State private var submissions: [JobSubmission] = []
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
@@ -118,7 +118,7 @@ struct JobDetailView: View {
         }
     }
 
-    private func header(_ job: AssignedJob) -> some View {
+    private func header(_ job: MyAssignedJob) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 BadgeView(text: L("From the manager"), tone: .neutral, symbol: "shippingbox.fill")
@@ -138,14 +138,14 @@ struct JobDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func when(_ job: AssignedJob) -> String {
+    private func when(_ job: MyAssignedJob) -> String {
         let from = formattedDayKey(job.startKey)
         let to = formattedDayKey(job.endKey)
         return job.startKey == job.endKey ? from : "\(from) – \(to)"
     }
 
     @ViewBuilder
-    private func actions(_ job: AssignedJob) -> some View {
+    private func actions(_ job: MyAssignedJob) -> some View {
         switch job.state {
         case "SUBMITTED":
             StatusNote(
@@ -200,7 +200,7 @@ struct JobDetailView: View {
     }
 
     @ViewBuilder
-    private func detail(_ job: AssignedJob) -> some View {
+    private func detail(_ job: MyAssignedJob) -> some View {
         if job.deliverable?.isEmpty == false || job.acceptance?.isEmpty == false {
             DetailCard(title: L("What counts as finished"), symbol: "package") {
                 if let deliverable = job.deliverable, !deliverable.isEmpty {

@@ -9,7 +9,7 @@ import Foundation
 extension APIClient {
     // MARK: - Jobs handed out by hand (AssignedTask)
 
-    func fetchJobs(filter: TaskFilter) async throws -> Loaded<[AssignedJob]> {
+    func fetchJobs(filter: TaskFilter) async throws -> Loaded<[MyAssignedJob]> {
         let loaded = try await read("me/jobs", ["filter": filter.rawValue], as: AssignedJobsResponse.self)
         return Loaded(value: loaded.value.jobs, cachedAt: loaded.cachedAt)
     }

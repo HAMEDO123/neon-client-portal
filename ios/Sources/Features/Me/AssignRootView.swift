@@ -12,7 +12,7 @@ struct AssignRootView: View {
     @State private var weekOffset = 0
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
-    @State private var editing: AssignedJob?
+    @State private var editing: MyAssignedJob?
     @State private var creating = false
 
     var body: some View {
@@ -113,7 +113,7 @@ struct AssignRootView: View {
         .padding(.horizontal, 4)
     }
 
-    private func assignedJobRow(_ job: AssignedJob) -> some View {
+    private func assignedJobRow(_ job: MyAssignedJob) -> some View {
         HStack(alignment: .top, spacing: 12) {
             AvatarView(url: nil, name: name(for: job.employeeId), size: 38)
             VStack(alignment: .leading, spacing: 5) {
@@ -164,7 +164,7 @@ struct AssignRootView: View {
 
 private struct AssignJobFormSheet: View {
     let team: [AssignTeamMember]
-    let job: AssignedJob?
+    let job: MyAssignedJob?
     let onSaved: () async -> Void
 
     @EnvironmentObject var api: APIClient
@@ -180,7 +180,7 @@ private struct AssignJobFormSheet: View {
     @State private var errorMessage: String?
     @State private var deleting = false
 
-    init(team: [AssignTeamMember], job: AssignedJob?, onSaved: @escaping () async -> Void) {
+    init(team: [AssignTeamMember], job: MyAssignedJob?, onSaved: @escaping () async -> Void) {
         self.team = team
         self.job = job
         self.onSaved = onSaved
@@ -277,7 +277,7 @@ private struct AssignJobFormSheet: View {
         }
     }
 
-    private func delete(_ job: AssignedJob) async {
+    private func delete(_ job: MyAssignedJob) async {
         deleting = true
         defer { deleting = false }
         do {

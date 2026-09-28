@@ -8,7 +8,7 @@ import Foundation
 // MARK: - Jobs handed out by hand (AssignedTask)
 
 /// `AssignedTaskView` in src/lib/assigned-tasks.ts.
-struct AssignedJob: Decodable, Identifiable {
+struct MyAssignedJob: Decodable, Identifiable {
     let id: String
     let employeeId: String
     let title: String
@@ -21,7 +21,7 @@ struct AssignedJob: Decodable, Identifiable {
     let priority: String
 }
 
-struct AssignedJobsResponse: Decodable { let jobs: [AssignedJob] }
+struct AssignedJobsResponse: Decodable { let jobs: [MyAssignedJob] }
 
 /// What has been sent for a job so far — `TaskSubmission` rows.
 struct JobSubmission: Decodable, Identifiable {
@@ -33,7 +33,7 @@ struct JobSubmission: Decodable, Identifiable {
 }
 
 struct JobDetailResponse: Decodable {
-    let job: AssignedJob
+    let job: MyAssignedJob
     let submissions: [JobSubmission]
 }
 
@@ -146,5 +146,5 @@ struct AssignWeekResponse: Decodable {
     let weekStart: String
     let weekLabel: String
     let todayKey: String
-    let tasks: [AssignedJob]
+    let tasks: [MyAssignedJob]
 }
