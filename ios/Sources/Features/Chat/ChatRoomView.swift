@@ -236,8 +236,10 @@ struct ChatRoomView: View {
                         HStack(spacing: 8) {
                             ForEach(chatQuickReplies, id: \.text) { reply in
                                 Button { Task { await sendQuick(reply.text) } } label: {
-                                    Label(reply.text, systemImage: reply.symbol)
+                                    // The text carries its own emoji, as the website sends it.
+                                    Text(verbatim: reply.text)
                                         .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(Color.neonInk)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 6)
                                         .background(Color.white.opacity(0.8), in: Capsule())
