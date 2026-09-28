@@ -4,7 +4,7 @@ import SwiftUI
 /// uses the studio's single admin password, with no email. The server's answer
 /// says which side this is, and the app follows it.
 struct LoginView: View {
-    private enum Who: String {
+    private enum Who: String, CaseIterable {
         case team, manager
     }
 
@@ -17,158 +17,153 @@ struct LoginView: View {
     @State private var error: String?
     @State private var loading = false
     @State private var appeared = false
-    @FocusState private var focused: Field?
-
-    private enum Field { case email, password }
+    @State private var shakes = 0
+    @FocusState private var emailFocused: Bool
+    @FocusState private var passwordFocused: Bool
 
     private var who: Who { Who(rawValue: whoRaw) ?? .team }
+
+    private var whoBinding: Binding<Who> {
+        Binding(get: { who }, set: { whoRaw = $0.rawValue })
+    }
 
     private var canSubmit: Bool {
         !loading && !password.isEmpty && (who == .manager || email.contains("@"))
     }
 
     var body: some View {
+        #if DEBUG
+        // The design kit's catalogue, for building screens: launch with -neonKitGallery.
+        if ProcessInfo.processInfo.arguments.contains("-neonKitGallery") {
+            NeonKitGallery()
+        } else {
+            signIn
+        }
+        #else
+        signIn
+        #endif
+    }
+
+    private var signIn: some View {
         ScrollView {
-            VStack(spacing: 26) {
+            VStack(spacing: 0) {
                 HStack {
                     Spacer()
-                    Button {
-                        Haptic.tap()
+                    Chip(AppLanguage.current.toggleLabel, symbol: "globe") {
                         AppLanguage.toggle()
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "globe")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text(AppLanguage.current.toggleLabel)
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundStyle(Color.neonInk.opacity(0.6))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.white.opacity(0.6), in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.neonInk.opacity(0.1), lineWidth: 1))
                     }
-                    .buttonStyle(.pressable)
                 }
-                .padding(.horizontal, 20)
                 .padding(.top, 8)
 
-                VStack(spacing: 6) {
-                    Text("NEON")
-                        .font(.system(size: 40, weight: .heavy, design: .rounded))
-                        .foregroundStyle(LinearGradient.neonWordmark)
+                VStack(spacing: 10) {
+                    BrandMark(size: 80)
+                    NeonWordmark(size: 40)
+                        .padding(.top, 2)
                     Text(L("The studio"))
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color.neonInk.opacity(0.55))
+                        .font(.system(size: 17, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color.neonTextSecondary)
                 }
-                .padding(.top, 40)
+                .padding(.top, 18)
                 .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 8)
+                .offset(y: appeared ? 0 : 10)
 
                 if api.signedOutNotice {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "lock.fill")
-                        Text(L("You have been signed out. Sign in again."))
-                    }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.neonOrangeStrong)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.neonOrange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding(.horizontal, 32)
+                    StatusNote(symbol: "lock.fill", tone: .warning, title: L("You have been signed out. Sign in again."))
+                        .padding(.top, 24)
+                        .transition(.neonRise)
                 }
 
-                VStack(spacing: 14) {
-                    Picker("", selection: $whoRaw) {
-                        Text(L("Team")).tag(Who.team.rawValue)
-                        Text(L("Manager")).tag(Who.manager.rawValue)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: whoRaw) { _ in
-                        error = nil
-                        password = ""
-                    }
-
-                    if who == .team {
-                        field {
-                            TextField(L("Email"), text: $email)
-                                .keyboardType(.emailAddress)
-                                .textContentType(.username)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .focused($focused, equals: .email)
-                                .submitLabel(.next)
-                                .onSubmit { focused = .password }
-                                .environment(\.layoutDirection, .leftToRight)
-                        }
-                    }
-
-                    field {
-                        SecureField(who == .manager ? L("Admin password") : L("Password"), text: $password)
-                            .textContentType(.password)
-                            .focused($focused, equals: .password)
-                            .submitLabel(.go)
-                            .onSubmit { Task { await login() } }
-                    }
-
-                    if let error {
-                        Text(error)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .multilineTextAlignment(.center)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-
-                    Button {
-                        Task { await login() }
-                    } label: {
-                        ZStack {
-                            Text(L("Sign In"))
-                                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                .opacity(loading ? 0 : 1)
-                            if loading {
-                                ProgressView().tint(.white)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                    }
-                    .background(Color.neonInk, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .foregroundStyle(.white)
-                    .disabled(!canSubmit)
-                    .opacity(canSubmit || loading ? 1 : 0.5)
-                    .scaleEffect(loading ? 0.98 : 1)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: loading)
-                }
-                .padding(.horizontal, 32)
-                .disabled(loading)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 14)
+                card
+                    .padding(.top, 26)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 18)
 
                 Text(L("NEON Design & Programming"))
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.neonInk.opacity(0.3))
-                    .padding(.top, 40)
-                    .padding(.bottom, 12)
+                    .foregroundStyle(Color.neonTextFaint)
+                    .padding(.top, 36)
+                    .padding(.bottom, 16)
                     .opacity(appeared ? 1 : 0)
             }
+            .padding(.horizontal, 24)
+            .frame(maxWidth: 460)
+            .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
-        .neonAmbientBackground()
+        .neonAmbientBackground(animated: true)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.5)) { appeared = true }
+            withNeonAnimation(NeonMotion.smooth) { appeared = true }
         }
     }
 
-    private func field<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .padding(.horizontal, 16)
-            .frame(height: 50)
-            .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.neonInk.opacity(0.1), lineWidth: 1)
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SegmentedPill(
+                selection: whoBinding,
+                options: Who.allCases,
+                title: { $0 == .team ? L("Team") : L("Manager") },
+                symbol: { $0 == .team ? "person.2.fill" : "briefcase.fill" }
             )
+            .disabled(loading)
+            .onChange(of: whoRaw) { _ in
+                withNeonAnimation { error = nil }
+                password = ""
+            }
+
+            Text(who == .team ? L("Sign in with your work email and password.") : L("Enter the studio's admin password."))
+                .font(.system(size: 13))
+                .foregroundStyle(Color.neonTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .id(who)
+                .transition(.opacity)
+
+            if who == .team {
+                NeonTextField(
+                    L("Email"),
+                    text: $email,
+                    prompt: "name@example.com",
+                    symbol: "envelope",
+                    keyboard: .emailAddress,
+                    contentType: .username,
+                    capitalization: .never,
+                    autocorrect: false,
+                    leftToRight: true,
+                    submitLabel: .next,
+                    onSubmit: { passwordFocused = true },
+                    focus: $emailFocused
+                )
+                .disabled(loading)
+                .transition(.neonRise)
+            }
+
+            NeonTextField(
+                who == .manager ? L("Admin password") : L("Password"),
+                text: $password,
+                prompt: "••••••••",
+                symbol: "lock",
+                contentType: .password,
+                isSecure: true,
+                submitLabel: .go,
+                onSubmit: { Task { await login() } },
+                focus: $passwordFocused
+            )
+            .disabled(loading)
+
+            if let error {
+                ValidationMessage(error)
+            }
+
+            NeonButton(L("Sign In"), symbol: "arrow.forward", kind: .primary, isLoading: loading) {
+                await login()
+            }
+            .disabled(!canSubmit && !loading)
+            .padding(.top, 4)
+        }
+        .padding(20)
+        .neonSurface(.strong, radius: NeonRadius.xxl)
+        .shake(shakes)
+        .animation(NeonMotion.smooth, value: who)
+        .animation(NeonMotion.snappy, value: error)
     }
 
     private func login() async {
@@ -182,12 +177,16 @@ struct LoginView: View {
             password = ""
             Haptic.success()
         } catch APIError.invalidCredentials {
-            withAnimation { self.error = who == .manager ? L("Invalid password.") : L("Invalid email or password.") }
-            Haptic.error()
+            refuse(who == .manager ? L("Invalid password.") : L("Invalid email or password."))
         } catch {
-            withAnimation { self.error = error.localizedDescription }
-            Haptic.error()
+            refuse(error.localizedDescription)
         }
+    }
+
+    private func refuse(_ message: String) {
+        withNeonAnimation { self.error = message }
+        shakes += 1
+        Haptic.error()
     }
 }
 

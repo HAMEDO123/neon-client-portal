@@ -1,0 +1,36 @@
+/* The design kit (ios/Sources/UI) and the sign-in screen. */
+
+/* Shared states */
+"Couldn't load this" = "تعذّر تحميل هذا";
+"Loading" = "جارٍ التحميل";
+"No data yet" = "لا توجد بيانات بعد";
+"Nothing matches “%@”" = "لا شيء يطابق «%@»";
+"Account" = "الحساب";
+
+/* Controls */
+"Search" = "بحث";
+"Clear" = "مسح";
+"Remove" = "إزالة";
+"Dismiss" = "إغلاق";
+"Confirm" = "تأكيد";
+"Delete" = "حذف";
+"Saved" = "تم الحفظ";
+
+/* Forms */
+"Required" = "مطلوب";
+"Choose…" = "اختر…";
+"%@ chosen" = "تم اختيار %@";
+"Add a date" = "أضف تاريخًا";
+"Remove date" = "إزالة التاريخ";
+"Show password" = "إظهار كلمة المرور";
+"Hide password" = "إخفاء كلمة المرور";
+"JOD" = "د.أ";
+
+/* Examples in the kit's own documentation */
+"Delete this file?" = "حذف هذا الملف؟";
+"New task" = "مهمة جديدة";
+"Hand out" = "إسناد";
+
+/* Sign-in */
+"Sign in with your work email and password." = "سجّل الدخول ببريد العمل وكلمة المرور.";
+"Enter the studio's admin password." = "أدخل كلمة مرور الإدارة الخاصة بالاستوديو.";

@@ -21,17 +21,21 @@ func naturalDirection(_ text: String) -> LayoutDirection? {
 }
 
 /// Text that came from somebody, aligned the way it is written.
+/// `fill: false` keeps it at the row's leading edge (lists, chips) while still
+/// shaping it in its own direction.
 struct DirText: View {
     let text: String
     var font: Font = .body
     var color: Color = .neonInk
     var fill = true
+    var lineLimit: Int?
 
-    init(_ text: String, font: Font = .body, color: Color = .neonInk, fill: Bool = true) {
+    init(_ text: String, font: Font = .body, color: Color = .neonInk, fill: Bool = true, lineLimit: Int? = nil) {
         self.text = text
         self.font = font
         self.color = color
         self.fill = fill
+        self.lineLimit = lineLimit
     }
 
     var body: some View {
@@ -39,6 +43,7 @@ struct DirText: View {
         Text(verbatim: text)
             .font(font)
             .foregroundStyle(color)
+            .lineLimit(lineLimit)
             .multilineTextAlignment(.leading)
             .frame(maxWidth: fill ? .infinity : nil, alignment: .leading)
             .environment(\.layoutDirection, direction)
@@ -54,71 +59,107 @@ struct OfflineBanner: View {
     let savedAt: Date
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: "wifi.slash")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(Color.neonOrange))
             Text(L("Offline — showing what the server said at %@", savedAt.formatted(
                 Date.FormatStyle(date: .abbreviated, time: .shortened, locale: AppLanguage.current.locale)
             )))
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.neonOrangeStrong)
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(Color.neonOrangeStrong)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.neonOrange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.vertical, 9)
+        .neonSurface(.tinted(.neonOrange), radius: 14)
+        .transition(.neonRise)
+        .accessibilityElement(children: .combine)
     }
 }
 
+/// A read that failed: the server's own sentence, and a way to try again.
 struct ErrorState: View {
     let message: String
     let retry: () async -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 26))
-                .foregroundStyle(Color.neonInk.opacity(0.35))
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(Color.neonInk.opacity(0.6))
-                .multilineTextAlignment(.center)
-            Button(L("Retry")) { Task { await retry() } }
-                .buttonStyle(.borderedProminent)
-                .tint(.neonInk)
+        VStack(spacing: 14) {
+            IconTile("exclamationmark.triangle.fill", tint: .neonOrangeStrong, size: 56)
+            VStack(spacing: 6) {
+                Text(L("Couldn't load this"))
+                    .font(.neonHeadline)
+                    .foregroundStyle(Color.neonInk)
+                Text(message)
+                    .font(.neonSubheadline)
+                    .foregroundStyle(Color.neonTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            NeonButton(L("Retry"), symbol: "arrow.clockwise", kind: .secondary, size: .medium) {
+                await retry()
+            }
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 36)
         .padding(.horizontal, 24)
+        .neonAppear()
     }
 }
 
+/// Nothing to show — said plainly, with the symbol breathing so the screen
+/// doesn't read as frozen. An optional action offers the obvious next step.
 struct EmptyState: View {
     let symbol: String
     let title: String
     var detail: String?
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 28))
-                .foregroundStyle(Color.neonInk.opacity(0.25))
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient.neonAmbient)
+                    .frame(width: 72, height: 72)
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
+                    .frame(width: 72, height: 72)
+                Image(systemName: symbol)
+                    .font(.system(size: 28, weight: .regular))
+                    .foregroundStyle(Color.neonPurpleStrong.opacity(0.7))
+                    .neonFloat()
+            }
+            .padding(.bottom, 4)
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.neonInk.opacity(0.65))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.neonInk.opacity(0.75))
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             if let detail {
                 Text(detail)
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.neonInk.opacity(0.45))
+                    .foregroundStyle(Color.neonTextTertiary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let actionTitle, let action {
+                NeonButton(actionTitle, kind: .tinted(.neonPurpleStrong), size: .medium) { action() }
+                    .padding(.top, 6)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 36)
         .padding(.horizontal, 24)
+        .neonAppear()
     }
 }
 
+/// The small uppercase heading above a block of a screen.
 struct SectionLabel: View {
     let text: String
 
@@ -127,50 +168,99 @@ struct SectionLabel: View {
     var body: some View {
         Text(text.uppercased())
             .font(.system(size: 12, weight: .semibold))
-            .tracking(0.6)
-            .foregroundStyle(Color.neonInk.opacity(0.4))
+            .tracking(0.7)
+            .foregroundStyle(Color.neonInk.opacity(0.42))
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
+/// The standard loading placeholder: rows shaped like `ListRow`s, shimmering.
 struct SkeletonRows: View {
     var count = 4
-    @State private var pulse = false
 
     var body: some View {
         VStack(spacing: 10) {
-            ForEach(0..<count, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.neonInk.opacity(pulse ? 0.05 : 0.09))
-                    .frame(height: 72)
+            ForEach(0..<count, id: \.self) { index in
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(Color.neonInk.opacity(0.07))
+                        .frame(width: 40, height: 40)
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonBlock(width: index.isMultiple(of: 2) ? 170 : 130, height: 12)
+                        SkeletonBlock(width: index.isMultiple(of: 2) ? 110 : 150, height: 10)
+                    }
+                    Spacer(minLength: 0)
+                    SkeletonBlock(width: 44, height: 18, radius: 9)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 72)
+                .neonSurface(.glass, radius: 16)
             }
         }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true }
-        }
+        .shimmer()
+        .accessibilityLabel(L("Loading"))
     }
 }
 
+/// Somebody's picture, or their initials on a colour that is theirs.
 struct AvatarView: View {
     let url: URL?
     let name: String
     var size: CGFloat = 44
+    /// A white ring, for avatars sitting on photos or overlapping in a stack.
+    var ring = false
+    /// A green dot: here right now.
+    var online = false
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                ZStack {
-                    Color.neonPurple.opacity(0.14)
-                    Text(String(name.prefix(1)).uppercased())
-                        .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.neonPurpleStrong)
+        let accent = NeonPalette.color(for: name)
+        ZStack {
+            LinearGradient(
+                colors: [accent.opacity(0.20), accent.opacity(0.10)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Text(Self.initials(name, size: size))
+                .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
+                .foregroundStyle(accent)
+            if let url {
+                AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFill().transition(.opacity)
+                    } else {
+                        Color.clear
+                    }
                 }
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
+        .overlay {
+            if ring { Circle().strokeBorder(Color.white, lineWidth: max(1.5, size * 0.05)) }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if online {
+                Circle()
+                    .fill(Color.neonSuccess)
+                    .frame(width: size * 0.28, height: size * 0.28)
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: max(1.5, size * 0.05)))
+                    .offset(x: size * 0.02, y: size * 0.02)
+            }
+        }
+        .accessibilityLabel(Text(verbatim: name))
+    }
+
+    /// Two initials for a Latin name; one letter for an Arabic one, whose
+    /// letters would otherwise join into a word that isn't one.
+    static func initials(_ name: String, size: CGFloat = 44) -> String {
+        let words = name.split(whereSeparator: { $0.isWhitespace })
+        guard let first = words.first?.first else { return "·" }
+        if naturalDirection(name) == .rightToLeft || size < 30 || words.count < 2 {
+            return String(first).uppercased()
+        }
+        let second = words[1].first.map(String.init) ?? ""
+        return (String(first) + second).uppercased()
     }
 }
 
@@ -199,14 +289,20 @@ struct AccountMenu: View {
                 Label(L("Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
             }
         } label: {
-            Image(systemName: "person.crop.circle")
-                .font(.system(size: 19))
-                .foregroundStyle(Color.neonInk.opacity(0.7))
+            AvatarView(url: nil, name: accountName, size: 30, ring: true)
+                .neonShadow(.low)
+                .accessibilityLabel(L("Account"))
         }
         .confirmationDialog(L("Sign out of NEON?"), isPresented: $confirmSignOut, titleVisibility: .visible) {
             Button(L("Sign Out"), role: .destructive) { api.logout() }
             Button(L("Cancel"), role: .cancel) {}
         }
+    }
+
+    /// Their own initials for somebody on the team; the studio's "N" for the manager.
+    private var accountName: String {
+        guard let identity = api.identity, identity.side == .employee, !identity.name.isEmpty else { return "NEON" }
+        return identity.name
     }
 }
 
