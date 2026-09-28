@@ -1,0 +1,212 @@
+/* Team area: employees and payroll. English text is the key; see Core/Localization.swift. */
+
+"Employees" = "الموظفون";
+"Payroll" = "الرواتب";
+"Team" = "الفريق";
+"Employee" = "الموظف";
+
+/* Employees list */
+"Add an employee" = "إضافة موظف";
+"No employees yet" = "لا يوجد موظفون بعد";
+"No matches" = "لا نتائج";
+"Add the first account above — they can then sign in to the employee portal." = "أضف أول حساب أعلاه — يمكنهم بعدها تسجيل الدخول إلى بوابة الموظفين.";
+"Search employees" = "ابحث عن موظف";
+"Board only — no login" = "على اللوحة فقط — بلا تسجيل دخول";
+"No account" = "بلا حساب";
+"Active" = "نشط";
+"Disabled" = "معطّل";
+"%d/%d warnings" = "%d/%d إنذارات";
+"%d/%d sold" = "%d/%d مبيع";
+"%d device" = "%d جهاز";
+
+/* Create employee sheet */
+"They sign in at the employee portal and see only their own tasks." = "يسجّلون الدخول من بوابة الموظفين ويرون مهامهم فقط.";
+"Full name" = "الاسم الكامل";
+"Ahmed Nasser" = "أحمد ناصر";
+"Email" = "البريد الإلكتروني";
+"Password" = "كلمة المرور";
+"At least 8 characters" = "8 أحرف على الأقل";
+"Job title" = "المسمى الوظيفي";
+"3D Visualizer" = "مصمم ثلاثي الأبعاد";
+"Phone" = "الهاتف";
+"Employee ID" = "رقم الموظف";
+"Create account" = "إنشاء الحساب";
+"Account created" = "تم إنشاء الحساب";
+
+/* Employee detail — header */
+"Edit" = "تعديل";
+"Added %@ · last signed in %@" = "أُضيف %@ · آخر دخول %@";
+"Added %@ · never signed in" = "أُضيف %@ · لم يسجّل الدخول أبداً";
+"Sales target" = "هدف المبيعات";
+"%d projects a month" = "%d مشاريع شهرياً";
+"Reviewed by" = "مراجَع من قبل";
+"The manager" = "المدير";
+"WhatsApp" = "واتساب";
+"Assign tasks" = "إسناد المهام";
+"Site visits" = "زيارات الموقع";
+"What they usually do" = "ما يقومون به عادة";
+
+/* Details edit sheet */
+"Edit details" = "تعديل التفاصيل";
+"Save details" = "حفظ التفاصيل";
+"Details" = "التفاصيل";
+"Monthly sales target" = "هدف المبيعات الشهري";
+"projects" = "مشاريع";
+"Permissions" = "الصلاحيات";
+"Off for everyone until you tick it." = "معطّلة للجميع حتى تفعّلها.";
+"Can use the company WhatsApp" = "يمكنه استخدام واتساب الشركة";
+"Read the studio's conversations and reply as the studio." = "قراءة محادثات الاستوديو والرد باسمه.";
+"Can hand out tasks" = "يمكنه إسناد المهام";
+"Choose who a job is for and which days it runs over." = "اختيار من له المهمة وفي أي أيام تمتد.";
+"Keeps the site-visit diary" = "يمسك سجل زيارات الموقع";
+"Schedule a visit, then say what came of it." = "جدولة زيارة، ثم كتابة ما آلت إليه.";
+"Day planning" = "تخطيط اليوم";
+"All optional: left empty, nothing about this person is invented." = "كل الحقول اختيارية: إن تُركت فارغة، لا يُفترض شيء عن هذا الشخص.";
+"What they can do" = "ما يستطيعون فعله";
+"Work of theirs worth copying" = "أعمال لهم تستحق الاقتداء";
+"Minutes of real work in their day" = "دقائق العمل الفعلي في يومهم";
+"min" = "د";
+"Their work is reviewed by" = "عملهم يراجعه";
+"Saved" = "تم الحفظ";
+
+/* Password reset sheet */
+"Set a new password" = "تعيين كلمة مرور جديدة";
+"The employee is notified in-app. Existing sessions stay valid until they expire." = "يُخطَر الموظف داخل التطبيق. الجلسات الحالية تبقى صالحة حتى تنتهي.";
+"New password" = "كلمة المرور الجديدة";
+"Update password" = "تحديث كلمة المرور";
+"Password updated" = "تم تحديث كلمة المرور";
+
+/* Day plan */
+"Plan %@'s day" = "خطّط يوم %@";
+"Built from their profile, your rules, and what is open on the board." = "مبني على ملفهم، وقواعدك، وما هو مفتوح على اللوحة.";
+"Today" = "اليوم";
+"today" = "اليوم";
+"tomorrow" = "غداً";
+"Planning is unavailable" = "التخطيط غير متاح";
+"The server needs an assistant key set." = "يحتاج الخادم إلى مفتاح مساعد مُعدّ.";
+"Generate %@'s plan" = "إنشاء خطة %@";
+"Generate again" = "إنشاء من جديد";
+"Save changes" = "حفظ التغييرات";
+"Saved." = "تم الحفظ.";
+"On %@'s board. Edit and put it again to change it." = "على لوحة %@. عدّل ثم ضعها مجدداً لتغييرها.";
+"Edited — save it before putting it on the day." = "تم التعديل — احفظ قبل وضعها على اليوم.";
+"Tick what should go on %@." = "أشّر على ما يجب أن يوضع على %@.";
+"Put %d on %@" = "وضع %d على %@";
+"On the week board" = "على لوحة الأسبوع";
+"Goes on the week board" = "ستوضع على لوحة الأسبوع";
+"Nothing moved" = "لم يُنقل شيء";
+"%d steps scheduled" = "%d خطوات مجدولة";
+"%d jobs on the week board" = "%d مهام على لوحة الأسبوع";
+"%@ for %@. %@ has been told." = "%@ لـ%@. تم إخبار %@.";
+" and " = " و";
+"That did not work." = "لم ينجح ذلك.";
+"That did not save." = "لم يُحفظ ذلك.";
+
+/* Sales card */
+"Sales this month" = "المبيعات هذا الشهر";
+"No target set." = "لا هدف محدد.";
+"Target met, %d over." = "تحقق الهدف، بزيادة %d.";
+"Target met." = "تحقق الهدف.";
+"%d more to reach the target." = "%d إضافية للوصول إلى الهدف.";
+
+/* Performance card */
+"How the work is going" = "كيف يسير العمل";
+"Last %d days, measured by what came out of the work." = "آخر %d يوماً، مقاسة بما نتج عن العمل.";
+"Delivered on time" = "أُنجز في الوقت المحدد";
+"Accepted first time" = "قُبل من أول مرة";
+"Sent back" = "أُعيد";
+"Waiting on others" = "بانتظار الآخرين";
+"Estimates" = "التقديرات";
+"from %d measurements" = "من %d قياسات";
+"Not enough to say" = "لا يكفي للحكم";
+"About right" = "تقريباً صحيح";
+"Takes about %.1f× the estimate" = "يستغرق نحو %.1f× من التقدير";
+"Finishes in about %.1f× the estimate" = "ينتهي في نحو %.1f× من التقدير";
+"Nothing here measures presence, hours at a desk, or how quickly somebody replies." = "لا شيء هنا يقيس الحضور أو ساعات المكتب أو سرعة الرد.";
+"%dh" = "%dس";
+"%dm" = "%dد";
+"%dh %dm" = "%dس %dد";
+
+/* Warnings */
+"Warnings" = "الإنذارات";
+"%@ is told on their phone the moment you give one, and sees it until you remove it." = "يُخطَر %@ على هاتفه فور إصدار الإنذار، ويبقى ظاهراً حتى تزيله.";
+"Account disabled" = "الحساب معطّل";
+"Enable it above to give warnings again." = "فعّل الحساب أعلاه لإصدار إنذارات من جديد.";
+"Already has %d warnings" = "لديه بالفعل %d إنذارات";
+"Remove one before giving another." = "أزل واحداً قبل إصدار آخر.";
+"Reason" = "السبب";
+"Reason for the final warning" = "سبب الإنذار الأخير";
+"Give warning %d of %d" = "إصدار الإنذار %d من %d";
+"Give final warning and close account" = "إصدار الإنذار الأخير وإغلاق الحساب";
+"This closes %@'s account: they are told why, then they can no longer sign in." = "هذا يغلق حساب %@: سيُخبَر بالسبب، ثم لن يتمكن من تسجيل الدخول.";
+"Send %@ warning %d of %d? It goes to their phone now." = "إرسال إنذار %2$d من %3$d إلى %1$@؟ سيصل إلى هاتفه الآن.";
+"Warning sent" = "تم إرسال الإنذار";
+"Remove this warning?" = "إزالة هذا الإنذار؟";
+"%@ will no longer see it." = "لن يراه %@ بعد الآن.";
+
+/* Account access */
+"Account access" = "الوصول إلى الحساب";
+"Disabling takes effect on the employee's next request and stops all push to their devices. Their place on the task board is untouched." = "التعطيل يسري مع أول طلب تالٍ للموظف، ويوقف كل الإشعارات عن أجهزته. مكانه على لوحة المهام يبقى كما هو.";
+"Disable account" = "تعطيل الحساب";
+"Enable account" = "تفعيل الحساب";
+"Disable this account?" = "تعطيل هذا الحساب؟";
+"Account enabled" = "تم تفعيل الحساب";
+"Revoke login" = "إلغاء تسجيل الدخول";
+"Remove %@'s email and password?" = "إزالة بريد %@ وكلمة مروره؟";
+"They stay on the task board but can no longer sign in." = "يبقى على لوحة المهام لكنه لن يتمكن من تسجيل الدخول.";
+"Login revoked" = "تم إلغاء تسجيل الدخول";
+"%d device receiving push · %d notification sent" = "%d جهاز يستقبل الإشعارات · %d إشعار أُرسل";
+
+/* Payroll */
+"Salary ÷ working days ÷ 8 gives the hourly rate, times hours late is the cutoff, plus receipts." = "الراتب ÷ أيام العمل ÷ 8 يعطي أجر الساعة، مضروباً بساعات التأخير يعطي الاستقطاع، مضافاً إليه الإيصالات.";
+"Previous month" = "الشهر السابق";
+"This month" = "هذا الشهر";
+"Deducted so far" = "المخصوم حتى الآن";
+"Total deducted" = "إجمالي المخصوم";
+"Receipts owed" = "الإيصالات المستحقة";
+"Total payable" = "إجمالي المستحق";
+"Pay sheet" = "كشف الرواتب";
+"Final pay" = "الصافي المستحق";
+"Per hour %@" = "أجر الساعة %@";
+"Late %.2f h" = "تأخير %.2f س";
+"Cutoff −%@" = "الاستقطاع −%@";
+"Adjustments −%@" = "تعديلات −%@";
+"Receipts +%@" = "إيصالات +%@";
+"Salaries" = "الرواتب الأساسية";
+"Not set" = "غير محدد";
+"Monthly" = "شهري";
+"Weekly" = "أسبوعي";
+"Salary" = "الراتب";
+"Monthly (÷26÷8)" = "شهري (÷26÷8)";
+"Weekly (÷6÷8)" = "أسبوعي (÷6÷8)";
+"Paid" = "طريقة الدفع";
+"Save" = "حفظ";
+
+/* Attendance */
+"Arrival delays" = "تأخيرات الحضور";
+"Record" = "تسجيل";
+"Recorded per day and per person. The fingerprint device writes these same rows, and never writes over a figure you typed here." = "تُسجَّل ليوم واحد لشخص واحد. جهاز البصمة يكتب نفس هذه الصفوف، ولا يستبدل رقماً كتبته هنا أبداً.";
+"Paired by the device's own user number, never by name." = "الربط برقم المستخدم في الجهاز نفسه، وليس بالاسم أبداً.";
+"device no." = "رقم الجهاز";
+"Pair" = "ربط";
+"Paired" = "تم الربط";
+"Remove" = "إزالة";
+"Remove this delay record?" = "إزالة سجل التأخير هذا؟";
+"Record a delay" = "تسجيل تأخير";
+"Day" = "اليوم";
+"Hours late" = "ساعات التأخير";
+"Note" = "ملاحظة";
+"Recorded" = "تم التسجيل";
+
+/* Receipts */
+"Receipts" = "الإيصالات";
+"No receipts this month" = "لا إيصالات هذا الشهر";
+"Read from the photo automatically. Each receipt counts up to 2 JOD — correct the amount if the reading is wrong." = "تُقرأ من الصورة تلقائياً. كل إيصال يُحتسب حتى 2 دينار — صحّح المبلغ إن كانت القراءة خاطئة.";
+"No description" = "لا وصف";
+"Fix this receipt" = "تصحيح هذا الإيصال";
+"Vendor" = "المتجر";
+"Counts as" = "يُحتسب";
+"Fix" = "تصحيح";
+"Updated" = "تم التحديث";
+"%.2f h" = "%.2f س";
+"%@ · %@" = "%@ · %@";
