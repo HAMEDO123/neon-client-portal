@@ -1,0 +1,117 @@
+/* Home tab: dashboard */
+"Home" = "الرئيسية";
+"All Projects" = "كل المشاريع";
+"No projects yet" = "لا توجد مشاريع بعد";
+"Create your first client project to start building its delivery portal." = "أنشئ أول مشروع عميل لبدء بناء بوابة تسليمه.";
+"%d approvals" = "%d موافقات";
+"%d comments" = "%d تعليقات";
+
+/* The day board */
+"The day" = "اليوم";
+"On the day" = "في اليوم";
+"No plan yet" = "لا خطة بعد";
+"Blocked" = "معطّل";
+"Said started" = "قال بدأ";
+"Overloaded" = "محمّل زيادة";
+"Unanswered" = "بلا رد";
+"Nothing on %@ needs you right now." = "لا شيء في %@ يحتاجك الآن.";
+"An unanswered question is a question, not a verdict: nobody here is marked as having done nothing." = "السؤال بلا رد يبقى سؤالاً، لا حكمًا: لا أحد هنا يُعتبر أنه لم يفعل شيئًا.";
+"%@ more than the day holds (%@ planned, %@ available)" = "%@ أكثر مما يتّسع له اليوم (%@ مخطَّط، %@ متاح)";
+"%@ can clear it" = "بإمكان %@ حلّها";
+"%@: said started, the board still says pending" = "%@: قال إنه بدأ، لكن اللوحة ما زالت تقول معلّق";
+"Their day" = "يومهم";
+
+/* describeKind — the same judgement `describeDay` prints, on the web */
+"No plan on the day yet" = "لا خطة لليوم بعد";
+"%d blocked" = "%d معطّل";
+"Said started, board still pending" = "قال بدأ، واللوحة ما زالت معلّقة";
+"%d waiting on you" = "%d بانتظارك";
+"More planned than the day holds" = "المخطط أكثر مما يتّسع له اليوم";
+"%d unanswered" = "%d بلا رد";
+"All started" = "الكل بدأ";
+
+/* An answer that needs the manager (day-board.ts) */
+"blocked" = "معطّل";
+"need info" = "معلومات ناقصة";
+"more time" = "وقت إضافي";
+
+/* Activity */
+"Activity" = "النشاط";
+"Everything your team changes, as it happens." = "كل ما يغيّره فريقك، لحظة حدوثه.";
+"Everything your team changes, as it happens. %d new." = "كل ما يغيّره فريقك، لحظة حدوثه. %d جديد.";
+"Mark all read" = "تعليم الكل كمقروء";
+"Mark read" = "تعليم كمقروء";
+"Nothing yet" = "لا شيء بعد";
+"Task updates, finished work and supply requests land here the moment they happen." = "تحديثات المهام، الأعمال المنجزة وطلبات التوريد تصل هنا لحظة حدوثها.";
+
+/* Reviews */
+"Reviews" = "المراجعات";
+"Work your team says is finished, with the proof attached. Approving marks the task complete on the board; sending it back returns it to In Progress with your reason." = "أعمال يقول فريقك إنها منجزة، مع الإثبات المرفق. الموافقة تُنجز المهمة على اللوحة؛ والإرجاع يعيدها لقيد التنفيذ مع سببك.";
+"Nothing waiting" = "لا شيء بالانتظار";
+"When someone finishes a task and sends a photo of it, it appears here." = "عندما ينهي أحدهم مهمة ويرسل صورتها، تظهر هنا.";
+"Handed out by you" = "أسندتَه بنفسك";
+"Note" = "ملاحظة";
+"A note for them (required to send back)" = "ملاحظة لهم (مطلوبة لإعادة العمل)";
+"Tell them what needs redoing." = "أخبرهم بما يحتاج إعادة.";
+"Approve" = "موافقة";
+"Approved" = "تمت الموافقة";
+"Send back" = "إعادة";
+"Sent back" = "تم الإرجاع";
+
+/* Submission checks */
+"Not checked against the acceptance criteria — this is yours to judge." = "لم يُتحقق منه مقابل معايير القبول — الحكم لك.";
+"Nothing is written under \u{201C}Counts as done when\u{201D} for this task, so there was nothing to check it against." = "لا يوجد شيء مكتوب تحت «يُعتبر منجزًا عندما» لهذه المهمة، لذا لم يكن هناك ما يُتحقق منه مقابله.";
+"Checked against what you asked for" = "تم التحقق مقابل ما طلبته";
+"A reading of the photo, not a decision. Approving and sending back are still yours." = "قراءة للصورة، وليست قرارًا. الموافقة والإعادة تبقى لك.";
+"Shown" = "ظاهر";
+"Partly" = "جزئيًا";
+"Not done" = "لم يُنجز";
+"Evidence does not show" = "الدليل لا يُظهر";
+"Your call" = "قرارك";
+
+/* Analytics */
+"Analytics" = "التحليلات";
+"How each person's day and month are going." = "كيف يسير يوم وشهر كل شخص.";
+"Daily progress" = "التقدّم اليومي";
+"Previous day" = "اليوم السابق";
+"Next day" = "اليوم التالي";
+"Today · %@" = "اليوم · %@";
+"Yesterday · %@" = "أمس · %@";
+"Tomorrow · %@" = "غدًا · %@";
+"Each person's list for the day — board steps scheduled on it and jobs from the week table — counted the way their own phone shows it." = "قائمة كل شخص لليوم — خطوات اللوحة المجدولة فيه ومهام جدول الأسبوع — محسوبة كما يظهر في هاتفه.";
+"No employees yet" = "لا يوجد موظفون بعد";
+"Add the team, and their day appears here." = "أضف الفريق، ويظهر يومهم هنا.";
+"Add the team, and their progress appears here." = "أضف الفريق، ويظهر تقدّمهم هنا.";
+"Whole team" = "الفريق كامل";
+"Nothing was on anyone's list this day." = "لم يكن في قائمة أحد شيء هذا اليوم.";
+"Nothing planned" = "لا شيء مخطط";
+"%d of %d done" = "%d من %d مكتمل";
+"Done" = "منجز";
+"In review" = "قيد المراجعة";
+"In progress" = "قيد التنفيذ";
+"Pending" = "معلّق";
+"Working on now" = "يعمل عليه الآن";
+"Last 7 days" = "آخر 7 أيام";
+"7 days to %@" = "7 أيام حتى %@";
+
+"Monthly progress" = "التقدّم الشهري";
+"Previous month" = "الشهر السابق";
+"This month" = "هذا الشهر";
+"Completed board steps over assigned ones. Below %d%% costs %.2f JOD, and the employee is told why." = "خطوات اللوحة المكتملة مقابل المُسندة. أقل من %d%% يكلّف %.2f دينار، ويُخبَر الموظف بالسبب.";
+"Team" = "الفريق";
+"Average progress" = "متوسط التقدّم";
+"Below %d%%" = "أقل من %d%%";
+"Deductions applied" = "الخصومات المطبّقة";
+"%@ is below %d%% for %@." = "%@ أقل من %d%% لشهر %@.";
+"%d people are below %d%% for %@." = "%d أشخاص أقل من %d%% لشهر %@.";
+"Applying this takes %.2f JOD off each of their salaries for the period and sends them a notification with the numbers behind it. Running it twice changes nothing." = "تطبيق هذا يخصم %.2f دينار من راتب كل واحد منهم لهذه الفترة، ويرسل لهم إشعارًا بالأرقام. تكراره مرتين لا يغيّر شيئًا.";
+"Apply the deduction" = "تطبيق الخصم";
+"Apply %d deductions" = "تطبيق %d خصومات";
+"Yes, deduct and notify" = "نعم، اخصم وأبلغهم";
+"Cancel" = "إلغاء";
+"Applied" = "تم التطبيق";
+"Review" = "مراجعة";
+"Working" = "قيد العمل";
+"Late" = "متأخر";
+"On time" = "في الوقت";
+"−%.2f deducted" = "خُصم %.2f";
