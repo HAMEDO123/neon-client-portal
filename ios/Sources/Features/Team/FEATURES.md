@@ -54,9 +54,28 @@ Source of truth read: `src/app/admin/(dashboard)/employees/page.tsx`,
   set clock) is `AttendanceRootView`, owned by the **ops** area per
   `ios/ARCHITECTURE.md` §3. This area only owns the `deviceUserId` pairing
   form that lives on the payroll page.
-- Tapping a sold project or the reviewer does not push into that project's
-  or colleague's own page — those are the **projects** area's screens and
-  there is no cross-area route contract for them yet. Shown read-only.
-- Day-plan block editing changes times and the keep tick; it does not let
-  the manager reorder blocks or add a new one by hand — the web panel
-  doesn't offer that either.
+- [x] Tapping a sold project now pushes `ProjectDetailView(projectId:)`
+  directly (a plain `NavigationLink(destination:)`, not the Projects tab's
+  own `ProjectRoute`/`navigationDestination` pair — this screen lives in
+  whichever stack hosts Team/More, not the Projects tab's stack, so the
+  route type isn't registered there). Tapping the reviewer pushes another
+  `EmployeeDetailView` via the existing `TeamEmployeeRoute`, which *is*
+  registered on this stack (`EmployeesRootView`), so it resolves correctly
+  however deep the reviewer chain goes.
+- **Day-plan block editing still cannot reorder blocks or add one by
+  hand.** Not a missed screen — the website's own action doesn't support
+  it, and there is no way to add it without editing that shared action:
+  `saveDayPlanEdits` (`src/lib/actions/day-plan-actions.ts`) takes
+  `{ from: string; to: string; keep: boolean }[]`, refuses any length but
+  `stored.blocks.length`, and maps `edits[index]` onto `stored.blocks[index]`
+  by **array position** — never by an id or an order field. So an edits
+  array sent back in a different order doesn't reorder anything: the server
+  still walks `stored.blocks` in its stored order and only borrows each
+  entry's `from`/`to`/`keep` from the same index of `edits`, which would
+  quietly attach one block's time to a different block's task. And a longer
+  array (an added block) is refused outright before any of that. The exact
+  change needed: `saveDayPlanEdits` would need to accept a full
+  `PlannedBlock[]` (order as sent, and a `what`/`why` for a hand-added
+  block with no `entryId`) rather than a fixed-length, index-matched
+  `{from,to,keep}[]`. That is a change to a shared server action file, so
+  it stays out of this area's reach — reported rather than done.

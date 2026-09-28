@@ -118,6 +118,7 @@ export const reads: ReadRegistry = {
         location: p.location,
         publishState: p.publishState,
         pipelineStatus: p.pipelineStatus,
+        currentStage: p.currentStage,
         coverImageUrl: p.coverImageUrl,
         updatedAt: p.updatedAt,
         approvalsCount: p._count.approvals,

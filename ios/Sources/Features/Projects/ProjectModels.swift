@@ -20,6 +20,7 @@ struct ProjectSummary: Codable, Identifiable, Equatable {
     let location: String?
     let publishState: String
     let pipelineStatus: String
+    let currentStage: String
     let coverImageUrl: String?
     let updatedAt: String
     let approvalsCount: Int

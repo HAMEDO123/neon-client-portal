@@ -85,15 +85,21 @@ here via `ProjectDrawingsSection(projectId:)` … `ProjectCommentsSection(projec
 
 ## notImplemented
 
-- **The employee-side amber "this is live" banner.** Low-value restatement
-  of the publish badge already on screen; the manager and team both see the
-  same publish-state colour immediately. Would take one `StatusNote` if
-  wanted later.
-- **Filtering the list by pipeline status or journey stage** — only
-  publish-state filtering is wired into `FilterChips`. Nine pipeline values
-  and eight stages would need a second filter row or a sheet; deferred for a
-  first pass in favour of the publish-state filter, which is what decides
-  whether the client can see a project at all.
+- ~~**The employee-side amber "this is live" banner.**~~ Done: shown on
+  `ProjectDetailView` only when `api.side == .employee`, in the employee web
+  page's own words (`src/app/employee/(portal)/projects/[id]/layout.tsx`) —
+  "This project is live. Anything you add or remove here changes the
+  client's page straight away." / "This project is not published, so the
+  client sees nothing until somebody publishes it." No server change: it
+  reads the `publishState` the detail read already returns.
+- ~~**Filtering the list by pipeline status or journey stage**~~ Done: a
+  "Filters" button beside the publish-state chips opens `ProjectFilterSheet`
+  — two `MenuField`s (the same component and the same
+  `ProjectConstants.pipelineStatuses`/`projectStages` the Overview edit
+  sheet already offers), applied live, ANDed with the publish filter and
+  search. `currentStage` (journey stage) is new on `ProjectSummary` and on
+  `projects/list`'s mapped rows — `getProjects()` already `include`s the
+  whole `Project` row, so this is one added field, not a new query.
 - **The `compress` upload checkbox.** The website lets a person turn client-
   side compression off for a full-quality upload; this app always compresses
   (`UploadMaker.photo`, 2400px / 0.82 quality) since a phone's camera photos

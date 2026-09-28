@@ -9,7 +9,10 @@ struct ProjectListView: View {
     @State private var errorMessage: String?
     @State private var query = ""
     @State private var filter: PublishFilter = .all
+    @State private var pipelineFilter: String?
+    @State private var stageFilter: String?
     @State private var showNewProject = false
+    @State private var showFilters = false
 
     enum PublishFilter: String, CaseIterable {
         case all, published = "PUBLISHED", draft = "DRAFT", archived = "ARCHIVED"
@@ -60,6 +63,9 @@ struct ProjectListView: View {
                 Task { await load() }
             }
         }
+        .sheet(isPresented: $showFilters) {
+            ProjectFilterSheet(pipelineFilter: $pipelineFilter, stageFilter: $stageFilter)
+        }
         .task { await load() }
         .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { _ in
             Task { await load() }
@@ -95,6 +101,54 @@ struct ProjectListView: View {
             )
             .padding(.horizontal, -16)
 
+            HStack(spacing: 8) {
+                Button {
+                    Haptic.tap()
+                    showFilters = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                        Text(L("Filters"))
+                        if activeExtraFilters > 0 {
+                            Text("\(activeExtraFilters)")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .background(Circle().fill(Color.neonInk))
+                        }
+                    }
+                    .font(.neonFootnote.weight(.medium))
+                    .foregroundStyle(activeExtraFilters > 0 ? Color.neonInk : Color.neonTextSecondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background {
+                        if activeExtraFilters > 0 {
+                            Capsule().fill(Color.neonCyan.opacity(0.16))
+                        } else {
+                            Capsule().fill(Color.white.opacity(0.78)).overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
+                        }
+                    }
+                }
+                .buttonStyle(PressableStyle(scale: 0.96))
+
+                if activeExtraFilters > 0 {
+                    Button {
+                        Haptic.tap()
+                        withNeonAnimation(NeonMotion.snappy) {
+                            pipelineFilter = nil
+                            stageFilter = nil
+                        }
+                    } label: {
+                        Text(L("Clear Filters"))
+                            .font(.neonFootnote.weight(.medium))
+                            .foregroundStyle(Color.neonTextTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer(minLength: 0)
+            }
+
             if filtered.isEmpty {
                 EmptyState(
                     symbol: "folder",
@@ -117,9 +171,15 @@ struct ProjectListView: View {
         .refreshable { await load() }
     }
 
+    private var activeExtraFilters: Int {
+        (pipelineFilter != nil ? 1 : 0) + (stageFilter != nil ? 1 : 0)
+    }
+
     private func filteredProjects(_ projects: [ProjectSummary]) -> [ProjectSummary] {
         var list = projects
         if filter != .all { list = list.filter { $0.publishState == filter.rawValue } }
+        if let pipelineFilter { list = list.filter { $0.pipelineStatus == pipelineFilter } }
+        if let stageFilter { list = list.filter { $0.currentStage == stageFilter } }
         if !query.isEmpty {
             list = list.filter { $0.name.matchesSearch(query) || $0.clientName.matchesSearch(query) }
         }
