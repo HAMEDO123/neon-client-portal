@@ -1,3 +1,4 @@
+import UIKit
 import Foundation
 import WebRTC
 
@@ -51,7 +52,19 @@ final class CallCenter: ObservableObject {
     private var started = false
     private let streamURL = URL(string: "https://clients.neonjo.com/api/mobile/calls/stream")!
 
-    private init() {}
+    private init() {
+        // Closed mid-call: say "away", not "leave" — the same grace a
+        // reloading web page gets, so coming straight back rejoins the call.
+        NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let callId = self?.session?.callId else { return }
+            let done = DispatchSemaphore(value: 0)
+            Task.detached {
+                _ = try? await APIClient.shared.callAway(callId: callId)
+                done.signal()
+            }
+            _ = done.wait(timeout: .now() + 1.5)
+        }
+    }
 
     var me: String? { ready?.me }
 

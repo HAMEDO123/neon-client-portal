@@ -47,6 +47,37 @@ extension APIClient {
         return (try? JSONDecoder().decode(CallHeartbeatAnswer.self, from: data))?.inCall ?? true
     }
 
+    /// Somebody who could be asked into a call: the website's `addableToCall`.
+    struct CallMember: Decodable, Identifiable {
+        let key: String
+        let name: String
+        let color: String?
+        var id: String { key }
+    }
+
+    private struct CallAddableAnswer: Decodable { let members: [CallMember] }
+    private struct CallInviteAnswer: Decodable { let invited: Int? }
+
+    /// Who else in this conversation could be rung into the call.
+    func callAddable(callId: String) async throws -> [CallMember] {
+        let data = try await post("calls", json: ["action": "addable", "callId": callId])
+        return (try? JSONDecoder().decode(CallAddableAnswer.self, from: data))?.members ?? []
+    }
+
+    /// Rings these people into the running call; answers how many were asked.
+    @discardableResult
+    func callInvite(callId: String, members: [String]) async throws -> Int {
+        let data = try await post("calls", json: ["action": "invite", "callId": callId, "members": members])
+        return (try? JSONDecoder().decode(CallInviteAnswer.self, from: data))?.invited ?? 0
+    }
+
+    /// The app is going to the background: keep this device's place for the
+    /// server's grace period instead of leaving, as a reloading web page does.
+    @discardableResult
+    func callAway(callId: String) async throws -> Data {
+        try await post("calls", json: ["action": "away", "callId": callId])
+    }
+
     /// A batch of connection messages for the other devices in this call.
     func callSendSignals(callId: String, signals: [JSONValue]) async throws {
         _ = try await post("calls/signal", json: ["callId": callId, "signals": signals.map { $0.anyValue }])

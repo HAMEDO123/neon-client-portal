@@ -14,6 +14,8 @@ struct CallScreenView: View {
     let me: String
 
     @State private var showPeople = false
+    @State private var addable: [APIClient.CallMember] = []
+    @State private var ringing: Set<String> = []
     @State private var now = Date()
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -253,13 +255,55 @@ struct CallScreenView: View {
                     .neonSurface(.solid, radius: NeonRadius.md)
                     .neonListRow()
                 }
+
+                // Asking somebody else in: the website's "add people", with
+                // the same refusal for anybody not in the call themselves.
+                if !addable.isEmpty {
+                    Section(L("Add to the call")) {
+                        ForEach(addable) { member in
+                            HStack(spacing: NeonSpace.sm) {
+                                AvatarView(url: nil, name: member.name, size: 36)
+                                DirText(member.name)
+                                Spacer(minLength: 0)
+                                Button {
+                                    Task { await ring(member) }
+                                } label: {
+                                    Label(ringing.contains(member.key) ? L("Ringing") : L("Ring"), systemImage: "phone.arrow.up.right")
+                                        .font(.neonCaption.weight(.semibold))
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.neonSuccessStrong)
+                                .disabled(ringing.contains(member.key))
+                            }
+                            .neonSurface(.solid, radius: NeonRadius.md)
+                            .neonListRow()
+                        }
+                    }
+                }
             }
             .neonListStyle()
+            .task { await loadAddable() }
             .navigationTitle(L("People"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Close")) { showPeople = false } } }
         }
         .neonSheet([.medium, .large])
+    }
+
+    private func loadAddable() async {
+        addable = (try? await APIClient.shared.callAddable(callId: session.callId)) ?? []
+    }
+
+    private func ring(_ member: APIClient.CallMember) async {
+        Haptic.tap()
+        ringing.insert(member.key)
+        do {
+            try await APIClient.shared.callInvite(callId: session.callId, members: [member.key])
+            Haptic.success()
+        } catch {
+            ringing.remove(member.key)
+            Haptic.error()
+        }
     }
 
     private func stateLabel(_ state: String) -> String {

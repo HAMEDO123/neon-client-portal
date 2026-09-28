@@ -1,5 +1,15 @@
 import { channelFor, parseConversation } from "@/lib/chat";
-import { CallError, declineCall, heartbeat, joinCall, leaveCall, startCall } from "@/lib/call-store";
+import {
+  CallError,
+  addableToCall,
+  declineCall,
+  heartbeat,
+  inviteToCall,
+  joinCall,
+  leaveCall,
+  markAway,
+  startCall,
+} from "@/lib/call-store";
 import { mayCallIn } from "@/lib/calls";
 import { iceServers } from "@/lib/ice-servers";
 import { mobileViewer } from "@/lib/mobile-auth";
@@ -17,7 +27,7 @@ import { mobileViewer } from "@/lib/mobile-auth";
 
 export const dynamic = "force-dynamic";
 
-type Body = { action?: unknown; conversation?: unknown; kind?: unknown; callId?: unknown };
+type Body = { action?: unknown; conversation?: unknown; kind?: unknown; callId?: unknown; members?: unknown };
 
 const failure = (message: string, status: number) => Response.json({ error: message }, { status });
 
@@ -53,8 +63,21 @@ export async function POST(request: Request) {
       case "leave":
         await leaveCall(viewer, callId);
         return Response.json({ ok: true });
+      // The app going to the background mid-call: it keeps its place for
+      // AWAY_GRACE_MS, exactly as a reloading web page does.
+      case "away":
+        await markAway(viewer, callId);
+        return Response.json({ ok: true });
       case "heartbeat":
         return Response.json({ inCall: await heartbeat(viewer, callId) });
+      // Who else could be asked into this call, and asking them. Both refuse
+      // anybody who is not themselves in it.
+      case "addable":
+        return Response.json({ members: await addableToCall(viewer, callId) });
+      case "invite": {
+        const keys = Array.isArray(body.members) ? body.members.filter((key): key is string => typeof key === "string") : [];
+        return Response.json(await inviteToCall(viewer, callId, keys));
+      }
       default:
         return failure("That is not something a call can do.", 400);
     }

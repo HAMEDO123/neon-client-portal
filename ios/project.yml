@@ -43,6 +43,9 @@ targets:
         # Proof of finished work is usually a photo taken on site, there and
         # then. The picker for existing photos needs no permission at all.
         NSCameraUsageDescription: "NEON uses the camera to photograph finished work, and for video calls with the studio."
+        # A call keeps its sound when somebody switches to another app, as a
+        # phone call does; nothing else runs in the background.
+        UIBackgroundModes: [audio]
         NSMicrophoneUsageDescription: "NEON uses the microphone for calls with the studio."
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
