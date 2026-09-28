@@ -9,6 +9,8 @@ import { getPreferences } from "@/lib/notifications/engine";
 import { deviceLabel } from "@/lib/devices";
 import { myAssignedTasks, myAssignedTask, assignedTasksForWeek } from "@/lib/assigned-tasks";
 import { submissionsForAssignedTask } from "@/lib/submissions";
+import { openFollowUpForTask } from "@/lib/follow-up-queue";
+import { answerFollowUp } from "@/lib/actions/follow-up-actions";
 import { weekDayKeys, weekStartKey, weekLabel } from "@/lib/week";
 import { createSupplyRequest, cancelSupplyRequest, submitReceipt, deleteReceipt, saveDailyReport } from "@/lib/actions/operations-actions";
 import { saveNotificationPreferences } from "@/lib/actions/employee-actions";
@@ -47,6 +49,14 @@ export const reads: ReadRegistry = {
       filter === "completed" ? job.state === "DONE" : filter === "all" ? true : job.state !== "DONE"
     );
     return { jobs: filtered };
+  }),
+
+  // The one open question the day owes about this task, as `/employee/tasks/[id]`
+  // reads it: `openFollowUpForTask` — unanswered and already asked. `null` when
+  // there is nothing to answer right now.
+  "me/tasks/followup": guarded(requireEmployee, async (params, me) => {
+    const entryId = param(params, "entryId");
+    return openFollowUpForTask(me.id, entryId);
   }),
 
   // One job, as `/employee/assigned/[id]` reads it, plus what has been sent
@@ -154,6 +164,11 @@ export const reads: ReadRegistry = {
 };
 
 export const actions: ActionRegistry = {
+  // Answering what the day asked — follow-up-reply.tsx's four choices (or the
+  // end-of-block four), plus the note some of them ask for.
+  "me/tasks/followup/answer": async (input) =>
+    answerFollowUp(str(input.args[0], "followUpId"), str(input.args[1], "answer"), typeof input.args[2] === "string" ? input.args[2] : undefined),
+
   // Jobs handed out by hand — the employee's own moves. "Done" never appears:
   // canMove refuses it from this side exactly as the website does.
   "me/jobs/status": async (input) =>

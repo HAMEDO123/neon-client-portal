@@ -37,6 +37,21 @@ struct JobDetailResponse: Decodable {
     let submissions: [JobSubmission]
 }
 
+// MARK: - What the day asked (ScheduledFollowUp)
+
+/// The one open question a board task owes right now — `openFollowUpForTask`
+/// in src/lib/follow-up-queue.ts. `nil` when there is nothing to answer.
+struct FollowUpQuestion: Decodable, Identifiable {
+    let id: String
+    let kind: String
+    let dueAt: String
+}
+
+struct FollowUpAnswerResult: Decodable {
+    let ok: Bool
+    let error: String?
+}
+
 // MARK: - Requests tab
 
 struct SupplyRequestRow: Decodable, Identifiable {

@@ -18,6 +18,29 @@ extension APIClient {
         try await read("me/jobs/detail", ["id": id], as: JobDetailResponse.self)
     }
 
+    // MARK: - What the day asked (follow-up-reply.tsx)
+
+    /// The one open question owed about a board task, if any.
+    func fetchFollowUp(entryId: String) async throws -> Loaded<FollowUpQuestion?> {
+        try await read("me/tasks/followup", ["entryId": entryId], as: FollowUpQuestion?.self)
+    }
+
+    /// One of the four choices `follow-up-reply.tsx` offers, and the note some
+    /// of them ask for. Throws the server's sentence when the question is no
+    /// longer open — answered already, or the task moved on.
+    @discardableResult
+    func answerFollowUp(id: String, answer: String, note: String?) async throws -> Bool {
+        var args: [Any] = [id, answer]
+        let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty { args.append(trimmed) }
+        let outcome = try await perform("me/tasks/followup/answer", args: args)
+        let result = try outcome.result(FollowUpAnswerResult.self)
+        if result?.ok == false {
+            throw APIError.refused(result?.error ?? L("That didn't go through"))
+        }
+        return true
+    }
+
     /// TODO or IN_PROGRESS only — the same rule `canMove` enforces server-side:
     /// finishing a job means sending proof, never a status the employee picks.
     @discardableResult
