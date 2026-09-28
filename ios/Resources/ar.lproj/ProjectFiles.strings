@@ -1,0 +1,141 @@
+/* The project's file tabs — drawings, documents, BOQ, pricing, materials,
+   furniture, approvals, comments — embedded in a project's page. */
+
+/* Section titles */
+"Drawings" = "المخططات";
+"Documents" = "المستندات";
+"BOQ" = "جدول الكميات";
+"Pricing" = "التسعير";
+"Materials" = "المواد";
+"Furniture" = "الأثاث";
+"Approvals" = "الموافقات";
+"Comments" = "التعليقات";
+
+/* Drawings */
+"Add drawing" = "إضافة مخطط";
+"Add Drawing" = "إضافة مخطط";
+"No drawings yet" = "لا توجد مخططات بعد";
+"Upload the first technical drawing." = "ارفع أول مخطط فني.";
+"Drawing added" = "تمت إضافة المخطط";
+"Delete “%@”?" = "حذف «%@»؟";
+"This removes every revision on file too." = "هذا يحذف كل مراجعة مسجّلة أيضًا.";
+"No earlier revisions." = "لا توجد مراجعات سابقة.";
+"Upload new revision" = "رفع مراجعة جديدة";
+"Remove revision %@?" = "إزالة المراجعة %@؟";
+"Remove" = "إزالة";
+"Sub-category" = "الفئة الفرعية";
+"Drawing name" = "اسم المخطط";
+"Drawing number" = "رقم المخطط";
+"Revision" = "المراجعة";
+"File (PDF, DWG, image…)" = "الملف (PDF، DWG، صورة…)";
+"New revision" = "مراجعة جديدة";
+"New revision label" = "رمز المراجعة الجديدة";
+"What changed" = "ما الذي تغيّر";
+"New file" = "الملف الجديد";
+"The current file moves into revision history." = "الملف الحالي ينتقل إلى سجل المراجعات.";
+"Upload Revision" = "رفع المراجعة";
+"Revision uploaded" = "تم رفع المراجعة";
+
+/* Documents */
+"Add document" = "إضافة مستند";
+"Add Document" = "إضافة مستند";
+"No documents yet" = "لا توجد مستندات بعد";
+"Upload contracts, reports, or specifications." = "ارفع العقود أو التقارير أو المواصفات.";
+"Document added" = "تمت إضافة المستند";
+"Title" = "العنوان";
+"Version" = "الإصدار";
+"File" = "الملف";
+
+/* Shared: categories & fields */
+"Category" = "الفئة";
+"Name" = "الاسم";
+"Item name" = "اسم العنصر";
+"Quantity" = "الكمية";
+"Unit" = "الوحدة";
+"Unit price (optional)" = "سعر الوحدة (اختياري)";
+"Related drawing" = "المخطط المرتبط";
+"Related space" = "المساحة المرتبطة";
+"Specification" = "المواصفة";
+"Reference image (optional)" = "صورة مرجعية (اختياري)";
+"Description" = "الوصف";
+"Brand" = "الماركة";
+"Model" = "الطراز";
+"Color" = "اللون";
+"Finish" = "التشطيب";
+"Supplier" = "المورّد";
+"Estimated quantity" = "الكمية التقديرية";
+"Price (optional)" = "السعر (اختياري)";
+"Used in (spaces)" = "مستخدَم في (المساحات)";
+"Image" = "الصورة";
+"Space" = "المساحة";
+"Dimensions" = "الأبعاد";
+"Label" = "التسمية";
+"Amount" = "المبلغ";
+"Choose a file" = "اختر ملفًا";
+"Choose a photo" = "اختر صورة";
+"Change photo" = "تغيير الصورة";
+"That file could not be read." = "تعذّرت قراءة هذا الملف.";
+
+/* BOQ */
+"Add item" = "إضافة عنصر";
+"Add Item" = "إضافة عنصر";
+"No BOQ items yet" = "لا توجد عناصر في جدول الكميات بعد";
+"Add quantities and specifications." = "أضف الكميات والمواصفات.";
+"Item added" = "تمت إضافة العنصر";
+"Add BOQ item" = "إضافة عنصر لجدول الكميات";
+
+/* Pricing */
+"Add line item" = "إضافة بند";
+"Add Line Item" = "إضافة بند";
+"No pricing yet" = "لا يوجد تسعير بعد";
+"Add cost breakdown line items." = "أضف بنود تفصيل التكلفة.";
+"Line item added" = "تمت إضافة البند";
+"Pricing is currently hidden from the client" = "التسعير مخفي حاليًا عن العميل";
+"Enable “Show Execution Pricing” in the project's Overview when ready." = "فعّل «إظهار تسعير التنفيذ» في نظرة عامة على المشروع عند الجاهزية.";
+"Optional" = "اختياري";
+"Optional item" = "بند اختياري";
+"Shown separately, not in the total." = "يُعرض بشكل منفصل، ولا يُحتسب في الإجمالي.";
+"Total Project Cost" = "إجمالي تكلفة المشروع";
+
+/* Materials & Furniture */
+"Add material" = "إضافة مادة";
+"Add Material" = "إضافة مادة";
+"No materials yet" = "لا توجد مواد بعد";
+"Build the material and finish board." = "أنشئ لوحة المواد والتشطيبات.";
+"Material added" = "تمت إضافة المادة";
+"Add furniture item" = "إضافة قطعة أثاث";
+"Add Item" = "إضافة عنصر";
+"No furniture yet" = "لا يوجد أثاث بعد";
+"Build the furniture and product schedule." = "أنشئ جدول الأثاث والمنتجات.";
+
+/* Approvals */
+"Add milestone" = "إضافة معلَم";
+"Add Milestone" = "إضافة معلَم";
+"No approval milestones yet" = "لا توجد معالم موافقة بعد";
+"Add design milestones for the client to review." = "أضف معالم تصميم ليراجعها العميل.";
+"Milestone added" = "تمت إضافة المعلَم";
+"Milestone for client approval" = "معلَم لموافقة العميل";
+"The client sees this on their page and can approve it or ask for changes." = "يرى العميل هذا في صفحته ويمكنه الموافقة عليه أو طلب تعديلات.";
+"Approved" = "تمت الموافقة";
+"Changes Requested" = "طُلبت تعديلات";
+"Pending Review" = "بانتظار المراجعة";
+
+/* Comments */
+"Reply" = "الرد";
+"No comments yet" = "لا توجد تعليقات بعد";
+"Client feedback and change requests appear here." = "تظهر هنا ملاحظات العميل وطلبات التعديل.";
+"Referring to (optional)" = "بخصوص (اختياري)";
+"e.g. Living Room drawing" = "مثال: مخطط الصالة";
+"Reply as NEON Team" = "الرد كفريق نيون";
+"Send reply" = "إرسال الرد";
+"Reply sent" = "تم إرسال الرد";
+"Studio" = "الفريق";
+"Open" = "مفتوح";
+"Resolved" = "تمت المعالجة";
+"Mark Resolved" = "وضع كمُعالَج";
+"Reopen" = "إعادة الفتح";
+"Delete this comment?" = "حذف هذا التعليق؟";
+
+/* Formats */
+"%@ %@" = "%@ %@";
+"Qty %d" = "الكمية %d";
