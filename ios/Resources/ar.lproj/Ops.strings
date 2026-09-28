@@ -85,6 +85,23 @@
 "On time" = "في الوقت";
 "Manual" = "يدوي";
 
+/* --- Attendance: manual correction --- */
+"Correct a day" = "تصحيح يوم";
+"Correct this day" = "تصحيح هذا اليوم";
+"Add a correction" = "إضافة تصحيح";
+"Day" = "اليوم";
+"Hours left early" = "ساعات المغادرة المبكرة";
+"Note" = "ملاحظة";
+"Saved by hand, this day is marked Manual and a later device sync will not overwrite it." = "لأنه محفوظ يدويًا، هذا اليوم عليه علامة \"يدوي\" ولن تستبدله أي مزامنة لاحقة من الجهاز.";
+"Remove this record…" = "إزالة هذا السجل…";
+"Remove this record?" = "إزالة هذا السجل؟";
+"This deletes %@'s figure for this day outright — it is not the same as setting it to zero." = "هذا يحذف رقم %@ لهذا اليوم نهائيًا — وهذا يختلف عن جعله صفرًا.";
+"Removed" = "تمت الإزالة";
+
+/* --- Settings: WhatsApp link to the WhatsApp area --- */
+"WhatsApp inbox" = "بريد واتساب";
+"Link or unlink the number, and read the studio's chats" = "اربط الرقم أو افصله، واقرأ محادثات الاستوديو";
+
 /* --- Requests --- */
 "Today's reports" = "تقارير اليوم";
 "No team yet" = "لا يوجد فريق بعد";

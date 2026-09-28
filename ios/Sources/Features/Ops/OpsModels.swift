@@ -78,6 +78,13 @@ struct AttendanceMonth: Decodable {
     let days: [Day]
     let rows: [Row]
     let thisMonth: String
+    /// `AttendanceRecord.id`, keyed by `"<employeeId>|<dayKey>"` — what the
+    /// correction sheet hands `opsDeleteAttendance` for a day it has open.
+    let recordIds: [String: String]
+
+    func recordId(employeeId: String, dayKey: String) -> String? {
+        recordIds["\(employeeId)|\(dayKey)"]
+    }
 }
 
 // MARK: - Requests

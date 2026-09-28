@@ -53,6 +53,27 @@ extension APIClient {
         try await read("ops/attendanceMonth", ["month": month], as: AttendanceMonth.self)
     }
 
+    /// `setAttendance` in operations-actions.ts: creates or corrects one day's
+    /// figure for one person. Written as MANUAL either way, on the server —
+    /// a manager's figure wins, and correcting a device day re-marks it
+    /// MANUAL so the next sync leaves it alone.
+    func opsSetAttendance(employeeId: String, day: String, delayHours: Double, earlyHours: Double, note: String) async throws {
+        try await perform(
+            "ops/setAttendance",
+            form: [
+                "employeeId": employeeId,
+                "day": day,
+                "delayHours": delayHours,
+                "earlyHours": earlyHours,
+                "note": note,
+            ]
+        )
+    }
+
+    func opsDeleteAttendance(id: String) async throws {
+        try await perform("ops/deleteAttendance", args: [id])
+    }
+
     func opsSetDeviceUserId(employeeId: String, deviceUserId: String) async throws {
         try await perform("ops/setDeviceUserId", args: [employeeId], form: ["deviceUserId": deviceUserId])
     }

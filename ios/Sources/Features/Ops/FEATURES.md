@@ -64,14 +64,21 @@ automation,admin-push}-actions.ts`.
 - `SettingsRootView()`: push health (read-only diagnostic, with an explicit note
   that this build cannot receive push at all — see notImplemented), the working
   day form, planning notes, automation rules (full CRUD + switch + preview),
-  WhatsApp status (read-only), timezone, AI/push integration status, and a link to
-  the tasks area's `ProcessSettingsView()`.
+  WhatsApp status (summary, with a link into the WhatsApp area's own
+  `WhatsAppRootView()` for linking/unlinking and the inbox itself), timezone,
+  AI/push integration status, and a link to the tasks area's
+  `ProcessSettingsView()`.
+- **Manual attendance correction** (`AttendanceCorrectionSheet`, on top of the
+  month drill-down): add, edit or remove one person's day — `setAttendance`/
+  `deleteAttendance`, the payroll screen's own actions
+  (`admin/(dashboard)/payroll/page.tsx`), exposed here since this area owns the
+  app's attendance screens. The website's rules travel unchanged: written as
+  MANUAL either way (a manager's figure wins, and correcting a device day
+  re-marks it MANUAL so the next sync leaves it alone), both hours clamped to
+  0–24 server-side.
 
 ## notImplemented (with reasons)
 
-- **Manual attendance correction** (`setAttendance`/`deleteAttendance` in
-  `operations-actions.ts`): only used by `/admin/payroll`, owned by the team area,
-  not this area's website page. Not built here to stay in scope.
 - **Registering this phone for push** (`admin-push-actions.ts`,
   `saveAdminPushSubscription`/`removeAdminPushSubscription`): these take a Web
   Push subscription object from a browser's `PushManager`; there is no iOS
@@ -79,8 +86,9 @@ automation,admin-push}-actions.ts`.
   build (signed for AltStore) cannot register for push notifications at all. The
   Settings screen shows push health as a read-only diagnostic with an explicit
   note instead of a non-functional "enable" toggle.
-- **WhatsApp linking (QR code / pairing code)** and the **free-text test message**
-  on the Settings page (`WhatsAppChannelCard`, `WhatsAppTest`): only the link
-  *status* was in this area's scope per the task description; the interactive
-  linking flow reads more naturally as part of the WhatsApp area's own screen
-  (`WhatsAppRootView()`), which already owns the studio's WhatsApp inbox.
+- **The free-text test message** on the Settings page (`WhatsAppTest`): stays
+  out of scope for this area's Settings screen. **WhatsApp linking (QR code /
+  pairing code)** itself is no longer "web-only" from here — the status card
+  now links straight to the WhatsApp area's own `WhatsAppRootView()`, which
+  owns the studio's WhatsApp inbox and its linking flow, rather than this
+  screen saying it cannot be done from the app.

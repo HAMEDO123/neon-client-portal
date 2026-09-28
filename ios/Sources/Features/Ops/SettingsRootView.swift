@@ -377,7 +377,8 @@ private struct AutomationRuleSheet: View {
     }
 }
 
-// MARK: - WhatsApp status (read-only — linking itself is the WhatsApp area's)
+// MARK: - WhatsApp status (a status summary here; linking itself lives on the
+// WhatsApp area's own screen, which this card opens)
 
 private struct WhatsAppStatusCard: View {
     let whatsapp: OpsSettings.WhatsApp
@@ -397,6 +398,12 @@ private struct WhatsAppStatusCard: View {
             } else {
                 Text(L("Neither the Cloud API nor the session worker is set up on the server.")).font(.neonFootnote).foregroundStyle(Color.neonTextTertiary)
             }
+
+            NavigationLink(destination: WhatsAppRootView()) {
+                ListRow(L("WhatsApp inbox"), subtitle: L("Link or unlink the number, and read the studio's chats"), leading: .icon("message.badge.circle.fill"), chevron: true)
+            }
+            .buttonStyle(.pressableCard)
+            .neonSurface(.sunken, radius: NeonRadius.md)
         }
     }
 }
