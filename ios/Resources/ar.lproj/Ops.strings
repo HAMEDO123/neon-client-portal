@@ -1,0 +1,268 @@
+/* Ops area: Attendance, Requests, Site visits, Settings. */
+
+/* Nav titles */
+"Attendance" = "الحضور";
+"Requests" = "الطلبات";
+"Site visits" = "زيارات الموقع";
+"Settings" = "الإعدادات";
+
+/* --- Attendance: device status --- */
+"No device configured" = "لا يوجد جهاز معرَّف";
+"Reachable" = "متصل";
+"The device did not answer" = "لم يستجب الجهاز";
+"Its clock" = "ساعة الجهاز";
+"Out by" = "الفرق";
+"%d min" = "%d دقيقة";
+"Enrolled" = "المسجَّلون";
+"Nothing will be recorded while it is this far out" = "لن يُسجَّل شيء ما دامت الساعة بهذا الفارق";
+"Set its clock. If it keeps drifting back, its backup battery needs replacing." = "اضبط ساعته. إذا استمر الفرق بالعودة فبطاريته الاحتياطية تحتاج تغييرًا.";
+
+/* --- Attendance: console --- */
+"Sync today" = "مزامنة اليوم";
+"Set its clock" = "اضبط ساعته";
+"Clock set" = "تم ضبط الساعة";
+"The device now reads %@ — still %ds out, which usually means its backup battery is dead." = "الجهاز الآن يعرض %@ — ما زال فارق %d ثانية، وعادة يعني هذا أن بطاريته الاحتياطية ميتة.";
+"The device now reads %@." = "الجهاز الآن يعرض %@.";
+"Could not set the clock" = "تعذّر ضبط الساعة";
+"No device is configured" = "لا يوجد جهاز معرَّف";
+"The device reads %@, which is %d minutes out. Set its clock first." = "الجهاز يعرض %@، بفارق %d دقيقة. اضبط ساعته أولًا.";
+"Nothing written" = "لم يُسجَّل شيء";
+"Synced" = "تمت المزامنة";
+"Read 1 punch" = "قراءة بصمة واحدة";
+"Read %d punches" = "قراءة %d بصمات";
+"recorded 1 new day" = "سُجِّل يوم جديد";
+"recorded %d new days" = "سُجِّلت %d أيام جديدة";
+"corrected %d" = "تصحيح %d";
+"%d left exactly as set by hand" = "%d بقيت كما أُدخلت يدويًا";
+"%d skipped — no longer on the team" = "تم تجاوز %d — لم يعودوا في الفريق";
+"nobody is paired with %@" = "لا أحد مرتبط بالرقم %@";
+"nothing from today" = "لا شيء من اليوم";
+
+/* --- Attendance: enrolled users --- */
+"Enrolled on the device" = "المسجَّلون على الجهاز";
+"Add" = "إضافة";
+"Nobody is enrolled yet" = "لا أحد مسجَّل بعد";
+"Cannot read the device just now" = "تعذّرت قراءة الجهاز الآن";
+"Number %@" = "الرقم %@";
+"%@ · no longer on the team" = "%@ · لم يعد في الفريق";
+"Not paired — nothing is recorded for this number" = "غير مرتبط — لا يُسجَّل شيء لهذا الرقم";
+"Remove" = "إزالة";
+"Remove %@ from the device?" = "إزالة %@ من الجهاز؟";
+"Their past punches stay in its log; the person is removed." = "بصماته السابقة تبقى في السجل؛ ويُزال الشخص فقط.";
+"Could not remove them" = "تعذّرت الإزالة";
+"Add to device" = "إضافة إلى الجهاز";
+"This creates the record, not the fingerprint — the person still has to put their finger on the reader at the machine." = "هذا ينشئ السجل فقط وليس البصمة — على الشخص وضع إصبعه على القارئ عند الجهاز نفسه.";
+"Number" = "الرقم";
+"Name on the device" = "الاسم على الجهاز";
+
+/* --- Attendance: pairing --- */
+"Pair people" = "ربط الأشخاص";
+"By the device's number, never by name." = "بالرقم على الجهاز دائمًا، لا بالاسم أبدًا.";
+"Not paired" = "غير مرتبط";
+"Device number" = "رقم الجهاز";
+"empty to clear" = "اتركه فارغًا لإلغاء الربط";
+"Paired" = "تم الربط";
+
+/* --- Attendance: wipe log --- */
+"Wipe the device's log" = "مسح سجل الجهاز";
+"This cannot be undone, and it destroys arrivals that exist nowhere else — a sync only records days from its cutoff onward." = "لا يمكن التراجع عن هذا، وهو يمحو حضورًا لا وجود له في أي مكان آخر — المزامنة تسجّل الأيام من نقطة بدئها فقط.";
+"Wipe the log…" = "مسح السجل…";
+"Nothing was cleared" = "لم يُمسح شيء";
+"Type WIPE to confirm." = "اكتب WIPE للتأكيد.";
+"Type WIPE" = "اكتب WIPE";
+"Clear the log" = "مسح السجل";
+
+/* --- Attendance: month --- */
+"Recorded this month" = "المسجَّل هذا الشهر";
+"An empty cell means nothing was recorded — not that somebody was absent." = "الخانة الفارغة تعني أنه لم يُسجَّل شيء — وليس أن أحدًا غاب.";
+"Nothing recorded this month" = "لا شيء مسجَّل هذا الشهر";
+"%d days recorded" = "%d أيام مسجَّلة";
+"Nothing recorded" = "لا شيء مسجَّل";
+"Left the team" = "غادر الفريق";
+"Days recorded" = "أيام مسجَّلة";
+"Hours late" = "ساعات التأخير";
+"An empty day means nothing was recorded — not that they were absent." = "اليوم الفارغ يعني أنه لم يُسجَّل شيء — وليس أن الشخص كان غائبًا.";
+"On time" = "في الوقت";
+"Manual" = "يدوي";
+
+/* --- Requests --- */
+"Today's reports" = "تقارير اليوم";
+"No team yet" = "لا يوجد فريق بعد";
+"Hasn't written today's report yet." = "لم يكتب تقرير اليوم بعد.";
+"Waiting for you" = "بانتظارك";
+"Nothing waiting" = "لا شيء بالانتظار";
+"New requests appear here." = "الطلبات الجديدة تظهر هنا.";
+"Decided" = "تم البتّ فيها";
+"Urgent" = "عاجل";
+"Approve" = "موافقة";
+"Decline" = "رفض";
+"Mark bought" = "تحديد كمشترى";
+"Note for the employee (optional)" = "ملاحظة للموظف (اختياري)";
+"Saved" = "تم الحفظ";
+"Waiting for a decision" = "بانتظار القرار";
+"Approved" = "تمت الموافقة";
+"Not approved" = "لم تتم الموافقة";
+"Bought" = "تم الشراء";
+
+/* --- Site visits: manager reading --- */
+"No site visits yet" = "لا توجد زيارات موقع بعد";
+"When somebody schedules a visit, it appears here with what they planned to do — and afterwards, what came of it." = "عندما يخطط أحد لزيارة، تظهر هنا مع ما خطط لفعله — وبعدها، ما نتج عنها.";
+"Not written up yet" = "لم تُكتب بعد";
+"The time has passed and nobody has said what happened. That is not a record of anybody missing a visit." = "مضى الوقت ولم يقل أحد ماذا حدث. هذا ليس دليلًا على تفويت أحد للزيارة.";
+"Coming up" = "قادمة";
+"Done" = "منتهية";
+"Planned to" = "خطة الزيارة";
+"What came of it" = "ما نتج عنها";
+"Why not" = "لماذا لا";
+
+/* --- Site visits: own diary --- */
+"No site visits written down yet." = "لا توجد زيارات مكتوبة بعد.";
+"Waiting on your write-up" = "بانتظار كتابتك";
+"Your visits" = "زياراتك";
+"Schedule a site visit" = "جدولة زيارة موقع";
+"I went" = "ذهبت";
+"Did not go" = "لم أذهب";
+"Edit" = "تعديل";
+"Call off" = "إلغاء";
+"Delete" = "حذف";
+"Call off “%@”?" = "إلغاء «%@»؟";
+"Delete “%@”?" = "حذف «%@»؟";
+"Call it off" = "إلغاؤها";
+
+/* --- Site visits: form --- */
+"New site visit" = "زيارة موقع جديدة";
+"Edit the visit" = "تعديل الزيارة";
+"Schedule it" = "جدولتها";
+"Save" = "حفظ";
+"What is the visit for" = "الغرض من الزيارة";
+"When" = "الموعد";
+"Where" = "المكان";
+"Abdoun, behind the bakery" = "عبدون، خلف المخبز";
+"Project" = "المشروع";
+"Not tied to a project" = "غير مرتبطة بمشروع";
+"What you plan to do there" = "ما تخطط لفعله هناك";
+"That did not save." = "لم يُحفظ.";
+
+/* --- Site visits: answering --- */
+"What came of it?" = "ما الذي نتج عنها؟";
+"Why did it not happen?" = "لماذا لم تحدث؟";
+"Mark as visited" = "تحديدها كزيارة تمت";
+"Mark as not visited" = "تحديدها كزيارة لم تتم";
+"What you saw, what was decided, what happens next" = "ما رأيته، ما تقرر، والخطوة التالية";
+"What got in the way, and whether it is being rescheduled" = "ما الذي أعاقها، وهل ستُعاد جدولتها";
+"Went" = "ذهب";
+"Planned" = "مخطَّطة";
+"Called off" = "أُلغيت";
+
+/* --- Settings: nav --- */
+"Delivery process" = "مسار التسليم";
+"Process sections, stage periods, what each kind of work needs" = "أقسام العملية، مدد المراحل، ومتطلبات كل نوع عمل";
+
+/* --- Settings: push health --- */
+"Push notifications" = "إشعارات الدفع";
+"Why a notification is or isn't arriving." = "لماذا يصل الإشعار أو لا يصل.";
+"Server keys" = "مفاتيح الخادم";
+"Generated" = "تم توليدها";
+"Set" = "مضبوطة";
+"Not set" = "غير مضبوطة";
+"Devices reachable" = "أجهزة يمكن الوصول إليها";
+"This phone cannot receive push" = "هذا الهاتف لا يمكنه استقبال إشعارات الدفع";
+"The app is signed for testing (AltStore), which Apple does not allow to register for push notifications. This card is diagnostic only." = "التطبيق موقَّع للاختبار (AltStore)، وأبل لا تسمح لمثله بتسجيل إشعارات الدفع. هذه البطاقة للتشخيص فقط.";
+"No manager account" = "لا يوجد حساب مدير";
+"Pair yourself to the attendance device in Attendance to become addressable." = "اربط نفسك بجهاز الحضور من صفحة الحضور حتى يمكن الوصول إليك.";
+"%d of your own devices registered" = "%d من أجهزتك الخاصة مسجَّلة";
+"The team's devices" = "أجهزة الفريق";
+
+/* --- Settings: working day --- */
+"The working day" = "يوم العمل";
+"What can be planned, which days are worked, when nobody should be messaged." = "ما يمكن تخطيطه، أي الأيام تُعمل، ومتى لا يجب مراسلة أحد.";
+"Working days" = "أيام العمل";
+"Sunday" = "الأحد";
+"Monday" = "الاثنين";
+"Tuesday" = "الثلاثاء";
+"Wednesday" = "الأربعاء";
+"Thursday" = "الخميس";
+"Friday" = "الجمعة";
+"Saturday" = "السبت";
+"Starts" = "يبدأ";
+"Ends" = "ينتهي";
+"Lunch at" = "الغداء الساعة";
+"Lunch" = "الغداء";
+"min" = "دقيقة";
+"Margin" = "الهامش";
+"Allowed late" = "التأخير المسموح";
+"A day is %@ long, so %@ can be planned after lunch and the margin." = "اليوم يمتد %@، لذا يمكن تخطيط %@ بعد الغداء والهامش.";
+"Arriving by %@ is on time. After that, lateness is charged in whole hours, rounded up." = "الوصول حتى %@ في الوقت. بعدها، يُحتسب التأخير بساعات كاملة، مقرَّبة للأعلى.";
+"Save the working day" = "حفظ يوم العمل";
+
+/* --- Settings: planning --- */
+"How we plan a day" = "كيف نخطط اليوم";
+"Your rules, in your own words — read whenever a day is proposed for somebody." = "قواعدك، بكلماتك — تُقرأ كلما اقتُرح يوم لأحد.";
+"Rules for planning" = "قواعد التخطيط";
+"Save rules" = "حفظ القواعد";
+
+/* --- Settings: automation --- */
+"Rules that watch the day" = "قواعد تراقب اليوم";
+"A rule can only ever speak — it never moves, ticks or approves work." = "القاعدة تتكلم فقط — لا تحرّك عملًا ولا تعلّمه منجزًا ولا توافق عليه أبدًا.";
+"Rules are switched on" = "القواعد مفعَّلة";
+"The one switch that stops all of them at once." = "المفتاح الوحيد الذي يوقفها كلها دفعة واحدة.";
+"On" = "مفعَّلة";
+"Off" = "متوقفة";
+"No rules yet" = "لا توجد قواعد بعد";
+"Preview against today" = "معاينة على اليوم";
+"Running…" = "جارٍ التشغيل…";
+"%d considered, %d would speak" = "%d تم فحصهم، %d سيتكلم عنهم";
+"Nothing would be said right now." = "لن يُقال شيء الآن.";
+"Writes nothing — no state, no notification." = "لا يكتب شيئًا — لا حالة، ولا إشعار.";
+"New rule" = "قاعدة جديدة";
+"Edit rule" = "تعديل القاعدة";
+"Name" = "الاسم";
+"At least this many" = "على الأقل هذا العدد";
+"How many of the thing must be true." = "كم مرة يجب أن يتحقق الأمر.";
+"Grace" = "المهلة";
+"How long it must have held before anything is said." = "كم يجب أن يستمر الأمر قبل أن يُقال شيء.";
+"Cooldown" = "فترة التهدئة";
+"Before this rule may speak about the same person again." = "قبل أن تتكلم القاعدة عن نفس الشخص مجددًا.";
+"Escalate after" = "التصعيد بعد";
+"Empty: never escalate to the manager." = "فارغ: لا يُصعَّد للمدير أبدًا.";
+"Enabled" = "مفعَّلة";
+"No plan on their day" = "لا خطة في يومه";
+"More planned than the day holds" = "المخطَّط أكثر مما يحتمله اليوم";
+"Work waiting on somebody else" = "عمل بانتظار شخص آخر";
+"Said started, board still pending" = "قال إنه بدأ، واللوحة ما زالت معلّقة";
+"An answer waiting on the manager" = "إجابة بانتظار المدير";
+"Questions nobody has answered" = "أسئلة لم يُجب عنها أحد";
+"Ask" = "اسأل";
+"Tell" = "أخبر";
+"Escalate" = "صعّد";
+"The person" = "الشخص";
+"The manager" = "المدير";
+
+/* --- Settings: WhatsApp status --- */
+"Company channel" = "قناة الشركة";
+"Not configured" = "غير معرَّفة";
+"Connected" = "متصلة";
+"Unreachable" = "لا يمكن الوصول إليها";
+"Transport" = "طريقة الإرسال";
+"Official Cloud API" = "واجهة Cloud API الرسمية";
+"Session worker" = "خادم الجلسة الخاص";
+"Sends from" = "يُرسل من";
+"Status" = "الحالة";
+"Neither the Cloud API nor the session worker is set up on the server." = "لا واجهة Cloud API ولا خادم الجلسة معدّان على الخادم.";
+
+/* --- Settings: timezone --- */
+"Company timezone" = "المنطقة الزمنية للشركة";
+"Decides which day a task belongs to and when the daily jobs run." = "تحدد أي يوم تنتمي إليه المهمة ومتى تعمل المهام اليومية.";
+"Timezone" = "المنطقة الزمنية";
+"Save timezone" = "حفظ المنطقة الزمنية";
+
+/* --- Settings: other integrations --- */
+"Other integrations" = "تكاملات أخرى";
+"AI assistant & receipt reading" = "مساعد الذكاء الاصطناعي وقراءة الإيصالات";
+"Powers the manager's chat assistant and reads receipt photos." = "يشغّل مساعد الدردشة للمدير ويقرأ صور الإيصالات.";
+"Configured" = "معرَّفة";
+
+/* --- Misc --- */
+"Added" = "تمت الإضافة";
+"Then" = "ثم";
+"this person" = "هذا الشخص";
