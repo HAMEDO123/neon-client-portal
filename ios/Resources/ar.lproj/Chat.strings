@@ -19,6 +19,7 @@
 "Cancel meeting" = "إلغاء الاجتماع";
 "Cancel this meeting?" = "إلغاء هذا الاجتماع؟";
 "Chat" = "المحادثة";
+"Chats" = "المحادثات";
 "Coming" = "سيحضر";
 "Coming up" = "القادمة";
 "Couldn't load the picture" = "تعذّر تحميل الصورة";
@@ -49,6 +50,7 @@
 "No matches" = "لا نتائج";
 "No meetings coming up" = "لا اجتماعات قادمة";
 "No messages yet" = "لا رسائل بعد";
+"No tasks yet" = "لا مهام بعد";
 "Nobody to ask" = "لا أحد لدعوته";
 "Nobody to hand this to" = "لا أحد لإسناد العمل إليه";
 "Not answered yet" = "لم يُجب بعد";
