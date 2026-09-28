@@ -30,8 +30,8 @@ struct ProjectOverviewContent: View {
                 if let phone = detail.clientPhone, !phone.isEmpty {
                     KeyValueRow(L("Client Phone"), value: phone, symbol: "phone", selectable: true)
                 }
-                if let date = detail.deliveryDate, let parsed = parseISODate(date) {
-                    KeyValueRow(L("Delivery Date"), value: NeonFormat.date(parsed), symbol: "calendar")
+                if let date = formattedDay(detail.deliveryDate) {
+                    KeyValueRow(L("Delivery Date"), value: date, symbol: "calendar")
                 }
             }
 

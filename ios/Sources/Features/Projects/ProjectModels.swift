@@ -120,7 +120,26 @@ struct ProjectDetail: Codable, Identifiable {
     }
 
     var allImages: [GalleryImage] { spaces.flatMap(\.images) }
+
+    // Core/APIClient.swift (off limits to this area) still declares postComment
+    // and setCommentStatus against the old /api/mobile/projects/<id>/comments
+    // route, which this area no longer calls — the projectfiles area owns
+    // comments now (ProjectCommentsSection). Kept only so that file still
+    // compiles; nothing in this area constructs or reads one.
+    struct CommentItem: Codable, Identifiable {
+        let id: String
+        let authorName: String
+        let authorType: String
+        let message: String
+        let refLabel: String?
+        let status: String
+        let createdAt: String
+    }
 }
+
+// Core/APIClient.swift's fetchDashboard() (unused by this area's own
+// ProjectsAPI.swift, which reads "projects/list" instead) still names this type.
+typealias DashboardResponse = ProjectsListResponse
 
 struct ProjectActivityItem: Codable, Identifiable {
     let id: String
