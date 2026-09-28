@@ -67,12 +67,12 @@ extension APIClient {
         try await perform("projects/notifyClient", args: [id, kind])
     }
 
-    struct WhatsAppOutcome: Decodable { let ok: Bool; let message: String }
+    struct ProjectWhatsAppOutcome: Decodable { let ok: Bool; let message: String }
 
     @discardableResult
-    func sendProjectWhatsApp(id: String, kind: String) async throws -> WhatsAppOutcome? {
+    func sendProjectWhatsApp(id: String, kind: String) async throws -> ProjectWhatsAppOutcome? {
         let outcome = try await perform("projects/sendWhatsApp", args: [id, kind])
-        return try outcome.result(WhatsAppOutcome.self)
+        return try outcome.result(ProjectWhatsAppOutcome.self)
     }
 
     func deleteProject(id: String) async throws {

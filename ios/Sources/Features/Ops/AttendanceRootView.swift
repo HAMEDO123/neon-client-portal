@@ -543,7 +543,7 @@ struct AttendancePersonDetail: View {
                         formattedDayKey(row.day.dayKey),
                         subtitle: row.entry.note,
                         leading: .icon(row.day.worked ? "calendar" : "calendar.badge.exclamationmark", tint: row.day.worked ? .neonCyanStrong : .neonTextFaint),
-                        value: row.entry.delayHours > 0 ? describeMinutes(row.entry.delayHours * 60) : L("On time"),
+                        value: attendanceSummary(row.entry),
                         badge: row.entry.source == "MANUAL" ? L("Manual") : nil,
                         badgeTone: .neutral
                     )
@@ -553,4 +553,16 @@ struct AttendancePersonDetail: View {
         .navigationTitle(row.name)
         .neonAmbientBackground()
     }
+}
+
+/// A recorded day as the admin page reads it: late in, early out, or neither.
+/// No clock-out is said as exactly that — the device cannot tell a short day
+/// from a missed scan, so it is never read as "stayed to the end".
+private func attendanceSummary(_ entry: AttendanceMonth.Entry) -> String {
+    var parts: [String] = []
+    if entry.delayHours > 0 { parts.append(L("Late %@", describeMinutes(entry.delayHours * 60))) }
+    if let early = entry.earlyHours, early > 0 { parts.append(L("Left early %@", describeMinutes(early * 60))) }
+    if parts.isEmpty { parts.append(L("On time")) }
+    if entry.clockedOut == false { parts.append(L("no clock-out")) }
+    return parts.joined(separator: " · ")
 }

@@ -57,6 +57,10 @@ struct AttendanceMonth: Decodable {
         let employeeId: String
         let dayKey: String
         let delayHours: Double
+        /// Hours of the day left unworked at the end; zero when nobody clocked out.
+        let earlyHours: Double?
+        /// Whether a clock-out was recorded at all — a blank is not "stayed to the end".
+        let clockedOut: Bool?
         let source: String
         let note: String?
     }

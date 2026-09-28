@@ -86,7 +86,19 @@ export async function attendanceMonthFor(askedMonth: string | null): Promise<Att
   const entries: MonthEntry[] = monthRecords.flatMap((row) => {
     const dayKey = dateToDayKey(row.day);
     return dayKey
-      ? [{ employeeId: row.employeeId, dayKey, delayHours: row.delayHours, source: row.source, note: row.note }]
+      ? [
+          {
+            employeeId: row.employeeId,
+            dayKey,
+            delayHours: row.delayHours,
+            // The same reading as the admin attendance page: hours left
+            // unworked at the end, and whether a clock-out exists at all.
+            earlyHours: row.earlyHours,
+            clockedOut: row.departedAt !== null,
+            source: row.source,
+            note: row.note,
+          },
+        ]
       : [];
   });
 
