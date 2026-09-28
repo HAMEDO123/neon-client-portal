@@ -1,75 +1,84 @@
 import SwiftUI
-import PhotosUI
 
+/// A project's page — overview, gallery and analytics are this area's own;
+/// the other tabs embed the projectfiles area's sections unchanged. Pushed
+/// from the list (both sides work a project the same way).
 struct ProjectDetailView: View {
-    let project: ProjectSummary
+    let projectId: String
+    var seed: ProjectSummary?
 
     @EnvironmentObject var api: APIClient
+    @Environment(\.dismiss) private var dismiss
     @State private var detail: ProjectDetail?
+    @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @State private var section: DetailSection = .overview
     @State private var showEdit = false
-    @State private var coverPickerActive = false
-    @State private var coverSelection: PhotosPickerItem?
-    @State private var uploadingCover = false
-    @State private var coverViewer: ImageViewerPayload?
-    @State private var showCoverPicker = false
+    @State private var showDeleteConfirm = false
+
+    enum DetailSection: String, CaseIterable {
+        case overview, gallery, drawings, boq, pricing, materials, furniture, documents, approvals, comments, analytics
+
+        var label: String {
+            switch self {
+            case .overview: return L("Overview")
+            case .gallery: return L("Gallery")
+            case .drawings: return L("Drawings")
+            case .boq: return L("BOQ")
+            case .pricing: return L("Pricing")
+            case .materials: return L("Materials")
+            case .furniture: return L("Furniture")
+            case .documents: return L("Documents")
+            case .approvals: return L("Approvals")
+            case .comments: return L("Comments")
+            case .analytics: return L("Analytics")
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .overview: return "info.circle"
+            case .gallery: return "photo.on.rectangle"
+            case .drawings: return "pencil.and.ruler"
+            case .boq: return "list.number"
+            case .pricing: return "banknote"
+            case .materials: return "square.stack.3d.up"
+            case .furniture: return "sofa"
+            case .documents: return "doc.text"
+            case .approvals: return "checkmark.seal"
+            case .comments: return "bubble.left.and.bubble.right"
+            case .analytics: return "chart.bar"
+            }
+        }
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                cover
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(detail?.name ?? project.name)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.neonInk)
-
-                    HStack(spacing: 8) {
-                        BadgeView(text: localizedEnum("publish", detail?.publishState ?? project.publishState), tone: publishTone(detail?.publishState ?? project.publishState))
-                        BadgeView(text: localizedEnum("pipeline", detail?.pipelineStatus ?? project.pipelineStatus), tone: .purple)
-                    }
-                }
-
-                if let detail {
-                    Group {
-                        if detail.completionPercent > 0 {
-                            completionBar(detail.completionPercent)
-                        }
-                        sectionPicker(for: detail)
-                        sectionContent(for: detail)
-                            .id(section)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .trailing)),
-                                removal: .opacity
-                            ))
-                    }
-                    .transition(.opacity.combined(with: .offset(y: 10)))
-                } else if let errorMessage {
-                    VStack(spacing: 12) {
-                        Text(errorMessage).foregroundStyle(Color.neonInk.opacity(0.5))
-                        Button(L("Retry")) { Task { await load() } }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.neonInk)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 40)
-                } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
-                }
+        Group {
+            if let detail {
+                page(detail)
+            } else if let errorMessage {
+                ErrorState(message: errorMessage) { await load() }
+            } else {
+                NeonScroll { SkeletonRows(count: 5) }
             }
-            .padding(16)
         }
         .neonAmbientBackground()
-        .navigationTitle(project.name)
+        .navigationTitle(detail?.name ?? seed?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                if detail != nil {
-                    Button(L("Edit")) { showEdit = true }
-                        .foregroundStyle(Color.neonInk)
+            if detail != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { showEdit = true } label: { Label(L("Edit"), systemImage: "pencil") }
+                        if api.side == .admin {
+                            Button(role: .destructive) { showDeleteConfirm = true } label: {
+                                Label(L("Delete Project"), systemImage: "trash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .foregroundStyle(Color.neonInk)
                 }
             }
         }
@@ -78,1312 +87,191 @@ struct ProjectDetailView: View {
                 EditProjectSheet(detail: detail) { Task { await load() } }
             }
         }
-        .photosPicker(isPresented: $coverPickerActive, selection: $coverSelection, matching: .images)
-        .onChange(of: coverSelection) { item in
-            guard let item else { return }
-            Task { await uploadCover(item) }
-        }
-        .fullScreenCover(item: $coverViewer) { ImageViewerView(payload: $0) }
-        .sheet(isPresented: $showCoverPicker) {
-            if let detail {
-                CoverPickerSheet(projectId: detail.id, spaces: detail.spaces) { Task { await load() } }
-            }
-        }
+        .confirmDestructive(
+            L("Delete this project?"),
+            message: L("“%@” and every file it holds — cover, renders, drawings, documents, materials, furniture — is deleted for good. This cannot be undone.", detail?.name ?? ""),
+            actionTitle: L("Delete"),
+            isPresented: $showDeleteConfirm
+        ) { Task { await deleteProject() } }
         .task { await load() }
-    }
-
-    private func load() async {
-        do {
-            let loaded = try await api.fetchProject(id: project.id)
-            withAnimation(.easeOut(duration: 0.3)) { detail = loaded }
-            errorMessage = nil
-        } catch {
-            errorMessage = L("Couldn't load project.")
-        }
-    }
-
-    private func uploadCover(_ item: PhotosPickerItem) async {
-        uploadingCover = true
-        defer { uploadingCover = false; coverSelection = nil }
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.9) else {
-            Haptic.error()
-            return
-        }
-        do {
-            try await api.uploadCover(projectId: project.id, image: jpeg)
-            Haptic.success()
-            await load()
-        } catch {
-            Haptic.error()
-        }
-    }
-
-    private var coverURL: URL? { resolvedMediaURL(detail?.coverImageUrl ?? project.coverImageUrl) }
-
-    private var cover: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(LinearGradient.neonAmbient)
-            if let url = coverURL {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    }
-                }
-            } else {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 34))
-                    .foregroundStyle(Color.neonInk.opacity(0.25))
-            }
-        }
-        .frame(height: 190)
-        .frame(maxWidth: .infinity)
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .onTapGesture {
-            guard let url = coverURL else { return }
-            Haptic.tap()
-            coverViewer = ImageViewerPayload(
-                items: [ImageViewerItem(id: "cover", url: url, caption: nil)],
-                startIndex: 0
-            )
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.neonInk.opacity(0.08), lineWidth: 1)
-        )
-        .overlay(alignment: .bottomTrailing) {
-            Menu {
-                Button {
-                    coverPickerActive = true
-                } label: {
-                    Label(L("Upload New Photo"), systemImage: "camera.fill")
-                }
-                Button {
-                    showCoverPicker = true
-                } label: {
-                    Label(L("Choose from Project Photos"), systemImage: "photo.on.rectangle")
-                }
-            } label: {
-                Image(systemName: uploadingCover ? "hourglass" : "camera.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
-                    .background(Color.neonInk.opacity(0.75), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(uploadingCover)
-            .padding(10)
-        }
-        .shadow(color: Color.neonInk.opacity(0.10), radius: 20, x: 0, y: 10)
-    }
-
-    private func completionBar(_ percent: Int) -> some View {
-        CompletionBar(percent: percent)
-    }
-
-    private func sectionPicker(for detail: ProjectDetail) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(DetailSection.allCases.filter { $0.isAvailable(in: detail) }, id: \.self) { s in
-                    Button {
-                        Haptic.tap()
-                        withAnimation(.easeOut(duration: 0.2)) { section = s }
-                    } label: {
-                        Text(s.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                section == s ? Color.neonInk : Color.neonInk.opacity(0.05),
-                                in: Capsule()
-                            )
-                            .foregroundStyle(section == s ? .white : Color.neonInk.opacity(0.65))
-                    }
-                    .buttonStyle(.pressable)
-                }
-            }
-            .padding(.vertical, 2)
+        .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
+            if let name = note.object as? String, name.hasPrefix("projects/") { Task { await load(silently: true) } }
         }
     }
 
     @ViewBuilder
-    private func sectionContent(for detail: ProjectDetail) -> some View {
+    private func page(_ detail: ProjectDetail) -> some View {
+        NeonScroll(spacing: 14) {
+            HeroHeader(
+                detail.name,
+                subtitle: detail.clientName,
+                eyebrow: L("Project"),
+                imageURL: detail.resolvedCoverURL
+            ) {
+                HStack(spacing: 6) {
+                    StateBadge(localizedEnum("pipeline", detail.pipelineStatus), tone: .purple)
+                    BadgeView(text: localizedEnum("publish", detail.publishState), tone: publishTone(detail.publishState))
+                }
+            }
+
+            if let cachedAt { OfflineBanner(savedAt: cachedAt) }
+
+            publishRow(detail)
+            linkRow(detail)
+
+            FilterChips(selection: $section, options: DetailSection.allCases, inset: 16, title: { $0.label }, symbol: { $0.symbol })
+                .padding(.horizontal, -16)
+
+            sectionContent(detail)
+                .id(section)
+                .transition(.neonRise)
+        }
+        .refreshable { await load() }
+        .animation(.easeOut(duration: 0.22), value: section)
+    }
+
+    @ViewBuilder
+    private func sectionContent(_ detail: ProjectDetail) -> some View {
         switch section {
-        case .overview: OverviewSection(detail: detail)
-        case .gallery: GallerySection(projectId: detail.id, spaces: detail.spaces) { Task { await load() } }
-        case .drawings: DrawingsSection(drawings: detail.drawings)
-        case .documents: DocumentsSection(documents: detail.documents)
-        case .boq: BoqSection(items: detail.boqItems)
-        case .pricing: PricingSection(items: detail.pricingItems)
-        case .materials: MaterialsSection(items: detail.materials)
-        case .furniture: FurnitureSection(items: detail.furniture)
-        case .approvals: ApprovalsSection(items: detail.approvals)
-        case .comments: CommentsSection(projectId: detail.id, comments: detail.comments)
-        }
-    }
-}
-
-enum DetailSection: CaseIterable {
-    case overview, gallery, drawings, documents, boq, pricing, materials, furniture, approvals, comments
-
-    var title: String {
-        switch self {
-        case .overview: return L("Overview")
-        case .gallery: return L("Gallery")
-        case .drawings: return L("Drawings")
-        case .documents: return L("Documents")
-        case .boq: return L("BOQ")
-        case .pricing: return L("Pricing")
-        case .materials: return L("Materials")
-        case .furniture: return L("Furniture")
-        case .approvals: return L("Approvals")
-        case .comments: return L("Comments")
+        case .overview: ProjectOverviewContent(detail: detail)
+        case .gallery: ProjectGalleryView(projectId: detail.id, spaces: detail.spaces, onChanged: { Task { await load(silently: true) } })
+        case .drawings: ProjectDrawingsSection(projectId: detail.id)
+        case .boq: ProjectBoqSection(projectId: detail.id)
+        case .pricing: ProjectPricingSection(projectId: detail.id)
+        case .materials: ProjectMaterialsSection(projectId: detail.id)
+        case .furniture: ProjectFurnitureSection(projectId: detail.id)
+        case .documents: ProjectDocumentsSection(projectId: detail.id)
+        case .approvals: ProjectApprovalsSection(projectId: detail.id)
+        case .comments: ProjectCommentsSection(projectId: detail.id)
+        case .analytics: ProjectAnalyticsView(projectId: detail.id)
         }
     }
 
-    func isAvailable(in detail: ProjectDetail) -> Bool {
-        switch self {
-        // Gallery stays visible even when empty — it's where employees upload.
-        case .overview, .comments, .gallery: return true
-        case .drawings: return !detail.drawings.isEmpty
-        case .documents: return !detail.documents.isEmpty
-        case .boq: return !detail.boqItems.isEmpty
-        case .pricing: return !detail.pricingItems.isEmpty
-        case .materials: return !detail.materials.isEmpty
-        case .furniture: return !detail.furniture.isEmpty
-        case .approvals: return !detail.approvals.isEmpty
-        }
-    }
-}
-
-// The gradient fill sweeps in from zero when the bar first appears, and the
-// percentage counts up with it.
-private struct CompletionBar: View {
-    let percent: Int
-    @State private var animated = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(L("Completion"))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
-                Spacer()
-                Text("\(animated ? percent : 0)%")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.neonPurpleStrong)
-                    .contentTransition(.numericText())
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.neonInk.opacity(0.08))
-                    Capsule()
-                        .fill(LinearGradient.neonWordmark)
-                        .frame(width: geo.size.width * CGFloat(animated ? percent : 0) / 100)
+    @ViewBuilder
+    private func publishRow(_ detail: ProjectDetail) -> some View {
+        HStack(spacing: 8) {
+            if detail.publishState != "PUBLISHED" {
+                NeonButton(L("Publish Project"), symbol: "checkmark.seal.fill", size: .small) {
+                    await setPublish("PUBLISHED")
                 }
-            }
-            .frame(height: 8)
-        }
-        .padding(14)
-        .glassCard(radius: 16)
-        .onAppear {
-            withAnimation(.spring(response: 0.9, dampingFraction: 0.85).delay(0.15)) {
-                animated = true
-            }
-        }
-    }
-}
-
-// MARK: - Overview
-
-private struct OverviewSection: View {
-    let detail: ProjectDetail
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ShareLinkCard(detail: detail)
-
-            VStack(spacing: 0) {
-                InfoRow(symbol: "person.fill", label: L("Client"), value: detail.clientName)
-                if let email = detail.clientEmail { divided(InfoRow(symbol: "envelope.fill", label: L("Email"), value: email)) }
-                if let phone = detail.clientPhone { divided(InfoRow(symbol: "phone.fill", label: L("Phone"), value: phone)) }
-                if let location = detail.location { divided(InfoRow(symbol: "mappin.and.ellipse", label: L("Location"), value: location)) }
-                if let area = detail.area { divided(InfoRow(symbol: "ruler.fill", label: L("Area"), value: area)) }
-                if let type = detail.projectType { divided(InfoRow(symbol: "building.2.fill", label: L("Type"), value: type)) }
-                if let delivery = formattedISODate(detail.deliveryDate) { divided(InfoRow(symbol: "calendar", label: L("Delivery"), value: delivery)) }
-                divided(InfoRow(symbol: "flag.fill", label: L("Stage"), value: localizedEnum("stage", detail.currentStage)))
-                if let updated = formattedISODate(detail.updatedAt) { divided(InfoRow(symbol: "clock.fill", label: L("Last Updated"), value: updated)) }
-            }
-            .glassCard(radius: 18)
-
-            if let description = detail.description, !description.isEmpty {
-                Text(description)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.neonInk.opacity(0.7))
-                    .lineSpacing(4)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassCard(radius: 18)
-            }
-        }
-    }
-
-    private func divided(_ row: InfoRow) -> some View {
-        VStack(spacing: 0) {
-            Divider().padding(.leading, 46)
-            row
-        }
-    }
-}
-
-// The public client link (/p/<token>) with the same actions the web admin
-// has: copy, preview, and the two WhatsApp sends.
-private struct ShareLinkCard: View {
-    let detail: ProjectDetail
-
-    @Environment(\.openURL) private var openURL
-    @State private var copied = false
-
-    var body: some View {
-        if let link = detail.clientLink {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "link")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.neonPurpleStrong)
-                    Text(L("CLIENT LINK"))
-                        .font(.system(size: 11, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(Color.neonInk.opacity(0.4))
-                    Spacer()
-                    ShareLink(item: link) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.neonInk.opacity(0.5))
-                    }
-                }
-
-                Text(link.absoluteString)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Color.neonInk.opacity(0.55))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.neonInk.opacity(0.05), in: Capsule())
-
-                HStack(spacing: 8) {
-                    shareButton(
-                        copied ? L("Copied") : L("Copy"),
-                        symbol: copied ? "checkmark" : "doc.on.doc",
-                        tint: .neonInk
-                    ) {
-                        UIPasteboard.general.string = link.absoluteString
-                        Haptic.success()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { copied = true }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                            withAnimation { copied = false }
-                        }
-                    }
-                    shareButton(L("Preview"), symbol: "safari", tint: .neonCyanStrong) {
-                        Haptic.tap()
-                        openURL(link)
-                    }
-                    shareButton(L("WhatsApp"), symbol: "paperplane.fill", tint: Color(hex: 0x16A34A)) {
-                        Haptic.tap()
-                        sendWhatsApp(message: L(
-                            "Hi %@, your project from NEON is ready. You can review the designs, drawings, quantities, and more here: %@",
-                            detail.clientName, link.absoluteString
-                        ))
-                    }
-                    shareButton(L("Update"), symbol: "bell.fill", tint: .neonPurpleStrong) {
-                        Haptic.tap()
-                        sendWhatsApp(message: L(
-                            "Hi %@, there's an update on your NEON project. View the latest here: %@",
-                            detail.clientName, link.absoluteString
-                        ))
-                    }
-                }
-            }
-            .padding(14)
-            .glassCard(radius: 18)
-        }
-    }
-
-    // wa.me needs digits only; with no number WhatsApp still opens with the
-    // message ready and the sender picks the contact — same as the web admin.
-    private func sendWhatsApp(message: String) {
-        let number = (detail.clientPhone ?? "").filter(\.isNumber)
-        var components = URLComponents(string: "https://wa.me/\(number)")
-        components?.queryItems = [URLQueryItem(name: "text", value: message)]
-        guard let url = components?.url else { return }
-        openURL(url)
-    }
-
-    private func shareButton(_ title: String, symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 5) {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(tint)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.pressable)
-    }
-}
-
-private struct InfoRow: View {
-    let symbol: String
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.neonPurpleStrong)
-                .frame(width: 32, height: 32)
-                .background(Color.neonPurple.opacity(0.12), in: Circle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(Color.neonInk.opacity(0.4))
-                Text(value)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.neonInk)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-    }
-}
-
-// MARK: - Gallery
-
-private struct GallerySection: View {
-    let projectId: String
-    let spaces: [ProjectDetail.GallerySpace]
-    let onUploaded: () -> Void
-
-    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
-
-    @State private var viewer: ImageViewerPayload?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            GalleryUploader(projectId: projectId, spaces: spaces, onUploaded: onUploaded)
-
-            if spaces.isEmpty {
-                Text(L("No photos yet — upload the first ones."))
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
-            }
-
-            ForEach(spaces) { space in
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(space.name.uppercased())
-                        .font(.system(size: 12, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(Color.neonInk.opacity(0.4))
-                    LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(Array(space.images.enumerated()), id: \.element.id) { index, image in
-                            Button {
-                                Haptic.tap()
-                                viewer = ImageViewerPayload(
-                                    items: space.images.map {
-                                        ImageViewerItem(id: $0.id, url: resolvedMediaURL($0.imageUrl), caption: $0.caption)
-                                    },
-                                    startIndex: index
-                                )
-                            } label: {
-                                GalleryTile(image: image)
-                            }
-                            .buttonStyle(.pressable)
-                        }
-                    }
-                }
-            }
-        }
-        .fullScreenCover(item: $viewer) { ImageViewerView(payload: $0) }
-    }
-}
-
-private struct GalleryUploader: View {
-    let projectId: String
-    let spaces: [ProjectDetail.GallerySpace]
-    let onUploaded: () -> Void
-
-    @EnvironmentObject var api: APIClient
-    @State private var selection: [PhotosPickerItem] = []
-    @State private var pickerActive = false
-    @State private var targetSpaceId: String?
-    @State private var newSpaceName = ""
-    @State private var promptNewSpace = false
-    @State private var uploading = false
-
-    var body: some View {
-        Menu {
-            ForEach(spaces) { space in
-                Button(space.name) {
-                    targetSpaceId = space.id
-                    newSpaceName = ""
-                    pickerActive = true
-                }
-            }
-            Button {
-                promptNewSpace = true
-            } label: {
-                Label(L("New Space…"), systemImage: "plus")
-            }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: uploading ? "hourglass" : "photo.badge.plus")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.neonPurpleStrong)
-                Text(uploading ? L("Uploading…") : L("Add Photos"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.neonInk)
-                Spacer()
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.neonInk.opacity(0.3))
-            }
-            .padding(14)
-            .glassCard(radius: 16)
-        }
-        .buttonStyle(.plain)
-        .disabled(uploading)
-        .alert(L("New Space"), isPresented: $promptNewSpace) {
-            TextField(L("Space name (e.g. Bedroom)"), text: $newSpaceName)
-            Button(L("Choose Photos")) {
-                guard !newSpaceName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                targetSpaceId = nil
-                pickerActive = true
-            }
-            Button(L("Cancel"), role: .cancel) {}
-        }
-        .photosPicker(isPresented: $pickerActive, selection: $selection, maxSelectionCount: 10, matching: .images)
-        .onChange(of: selection) { items in
-            guard !items.isEmpty else { return }
-            Task { await upload(items) }
-        }
-    }
-
-    private func upload(_ items: [PhotosPickerItem]) async {
-        uploading = true
-        defer { uploading = false; selection = [] }
-
-        var images: [Data] = []
-        for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.9) {
-                images.append(jpeg)
-            }
-        }
-        guard !images.isEmpty else { Haptic.error(); return }
-
-        do {
-            try await api.uploadGalleryImages(
-                projectId: projectId,
-                spaceId: targetSpaceId,
-                spaceName: targetSpaceId == nil ? newSpaceName.trimmingCharacters(in: .whitespaces) : nil,
-                caption: nil,
-                images: images
-            )
-            Haptic.success()
-            onUploaded()
-        } catch {
-            Haptic.error()
-        }
-    }
-}
-
-private struct GalleryTile: View {
-    let image: ProjectDetail.GalleryImage
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.neonInk.opacity(0.06))
-                AsyncImage(url: resolvedMediaURL(image.imageUrl)) { phase in
-                    if let img = phase.image {
-                        img.resizable().aspectRatio(contentMode: .fill)
-                    }
-                }
-            }
-            .frame(height: 120)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            if let caption = image.caption, !caption.isEmpty {
-                Text(caption)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
-                    .lineLimit(1)
-            }
-        }
-    }
-}
-
-// MARK: - Drawings & Documents
-
-private struct DrawingsSection: View {
-    let drawings: [ProjectDetail.Drawing]
-
-    var body: some View {
-        GroupedList(items: drawings, category: \.category) { drawing in
-            FileRow(
-                symbol: "pencil.and.ruler.fill",
-                thumbnailUrl: drawing.thumbnailUrl,
-                title: drawing.name,
-                subtitle: [drawing.drawingNumber, drawing.subCategory].compactMap { $0 }.joined(separator: " · "),
-                badge: drawing.revision,
-                fileUrl: drawing.fileUrl
-            )
-        }
-    }
-}
-
-private struct DocumentsSection: View {
-    let documents: [ProjectDetail.ProjectDocument]
-
-    var body: some View {
-        GroupedList(items: documents, category: \.category) { doc in
-            FileRow(
-                symbol: "doc.fill",
-                thumbnailUrl: nil,
-                title: doc.title,
-                subtitle: doc.fileType.uppercased(),
-                badge: doc.version,
-                fileUrl: doc.fileUrl
-            )
-        }
-    }
-}
-
-private struct FileRow: View {
-    let symbol: String
-    let thumbnailUrl: String?
-    let title: String
-    let subtitle: String
-    let badge: String?
-    let fileUrl: String
-
-    var body: some View {
-        Group {
-            if let url = resolvedMediaURL(fileUrl) {
-                Link(destination: url) { content }
             } else {
-                content
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var content: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.neonCyan.opacity(0.12))
-                if let thumbnailUrl, let url = resolvedMediaURL(thumbnailUrl) {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        }
-                    }
-                } else {
-                    Image(systemName: symbol)
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.neonCyanStrong)
+                NeonButton(L("Unpublish"), kind: .secondary, size: .small) {
+                    await setPublish("DRAFT")
                 }
             }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.neonInk)
-                    .lineLimit(1)
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.neonInk.opacity(0.5))
-                        .lineLimit(1)
+            if detail.publishState != "ARCHIVED" {
+                NeonButton(
+                    L("Archive"), kind: .ghost, size: .small,
+                    confirm: L("Archive this project?"), confirmMessage: L("It will be hidden from the client link.")
+                ) {
+                    await setPublish("ARCHIVED")
                 }
             }
-            Spacer(minLength: 8)
-            if let badge, !badge.isEmpty {
-                BadgeView(text: badge, tone: .cyan)
-            }
-            Image(systemName: "arrow.up.right.square")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.neonInk.opacity(0.3))
-        }
-        .padding(12)
-        .glassCard(radius: 14)
-    }
-}
-
-// MARK: - BOQ & Pricing
-
-private struct BoqSection: View {
-    let items: [ProjectDetail.BoqItem]
-
-    var body: some View {
-        GroupedList(items: items, category: \.category) { item in
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.name)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.neonInk)
-                    if let description = item.description, !description.isEmpty {
-                        Text(description)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.neonInk.opacity(0.5))
-                            .lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 8)
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text("\(item.quantity.cleanQty) \(item.unit)")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.neonInk)
-                    if let price = item.unitPrice {
-                        Text(price.currency)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.neonInk.opacity(0.5))
-                    }
-                }
-            }
-            .padding(12)
-            .glassCard(radius: 14)
+            Spacer()
         }
     }
-}
 
-private struct PricingSection: View {
-    let items: [ProjectDetail.PricingItem]
-
-    private var total: Double { items.filter { !$0.isOptional }.reduce(0) { $0 + $1.amount } }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            GroupedList(items: items, category: \.category) { item in
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(item.label)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(Color.neonInk)
-                            if item.isOptional {
-                                BadgeView(text: L("Optional"), tone: .neutral)
-                            }
-                        }
-                        if let description = item.description, !description.isEmpty {
-                            Text(description)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.neonInk.opacity(0.5))
-                                .lineLimit(2)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    Text(item.amount.currency)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.neonInk)
-                }
-                .padding(12)
-                .glassCard(radius: 14)
-            }
-
-            HStack {
-                Text(L("Total"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.neonInk)
-                Spacer()
-                Text(total.currency)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.neonPurpleStrong)
-            }
-            .padding(14)
-            .glassCard(radius: 16)
-        }
-    }
-}
-
-// MARK: - Materials & Furniture
-
-private struct MaterialsSection: View {
-    let items: [ProjectDetail.MaterialItem]
-
-    var body: some View {
-        GroupedList(items: items, category: \.category) { item in
-            ItemRow(
-                imageUrl: item.imageUrl,
-                title: item.name,
-                subtitle: [item.brand, item.color, item.finish].compactMap { $0 }.joined(separator: " · "),
-                trailing: item.price?.currency
-            )
-        }
-    }
-}
-
-private struct FurnitureSection: View {
-    let items: [ProjectDetail.FurnitureItem]
-
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(items) { item in
-                ItemRow(
-                    imageUrl: item.imageUrl,
-                    title: item.quantity > 1 ? "\(item.name) ×\(item.quantity)" : item.name,
-                    subtitle: [item.brand, item.dimensions, item.space].compactMap { $0 }.joined(separator: " · "),
-                    trailing: item.price?.currency
-                )
-            }
-        }
-    }
-}
-
-private struct ItemRow: View {
-    let imageUrl: String?
-    let title: String
-    let subtitle: String
-    let trailing: String?
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.neonInk.opacity(0.06))
-                if let url = resolvedMediaURL(imageUrl) {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        }
-                    }
-                } else {
-                    Image(systemName: "cube.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.neonInk.opacity(0.25))
-                }
-            }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.neonInk)
-                    .lineLimit(1)
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.neonInk.opacity(0.5))
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 8)
-            if let trailing {
-                Text(trailing)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.neonInk.opacity(0.7))
-            }
-        }
-        .padding(12)
-        .glassCard(radius: 14)
-    }
-}
-
-// MARK: - Approvals
-
-private struct ApprovalsSection: View {
-    let items: [ProjectDetail.ApprovalItem]
-
-    var body: some View {
-        VStack(spacing: 10) {
-            ForEach(items) { item in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(item.itemLabel)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Color.neonInk)
+    @ViewBuilder
+    private func linkRow(_ detail: ProjectDetail) -> some View {
+        if let link = detail.clientLink {
+            NeonCard(padding: 10) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text(link.absoluteString)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(Color.neonTextSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                         Spacer()
-                        BadgeView(text: localizedEnum("approval", item.status), tone: approvalTone(item.status))
                     }
-                    if let note = item.note, !note.isEmpty {
-                        Text(note)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.neonInk.opacity(0.6))
-                    }
-                    HStack(spacing: 6) {
-                        if let client = item.clientName {
-                            Text(client)
+                    FlowRow {
+                        NeonButton(L("Copy Link"), symbol: "doc.on.doc", kind: .secondary, size: .small) {
+                            UIPasteboard.general.string = link.absoluteString
+                            Haptic.soft()
+                            Toast.info(L("Copied"), detail: link.absoluteString)
                         }
-                        if let responded = formattedISODate(item.respondedAt) {
-                            Text("· \(responded)")
+                        ShareLink(item: link) {
+                            Label(L("Preview"), systemImage: "arrow.up.right.square")
+                        }
+                        .buttonStyle(.neon(.secondary, size: .small))
+                        NeonButton(L("Send to Client"), symbol: "paperplane.fill", kind: .tinted(.neonSuccessStrong), size: .small) {
+                            await send(kind: "sent_to_client")
+                        }
+                        NeonButton(L("Send Update"), symbol: "bell.badge.fill", kind: .tinted(.neonInfoStrong), size: .small) {
+                            await send(kind: "sent_update")
+                        }
+                        NeonButton(
+                            L("Regenerate"), symbol: "arrow.clockwise", kind: .ghost, size: .small,
+                            confirm: L("Regenerate this project's link?"),
+                            confirmMessage: L("The old link stops working immediately.")
+                        ) {
+                            await regenerateLink()
                         }
                     }
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.neonInk.opacity(0.4))
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassCard(radius: 14)
-            }
-        }
-    }
-
-    private func approvalTone(_ status: String) -> BadgeTone {
-        switch status {
-        case "APPROVED": return .success
-        case "CHANGES_REQUESTED": return .warning
-        default: return .orange
-        }
-    }
-}
-
-// MARK: - Comments
-
-private struct CommentsSection: View {
-    let projectId: String
-    @State var comments: [ProjectDetail.CommentItem]
-
-    @EnvironmentObject var api: APIClient
-    @State private var draft = ""
-    @State private var sending = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                TextField(L("Reply to client…"), text: $draft, axis: .vertical)
-                    .font(.system(size: 14))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .glassCard(radius: 14)
-                Button {
-                    Task { await send() }
-                } label: {
-                    Image(systemName: sending ? "hourglass" : "paperplane.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(Color.neonInk, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            if comments.isEmpty {
-                Text(L("No comments yet."))
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
-                    .padding(.top, 12)
-            }
-
-            ForEach(comments) { comment in
-                CommentBubble(comment: comment) {
-                    Task { await toggleStatus(comment) }
                 }
             }
         }
     }
 
-    private func toggleStatus(_ comment: ProjectDetail.CommentItem) async {
-        let newStatus = comment.status == "RESOLVED" ? "OPEN" : "RESOLVED"
+    private func load(silently: Bool = false) async {
         do {
-            try await api.setCommentStatus(projectId: projectId, commentId: comment.id, status: newStatus)
-            if let index = comments.firstIndex(where: { $0.id == comment.id }) {
-                comments[index] = ProjectDetail.CommentItem(
-                    id: comment.id, authorName: comment.authorName, authorType: comment.authorType,
-                    message: comment.message, refLabel: comment.refLabel, status: newStatus,
-                    createdAt: comment.createdAt
-                )
+            let loaded = try await api.fetchProjectDetail(id: projectId)
+            withAnimation(.easeOut(duration: 0.3)) {
+                detail = loaded.value
+                cachedAt = loaded.cachedAt
             }
+            errorMessage = nil
+        } catch {
+            if !silently && detail == nil { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func setPublish(_ state: String) async {
+        do {
+            try await api.setPublishState(id: projectId, state: state)
             Haptic.success()
+            await load()
         } catch {
             Haptic.error()
+            Toast.error(error)
         }
     }
 
-    private func send() async {
-        let message = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty else { return }
-        sending = true
-        defer { sending = false }
+    private func regenerateLink() async {
         do {
-            let created = try await api.postComment(projectId: projectId, message: message)
-            comments.insert(created, at: 0)
-            draft = ""
+            try await api.regenerateProjectLink(id: projectId)
             Haptic.success()
+            Toast.success(L("Link regenerated"))
+            await load()
         } catch {
             Haptic.error()
-        }
-    }
-}
-
-private struct CommentBubble: View {
-    let comment: ProjectDetail.CommentItem
-    let onToggleStatus: () -> Void
-
-    private var isAdmin: Bool { comment.authorType == "ADMIN" }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text(comment.authorName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isAdmin ? Color.neonPurpleStrong : Color.neonInk.opacity(0.7))
-                if let ref = comment.refLabel, !ref.isEmpty {
-                    BadgeView(text: ref, tone: .cyan)
-                }
-                Spacer()
-                Button {
-                    onToggleStatus()
-                } label: {
-                    BadgeView(
-                        text: comment.status == "RESOLVED" ? L("Resolved") : L("Resolve"),
-                        tone: comment.status == "RESOLVED" ? .success : .neutral
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-            Text(comment.message)
-                .font(.system(size: 14))
-                .foregroundStyle(Color.neonInk)
-                .lineSpacing(3)
-            if let created = formattedISODate(comment.createdAt) {
-                Text(created)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.neonInk.opacity(0.4))
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            isAdmin ? Color.neonPurple.opacity(0.06) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
-        .glassCard(radius: 14)
-    }
-}
-
-// MARK: - Cover picker
-
-// Pick the project's cover (the image shown on the dashboard and client page)
-// from the photos already uploaded to the gallery.
-private struct CoverPickerSheet: View {
-    let projectId: String
-    let spaces: [ProjectDetail.GallerySpace]
-    let onPicked: () -> Void
-
-    @EnvironmentObject var api: APIClient
-    @Environment(\.dismiss) private var dismiss
-    @State private var savingUrl: String?
-    @State private var failed = false
-
-    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if spaces.allSatisfy({ $0.images.isEmpty }) {
-                        Text(L("No photos uploaded yet."))
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.neonInk.opacity(0.5))
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 40)
-                    }
-                    ForEach(spaces.filter { !$0.images.isEmpty }) { space in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(space.name.uppercased())
-                                .font(.system(size: 12, weight: .semibold))
-                                .tracking(0.6)
-                                .foregroundStyle(Color.neonInk.opacity(0.4))
-                            LazyVGrid(columns: columns, spacing: 10) {
-                                ForEach(space.images) { image in
-                                    Button {
-                                        Task { await pick(image.imageUrl) }
-                                    } label: {
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .fill(Color.neonInk.opacity(0.06))
-                                            AsyncImage(url: resolvedMediaURL(image.imageUrl)) { phase in
-                                                if let img = phase.image {
-                                                    img.resizable().aspectRatio(contentMode: .fill)
-                                                }
-                                            }
-                                            if savingUrl == image.imageUrl {
-                                                Color.black.opacity(0.4)
-                                                ProgressView().tint(.white)
-                                            }
-                                        }
-                                        .frame(height: 100)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    }
-                                    .buttonStyle(.pressable)
-                                    .disabled(savingUrl != nil)
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(16)
-            }
-            .neonAmbientBackground()
-            .navigationTitle(L("Cover Photo"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L("Cancel")) { dismiss() }
-                }
-            }
-            .alert(L("Couldn't save — check your connection and try again."), isPresented: $failed) {
-                Button(L("OK"), role: .cancel) {}
-            }
+            Toast.error(error)
         }
     }
 
-    private func pick(_ imageUrl: String) async {
-        savingUrl = imageUrl
-        defer { savingUrl = nil }
+    private func send(kind: String) async {
         do {
-            try await api.updateProject(id: projectId, fields: ["coverImageUrl": imageUrl])
+            let outcome = try await api.sendProjectWhatsApp(id: projectId, kind: kind)
+            if outcome?.ok == false { Toast.warning(outcome?.message ?? L("Nothing was sent")) }
+            else {
+                Haptic.success()
+                Toast.success(outcome?.message ?? L("Sent"))
+            }
+        } catch {
+            Haptic.error()
+            Toast.error(error)
+        }
+    }
+
+    private func deleteProject() async {
+        do {
+            try await api.deleteProject(id: projectId)
             Haptic.success()
-            onPicked()
+            Toast.success(L("Project deleted"))
             dismiss()
         } catch {
             Haptic.error()
-            failed = true
+            Toast.error(error)
         }
-    }
-}
-
-// MARK: - Edit sheet
-
-private struct EditProjectSheet: View {
-    let detail: ProjectDetail
-    let onSaved: () -> Void
-
-    @EnvironmentObject var api: APIClient
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var name: String
-    @State private var clientName: String
-    @State private var clientEmail: String
-    @State private var clientPhone: String
-    @State private var location: String
-    @State private var area: String
-    @State private var projectType: String
-    @State private var descriptionText: String
-    @State private var hasDeliveryDate: Bool
-    @State private var deliveryDate: Date
-    @State private var stage: String
-    @State private var pipeline: String
-    @State private var completion: Double
-    @State private var publish: String
-    @State private var saving = false
-    @State private var saveFailed = false
-
-    private static let pipelineStatuses = [
-        "DRAFT", "INTERNAL_REVIEW", "SENT_TO_CLIENT", "CLIENT_REVIEWING",
-        "CHANGES_REQUESTED", "APPROVED", "EXECUTION", "COMPLETED", "ARCHIVED",
-    ]
-    private static let publishStates = ["DRAFT", "PUBLISHED", "ARCHIVED"]
-
-    init(detail: ProjectDetail, onSaved: @escaping () -> Void) {
-        self.detail = detail
-        self.onSaved = onSaved
-        _name = State(initialValue: detail.name)
-        _clientName = State(initialValue: detail.clientName)
-        _clientEmail = State(initialValue: detail.clientEmail ?? "")
-        _clientPhone = State(initialValue: detail.clientPhone ?? "")
-        _location = State(initialValue: detail.location ?? "")
-        _area = State(initialValue: detail.area ?? "")
-        _projectType = State(initialValue: detail.projectType ?? "")
-        _descriptionText = State(initialValue: detail.description ?? "")
-        let parsedDelivery = detail.deliveryDate.flatMap { iso -> Date? in
-            let parser = ISO8601DateFormatter()
-            parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
-        }
-        _hasDeliveryDate = State(initialValue: parsedDelivery != nil)
-        _deliveryDate = State(initialValue: parsedDelivery ?? Date())
-        _stage = State(initialValue: detail.currentStage)
-        _pipeline = State(initialValue: detail.pipelineStatus)
-        _completion = State(initialValue: Double(detail.completionPercent))
-        _publish = State(initialValue: detail.publishState)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(L("Project")) {
-                    TextField(L("Project name"), text: $name)
-                    TextField(L("Location"), text: $location)
-                    TextField(L("Area (e.g. 450 m²)"), text: $area)
-                    TextField(L("Type (e.g. Residential Villa)"), text: $projectType)
-                }
-                Section(L("Client")) {
-                    TextField(L("Client name"), text: $clientName)
-                    TextField(L("Email"), text: $clientEmail)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    TextField(L("Phone (with country code)"), text: $clientPhone)
-                        .keyboardType(.phonePad)
-                }
-                Section(L("Description")) {
-                    TextField(L("What is this project about?"), text: $descriptionText, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-                Section(L("Delivery")) {
-                    Toggle(L("Delivery date set"), isOn: $hasDeliveryDate.animation())
-                        .tint(.neonPurple)
-                    if hasDeliveryDate {
-                        DatePicker(L("Delivery date"), selection: $deliveryDate, displayedComponents: .date)
-                    }
-                }
-                Section(L("Status")) {
-                    Picker(L("Journey stage"), selection: $stage) {
-                        ForEach(projectStages, id: \.self) {
-                            Text(localizedEnum("stage", $0)).tag($0)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    Picker(L("Pipeline status"), selection: $pipeline) {
-                        ForEach(Self.pipelineStatuses, id: \.self) {
-                            Text(localizedEnum("pipeline", $0)).tag($0)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-                Section(L("Completion — %d%%", Int(completion))) {
-                    Slider(value: $completion, in: 0...100, step: 1)
-                        .tint(.neonPurple)
-                }
-                Section(L("Visibility")) {
-                    Picker(L("Publish State"), selection: $publish) {
-                        ForEach(Self.publishStates, id: \.self) {
-                            Text(localizedEnum("publish", $0)).tag($0)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-            }
-            .navigationTitle(L("Edit Project"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(L("Cancel")) { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(saving ? L("Saving…") : L("Save")) { Task { await save() } }
-                        .fontWeight(.semibold)
-                        .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-            .alert(L("Couldn't save — check your connection and try again."), isPresented: $saveFailed) {
-                Button(L("OK"), role: .cancel) {}
-            }
-        }
-    }
-
-    private func save() async {
-        saving = true
-        defer { saving = false }
-        var fields: [String: Any] = [
-            "name": name.trimmingCharacters(in: .whitespaces),
-            "clientName": clientName.trimmingCharacters(in: .whitespaces),
-            "clientEmail": clientEmail.trimmingCharacters(in: .whitespaces),
-            "clientPhone": clientPhone.trimmingCharacters(in: .whitespaces),
-            "location": location.trimmingCharacters(in: .whitespaces),
-            "area": area.trimmingCharacters(in: .whitespaces),
-            "projectType": projectType.trimmingCharacters(in: .whitespaces),
-            "description": descriptionText.trimmingCharacters(in: .whitespacesAndNewlines),
-            "currentStage": stage,
-            "pipelineStatus": pipeline,
-            "completionPercent": Int(completion),
-            "publishState": publish,
-        ]
-        fields["deliveryDate"] = hasDeliveryDate
-            ? ISO8601DateFormatter().string(from: deliveryDate)
-            : ""
-        do {
-            try await api.updateProject(id: detail.id, fields: fields)
-            Haptic.success()
-            onSaved()
-            dismiss()
-        } catch {
-            Haptic.error()
-            saveFailed = true
-        }
-    }
-}
-
-// MARK: - Shared helpers
-
-private struct GroupedList<Item: Identifiable, Row: View>: View {
-    let items: [Item]
-    let category: KeyPath<Item, String>
-    @ViewBuilder let row: (Item) -> Row
-
-    private var groups: [(name: String, items: [Item])] {
-        var order: [String] = []
-        var buckets: [String: [Item]] = [:]
-        for item in items {
-            let key = item[keyPath: category]
-            if buckets[key] == nil { order.append(key) }
-            buckets[key, default: []].append(item)
-        }
-        return order.map { ($0, buckets[$0] ?? []) }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ForEach(groups, id: \.name) { group in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(group.name.uppercased())
-                        .font(.system(size: 12, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(Color.neonInk.opacity(0.4))
-                    VStack(spacing: 8) {
-                        ForEach(group.items) { row($0) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private extension Double {
-    var cleanQty: String {
-        truncatingRemainder(dividingBy: 1) == 0
-            ? String(format: "%.0f", self)
-            : String(format: "%.2f", self)
-    }
-
-    var currency: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        // Western digits in both languages — only the currency label localizes.
-        formatter.locale = Locale(identifier: "en_US")
-        let value = formatter.string(from: NSNumber(value: self)) ?? "\(self)"
-        return "\(L("JOD")) \(value)"
     }
 }
