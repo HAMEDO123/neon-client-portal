@@ -32,16 +32,7 @@ struct LoginView: View {
     }
 
     var body: some View {
-        #if DEBUG
-        // The design kit's catalogue, for building screens: launch with -neonKitGallery.
-        if ProcessInfo.processInfo.arguments.contains("-neonKitGallery") {
-            NeonKitGallery()
-        } else {
-            signIn
-        }
-        #else
         signIn
-        #endif
     }
 
     private var signIn: some View {

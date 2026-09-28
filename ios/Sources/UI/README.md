@@ -5,11 +5,6 @@ than hand-rolled paddings, colours and shadows, so every area looks and moves
 as one product: the web's glass cards on the lavender page, ink buttons,
 rounded display type, the cyan-purple-pink brand gradient.
 
-**See it all at once:** in a Debug build, launch with `-neonKitGallery` to get
-`NeonKitGallery` (`KitGallery.swift`), which shows every component with sample
-content. Add `-neonKitSection Charts` to open at a section, and `-app_language ar`
-to check it in Arabic. It also has SwiftUI previews in English and in RTL.
-
 **Don't add another `README.md` under `ios/Sources`.** XcodeGen copies `.md`
 files into the app as resources, and two files with one name stop the build
 ("Multiple commands produce …/README.md"). Name area notes `<Area>-NOTES.md`.
