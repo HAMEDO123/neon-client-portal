@@ -146,18 +146,29 @@ func cardStateLabel(_ state: String) -> String {
 struct MeetingsView: View {
     @EnvironmentObject var api: APIClient
     @StateObject private var cards = ChatCardsLoader()
-    @State private var web: WebPortalLink?
+    @State private var showCompose = false
 
     var body: some View {
         Group {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     // Only the manager sets meetings (lib/chat-meetings.ts).
+                    // Set from the team's own chat, exactly where the web's + →
+                    // Meeting lives — the same native sheet a conversation's own
+                    // + button opens.
                     if api.identity?.side == .admin {
-                        WebTile(title: L("Set a meeting"), symbol: "calendar.badge.plus") {
-                            web = WebPortalLink(path: "/admin/chat/team", title: L("Set a meeting"),
-                                                hint: L("Press + in the chat and choose Meeting. For one person, open their chat instead."))
+                        Button {
+                            Haptic.tap()
+                            showCompose = true
+                        } label: {
+                            Label(L("Set a meeting"), systemImage: "calendar.badge.plus")
+                                .font(.system(size: 14, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                                .foregroundStyle(.white)
+                                .background(Color.neonInk, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
+                        .buttonStyle(.pressable)
                     }
 
                     if let cachedAt = cards.cachedAt { OfflineBanner(savedAt: cachedAt) }
@@ -195,7 +206,11 @@ struct MeetingsView: View {
             .neonAmbientBackground()
         }
         .task { await cards.load(api) }
-        .fullScreenCover(item: $web) { WebPortalSheet(link: $0) }
+        .sheet(isPresented: $showCompose) {
+            ChatMeetingComposeSheet(conversationSlug: "team") {
+                Task { await cards.load(api) }
+            }
+        }
     }
 
     private func ends(_ meeting: MeetingCard) -> Date? {
@@ -216,12 +231,7 @@ struct MeetingsView: View {
     @ViewBuilder
     private func row(_ item: ChatCardsLoader.Item) -> some View {
         if let meeting = item.message.meeting {
-            MeetingRow(
-                meeting: meeting,
-                conversation: item.conversation,
-                viewer: api.identity,
-                open: { path, title, hint in web = WebPortalLink(path: path, title: title, hint: hint) }
-            )
+            MeetingRow(meeting: meeting, conversation: item.conversation, viewer: api.identity)
         }
     }
 }
@@ -230,7 +240,6 @@ private struct MeetingRow: View {
     let meeting: MeetingCard
     let conversation: ConversationSummary
     let viewer: Identity?
-    let open: (String, String, String?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -275,14 +284,10 @@ private struct MeetingRow: View {
 
             HStack(spacing: 8) {
                 if meeting.mode != "IN_PERSON" && joinable {
-                    actionButton(L("Join"), symbol: "video.fill", primary: true) {
-                        open(chatPath, meeting.title, L("Press Join on the meeting card to enter the call."))
-                    }
+                    actionButton(L("Join"), symbol: "video.fill", primary: true)
                 }
                 if myAnswer == "INVITED" && !isOver {
-                    actionButton(L("Answer"), symbol: "hand.raised", primary: !joinable) {
-                        open(chatPath, meeting.title, L("Answer on the meeting card: coming or not."))
-                    }
+                    actionButton(L("Answer"), symbol: "hand.raised", primary: !joinable)
                 }
             }
         }
@@ -305,14 +310,10 @@ private struct MeetingRow: View {
         return meeting.attendees.first { $0.memberKey == key }?.rsvp
     }
 
-    private var chatPath: String {
-        guard let viewer else { return "/" }
-        // The manager's chat page scrolls to `?meeting=`; the team's opens the chat.
-        return viewer.webChatPath(conversation.slug, query: viewer.side == .admin ? "meeting=\(meeting.id)" : nil)
-    }
-
-    private func actionButton(_ title: String, symbol: String, primary: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// Both buttons open the conversation the card actually lives in — Join and
+    /// Answer are the card's own controls there, native, not a web page.
+    private func actionButton(_ title: String, symbol: String, primary: Bool) -> some View {
+        NavigationLink(value: ChatRoute(conversation)) {
             Label(title, systemImage: symbol)
                 .font(.system(size: 13, weight: .semibold))
                 .frame(maxWidth: .infinity)
