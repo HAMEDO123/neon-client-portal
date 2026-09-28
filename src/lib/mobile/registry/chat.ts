@@ -8,6 +8,9 @@ import { createChatTask, deleteChatTask, addChatTaskComment } from "@/lib/action
 import { createChatMeeting, cancelChatMeeting, setMeetingRsvp } from "@/lib/actions/chat-meeting-actions";
 import { reactToMessage, setMessagePinned } from "@/lib/actions/chat-reaction-actions";
 import { deleteChatMessage, askChatAssistant } from "@/lib/actions/chat-actions";
+// The manager's approve / send-back on a task card — the same actions the
+// web review queue calls, used here only as the card uses them.
+import { approveSubmission, rejectSubmission } from "@/lib/actions/submission-actions";
 
 // The "chat" area of the phone API. See lib/mobile/rpc.ts: keys are
 // "chat/<name>"; every read is guarded(<the website page's guard>, …); an
@@ -98,6 +101,10 @@ export const actions: ActionRegistry = {
   "chat/tasks/create": (input) => createChatTask(input.form),
   "chat/tasks/delete": (input) => deleteChatTask(str(input.args[0], "taskId")),
   "chat/tasks/comment": (input) => addChatTaskComment(input.form),
+  // The manager's approve / send-back on a card, exactly where the web review
+  // queue's buttons lead — "Done" stays the manager's word either way.
+  "chat/tasks/approve": (input) => approveSubmission(str(input.args[0], "submissionId"), input.form),
+  "chat/tasks/reject": (input) => rejectSubmission(str(input.args[0], "submissionId"), input.form),
 
   // Sets, calls off, and answers a meeting — the manager's + → Meeting.
   "chat/meetings/create": (input) => createChatMeeting(input.form),
