@@ -19,13 +19,18 @@ targets:
     info:
       path: Info.plist
       properties:
-        CFBundleDisplayName: "NEON Admin"
+        # One app for the whole studio now — the manager and the team sign in
+        # to the same build and the server's `side` decides what they see.
+        CFBundleDisplayName: "NEON"
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ar]
         CFBundleIcons:
           CFBundlePrimaryIcon:
             CFBundleIconFiles: [AppIcon60x60]
         UILaunchScreen: {}
+        # Proof of finished work is usually a photo taken on site, there and
+        # then. The picker for existing photos needs no permission at all.
+        NSCameraUsageDescription: "NEON uses the camera to photograph finished work and send it to the manager for review."
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -45,3 +50,9 @@ targets:
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: "NO"
         CODE_SIGNING_ALLOWED: "NO"
+        # Except on the simulator, which is signed locally ("Sign to Run
+        # Locally", no Apple ID involved). A simulator app with no signature at
+        # all has no application identifier, so the Keychain refuses it and
+        # the session token is gone on every relaunch.
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"
+        "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"

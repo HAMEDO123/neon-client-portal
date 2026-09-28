@@ -3,6 +3,7 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var api: APIClient
     @State private var data: DashboardResponse?
+    @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @State private var appeared = false
     @State private var showNewProject = false
@@ -15,6 +16,8 @@ struct DashboardView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(Color.neonInk.opacity(0.5))
                         .padding(.top, 4)
+
+                    if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
                     if let data {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -80,20 +83,6 @@ struct DashboardView: View {
             }
             .navigationTitle(L("Dashboard"))
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        Haptic.tap()
-                        AppLanguage.toggle()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "globe")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text(AppLanguage.current.toggleLabel)
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundStyle(Color.neonInk.opacity(0.6))
-                    }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Haptic.tap()
@@ -104,10 +93,7 @@ struct DashboardView: View {
                             .foregroundStyle(Color.neonPurpleStrong)
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(L("Sign Out")) { api.logout() }
-                        .foregroundStyle(Color.neonInk.opacity(0.6))
-                }
+                ToolbarItem(placement: .topBarTrailing) { AccountMenu() }
             }
             .sheet(isPresented: $showNewProject) {
                 NewProjectSheet { Task { await load() } }
@@ -119,12 +105,14 @@ struct DashboardView: View {
 
     private func load() async {
         do {
-            data = try await api.fetchDashboard()
+            let loaded = try await api.fetchDashboard()
+            data = loaded.value
+            cachedAt = loaded.cachedAt
             errorMessage = nil
             appeared = false
             withAnimation { appeared = true }
         } catch {
-            errorMessage = L("Couldn't load — pull to retry.")
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? L("Couldn't load — pull to retry.")
         }
     }
 }

@@ -7,7 +7,7 @@ One Next.js app runs NEON's interior-design studio. It is live at **https://clie
 | Clients | `/p/<token>` | A project's page: renders, drawings, documents, BOQ, pricing, materials, furniture, approvals, comments and downloads. There is no login; the link is the key. |
 | The manager | `/admin` | Projects, the team's task board and week board, reviews, alerts, chat, analytics, payroll, requests, employees and settings. |
 | Employees | `/employee` | A phone web app added to the Home Screen: the day's work, photo proof, chat, requests and push notifications. |
-| The manager, native | `ios/` | "NeonAdmin", a small SwiftUI app that talks to `/api/mobile/*`. It is sideloaded with AltStore. |
+| The studio, native | `ios/` | "NEON" (target `NeonAdmin`), a SwiftUI app for the manager and the team alike, on `/api/mobile/*`. It is sideloaded with AltStore. |
 | WhatsApp | `whatsapp-worker/` | An optional separate service that sends messages from a linked WhatsApp number. |
 
 **Stack:**
@@ -435,7 +435,11 @@ The domain vocabulary, as the code defines it:
 - Without `ANTHROPIC_API_KEY`, they all fail softly and nothing else is affected.
 
 ### iOS app and mobile API
-- `/api/mobile/{login,dashboard,projects,projects/[id],…/comments,…/cover,…/gallery}` use a Bearer token, the same one as the admin cookie. Mobile is admin only.
+- `/api/mobile/*` takes a Bearer token: the admin's or an employee's, the same signed tokens as the cookies (`lib/mobile-auth.ts`). `/login` with an email is somebody on the team, without one the manager, and it answers with `side`.
+- **One app, both sides.** The side from `/login` decides the screens: the manager gets Projects and Chat, the team gets Today, Tasks, Chat and Alerts. `ios/PLAN.md` is the map — which screen reads which route, the real shapes the server answered, and the routes the app still needs (jobs handed out by hand, push, reviewing proof, meeting answers).
+- **The app follows the platform's refusals rather than restating them.** There is no Done button (proof goes through `/tasks/[id]/proof`, which answers SUBMITTED), warnings cannot be dismissed, and an empty day reads "Nothing planned for today" in the web's own words.
+- The token is in the Keychain (`TokenStore.swift`); a 401 signs out and wipes the on-disk cache of GET answers, which is only ever shown under an "Offline" banner.
+- **Simulator builds are signed locally** (`CODE_SIGN_IDENTITY[sdk=iphonesimulator*]: "-"` in `project.yml`). A completely unsigned simulator app is refused by the Keychain, so it forgets the session on every relaunch — which reads as broken sign-in and is not. Device builds stay unsigned.
 - The app (`ios/Sources/*.swift`) has the production URL hard-coded in `APIClient.swift`. It is unsigned and meant to be re-signed with AltStore using a free Apple ID, which also means it can't receive push notifications.
 
 ### Tests
