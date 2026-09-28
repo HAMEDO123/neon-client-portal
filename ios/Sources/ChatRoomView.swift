@@ -21,6 +21,7 @@ struct ChatRoomView: View {
     @State private var showFiles = false
     @State private var viewer: ImageViewerPayload?
     @State private var proofFor: ProofTarget?
+    @State private var web: WebPortalLink?
     @FocusState private var composerFocused: Bool
 
     var body: some View {
@@ -48,6 +49,10 @@ struct ChatRoomView: View {
                                     },
                                     sendProof: { assignment, card in
                                         proofFor = ProofTarget(id: assignment.id, title: card.title, detail: card.description)
+                                    },
+                                    openReviews: {
+                                        web = WebPortalLink(path: "/admin/reviews", title: L("Reviews"),
+                                                            hint: L("Approve the proof, or send it back with a reason."))
                                     }
                                 )
                                 .id(message.id)
@@ -83,6 +88,14 @@ struct ChatRoomView: View {
         .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // Calls run on the website's own call screen, opened here signed
+            // in, until the phone API has call routes (ios/SERVER-REQUEST.md).
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { openCall() } label: { Image(systemName: "phone.fill") }
+                    .accessibilityLabel(L("Voice call"))
+                Button { openCall() } label: { Image(systemName: "video.fill") }
+                    .accessibilityLabel(L("Video call"))
+            }
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
                     AvatarView(url: resolvedMediaURL(route.avatar), name: route.title, size: 30)
@@ -97,6 +110,7 @@ struct ChatRoomView: View {
         }
         .task { await poll() }
         .fullScreenCover(item: $viewer) { ImageViewerView(payload: $0) }
+        .fullScreenCover(item: $web) { WebPortalSheet(link: $0) }
         .sheet(item: $proofFor) { target in
             ProofSheet(targetId: target.id, title: target.title, subtitle: target.detail) {
                 Task { await load() }
@@ -192,6 +206,16 @@ struct ChatRoomView: View {
 
     private var canSend: Bool {
         !sending && cachedAt == nil && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func openCall() {
+        Haptic.tap()
+        guard let identity = api.identity else { return }
+        web = WebPortalLink(
+            path: identity.webChatPath(route.slug),
+            title: route.title,
+            hint: L("Start or join the call with the buttons at the top of the chat.")
+        )
     }
 
     // MARK: Reading
@@ -320,6 +344,7 @@ private struct MessageView: View {
     let viewerIdentity: Identity?
     let openImage: (URL) -> Void
     let sendProof: (TaskCard.Assignment, TaskCard) -> Void
+    let openReviews: () -> Void
 
     @Environment(\.openURL) private var openURL
 
@@ -329,7 +354,7 @@ private struct MessageView: View {
             callLine
         case "TASK":
             if let card = message.task {
-                aligned { TaskCardView(card: card, message: message, viewer: viewerIdentity, sendProof: sendProof) }
+                aligned { TaskCardView(card: card, message: message, viewer: viewerIdentity, sendProof: sendProof, openReviews: openReviews) }
             } else {
                 aligned { bubble }
             }
@@ -398,7 +423,7 @@ private struct MessageView: View {
                                     }
                                     Text(L("Couldn't load the picture")).font(.system(size: 11, weight: .medium))
                                 }
-                                .foregroundStyle(Color.neonInk.opacity(0.4))
+                                .foregroundStyle(mine ? Color.white.opacity(0.75) : Color.neonInk.opacity(0.4))
                                 .padding(12)
                             } else {
                                 ProgressView()
@@ -484,6 +509,7 @@ private struct TaskCardView: View {
     let message: ChatMessage
     let viewer: Identity?
     let sendProof: (TaskCard.Assignment, TaskCard) -> Void
+    let openReviews: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -522,12 +548,26 @@ private struct TaskCardView: View {
                     if let pending = part.submissions?.first, part.state == "SUBMITTED" {
                         HStack(spacing: 6) {
                             Image(systemName: "photo")
-                            Text(viewer?.side == .admin ? L("Proof waiting for your review on the web") : L("Proof sent — waiting for review"))
+                            Text(viewer?.side == .admin ? L("Proof waiting for your review") : L("Proof sent — waiting for review"))
                         }
                         .font(.system(size: 11))
                         .foregroundStyle(Color.neonInk.opacity(0.5))
                         if let note = pending.note, !note.isEmpty {
                             DirText(note, font: .system(size: 12), color: .neonInk.opacity(0.6))
+                        }
+                        if viewer?.side == .admin {
+                            Button {
+                                Haptic.tap()
+                                openReviews()
+                            } label: {
+                                Label(L("Review"), systemImage: "checkmark.seal")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 34)
+                                    .foregroundStyle(.white)
+                                    .background(Color.neonPurpleStrong, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                            .buttonStyle(.pressable)
                         }
                     }
                     if isMine(part), part.state != "SUBMITTED", part.state != "DONE" {
@@ -557,16 +597,6 @@ private struct TaskCardView: View {
         viewer?.side == .employee && viewer?.id == part.employeeId
     }
 
-    /// A card reads To do → In progress → Sent for review → Done.
-    private func cardStateLabel(_ state: String) -> String {
-        switch state {
-        case "TODO", "TOMORROW": return L("To do")
-        case "IN_PROGRESS": return L("In progress")
-        case "SUBMITTED": return L("Sent for review")
-        case "DONE": return L("Done")
-        default: return taskStateLabel(state)
-        }
-    }
 }
 
 /// A meeting set from the chat. Read-only here: answering it has no mobile

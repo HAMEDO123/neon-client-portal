@@ -39,7 +39,7 @@ struct NeonAdminApp: App {
 // MARK: - The team
 
 enum EmployeeTab: Hashable {
-    case today, tasks, chat, alerts
+    case today, tasks, chat, meetings, alerts
 }
 
 struct EmployeeHome: View {
@@ -66,6 +66,10 @@ struct EmployeeHome: View {
                 .badge(store.badges.unreadChat)
                 .tag(EmployeeTab.chat)
 
+            MeetingsView()
+                .tabItem { Label(L("Meetings"), systemImage: "calendar") }
+                .tag(EmployeeTab.meetings)
+
             NotificationsView(openChat: { tab = .chat })
                 .tabItem { Label(L("Alerts"), systemImage: "bell") }
                 .badge(store.badges.unread)
@@ -82,7 +86,7 @@ struct EmployeeHome: View {
 // MARK: - The manager
 
 enum AdminTab: Hashable {
-    case projects, chat
+    case projects, tasks, chat, meetings
 }
 
 struct AdminHome: View {
@@ -97,10 +101,18 @@ struct AdminHome: View {
                 .tabItem { Label(L("Projects"), systemImage: "square.grid.2x2") }
                 .tag(AdminTab.projects)
 
+            ManagerTasksView()
+                .tabItem { Label(L("Tasks"), systemImage: "checklist") }
+                .tag(AdminTab.tasks)
+
             ChatListView(onUnreadChange: { unreadChat = $0 })
                 .tabItem { Label(L("Chat"), systemImage: "bubble.left.and.bubble.right") }
                 .badge(unreadChat)
                 .tag(AdminTab.chat)
+
+            MeetingsView()
+                .tabItem { Label(L("Meetings"), systemImage: "calendar") }
+                .tag(AdminTab.meetings)
         }
         .task { await pollUnread() }
         .onChange(of: scenePhase) { phase in

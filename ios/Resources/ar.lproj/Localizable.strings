@@ -273,3 +273,36 @@
 "No notifications" = "لا توجد تنبيهات";
 "Mark all read" = "تعليم الكل كمقروء";
 "Couldn't load the picture" = "تعذّر تحميل الصورة";
+
+/* Tasks, meetings and calls through the studio's web pages */
+"Close" = "إغلاق";
+"Task board" = "لوحة المهام";
+"Reviews" = "المراجعات";
+"Review" = "راجع";
+"Approve the proof, or send it back with a reason." = "اعتمد الإثبات، أو أرجعه مع السبب.";
+"Handed out in chat" = "موزّعة في المحادثة";
+"To review" = "للمراجعة";
+"No tasks here" = "لا توجد مهام هنا";
+"Tasks from the last 200 messages of each chat." = "المهام من آخر ٢٠٠ رسالة في كل محادثة.";
+"Proof waiting for your review" = "إثبات بانتظار مراجعتك";
+"On the project board" = "على لوحة المشاريع";
+"My week on the web" = "أسبوعي على الويب";
+"My week" = "أسبوعي";
+"Meetings" = "الاجتماعات";
+"Coming up" = "القادمة";
+"Earlier" = "السابقة";
+"No meetings coming up" = "لا توجد اجتماعات قادمة";
+"Meetings set from a chat appear here." = "الاجتماعات التي تُحدَّد من المحادثة تظهر هنا.";
+"Meetings from the last 200 messages of each chat." = "الاجتماعات من آخر ٢٠٠ رسالة في كل محادثة.";
+"Now" = "الآن";
+"Join" = "انضم";
+"Answer" = "ردّ";
+"Press Join on the meeting card to enter the call." = "اضغط «انضم» على بطاقة الاجتماع لتدخل المكالمة.";
+"Answer on the meeting card: coming or not." = "ردّ على بطاقة الاجتماع: ستحضر أم لا.";
+"Voice call" = "مكالمة صوتية";
+"Video call" = "مكالمة فيديو";
+"Start or join the call with the buttons at the top of the chat." = "ابدأ المكالمة أو انضم إليها من الأزرار أعلى المحادثة.";
+"Hand out a task" = "وزّع مهمة";
+"Press + in the chat and choose Task. For one person, open their chat instead." = "اضغط + في المحادثة واختر «مهمة». ولشخص واحد، افتح محادثته بدلًا من ذلك.";
+"Set a meeting" = "حدّد اجتماعًا";
+"Press + in the chat and choose Meeting. For one person, open their chat instead." = "اضغط + في المحادثة واختر «اجتماع». ولشخص واحد، افتح محادثته بدلًا من ذلك.";

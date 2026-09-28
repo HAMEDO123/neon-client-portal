@@ -100,9 +100,22 @@ decision.
 `ios/SERVER-REQUEST.md` is a paste-ready request for both. The web's call
 routes (`/api/calls*`) accept only a browser session plus a same-origin
 check, and reviewing, the day board and handing out work are `requireAdmin`
-server actions. None of these can be called from the app today. The app
-shows call history lines in chat, but has no call buttons until those routes
-exist.
+server actions. None of these can be called from the app's API client.
+
+**Until those routes exist, the app opens the website's own page for them,
+inside the app and already signed in** (`WebPortal.swift`). This works
+because the app's token *is* the website's session cookie value
+(`createSessionToken` / `createEmployeeSessionToken`). The page runs on the
+website's origin, so the website's own checks apply unchanged. The cookie
+sits in a non-persistent store, so it is gone when the page closes.
+- Phone and camera buttons in every conversation → the website's chat, where calls start or join. Mic and camera permissions are in `project.yml`.
+- **Tasks** tab (manager) → the website's Task board and Reviews, "Hand out a task", and a native list of every task card from every chat (Open · To review · Done).
+- **Meetings** tab (both sides) → a native list of every meeting card, with Join (from ten minutes before) and Answer opening the website's chat. "Set a meeting" is for the manager only.
+- Tasks tab (team) → a native "Handed out in chat" list with Send proof, and "My week on the web".
+
+These are a bridge. When the routes in `SERVER-REQUEST.md` are live, each of
+them becomes a native screen. A call started this way rings only while the
+page is open, just as it does on the web.
 
 Each of these is a server change, to be made on the office PC. The app works
 without them, and it doesn't fake any of them.

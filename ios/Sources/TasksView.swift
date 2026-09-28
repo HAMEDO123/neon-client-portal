@@ -9,11 +9,20 @@ struct TasksView: View {
     @State private var tasks: [StaffTask]?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
+    @StateObject private var cards = ChatCardsLoader()
+    @State private var proofFor: ProofTarget?
+    @State private var web: WebPortalLink?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    // Jobs handed out on the week board have no phone route
+                    // yet (ios/SERVER-REQUEST.md); the website's list has them.
+                    WebTile(title: L("My week on the web"), symbol: "calendar") {
+                        web = WebPortalLink(path: "/employee/tasks", title: L("My week"))
+                    }
+
                     Picker(L("Show"), selection: $filter) {
                         ForEach(TaskFilter.allCases) { Text($0.label).tag($0) }
                     }
@@ -22,6 +31,7 @@ struct TasksView: View {
                     if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
                     if let tasks {
+                        SectionLabel(L("On the project board"))
                         if tasks.isEmpty {
                             EmptyState(
                                 symbol: "checklist",
@@ -31,6 +41,10 @@ struct TasksView: View {
                             .glassCard(radius: 18)
                         } else {
                             TaskList(tasks: tasks)
+                        }
+
+                        MyChatJobsSection(filter: filter, cards: cards, viewer: api.identity) { part, card in
+                            proofFor = ProofTarget(id: part.id, title: card.title, detail: card.description)
                         }
                     } else if let errorMessage {
                         ErrorState(message: errorMessage) { await load() }
@@ -43,6 +57,7 @@ struct TasksView: View {
             .refreshable {
                 Haptic.tap()
                 await load()
+                await cards.load(api)
             }
             .navigationTitle(L("Tasks"))
             .toolbar {
@@ -51,12 +66,20 @@ struct TasksView: View {
             .navigationDestination(for: TaskRoute.self) { route in
                 TaskDetailView(taskId: route.id)
             }
+            .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
             .neonAmbientBackground()
         }
         .task(id: filter) {
             tasks = nil
             await load()
         }
+        .task { await cards.load(api) }
+        .sheet(item: $proofFor) { target in
+            ProofSheet(targetId: target.id, title: target.title, subtitle: target.detail) {
+                Task { await cards.load(api) }
+            }
+        }
+        .fullScreenCover(item: $web) { WebPortalSheet(link: $0) }
     }
 
     private func load() async {

@@ -30,7 +30,8 @@ targets:
         UILaunchScreen: {}
         # Proof of finished work is usually a photo taken on site, there and
         # then. The picker for existing photos needs no permission at all.
-        NSCameraUsageDescription: "NEON uses the camera to photograph finished work and send it to the manager for review."
+        NSCameraUsageDescription: "NEON uses the camera to photograph finished work, and for video calls with the studio."
+        NSMicrophoneUsageDescription: "NEON uses the microphone for calls with the studio."
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

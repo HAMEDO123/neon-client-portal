@@ -407,11 +407,11 @@ final class APIClient: ObservableObject {
         try await load("chat/conversations", as: ConversationsResponse.self)
     }
 
-    func fetchMessages(conversation: String) async throws -> Loaded<[ChatMessage]> {
+    func fetchMessages(conversation: String, take: Int = 150) async throws -> Loaded<[ChatMessage]> {
         struct Wrapper: Decodable { let messages: [ChatMessage] }
         let loaded = try await load(
             "chat/messages",
-            query: [URLQueryItem(name: "conversation", value: conversation), URLQueryItem(name: "take", value: "150")],
+            query: [URLQueryItem(name: "conversation", value: conversation), URLQueryItem(name: "take", value: String(take))],
             as: Wrapper.self
         )
         return Loaded(value: loaded.value.messages, cachedAt: loaded.cachedAt)
