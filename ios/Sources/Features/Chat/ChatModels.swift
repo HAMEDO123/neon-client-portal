@@ -108,6 +108,8 @@ struct TaskCard: Decodable, Equatable {
     let attachmentUrl: String?
     let attachmentName: String?
     let assignments: [Assignment]
+    /// The newest, so a long thread still opens on what was said last.
+    var comments: [Comment] = []
 
     struct Assignment: Decodable, Equatable, Identifiable {
         let id: String
@@ -124,6 +126,128 @@ struct TaskCard: Decodable, Equatable {
             let createdAt: String?
         }
     }
+
+    struct Comment: Decodable, Equatable, Identifiable {
+        let id: String
+        let authorType: String
+        let authorId: String?
+        let authorName: String
+        let body: String
+        let createdAt: String
+    }
+
+    init(id: String, title: String, description: String?, dueAt: String?, priority: String?, attachmentUrl: String?, attachmentName: String?, assignments: [Assignment], comments: [Comment] = []) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.dueAt = dueAt
+        self.priority = priority
+        self.attachmentUrl = attachmentUrl
+        self.attachmentName = attachmentName
+        self.assignments = assignments
+        self.comments = comments
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, description, dueAt, priority, attachmentUrl, attachmentName, assignments, comments
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        dueAt = try container.decodeIfPresent(String.self, forKey: .dueAt)
+        priority = try container.decodeIfPresent(String.self, forKey: .priority)
+        attachmentUrl = try container.decodeIfPresent(String.self, forKey: .attachmentUrl)
+        attachmentName = try container.decodeIfPresent(String.self, forKey: .attachmentName)
+        assignments = try container.decodeIfPresent([Assignment].self, forKey: .assignments) ?? []
+        comments = try container.decodeIfPresent([Comment].self, forKey: .comments) ?? []
+    }
+}
+
+/// Who a task or a meeting set in a conversation can go to.
+struct ChatMembers: Decodable {
+    let task: [TaskMember]
+    let meeting: [MeetingMember]
+}
+
+/// One person a task can be handed to — a plain employee row.
+struct TaskMember: Decodable, Equatable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    let color: String?
+}
+
+/// One person a meeting can ask — the manager included, as the key "admin".
+struct MeetingMember: Decodable, Equatable, Hashable, Identifiable {
+    let key: String
+    let name: String
+    let color: String?
+    var id: String { key }
+}
+
+/// What people gave each message and what is pinned, as the live stream's
+/// `reactions` event carries it (and `chat/reactions` answers the same shape).
+struct ChatReactionSnapshot: Decodable, Equatable {
+    var reactions: [Reaction] = []
+    var pinned: [Pinned] = []
+
+    struct Reaction: Decodable, Equatable {
+        let messageId: String
+        let memberKey: String
+        let memberName: String
+        let emoji: String
+    }
+
+    struct Pinned: Decodable, Equatable, Identifiable {
+        let id: String
+        let kind: String
+        let body: String?
+        let attachmentName: String?
+        let authorName: String
+        let pinnedAt: String?
+        let pinnedByName: String?
+    }
+}
+
+/// Who is writing, and how far each person has read — the stream's `people` event.
+struct ChatPeopleSnapshot: Decodable, Equatable {
+    var typing: [Typing] = []
+    var reads: [ReadMark] = []
+
+    struct Typing: Decodable, Equatable { let memberKey: String; let name: String }
+    struct ReadMark: Decodable, Equatable { let key: String; let at: String }
+}
+
+/// The Tasks tab: every card this person can see, with the conversation it lives in.
+struct ChatTaskListItem: Decodable, Identifiable {
+    let id: String
+    let messageId: String
+    let title: String
+    let dueAt: String
+    let priority: String?
+    let assignments: [TaskCard.Assignment]
+    let conversationSlug: String
+    let conversationTitle: String
+    let isGroup: Bool
+
+    var overall: String { TaskCard(id: id, title: title, description: nil, dueAt: dueAt, priority: priority, attachmentUrl: nil, attachmentName: nil, assignments: assignments).overall }
+}
+
+/// The Meetings tab: every card this person can see, with the conversation it lives in.
+struct ChatMeetingListItem: Decodable, Identifiable {
+    let id: String
+    let messageId: String
+    let title: String
+    let mode: String?
+    let place: String?
+    let startsAt: String
+    let durationMinutes: Int?
+    let attendees: [MeetingCard.Attendee]
+    let conversationSlug: String
+    let conversationTitle: String
+    let isGroup: Bool
 }
 
 /// A meeting the manager set from the chat.

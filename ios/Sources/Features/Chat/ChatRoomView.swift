@@ -1,14 +1,19 @@
 import PhotosUI
 import SwiftUI
 
-/// One conversation. It reads `/chat/messages` and re-reads it every few
-/// seconds while open — the web has a live stream, the mobile API does not,
-/// so this polls — and marks the conversation read so the web and the app
-/// show the same unread number.
+/// One conversation. Live updates come from the stream (ChatStream.listen) —
+/// a new message the instant somebody sends one, who is typing, and who has
+/// read how far — with a background poll of `/chat/messages` underneath as
+/// the fallback and the source every task and meeting card's own state
+/// refreshes from, since that read already re-draws each card fresh every
+/// time.
 struct ChatRoomView: View {
     let route: ChatRoute
 
     @EnvironmentObject var api: APIClient
+    @StateObject private var recorder = ChatVoiceRecorder()
+    @ObservedObject private var voicePlayer = ChatVoicePlayer.shared
+
     @State private var messages: [ChatMessage]?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
@@ -21,39 +26,64 @@ struct ChatRoomView: View {
     @State private var showFiles = false
     @State private var viewer: ImageViewerPayload?
     @State private var proofFor: ProofTarget?
-    @State private var web: WebPortalLink?
+    @State private var showTaskCompose = false
+    @State private var showMeetingCompose = false
+    @State private var showAssistant = false
+    @State private var reactions = ChatReactionSnapshot()
+    @State private var people = ChatPeopleSnapshot()
+    @State private var searching = false
+    @State private var searchQuery = ""
+    @State private var scrollTarget: String?
+    @State private var lastTypingSentAt: Date?
     @FocusState private var composerFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             if let cachedAt { OfflineBanner(savedAt: cachedAt).padding(.horizontal, 12).padding(.top, 6) }
+            if searching {
+                SearchField(text: $searchQuery, prompt: L("Search this chat")).padding(.horizontal, 12).padding(.top, 8)
+            }
+            ChatPinnedStrip(
+                pinned: reactions.pinned,
+                onOpen: { scrollTarget = $0 },
+                onUnpin: { id in Task { try? await api.setChatPinned(messageId: id, pin: false) } }
+            )
 
-            ScrollViewReader { reader in
+            ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 6) {
                         if let messages {
-                            if messages.isEmpty {
-                                EmptyState(symbol: "bubble.left", title: L("No messages yet"), detail: L("Say hello."))
+                            let shown = displayed(messages)
+                            if shown.isEmpty {
+                                EmptyState(
+                                    symbol: searching ? "magnifyingglass" : "bubble.left",
+                                    title: searching ? L("No matches") : L("No messages yet"),
+                                    detail: searching ? nil : L("Say hello.")
+                                )
                             }
-                            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                                if startsNewDay(at: index, in: messages) {
+                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, message in
+                                if !searching, startsNewDay(at: index, in: shown) {
                                     DaySeparator(iso: message.createdAt)
                                 }
                                 MessageView(
                                     message: message,
                                     mine: message.isMine(api.identity),
-                                    showAuthor: route.isGroup && showsAuthor(at: index, in: messages),
+                                    showAuthor: route.isGroup && showsAuthor(at: index, in: shown),
                                     viewerIdentity: api.identity,
+                                    tallies: chatTally(reactions.reactions, messageId: message.id, myKey: memberKey),
+                                    isPinned: reactions.pinned.contains { $0.id == message.id },
+                                    isRead: isRead(message),
+                                    callSlug: route.slug,
                                     openImage: { url in
                                         viewer = ImageViewerPayload(items: [ImageViewerItem(id: message.id, url: url, caption: message.body)], startIndex: 0)
                                     },
                                     sendProof: { assignment, card in
                                         proofFor = ProofTarget(id: assignment.id, title: card.title, detail: card.description)
                                     },
-                                    openReviews: {
-                                        web = WebPortalLink(path: "/admin/reviews", title: L("Reviews"),
-                                                            hint: L("Approve the proof, or send it back with a reason."))
-                                    }
+                                    onReact: { emoji in Task { try? await api.toggleChatReaction(messageId: message.id, emoji: emoji) } },
+                                    onPin: { pin in Task { try? await api.setChatPinned(messageId: message.id, pin: pin) } },
+                                    onDelete: canDelete(message) ? { Task { await delete(message) } } : nil,
+                                    onCardChanged: { Task { await load() } }
                                 )
                                 .id(message.id)
                             }
@@ -69,32 +99,51 @@ struct ChatRoomView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: messages?.last?.id) { _ in
-                    withAnimation(.easeOut(duration: 0.2)) { reader.scrollTo("bottom", anchor: .bottom) }
+                    guard scrollTarget == nil else { return }
+                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
                 .onChange(of: composerFocused) { focused in
                     if focused {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            withAnimation { reader.scrollTo("bottom", anchor: .bottom) }
+                            withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                         }
                     }
                 }
-                .onAppear { reader.scrollTo("bottom", anchor: .bottom) }
+                .onChange(of: scrollTarget) { target in
+                    guard let target else { return }
+                    withAnimation { proxy.scrollTo(target, anchor: .center) }
+                    scrollTarget = nil
+                }
+                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
+
+            if let name = typingName {
+                HStack(spacing: 6) {
+                    ProgressView().scaleEffect(0.6)
+                    Text(L("%@ is typing…", name)).font(.system(size: 12)).foregroundStyle(Color.neonInk.opacity(0.5))
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 2)
+                .transition(.opacity)
             }
 
             composer
         }
         .background(Color.neonBg.ignoresSafeArea())
-        // The whole screen belongs to the conversation, as it does on the web.
         .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // Calls run on the website's own call screen, opened here signed
-            // in, until the phone API has call routes (ios/SERVER-REQUEST.md).
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button { openCall() } label: { Image(systemName: "phone.fill") }
-                    .accessibilityLabel(L("Voice call"))
-                Button { openCall() } label: { Image(systemName: "video.fill") }
-                    .accessibilityLabel(L("Video call"))
+                if route.slug == "team", api.identity?.side == .admin {
+                    Button { showAssistant = true } label: { Image(systemName: "sparkles") }
+                        .accessibilityLabel(L("Ask the assistant"))
+                }
+                Button { withAnimation { searching.toggle() }; if !searching { searchQuery = "" } } label: {
+                    Image(systemName: searching ? "xmark.circle" : "magnifyingglass")
+                }
+                .accessibilityLabel(L("Search"))
+                CallButtons(slug: route.slug, title: route.title)
             }
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
@@ -109,13 +158,20 @@ struct ChatRoomView: View {
             }
         }
         .task { await poll() }
+        .task { await listenLive() }
         .fullScreenCover(item: $viewer) { ImageViewerView(payload: $0) }
-        .fullScreenCover(item: $web) { WebPortalSheet(link: $0) }
         .sheet(item: $proofFor) { target in
             ProofSheet(targetId: target.id, title: target.title, subtitle: target.detail) {
                 Task { await load() }
             }
         }
+        .sheet(isPresented: $showTaskCompose) {
+            ChatTaskComposeSheet(conversationSlug: route.slug) { Task { await load() } }
+        }
+        .sheet(isPresented: $showMeetingCompose) {
+            ChatMeetingComposeSheet(conversationSlug: route.slug) { Task { await load() } }
+        }
+        .sheet(isPresented: $showAssistant) { ChatAssistantSheet() }
         .photosPicker(isPresented: $showPhotos, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { item in
             guard let item else { return }
@@ -143,6 +199,11 @@ struct ChatRoomView: View {
             }
             Task { await send(file: file) }
         }
+        .alert(L("Microphone access is off"), isPresented: $recorder.permissionDenied) {
+            Button(L("OK"), role: .cancel) {}
+        } message: {
+            Text(L("Turn it on in Settings to send a voice message."))
+        }
     }
 
     // MARK: Composer
@@ -158,64 +219,159 @@ struct ChatRoomView: View {
                 }
                 .padding(.horizontal, 14)
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    if CameraPicker.isAvailable {
-                        Button { showCamera = true } label: { Label(L("Camera"), systemImage: "camera") }
-                    }
-                    Button { showPhotos = true } label: { Label(L("Photo"), systemImage: "photo") }
-                    Button { showFiles = true } label: { Label(L("File"), systemImage: "doc") }
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color.neonInk.opacity(0.55))
-                        .frame(height: 38)
-                }
-                .disabled(sending || cachedAt != nil)
 
-                TextField(L("Message"), text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
-                    .focused($composerFocused)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.neonInk.opacity(0.1)))
-                    .environment(\.layoutDirection, naturalDirection(draft) ?? AppLanguage.current.layoutDirection)
-
-                Button {
-                    Task { await sendText() }
-                } label: {
-                    ZStack {
-                        if sending {
-                            ProgressView().tint(.white)
-                        } else {
-                            Image(systemName: "arrow.up").font(.system(size: 16, weight: .bold))
+            if recorder.isRecording {
+                recordingRow
+            } else {
+                if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(chatQuickReplies, id: \.text) { reply in
+                                Button { Task { await sendQuick(reply.text) } } label: {
+                                    Label(reply.text, systemImage: reply.symbol)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color.white.opacity(0.8), in: Capsule())
+                                        .overlay(Capsule().strokeBorder(Color.neonInk.opacity(0.08)))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
+                        .padding(.horizontal, 12)
                     }
-                    .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
-                    .background(canSend ? Color.neonPurpleStrong : Color.neonInk.opacity(0.2), in: Circle())
                 }
-                .disabled(!canSend)
+
+                HStack(alignment: .bottom, spacing: 8) {
+                    Menu {
+                        if CameraPicker.isAvailable {
+                            Button { showCamera = true } label: { Label(L("Camera"), systemImage: "camera") }
+                        }
+                        Button { showPhotos = true } label: { Label(L("Photo"), systemImage: "photo") }
+                        Button { showFiles = true } label: { Label(L("File"), systemImage: "doc") }
+                        if api.identity?.side == .admin && route.slug != "manager" {
+                            Divider()
+                            Button { showTaskCompose = true } label: { Label(L("Task"), systemImage: "checklist") }
+                            Button { showMeetingCompose = true } label: { Label(L("Meeting"), systemImage: "calendar.badge.plus") }
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(Color.neonInk.opacity(0.55))
+                            .frame(height: 38)
+                    }
+                    .disabled(sending || cachedAt != nil)
+
+                    TextField(L("Message"), text: $draft, axis: .vertical)
+                        .lineLimit(1...5)
+                        .focused($composerFocused)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.neonInk.opacity(0.1)))
+                        .environment(\.layoutDirection, naturalDirection(draft) ?? AppLanguage.current.layoutDirection)
+                        .onChange(of: draft) { _ in noteTyping() }
+
+                    Button {
+                        if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Haptic.tap()
+                            recorder.start()
+                        } else {
+                            Task { await sendText() }
+                        }
+                    } label: {
+                        ZStack {
+                            if sending {
+                                ProgressView().tint(.white)
+                            } else {
+                                Image(systemName: draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mic.fill" : "arrow.up")
+                                    .font(.system(size: 16, weight: .bold))
+                            }
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background(Color.neonPurpleStrong, in: Circle())
+                    }
+                    .disabled(sending || cachedAt != nil)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
         }
         .background(.ultraThinMaterial)
     }
 
-    private var canSend: Bool {
-        !sending && cachedAt == nil && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    private var recordingRow: some View {
+        HStack(spacing: 12) {
+            Circle().fill(Color.red).frame(width: 9, height: 9).neonPulse(true)
+            Text(formatDuration(recorder.elapsed)).font(.system(size: 15, weight: .semibold).monospacedDigit())
+            Spacer()
+            Button {
+                Haptic.tap()
+                recorder.cancel()
+            } label: { Image(systemName: "trash").foregroundStyle(.red) }
+            Button {
+                guard let taken = recorder.stopAndTake() else { Haptic.warning(); return }
+                Task { await sendVoice(url: taken.url, seconds: taken.seconds) }
+            } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Color.neonPurpleStrong, in: Circle())
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
-    private func openCall() {
-        Haptic.tap()
-        guard let identity = api.identity else { return }
-        web = WebPortalLink(
-            path: identity.webChatPath(route.slug),
-            title: route.title,
-            hint: L("Start or join the call with the buttons at the top of the chat.")
-        )
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let whole = max(0, Int(seconds))
+        return String(format: "%d:%02d", whole / 60, whole % 60)
+    }
+
+    /// The viewer's own key on this card and conversation — "admin" for the
+    /// manager, the employee id otherwise. The same key ChatRead, presence and
+    /// meeting attendees use.
+    private var memberKey: String {
+        guard let identity = api.identity else { return "" }
+        return identity.side == .admin ? "admin" : (identity.id ?? "")
+    }
+
+    private var typingName: String? {
+        people.typing.first { $0.memberKey != memberKey }?.name
+    }
+
+    /// The other person's key in a private chat, for a read tick — nil in the
+    /// group, where one pair of ticks cannot honestly mean "everybody".
+    private var otherKey: String? {
+        guard !route.isGroup, let identity = api.identity else { return nil }
+        if identity.side == .admin { return route.slug }
+        return route.slug == "manager" ? "admin" : route.slug
+    }
+
+    private func isRead(_ message: ChatMessage) -> Bool {
+        guard message.isMine(api.identity), let otherKey, let createdAt = parseISODate(message.createdAt) else { return false }
+        guard let mark = people.reads.first(where: { $0.key == otherKey }), let at = parseISODate(mark.at) else { return false }
+        return at >= createdAt
+    }
+
+    private func canDelete(_ message: ChatMessage) -> Bool {
+        guard let identity = api.identity else { return false }
+        if identity.side == .admin { return true }
+        return message.authorType == "EMPLOYEE" && message.authorId == identity.id
+    }
+
+    private func displayed(_ list: [ChatMessage]) -> [ChatMessage] {
+        guard searching, !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty else { return list }
+        return list.filter { matchesSearch(searchQuery, $0.body, $0.authorName) }
+    }
+
+    private func noteTyping() {
+        let now = Date()
+        if let last = lastTypingSentAt, now.timeIntervalSince(last) < 3 { return }
+        lastTypingSentAt = now
+        Task { await api.sendChatTyping(conversation: draft.isEmpty ? nil : route.slug) }
     }
 
     // MARK: Reading
@@ -232,6 +388,25 @@ struct ChatRoomView: View {
         }
     }
 
+    private func listenLive() async {
+        guard let token = api.token else { return }
+        await ChatStream.listen(conversation: route.slug, token: token) { event in
+            Task { @MainActor in
+                switch event {
+                case .messages(let batch):
+                    for message in batch { append(message) }
+                    if !batch.isEmpty { await markRead() }
+                case .reactions(let snapshot):
+                    reactions = snapshot
+                case .people(let snapshot):
+                    people = snapshot
+                case .connected:
+                    break
+                }
+            }
+        }
+    }
+
     private func load() async {
         do {
             let loaded = try await api.fetchMessages(conversation: route.slug)
@@ -241,6 +416,7 @@ struct ChatRoomView: View {
         } catch {
             if messages == nil { errorMessage = error.localizedDescription }
         }
+        if let snapshot = try? await api.fetchChatReactions(conversation: route.slug) { reactions = snapshot }
     }
 
     private func markRead() async {
@@ -261,11 +437,21 @@ struct ChatRoomView: View {
             draft = ""
             append(message)
             Haptic.tap()
+            await api.sendChatTyping(conversation: nil)
         } catch APIError.unauthorized {
         } catch {
-            // The draft stays in the box, so nothing typed is lost.
             sendError = error.localizedDescription
             Haptic.error()
+        }
+    }
+
+    private func sendQuick(_ text: String) async {
+        Haptic.tap()
+        do {
+            let message = try await api.sendMessage(conversation: route.slug, text: text)
+            append(message)
+        } catch {
+            Toast.error(error)
         }
     }
 
@@ -286,9 +472,39 @@ struct ChatRoomView: View {
         }
     }
 
+    private func sendVoice(url: URL, seconds: Int) async {
+        sending = true
+        defer { sending = false }
+        do {
+            let data = try Data(contentsOf: url)
+            let file = UploadFile(field: "voice", filename: "voice.m4a", mimeType: "audio/mp4", data: data)
+            let message = try await api.sendVoice(conversation: route.slug, file: file, durationSeconds: seconds)
+            append(message)
+            Haptic.success()
+        } catch {
+            sendError = error.localizedDescription
+            Haptic.error()
+        }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private func delete(_ message: ChatMessage) async {
+        do {
+            try await api.perform("chat/messages/delete", args: [message.id])
+            messages?.removeAll { $0.id == message.id }
+            Haptic.tap()
+        } catch {
+            Toast.error(error)
+        }
+    }
+
     private func append(_ message: ChatMessage) {
         var list = messages ?? []
-        if !list.contains(where: { $0.id == message.id }) { list.append(message) }
+        if let index = list.firstIndex(where: { $0.id == message.id }) {
+            list[index] = message
+        } else {
+            list.append(message)
+        }
         messages = list
     }
 
@@ -337,11 +553,19 @@ private struct MessageView: View {
     let mine: Bool
     let showAuthor: Bool
     let viewerIdentity: Identity?
+    let tallies: [ChatReactionTally]
+    let isPinned: Bool
+    let isRead: Bool
+    let callSlug: String
     let openImage: (URL) -> Void
     let sendProof: (TaskCard.Assignment, TaskCard) -> Void
-    let openReviews: () -> Void
+    let onReact: (String) -> Void
+    let onPin: (Bool) -> Void
+    let onDelete: (() -> Void)?
+    let onCardChanged: () -> Void
 
     @Environment(\.openURL) private var openURL
+    @ObservedObject private var voicePlayer = ChatVoicePlayer.shared
 
     var body: some View {
         switch message.kind {
@@ -349,18 +573,42 @@ private struct MessageView: View {
             callLine
         case "TASK":
             if let card = message.task {
-                aligned { TaskCardView(card: card, message: message, viewer: viewerIdentity, sendProof: sendProof, openReviews: openReviews) }
+                aligned {
+                    TaskCardView(card: card, message: message, viewer: viewerIdentity, sendProof: sendProof, onChanged: onCardChanged)
+                        .contextMenu { pinMenu }
+                }
             } else {
                 aligned { bubble }
             }
         case "MEETING":
             if let meeting = message.meeting {
-                aligned { MeetingCardView(meeting: meeting) }
+                aligned {
+                    MeetingCardView(meeting: meeting, callSlug: callSlug, callTitle: message.body ?? "", viewer: viewerIdentity, onChanged: onCardChanged)
+                        .contextMenu { pinMenu }
+                }
             } else {
                 aligned { bubble }
             }
         default:
-            aligned { bubble }
+            aligned {
+                bubble
+                    .contextMenu {
+                        ForEach(chatReactionSet, id: \.self) { emoji in
+                            Button { onReact(emoji) } label: { Text(emoji) }
+                        }
+                        pinMenu
+                        if let onDelete {
+                            Button(role: .destructive, action: onDelete) { Label(L("Delete"), systemImage: "trash") }
+                        }
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var pinMenu: some View {
+        Button { onPin(!isPinned) } label: {
+            Label(isPinned ? L("Unpin") : L("Pin"), systemImage: isPinned ? "pin.slash" : "pin")
         }
     }
 
@@ -375,13 +623,21 @@ private struct MessageView: View {
                     .padding(.horizontal, 6)
             }
             content()
+            ChatReactionRow(tallies: tallies, onToggle: onReact)
+                .padding(.horizontal, 6)
             HStack(spacing: 4) {
+                if isPinned { Image(systemName: "pin.fill").font(.system(size: 9)) }
                 if message.managerOnly == true {
                     Image(systemName: "eye.slash")
                     Text(L("Only you"))
                 }
                 if let time = parseISODate(message.createdAt) {
                     Text(time.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.current.locale)))
+                }
+                if mine && isRead {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 9)).foregroundStyle(Color.neonPurpleStrong)
+                } else if mine {
+                    Image(systemName: "checkmark").font(.system(size: 9))
                 }
             }
             .font(.system(size: 10))
@@ -409,8 +665,6 @@ private struct MessageView: View {
                             if let image = phase.image {
                                 image.resizable().scaledToFill()
                             } else if phase.error != nil {
-                                // Could not be fetched from here — say what it is, and
-                                // the tap still offers it in the full-screen viewer.
                                 VStack(spacing: 6) {
                                     Image(systemName: "photo").font(.system(size: 26))
                                     if let name = message.attachmentName {
@@ -429,14 +683,17 @@ private struct MessageView: View {
                     }
                     .buttonStyle(.plain)
                 }
-            case "FILE", "VOICE":
+            case "VOICE":
+                if let url = message.attachmentURL {
+                    voiceBubble(url: url)
+                }
+            case "FILE":
                 if let url = message.attachmentURL {
                     Button { openURL(url) } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: message.kind == "VOICE" ? "waveform.circle.fill" : "doc.fill")
-                                .font(.system(size: 26))
+                            Image(systemName: "doc.fill").font(.system(size: 26))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(verbatim: message.kind == "VOICE" ? L("Voice message") : (message.attachmentName ?? L("File")))
+                                Text(verbatim: message.attachmentName ?? L("File"))
                                     .font(.system(size: 14, weight: .semibold))
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
@@ -469,6 +726,23 @@ private struct MessageView: View {
         )
     }
 
+    private func voiceBubble(url: URL) -> some View {
+        let playing = voicePlayer.playingURL == url
+        return Button { voicePlayer.toggle(url: url) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: playing ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 30))
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressBar(progress: playing ? voicePlayer.progress : 0, tint: mine ? .white : .neonPurpleStrong, height: 4)
+                        .frame(width: 120)
+                    Text(message.durationSeconds.map { String(format: "0:%02d", Int($0)) } ?? L("Voice message"))
+                        .font(.system(size: 11))
+                }
+            }
+            .foregroundStyle(mine ? Color.white : Color.neonInk)
+        }
+        .buttonStyle(.plain)
+    }
+
     private var fileDetail: String {
         var parts: [String] = []
         if let type = message.attachmentType { parts.append(type.uppercased()) }
@@ -480,7 +754,6 @@ private struct MessageView: View {
     private var callLine: some View {
         HStack(spacing: 6) {
             Image(systemName: message.call?.kind == "VIDEO" ? "video.fill" : "phone.fill")
-            // One string, so the order survives either direction.
             Text(verbatim: [message.body ?? L("Call"), message.authorName].compactMap { $0 }.joined(separator: " · "))
         }
         .font(.system(size: 12, weight: .medium))
@@ -497,14 +770,22 @@ private struct MessageView: View {
 
 /// A job handed out from the chat. Each person on it has their own part; the
 /// person looking at their own part, while it is still theirs to do, gets the
-/// one action that moves it on — sending proof. Approving is the manager's,
-/// on the web's review screen.
+/// one action that moves it on — sending proof. The manager approves or sends
+/// it back right here, exactly where the web review queue's buttons lead —
+/// "Done" stays the manager's word either way — and everybody on the card can
+/// talk about it in the thread underneath.
 private struct TaskCardView: View {
     let card: TaskCard
     let message: ChatMessage
     let viewer: Identity?
     let sendProof: (TaskCard.Assignment, TaskCard) -> Void
-    let openReviews: () -> Void
+    let onChanged: () -> Void
+
+    @EnvironmentObject private var api: APIClient
+    @State private var commentDraft = ""
+    @State private var busy = false
+    @State private var reviewNote = ""
+    @State private var reviewingSubmissionId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -551,18 +832,49 @@ private struct TaskCardView: View {
                             DirText(note, font: .system(size: 12), color: .neonInk.opacity(0.6))
                         }
                         if viewer?.side == .admin {
-                            Button {
-                                Haptic.tap()
-                                openReviews()
-                            } label: {
-                                Label(L("Review"), systemImage: "checkmark.seal")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 34)
-                                    .foregroundStyle(.white)
-                                    .background(Color.neonPurpleStrong, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            if reviewingSubmissionId == pending.id {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    TextField(L("Note (optional)"), text: $reviewNote, axis: .vertical)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(size: 13))
+                                    HStack(spacing: 8) {
+                                        Button {
+                                            respond(to: pending.id, approve: true)
+                                        } label: {
+                                            Label(L("Approve"), systemImage: "checkmark")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .frame(maxWidth: .infinity, minHeight: 32)
+                                        }
+                                        .buttonStyle(.pressable)
+                                        .tint(.green)
+                                        .disabled(busy)
+
+                                        Button(role: .destructive) {
+                                            respond(to: pending.id, approve: false)
+                                        } label: {
+                                            Label(L("Send back"), systemImage: "arrow.uturn.backward")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .frame(maxWidth: .infinity, minHeight: 32)
+                                        }
+                                        .buttonStyle(.pressable)
+                                        .disabled(busy)
+                                    }
+                                }
+                            } else {
+                                Button {
+                                    Haptic.tap()
+                                    reviewNote = ""
+                                    reviewingSubmissionId = pending.id
+                                } label: {
+                                    Label(L("Review"), systemImage: "checkmark.seal")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 34)
+                                        .foregroundStyle(.white)
+                                        .background(Color.neonPurpleStrong, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                }
+                                .buttonStyle(.pressable)
                             }
-                            .buttonStyle(.pressable)
                         }
                     }
                     if isMine(part), part.state != "SUBMITTED", part.state != "DONE" {
@@ -581,6 +893,11 @@ private struct TaskCardView: View {
                     }
                 }
             }
+
+            if viewer != nil {
+                Divider()
+                commentsSection
+            }
         }
         .padding(14)
         .frame(width: 290, alignment: .leading)
@@ -588,22 +905,93 @@ private struct TaskCardView: View {
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.neonPurple.opacity(0.25)))
     }
 
+    private var commentsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(card.comments) { comment in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(comment.authorName).font(.system(size: 11, weight: .semibold))
+                    DirText(comment.body, font: .system(size: 12.5), color: .neonInk.opacity(0.8))
+                }
+            }
+            HStack(spacing: 8) {
+                TextField(L("Write a comment…"), text: $commentDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 13))
+                Button {
+                    send()
+                } label: {
+                    Image(systemName: "paperplane.fill")
+                }
+                .disabled(commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
+            }
+        }
+    }
+
     private func isMine(_ part: TaskCard.Assignment) -> Bool {
         viewer?.side == .employee && viewer?.id == part.employeeId
     }
 
+    private func send() {
+        let body = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        commentDraft = ""
+        Haptic.tap()
+        busy = true
+        Task {
+            defer { busy = false }
+            try? await api.addChatTaskComment(taskId: card.id, body: body)
+            onChanged()
+        }
+    }
+
+    private func respond(to submissionId: String, approve: Bool) {
+        Haptic.tap()
+        busy = true
+        let note = reviewNote
+        Task {
+            defer { busy = false }
+            if approve {
+                try? await api.approveChatSubmission(id: submissionId, note: note)
+            } else {
+                try? await api.rejectChatSubmission(id: submissionId, note: note)
+            }
+            reviewingSubmissionId = nil
+            onChanged()
+        }
+    }
 }
 
-/// A meeting set from the chat. Read-only here: answering it has no mobile
-/// route yet, and joining is the web's call.
+/// A meeting set from the chat: the manager's ONLINE or IN_PERSON card with
+/// its attendees. Whoever was asked answers ACCEPTED or DECLINED right here;
+/// the manager can call it off; Join opens ten minutes before the start,
+/// through the same call buttons the conversation's header carries.
 private struct MeetingCardView: View {
     let meeting: MeetingCard
+    let callSlug: String
+    let callTitle: String
+    let viewer: Identity?
+    let onChanged: () -> Void
+
+    @EnvironmentObject private var api: APIClient
+    @State private var busy = false
+    @State private var confirmCancel = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(L("MEETING"), systemImage: "calendar")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.neonCyanStrong)
+            HStack {
+                Label(L("MEETING"), systemImage: "calendar")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.neonCyanStrong)
+                Spacer()
+                if viewer?.side == .admin {
+                    Button(role: .destructive) {
+                        confirmCancel = true
+                    } label: {
+                        Image(systemName: "xmark.circle").font(.system(size: 14))
+                    }
+                    .disabled(busy)
+                }
+            }
             DirText(meeting.title, font: .system(size: 16, weight: .semibold))
             if let agenda = meeting.agenda, !agenda.isEmpty {
                 DirText(agenda, font: .system(size: 13), color: .neonInk.opacity(0.7))
@@ -623,6 +1011,10 @@ private struct MeetingCardView: View {
             .font(.system(size: 12))
             .foregroundStyle(Color.neonInk.opacity(0.6))
 
+            if meeting.mode != "IN_PERSON", isUpcoming {
+                CallButtons(slug: callSlug, title: callTitle)
+            }
+
             if !meeting.attendees.isEmpty {
                 Divider()
                 ForEach(meeting.attendees) { person in
@@ -631,8 +1023,33 @@ private struct MeetingCardView: View {
                         Spacer()
                         Text(rsvpLabel(person.rsvp))
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(person.rsvp == "ACCEPTED" ? Color.green : Color.neonInk.opacity(0.5))
+                            .foregroundStyle(person.rsvp == "ACCEPTED" ? Color.green : (person.rsvp == "DECLINED" ? Color.red.opacity(0.7) : Color.neonInk.opacity(0.5)))
                     }
+                }
+            }
+
+            if let mine = myAttendee {
+                HStack(spacing: 8) {
+                    Button {
+                        rsvp("ACCEPTED")
+                    } label: {
+                        Label(L("Coming"), systemImage: "checkmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 32)
+                    }
+                    .buttonStyle(.pressable)
+                    .tint(mine.rsvp == "ACCEPTED" ? .green : .gray)
+                    .disabled(busy)
+
+                    Button {
+                        rsvp("DECLINED")
+                    } label: {
+                        Label(L("Not coming"), systemImage: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 32)
+                    }
+                    .buttonStyle(.pressable)
+                    .disabled(busy)
                 }
             }
         }
@@ -640,5 +1057,47 @@ private struct MeetingCardView: View {
         .frame(width: 290, alignment: .leading)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.neonCyan.opacity(0.3)))
+        .confirmationDialog(L("Cancel this meeting?"), isPresented: $confirmCancel, titleVisibility: .visible) {
+            Button(L("Cancel meeting"), role: .destructive) { cancel() }
+            Button(L("Keep it"), role: .cancel) {}
+        }
+    }
+
+    private var myKey: String? {
+        guard let viewer else { return nil }
+        return viewer.side == .admin ? "admin" : viewer.id
+    }
+
+    private var myAttendee: MeetingCard.Attendee? {
+        guard let myKey else { return nil }
+        return meeting.attendees.first { $0.memberKey == myKey }
+    }
+
+    /// Ten minutes before the start and while it is plausibly still running —
+    /// the same window the card's own Join button opens in on the web.
+    private var isUpcoming: Bool {
+        guard let starts = parseISODate(meeting.startsAt) else { return true }
+        let duration = TimeInterval((meeting.durationMinutes ?? 60) * 60)
+        return Date() > starts.addingTimeInterval(-600) && Date() < starts.addingTimeInterval(duration + 1800)
+    }
+
+    private func rsvp(_ answer: String) {
+        Haptic.tap()
+        busy = true
+        Task {
+            defer { busy = false }
+            try? await api.setChatMeetingRsvp(meetingId: meeting.id, rsvp: answer)
+            onChanged()
+        }
+    }
+
+    private func cancel() {
+        Haptic.tap()
+        busy = true
+        Task {
+            defer { busy = false }
+            try? await api.cancelChatMeeting(id: meeting.id)
+            onChanged()
+        }
     }
 }

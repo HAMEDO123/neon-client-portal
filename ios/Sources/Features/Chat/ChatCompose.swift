@@ -1,0 +1,220 @@
+import SwiftUI
+
+// The manager's + menu: handing out a task and setting a meeting from a
+// conversation, natively — the same two forms the web's TaskDialog and
+// MeetingSheet are, reading who the card can go to from chat/members and
+// writing through chat/tasks/create and chat/meetings/create. Both are the
+// manager's alone; ChatRoomView only offers + when the viewer is admin.
+
+struct ChatTaskComposeSheet: View {
+    let conversationSlug: String
+    var onCreated: () -> Void = {}
+
+    @EnvironmentObject var api: APIClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var description = ""
+    @State private var priority: String? = "MEDIUM"
+    @State private var assignees: Set<TaskMember> = []
+    @State private var due = Date().addingTimeInterval(3600)
+    @State private var members: [TaskMember] = []
+    @State private var loadingMembers = true
+    @State private var loadError: String?
+
+    var body: some View {
+        SheetScaffold(
+            L("New task"), subtitle: L("Hand out work in this chat"), symbol: "checklist",
+            primaryTitle: L("Hand out"), isPrimaryEnabled: isValid
+        ) {
+            await create()
+        } content: {
+            FormSection(L("Task")) {
+                NeonTextField(L("Title"), text: $title, symbol: "textformat", isRequired: true)
+                NeonTextEditor(L("Details"), text: $description, minLines: 3, maxLines: 8, limit: 4000)
+                MenuField(L("Priority"), selection: $priority, options: ["LOW", "MEDIUM", "HIGH"], title: { localizedEnum("priority", $0) })
+                DateField(L("Due"), date: $due, components: [.date, .hourAndMinute], in: Date()...Date.distantFuture)
+            }
+            FormSection(L("Assigned to")) {
+                if loadingMembers {
+                    SkeletonRows(count: 2)
+                } else if members.isEmpty {
+                    StatusNote(symbol: "person.slash", tone: .warning, title: L("Nobody to hand this to"), detail: L("There is nobody else in this chat."))
+                } else {
+                    SelectField(L("People"), selection: $assignees, options: members, title: \.name, isRequired: true)
+                }
+                if let loadError { ValidationMessage(loadError) }
+            }
+        }
+        .neonSheet([.large])
+        .task { await loadMembers() }
+    }
+
+    private var isValid: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !assignees.isEmpty && due > Date().addingTimeInterval(-60)
+    }
+
+    private func loadMembers() async {
+        do {
+            members = try await api.fetchChatMembers(conversation: conversationSlug).task
+        } catch {
+            loadError = error.localizedDescription
+        }
+        loadingMembers = false
+    }
+
+    private func create() async {
+        do {
+            try await api.createChatTask(
+                conversation: conversationSlug,
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                priority: priority ?? "MEDIUM",
+                assignees: assignees.map(\.id),
+                due: due
+            )
+            Haptic.success()
+            dismiss()
+            onCreated()
+        } catch {
+            Toast.error(error)
+            Haptic.error()
+        }
+    }
+}
+
+struct ChatMeetingComposeSheet: View {
+    let conversationSlug: String
+    var onCreated: () -> Void = {}
+
+    private static let durations = [15, 30, 45, 60, 90, 120]
+    private static let reminders = [0, 5, 10, 15, 30, 60]
+
+    @EnvironmentObject var api: APIClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var agenda = ""
+    @State private var mode: String? = "ONLINE"
+    @State private var place = ""
+    @State private var attendees: Set<MeetingMember> = []
+    @State private var when = roundedUpcomingHalfHour()
+    @State private var duration: Int? = 30
+    @State private var remind: Int? = 10
+    @State private var members: [MeetingMember] = []
+    @State private var loadingMembers = true
+    @State private var loadError: String?
+
+    var body: some View {
+        SheetScaffold(
+            L("Set a meeting"), subtitle: L("Everybody asked is told, and reminded before it starts"), symbol: "calendar.badge.plus",
+            primaryTitle: L("Set meeting"), isPrimaryEnabled: isValid
+        ) {
+            await create()
+        } content: {
+            FormSection(L("Meeting")) {
+                NeonTextField(L("Title"), text: $title, symbol: "textformat", isRequired: true)
+                NeonTextEditor(L("Agenda"), text: $agenda, minLines: 2, maxLines: 6, limit: 4000)
+                MenuField(L("Where"), selection: $mode,
+                          options: ["ONLINE", "IN_PERSON"], title: { $0 == "ONLINE" ? L("Online") : L("In person") })
+                if mode == "IN_PERSON" {
+                    NeonTextField(L("Place"), text: $place, symbol: "mappin.and.ellipse")
+                }
+                DateField(L("Starts"), date: $when, components: [.date, .hourAndMinute], in: Date()...Date.distantFuture)
+                MenuField(L("Duration"), selection: $duration, options: Self.durations, title: { L("%d min", $0) })
+                MenuField(L("Remind"), selection: $remind, options: Self.reminders,
+                          title: { $0 == 0 ? L("At the time") : L("%d min before", $0) })
+            }
+            FormSection(L("Attendees")) {
+                if loadingMembers {
+                    SkeletonRows(count: 2)
+                } else if members.isEmpty {
+                    StatusNote(symbol: "person.slash", tone: .warning, title: L("Nobody to ask"), detail: L("There is nobody else in this chat."))
+                } else {
+                    SelectField(L("People"), selection: $attendees, options: members, title: \.name, isRequired: true)
+                }
+                if let loadError { ValidationMessage(loadError) }
+            }
+        }
+        .neonSheet([.large])
+        .task { await loadMembers() }
+    }
+
+    private var isValid: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !attendees.isEmpty
+            && when > Date().addingTimeInterval(-60)
+            && ((mode ?? "ONLINE") != "IN_PERSON" || !place.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private func loadMembers() async {
+        do {
+            members = try await api.fetchChatMembers(conversation: conversationSlug).meeting
+        } catch {
+            loadError = error.localizedDescription
+        }
+        loadingMembers = false
+    }
+
+    private func create() async {
+        do {
+            try await api.createChatMeeting(
+                conversation: conversationSlug,
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                agenda: agenda.trimmingCharacters(in: .whitespacesAndNewlines),
+                mode: mode ?? "ONLINE",
+                place: place.trimmingCharacters(in: .whitespacesAndNewlines),
+                attendees: attendees.map(\.key),
+                when: when,
+                durationMinutes: duration ?? 30,
+                remindMinutes: remind ?? 10
+            )
+            Haptic.success()
+            dismiss()
+            onCreated()
+        } catch {
+            Toast.error(error)
+            Haptic.error()
+        }
+    }
+}
+
+/// Rounds up to the next half hour, the same default the web's form opens on.
+private func roundedUpcomingHalfHour() -> Date {
+    let now = Date().timeIntervalSinceReferenceDate
+    let half: TimeInterval = 30 * 60
+    return Date(timeIntervalSinceReferenceDate: (now / half).rounded(.up) * half)
+}
+
+/// The manager's "Ask the assistant" — a question, written into this
+/// conversation alongside the answer as messages only they can see, so
+/// there is nothing further to fetch: the reply appears where every other
+/// message does, tagged "Only you".
+struct ChatAssistantSheet: View {
+    @EnvironmentObject var api: APIClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var question = ""
+    @State private var asking = false
+
+    var body: some View {
+        SheetHeader(L("Ask the assistant"), subtitle: L("Answers only you can see, in this chat"), symbol: "sparkles") { dismiss() }
+        VStack(alignment: .leading, spacing: 14) {
+            NeonTextEditor(L("Question"), text: $question, minLines: 3, maxLines: 8, limit: 2000)
+            NeonButton(L("Ask"), symbol: "sparkles", isLoading: asking) { await ask() }
+                .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(16)
+        .neonSheet([.medium])
+    }
+
+    private func ask() async {
+        asking = true
+        defer { asking = false }
+        do {
+            try await api.askChatAssistant(question: question.trimmingCharacters(in: .whitespacesAndNewlines))
+            Haptic.success()
+            dismiss()
+        } catch {
+            Toast.error(error)
+            Haptic.error()
+        }
+    }
+}
