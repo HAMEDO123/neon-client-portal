@@ -6,6 +6,7 @@ import {
   attendanceFromPunches,
   cutoffFor,
   deviceWallClock,
+  earlyHours,
   groupPunches,
   lateHours,
   mayDeviceWrite,
@@ -72,6 +73,75 @@ describe("how late an arrival is", () => {
   it("refuses a time it cannot read rather than guessing", () => {
     assert.equal(lateHours(hours, "not a time"), 0);
     assert.equal(lateHours(hours, ""), 0);
+  });
+});
+
+describe("how much of the day leaving early costs", () => {
+  // The studio's decision, and the one place it is written down: the five
+  // minutes it allows in the morning are not allowed in the evening.
+  it("charges whole hours, rounded up, with no allowance at all", () => {
+    assert.equal(earlyHours(hours, "19:00"), 0);
+    assert.equal(earlyHours(hours, "18:59"), 1, "a minute early is an hour");
+    assert.equal(earlyHours(hours, "18:01"), 1);
+    assert.equal(earlyHours(hours, "18:00"), 1);
+    assert.equal(earlyHours(hours, "17:59"), 2);
+    assert.equal(earlyHours(hours, "17:20"), 2);
+    assert.equal(earlyHours(hours, "15:00"), 4);
+  });
+
+  it("pays nothing for staying late", () => {
+    // The trap `lateHours` avoids at its own end of the day: a negative here
+    // would be multiplied by the hourly rate and quietly become overtime,
+    // which this studio does not have.
+    assert.equal(earlyHours(hours, "19:01"), 0);
+    assert.equal(earlyHours(hours, "22:30"), 0);
+  });
+
+  it("never charges more than a day, whatever the clock says", () => {
+    assert.equal(earlyHours(hours, "00:01"), 19);
+    assert.equal(earlyHours(hours, "not a time"), 0);
+  });
+});
+
+describe("a clock-out, and when the device has not given one", () => {
+  it("reads the last touch of the day as the departure", () => {
+    // In at 11:00, out at 17:30: two hours of the day unworked.
+    const [day] = attendanceFromPunches([at(THURSDAY, "08:00"), at(THURSDAY, "14:30")], hours, TZ);
+
+    assert.ok(day.departedAt);
+    assert.equal(day.departedLocal, "5:30 PM");
+    assert.equal(day.earlyHours, 2);
+    assert.equal(day.delayHours, 0);
+  });
+
+  it("says nothing about a day with one read, and deducts nothing", () => {
+    // Every day in this studio looks like this today. Reading the single read
+    // as both arrival and departure would cut a whole day's pay from somebody
+    // who worked it.
+    const [day] = attendanceFromPunches([at(THURSDAY, "08:00")], hours, TZ);
+
+    assert.equal(day.departedAt, null);
+    assert.equal(day.departedLocal, null);
+    assert.equal(day.earlyHours, 0);
+    assert.equal(day.punches, 1);
+  });
+
+  it("treats a second scan moments after the first as one arrival", () => {
+    // Somebody scanning again because the machine did not beep. Reading 11:04
+    // as a clock-out would charge them eight hours for arriving.
+    const [day] = attendanceFromPunches([at(THURSDAY, "08:00"), at(THURSDAY, "08:04")], hours, TZ);
+
+    assert.equal(day.departedAt, null);
+    assert.equal(day.earlyHours, 0);
+    assert.equal(day.punches, 2, "both reads are still counted");
+  });
+
+  it("charges both ends of the day when both went wrong", () => {
+    // In at 12:20 — late — and out at 17:00.
+    const [day] = attendanceFromPunches([at(THURSDAY, "09:20"), at(THURSDAY, "14:00")], hours, TZ);
+
+    assert.equal(day.delayHours, 2, "11:00 start, 5 minutes' grace");
+    assert.equal(day.earlyHours, 2, "19:00 end, no grace");
   });
 });
 

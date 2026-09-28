@@ -14,6 +14,7 @@ import {
   PhoneOff,
   Presentation,
   Send,
+  UserPlus,
   Users,
   Video,
   VideoOff,
@@ -302,7 +303,7 @@ export function CallScreen({
               </button>
             </div>
             {panel === "people" ? (
-              <PeoplePanel call={call} state={state} me={me} />
+              <PeoplePanel call={call} state={state} me={me} side={side} />
             ) : call ? (
               <CallChat conversation={call.conversationSlug} side={side} me={me} />
             ) : null}
@@ -597,12 +598,23 @@ function Control({
   );
 }
 
-function PeoplePanel({ call, state, me }: { call: CallView | undefined; state: SessionState; me: string }) {
+function PeoplePanel({
+  call,
+  state,
+  me,
+  side,
+}: {
+  call: CallView | undefined;
+  state: SessionState;
+  me: string;
+  side: ChatSide;
+}) {
   const parts = [...(call?.participants ?? [])].sort((a, b) => (a.memberKey === me ? -1 : b.memberKey === me ? 1 : 0));
   const label = { JOINED: "In the call", INVITED: "Not joined", DECLINED: "Declined", LEFT: "Left" } as const;
 
   return (
-    <ul className="flex-1 overflow-y-auto p-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ul className="min-h-0 flex-1 overflow-y-auto p-2">
       {parts.map((part) => {
         const person = state.people.find((each) => each.key === part.memberKey);
         const muted = part.memberKey === me ? state.audioMuted || !state.mic : person?.audioMuted;
@@ -622,7 +634,123 @@ function PeoplePanel({ call, state, me }: { call: CallView | undefined; state: S
           </li>
         );
       })}
-    </ul>
+      </ul>
+
+      {call && <AddPeople callId={call.id} side={side} />}
+    </div>
+  );
+}
+
+/**
+ * Asking more people into a call that is already running.
+ *
+ * Lives in the People panel because that is where the question "who is in
+ * this?" is already being asked. The list is fetched when it is opened rather
+ * than with the call: who is addable changes as people join, and a stale list
+ * would offer somebody who is already here.
+ *
+ * Whoever is tapped rings the ordinary way — an invitation is the same row an
+ * incoming call has always been made of — so there is no second kind of call
+ * to get wrong.
+ */
+function AddPeople({ callId, side }: { callId: string; side: ChatSide }) {
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<{ key: string; name: string; color: string }[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function post(body: Record<string, unknown>) {
+    const response = await fetch("/api/calls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, as: side, callId }),
+    });
+    if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? "");
+    return response.json();
+  }
+
+  async function show() {
+    setOpen(true);
+    setProblem(null);
+    try {
+      const answer = (await post({ action: "addable" })) as { members: typeof options };
+      setOptions(answer.members ?? []);
+    } catch {
+      setOptions([]);
+      setProblem("Could not read who else could join.");
+    }
+  }
+
+  async function invite(key: string) {
+    setBusy(key);
+    setProblem(null);
+    try {
+      await post({ action: "invite", members: [key] });
+      // Gone from the list the moment they are asked; they reappear in the
+      // list above as "Not joined" when the call's next snapshot arrives.
+      setOptions((current) => (current ?? []).filter((member) => member.key !== key));
+    } catch (cause) {
+      setProblem(cause instanceof Error && cause.message ? cause.message : "Could not add them.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="border-t border-white/10 p-2">
+        <button
+          type="button"
+          onClick={() => void show()}
+          className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left text-sm font-medium text-white/80 hover:bg-white/10"
+        >
+          <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full border border-dashed border-white/25">
+            <UserPlus size={16} />
+          </span>
+          Add someone
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-h-64 shrink-0 overflow-y-auto border-t border-white/10 p-2">
+      <div className="flex items-center justify-between px-2 pb-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-white/40">Add to this call</p>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="rounded-md px-2 py-1 text-xs text-white/50 hover:bg-white/10 hover:text-white"
+        >
+          Done
+        </button>
+      </div>
+
+      {problem && <p className="px-2 pb-1 text-xs text-red-300">{problem}</p>}
+
+      {options === null ? (
+        <p className="px-2 py-2 text-xs text-white/40">Looking…</p>
+      ) : options.length === 0 ? (
+        <p className="px-2 py-2 text-xs text-white/40">Everybody is already in this call.</p>
+      ) : (
+        <ul>
+          {options.map((member) => (
+            <li key={member.key}>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void invite(member.key)}
+                className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-white/10 disabled:opacity-50"
+              >
+                <PersonAvatar name={member.name} color={member.color} size={34} />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{member.name}</span>
+                <span className="text-xs text-white/40">{busy === member.key ? "Ringing…" : "Add"}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

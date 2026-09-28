@@ -1,11 +1,21 @@
 import { channelFor, chatSide, getChatViewer, parseConversation } from "@/lib/chat";
-import { CallError, declineCall, heartbeat, joinCall, leaveCall, startCall } from "@/lib/call-store";
+import {
+  CallError,
+  addableToCall,
+  declineCall,
+  heartbeat,
+  inviteToCall,
+  joinCall,
+  leaveCall,
+  markAway,
+  startCall,
+} from "@/lib/call-store";
 import { mayCallIn } from "@/lib/calls";
 import { iceServers } from "@/lib/ice-servers";
 import { sameOrigin } from "@/lib/request-origin";
 
-// Starting, answering, declining and leaving a call, and an open call saying
-// it is still there.
+// Starting, answering, declining and leaving a call, an open call saying it is
+// still there, and a page on its way out keeping its place.
 //
 // A route handler rather than server actions: a page runs its server actions
 // one at a time, and a call cannot wait behind whatever else the page is
@@ -14,7 +24,7 @@ import { sameOrigin } from "@/lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
-type Body = { action?: unknown; as?: unknown; conversation?: unknown; kind?: unknown; callId?: unknown };
+type Body = { action?: unknown; as?: unknown; conversation?: unknown; kind?: unknown; callId?: unknown; members?: unknown };
 
 const failure = (message: string, status: number) => Response.json({ error: message }, { status });
 
@@ -52,8 +62,21 @@ export async function POST(request: Request) {
       case "leave":
         await leaveCall(viewer, callId);
         return Response.json({ ok: true });
+      // A page that is unloading — reloaded or closed, the browser cannot say
+      // which. It keeps its place for AWAY_GRACE_MS rather than leaving.
+      case "away":
+        await markAway(viewer, callId);
+        return Response.json({ ok: true });
       case "heartbeat":
         return Response.json({ inCall: await heartbeat(viewer, callId) });
+      // Who else could be asked into this call, and asking them. Both refuse
+      // anybody who is not themselves in it.
+      case "addable":
+        return Response.json({ members: await addableToCall(viewer, callId) });
+      case "invite": {
+        const keys = Array.isArray(body.members) ? body.members.filter((key): key is string => typeof key === "string") : [];
+        return Response.json(await inviteToCall(viewer, callId, keys));
+      }
       default:
         return failure("That is not something a call can do.", 400);
     }

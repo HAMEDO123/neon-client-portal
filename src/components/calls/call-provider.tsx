@@ -72,7 +72,10 @@ export function CallProvider({ side, children }: { side: ChatSide; children: Rea
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [answering, setAnswering] = useState(false);
+  const [resumable, setResumable] = useState<CallView | null>(null);
   const sessionRef = useRef<CallSession | null>(null);
+  /** Calls this page has already tried to pick back up, so it tries once. */
+  const resumed = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     sessionRef.current = session;
@@ -103,6 +106,21 @@ export function CallProvider({ side, children }: { side: ChatSide; children: Rea
       call.participants.some((part) => part.memberKey === me && part.state === "INVITED")
   );
   const ringingId = ringing?.id ?? null;
+
+  /**
+   * A call the server still has this person in, that this page knows nothing
+   * about — which is what a reload leaves behind. The page is new, the call is
+   * not, and `pagehide` only said "away", so there are a few seconds to pick
+   * it back up before the sweep decides they are gone.
+   */
+  const orphan = calls.find(
+    (call) =>
+      call.status !== "ENDED" &&
+      !session &&
+      !answering &&
+      !prejoin &&
+      call.participants.some((part) => part.memberKey === me && part.state === "JOINED")
+  );
 
   useEffect(() => {
     if (!ringingId) return;
@@ -158,6 +176,47 @@ export function CallProvider({ side, children }: { side: ChatSide; children: Rea
     },
     [post, ready, side]
   );
+
+  /**
+   * Picks a call back up after a reload, without asking.
+   *
+   * Tried automatically because being asked to rejoin the call you are already
+   * in is the bug, not the fix. It can still fail — iOS in particular will not
+   * always open a microphone without a tap to point at — so a failure falls
+   * back to a one-tap banner rather than a dead screen.
+   */
+  const resume = useCallback(
+    async (call: CallView) => {
+      const saved = savedDevices();
+      let media: Awaited<ReturnType<typeof openMedia>>;
+      try {
+        media = await openMedia({ video: call.kind === "VIDEO", micId: saved.micId, cameraId: saved.cameraId });
+      } catch {
+        setResumable(call);
+        return;
+      }
+
+      try {
+        await begin(
+          { mode: "join", callId: call.id, kind: call.kind, title: call.title },
+          { mic: media.mic, camera: media.camera, audioMuted: false },
+          media.problem
+        );
+        setResumable(null);
+      } catch {
+        media.mic?.stop();
+        media.camera?.stop();
+        setResumable(call);
+      }
+    },
+    [begin]
+  );
+
+  useEffect(() => {
+    if (!orphan || !ready || resumed.current.has(orphan.id)) return;
+    resumed.current.add(orphan.id);
+    void resume(orphan);
+  }, [orphan, ready, resume]);
 
   async function accept(call: CallView, video: boolean) {
     void unlockSounds();
@@ -236,6 +295,18 @@ export function CallProvider({ side, children }: { side: ChatSide; children: Rea
                 notice={notice}
                 onDismissNotice={() => setNotice(null)}
               />
+            )}
+            {/* The automatic pick-up could not open the microphone — iOS
+                wants a tap it can point at. One is offered rather than a
+                screen that silently does nothing. */}
+            {resumable && !session && (
+              <button
+                type="button"
+                onClick={() => void resume(resumable)}
+                className="neon-rise fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[70] mx-auto flex max-w-sm items-center gap-3 rounded-2xl bg-emerald-600 px-4 py-3 text-left text-sm font-semibold text-white shadow-2xl"
+              >
+                <span className="flex-1">You are still in a call — tap to rejoin</span>
+              </button>
             )}
             {!session && notice && (
               <div

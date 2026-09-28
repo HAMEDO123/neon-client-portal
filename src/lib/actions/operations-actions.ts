@@ -232,8 +232,9 @@ export async function correctReceipt(id: string, formData: FormData) {
 // --- Attendance ------------------------------------------------------------
 
 /**
- * Records how late someone was on one day. Upserted on (employee, day) so the
- * attendance device can push the same shape later without creating duplicates.
+ * Records what one day cost somebody: hours late at the start, hours left
+ * early at the end. Upserted on (employee, day) so the attendance device can
+ * push the same shape later without creating duplicates.
  */
 export async function setAttendance(formData: FormData) {
   await requireAdmin();
@@ -241,10 +242,14 @@ export async function setAttendance(formData: FormData) {
   const employeeId = String(formData.get("employeeId") ?? "");
   const day = String(formData.get("day") ?? "");
   const hoursRaw = Number(formData.get("delayHours") ?? 0);
+  const earlyRaw = Number(formData.get("earlyHours") ?? 0);
 
   if (!employeeId || !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("Pick an employee and a day.");
 
   const delayHours = Number.isFinite(hoursRaw) ? Math.max(0, Math.min(hoursRaw, 24)) : 0;
+  // Both ends, because a correction that can only fix one of them leaves the
+  // other wrong and looking deliberate.
+  const earlyHours = Number.isFinite(earlyRaw) ? Math.max(0, Math.min(earlyRaw, 24)) : 0;
   const date = new Date(`${day}T00:00:00.000Z`);
 
   // Written as MANUAL on both paths, and on update as well as create: editing a
@@ -258,11 +263,13 @@ export async function setAttendance(formData: FormData) {
       employeeId,
       day: date,
       delayHours,
+      earlyHours,
       source: MANUAL,
       note: String(formData.get("note") ?? "").trim().slice(0, 200) || null,
     },
     update: {
       delayHours,
+      earlyHours,
       source: MANUAL,
       note: String(formData.get("note") ?? "").trim().slice(0, 200) || null,
     },

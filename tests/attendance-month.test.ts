@@ -18,10 +18,19 @@ import { DEVICE, MANUAL } from "../src/lib/attendance";
 const STUDIO: WorkHours = { ...DEFAULT_WORK_HOURS, days: [0, 1, 2, 3, 4, 6] };
 const TODAY = "2026-09-19";
 
-const entry = (employeeId: string, dayKey: string, delayHours = 0, source = DEVICE): MonthEntry => ({
+const entry = (
+  employeeId: string,
+  dayKey: string,
+  delayHours = 0,
+  source = DEVICE,
+  earlyHours = 0,
+  clockedOut = true
+): MonthEntry => ({
   employeeId,
   dayKey,
   delayHours,
+  earlyHours,
+  clockedOut,
   source,
   note: null,
 });

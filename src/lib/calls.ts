@@ -21,6 +21,22 @@ export const RING_MS = 45_000;
 export const STALE_MS = 20_000;
 /** How often an open call tells the server it is still there. */
 export const HEARTBEAT_MS = 5_000;
+/**
+ * How long a page that is going away keeps its place in the call.
+ *
+ * A reload and a closed tab are the same event to a browser — `pagehide`
+ * fires for both, and nothing distinguishes them. Saying "leave" there ended
+ * the call on every refresh, which is the wrong answer for the common case:
+ * somebody reloading is back in a second or two.
+ *
+ * So a page that is unloading says it is *away* instead, which backdates its
+ * last-seen to leave it this long before the sweep counts it gone. A reload
+ * beats again well inside the window and the call never notices; a tab that
+ * was really closed ends the call a few seconds later than it used to, which
+ * is the price, and a smaller one than a call that drops every time somebody
+ * refreshes.
+ */
+export const AWAY_GRACE_MS = 12_000;
 
 /** A person in calls: "admin" for the manager, their employee id otherwise — the same key chat reads use. */
 export function memberKeyOf(viewer: ChatViewer) {

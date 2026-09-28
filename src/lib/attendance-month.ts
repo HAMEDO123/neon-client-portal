@@ -34,6 +34,10 @@ export type MonthEntry = {
   employeeId: string;
   dayKey: string;
   delayHours: number;
+  /** Hours of the day left unworked at the end. Zero when nobody clocked out. */
+  earlyHours: number;
+  /** Whether a clock-out was recorded at all — a blank is not "stayed to the end". */
+  clockedOut: boolean;
   /** MANUAL or DEVICE — who put the figure there. */
   source: string;
   note: string | null;
@@ -51,6 +55,10 @@ export type MonthRow = {
   daysRecorded: number;
   /** The month's lateness, summed. */
   hoursLate: number;
+  /** Hours lost at the end of days, across the month. */
+  hoursEarly: number;
+  /** Days somebody arrived and no clock-out was recorded. */
+  daysWithoutClockOut: number;
 };
 
 export type Month = { monthKey: string; days: MonthDay[]; rows: MonthRow[] };
@@ -144,6 +152,11 @@ export function buildMonth(input: {
       // 0.44999999999999996, and a payroll-adjacent screen printing that is a
       // screen nobody trusts.
       hoursLate: Math.round(recorded.reduce((total, cell) => total + cell.delayHours, 0) * 100) / 100,
+      hoursEarly: Math.round(recorded.reduce((total, cell) => total + cell.earlyHours, 0) * 100) / 100,
+      // Days the device saw somebody arrive and never saw them leave. Not a
+      // count of anything anybody did — it is the count of days the studio
+      // knows nothing about the end of, which is the number worth chasing.
+      daysWithoutClockOut: recorded.filter((cell) => !cell.clockedOut).length,
     };
   });
 

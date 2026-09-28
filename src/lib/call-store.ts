@@ -11,6 +11,7 @@ import {
 } from "@/lib/chat-conversations";
 import {
   RING_MS,
+  AWAY_GRACE_MS,
   STALE_MS,
   callSummary,
   memberKeyOf,
@@ -58,6 +59,84 @@ export async function callMembers(conversation: Conversation): Promise<Member[]>
   });
   const members = people.map((person) => ({ key: person.id, name: person.name, color: person.color }));
   return conversation.kind === "direct" ? [manager, ...members] : members;
+}
+
+/**
+ * People who could be asked into this call: everybody on the team who is not
+ * already in it, and the manager.
+ *
+ * Deliberately the whole team rather than the chat the call began in — the
+ * point of adding somebody is that they were not in that chat.
+ */
+export async function addableToCall(viewer: ChatViewer, callId: string): Promise<Member[]> {
+  const inCall = await presentIn(viewer, callId);
+  if (!inCall) return [];
+
+  const already = new Set(inCall.participants.map((part) => part.memberKey));
+  const team = await prisma.employee.findMany({
+    where: { active: true, accessRole: "EMPLOYEE" },
+    orderBy: { order: "asc" },
+    select: { id: true, name: true, color: true },
+  });
+
+  const everyone: Member[] = [
+    { key: "admin", name: "Manager", color: "ink" },
+    ...team.map((person) => ({ key: person.id, name: person.name, color: person.color })),
+  ];
+
+  return everyone.filter((member) => !already.has(member.key));
+}
+
+/**
+ * Asks more people into a call that is already running.
+ *
+ * Only somebody in the call may do it, which is the whole of the rule: a
+ * participant row is a granted fact, never something anybody writes for
+ * themselves, and `joinCall` trusts it precisely because of that.
+ *
+ * Their phones ring the ordinary way — an INVITED row is what the calls
+ * stream turns into an incoming call — so nothing new had to be taught to the
+ * screen that answers.
+ */
+export async function inviteToCall(viewer: ChatViewer, callId: string, memberKeys: string[]) {
+  const inCall = await presentIn(viewer, callId);
+  if (!inCall) throw new CallError("Only somebody in the call can add to it.");
+
+  const already = new Set(inCall.participants.map((part) => part.memberKey));
+  const wanted = [...new Set(memberKeys.map((key) => key.trim()).filter(Boolean))].filter((key) => !already.has(key));
+  if (wanted.length === 0) return { invited: 0 };
+
+  const team = await prisma.employee.findMany({
+    where: { id: { in: wanted.filter((key) => key !== "admin") }, active: true, accessRole: "EMPLOYEE" },
+    select: { id: true, name: true, color: true },
+  });
+
+  const rows = [
+    ...(wanted.includes("admin") ? [{ key: "admin", name: "Manager", color: "ink" }] : []),
+    ...team.map((person) => ({ key: person.id, name: person.name, color: person.color })),
+  ];
+
+  for (const row of rows) {
+    await prisma.callParticipant.create({
+      data: { callId, memberKey: row.key, name: row.name, color: row.color, state: "INVITED" },
+    });
+  }
+
+  return { invited: rows.length };
+}
+
+/** The call, if this person is actually in it right now. */
+async function presentIn(viewer: ChatViewer, callId: string) {
+  const me = memberKeyOf(viewer);
+  const call = await prisma.call.findFirst({
+    where: {
+      id: callId,
+      status: { not: "ENDED" },
+      participants: { some: { memberKey: me, state: "JOINED" } },
+    },
+    select: { id: true, participants: { select: { memberKey: true } } },
+  });
+  return call;
 }
 
 async function colourOf(viewer: ChatViewer) {
@@ -159,7 +238,15 @@ export async function joinCall(viewer: ChatViewer, callId: string) {
   if (!call) throw new CallError("That call no longer exists.");
 
   const conversation = conversationFromKey(call.channel.key);
-  if (!conversation || !mayOpen(viewer, conversation)) throw new CallError("That call is not in a conversation you are in.");
+  // Being in the call is itself the right to be in it. Until people could be
+  // added mid-call, the only way to be a participant was to be in the chat, so
+  // the two questions had one answer; now somebody can be asked into a call
+  // from a chat they are not in, and their own row is what says they were
+  // asked. Nobody can write that row for themselves — see inviteToCall.
+  const invited = call.participants.length > 0;
+  if (!invited && (!conversation || !mayOpen(viewer, conversation))) {
+    throw new CallError("That call is not in a conversation you are in.");
+  }
   if (call.status === "ENDED") throw new CallError("This call has ended.");
 
   await leaveOtherCalls(me, callId);
@@ -196,6 +283,25 @@ export async function leaveCall(viewer: ChatViewer, callId: string) {
     data: { state: "LEFT", leftAt: new Date() },
   });
   await sweep(callId);
+}
+
+/**
+ * A page going away — reloaded, or closed — keeping its place for a moment.
+ *
+ * Not `leaveCall`: a browser cannot tell a reload from a closed tab, and
+ * treating both as leaving ended the call every time somebody refreshed. This
+ * backdates the last-seen instead, so the ordinary sweep counts them gone
+ * `AWAY_GRACE_MS` from now unless they come back and beat — which a reload
+ * does, in a second or two.
+ *
+ * Deliberately never touches the call itself and never sweeps: the whole point
+ * is that nothing is decided yet.
+ */
+export async function markAway(viewer: ChatViewer, callId: string, now = Date.now()) {
+  await prisma.callParticipant.updateMany({
+    where: { callId, memberKey: memberKeyOf(viewer), state: "JOINED", call: { status: { not: "ENDED" } } },
+    data: { lastSeenAt: new Date(now - (STALE_MS - AWAY_GRACE_MS)) },
+  });
 }
 
 /**
@@ -387,7 +493,11 @@ export async function callsFor(viewer: ChatViewer) {
 
   return calls.flatMap(({ channel, ...call }) => {
     const conversation = conversationFromKey(channel.key);
-    if (!conversation || !mayOpen(viewer, conversation)) return [];
+    // Already filtered to calls this person is a participant of, and being
+    // asked into a call is what puts the row there — so a call reaches them
+    // even when it began in a chat they cannot open. Without this, somebody
+    // added to a call from a private chat would never hear it ring.
+    if (!conversation) return [];
     const others = call.participants.filter((part) => part.memberKey !== me).map((part) => part.name);
     return [
       {

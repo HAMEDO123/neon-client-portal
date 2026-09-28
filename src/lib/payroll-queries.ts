@@ -36,7 +36,7 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
   const attendance = await prisma.attendanceRecord.groupBy({
     by: ["employeeId"],
     where: { day: { gte: start, lt: end } },
-    _sum: { delayHours: true },
+    _sum: { delayHours: true, earlyHours: true },
     _count: { _all: true },
   });
 
@@ -76,6 +76,9 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
         salaryAmount: employee.salaryAmount,
         payBasis: employee.payBasis,
         delayHours: delay?._sum.delayHours ?? 0,
+        // Leaving early costs the same hourly rate as arriving late. A day
+        // nobody clocked out of carries zero here, not a guess.
+        earlyHours: delay?._sum.earlyHours ?? 0,
         receiptTotal: receipt?._sum.countedAmount ?? 0,
         adjustmentTotal: adjusted.reduce((total, row) => total + row.amount, 0),
       }),

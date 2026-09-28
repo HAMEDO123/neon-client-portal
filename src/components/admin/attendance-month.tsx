@@ -88,7 +88,7 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
                     Days
                   </th>
                   <th scope="col" className="px-3 py-2.5 text-right font-medium">
-                    Late
+                    Hours off
                   </th>
                 </tr>
               </thead>
@@ -122,13 +122,19 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
                     })}
 
                     <td className="px-3 py-2.5 text-right tabular-nums text-bark/60">{row.daysRecorded}</td>
+                    {/* Both ends of the day in one number, because it is one
+                        deduction on the payslip — the breakdown is in the
+                        title, where somebody checking a figure will look. */}
                     <td
+                      title={`${row.hoursLate}h late · ${row.hoursEarly}h left early`}
                       className={cell(
                         "px-3 py-2.5 text-right tabular-nums",
-                        row.hoursLate > 0 ? "font-medium text-amber-700" : "text-bark/35"
+                        row.hoursLate + row.hoursEarly > 0 ? "font-medium text-amber-700" : "text-bark/35"
                       )}
                     >
-                      {row.hoursLate > 0 ? `${row.hoursLate}h` : "—"}
+                      {row.hoursLate + row.hoursEarly > 0
+                        ? `${Math.round((row.hoursLate + row.hoursEarly) * 100) / 100}h`
+                        : "—"}
                     </td>
                   </tr>
                 ))}
@@ -138,10 +144,13 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
 
           <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-bark/45">
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" /> on time
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" /> full day
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="font-medium tabular-nums text-amber-700">1.5</span> hours late
+              <span className="inline-block h-2 w-2 rounded-full border-2 border-emerald-600/60" /> no clock-out
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-medium tabular-nums text-amber-700">1.5</span> hours off
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-2 w-2 rounded-full bg-clay ring-2 ring-clay/25" /> typed by you
@@ -156,7 +165,8 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
           <p className="mt-1.5 text-[11px] text-bark/35">
             An empty day means nothing was recorded — not that somebody was away. A day the device did not read,
             or one nobody has synced, looks exactly the same here. {recorded} {recorded === 1 ? "day is" : "days are"}{" "}
-            recorded this month.
+            recorded this month. A hollow dot is a day somebody arrived and no clock-out was read: nothing is
+            deducted for it, because the device cannot tell a forgotten scan from an early finish.
           </p>
         </>
       )}
@@ -193,8 +203,9 @@ function Mark({ entry, future, worked }: { entry: MonthEntry | null; future: boo
   }
 
   const typed = entry.source === MANUAL;
+  const lost = entry.delayHours + entry.earlyHours;
 
-  if (entry.delayHours > 0) {
+  if (lost > 0) {
     return (
       <span
         className={cell(
@@ -202,14 +213,29 @@ function Mark({ entry, future, worked }: { entry: MonthEntry | null; future: boo
           typed && "ring-1 ring-clay/40"
         )}
       >
-        {entry.delayHours}
+        {Math.round(lost * 100) / 100}
       </span>
+    );
+  }
+
+  // A day nobody clocked out of is not a full day — it is a day the studio
+  // knows nothing about the end of. A green dot would say the opposite, so it
+  // gets a hollow one and the tooltip says why.
+  if (!entry.clockedOut) {
+    return (
+      <span
+        aria-label="no clock-out"
+        className={cell(
+          "inline-block h-2 w-2 rounded-full border-2",
+          typed ? "border-clay" : "border-emerald-600/60"
+        )}
+      />
     );
   }
 
   return (
     <span
-      aria-label="on time"
+      aria-label="full day"
       className={cell(
         "inline-block h-2 w-2 rounded-full",
         typed ? "bg-clay ring-2 ring-clay/25" : "bg-emerald-600"
@@ -223,6 +249,12 @@ function describe(name: string, dayKey: string, entry: MonthEntry | null) {
   if (!entry) return `${name} · ${dayKey} · nothing recorded`;
 
   const how = entry.source === MANUAL ? "typed by the manager" : "from the device";
-  const late = entry.delayHours > 0 ? `${entry.delayHours}h late` : "on time";
-  return `${name} · ${dayKey} · ${late} · ${how}${entry.note ? ` · ${entry.note}` : ""}`;
+
+  const parts: string[] = [];
+  if (entry.delayHours > 0) parts.push(`${entry.delayHours}h late`);
+  if (entry.earlyHours > 0) parts.push(`${entry.earlyHours}h left early`);
+  if (!entry.clockedOut) parts.push("no clock-out recorded");
+  if (parts.length === 0) parts.push("full day");
+
+  return `${name} · ${dayKey} · ${parts.join(" · ")} · ${how}${entry.note ? ` · ${entry.note}` : ""}`;
 }
