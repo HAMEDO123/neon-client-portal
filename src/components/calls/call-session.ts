@@ -279,10 +279,19 @@ export class CallSession {
     this.emit();
   }
 
-  // A closing tab cannot wait for a fetch; a beacon still goes.
+  /**
+   * The page is going away. A closing tab cannot wait for a fetch; a beacon
+   * still goes.
+   *
+   * It says "away", not "leave", because a browser cannot tell a reload from a
+   * close — `pagehide` fires for both — and saying "leave" ended the call
+   * every single time somebody refreshed the page. Away keeps the place for
+   * `AWAY_GRACE_MS`: a reload is back and beating inside that, and a tab that
+   * really closed is swept a few seconds later.
+   */
   private onPageHide = () => {
     if (this.phase === "ended") return;
-    const body = new Blob([JSON.stringify({ action: "leave", as: this.side, callId: this.callId })], { type: "text/plain" });
+    const body = new Blob([JSON.stringify({ action: "away", as: this.side, callId: this.callId })], { type: "text/plain" });
     navigator.sendBeacon("/api/calls", body);
   };
 

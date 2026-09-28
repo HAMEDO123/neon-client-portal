@@ -1,11 +1,11 @@
 import { channelFor, chatSide, getChatViewer, parseConversation } from "@/lib/chat";
-import { CallError, declineCall, heartbeat, joinCall, leaveCall, startCall } from "@/lib/call-store";
+import { CallError, declineCall, heartbeat, joinCall, leaveCall, markAway, startCall } from "@/lib/call-store";
 import { mayCallIn } from "@/lib/calls";
 import { iceServers } from "@/lib/ice-servers";
 import { sameOrigin } from "@/lib/request-origin";
 
-// Starting, answering, declining and leaving a call, and an open call saying
-// it is still there.
+// Starting, answering, declining and leaving a call, an open call saying it is
+// still there, and a page on its way out keeping its place.
 //
 // A route handler rather than server actions: a page runs its server actions
 // one at a time, and a call cannot wait behind whatever else the page is
@@ -51,6 +51,11 @@ export async function POST(request: Request) {
         return Response.json({ ok: true });
       case "leave":
         await leaveCall(viewer, callId);
+        return Response.json({ ok: true });
+      // A page that is unloading — reloaded or closed, the browser cannot say
+      // which. It keeps its place for AWAY_GRACE_MS rather than leaving.
+      case "away":
+        await markAway(viewer, callId);
         return Response.json({ ok: true });
       case "heartbeat":
         return Response.json({ inCall: await heartbeat(viewer, callId) });

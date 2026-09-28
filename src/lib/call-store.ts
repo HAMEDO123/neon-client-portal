@@ -11,6 +11,7 @@ import {
 } from "@/lib/chat-conversations";
 import {
   RING_MS,
+  AWAY_GRACE_MS,
   STALE_MS,
   callSummary,
   memberKeyOf,
@@ -196,6 +197,25 @@ export async function leaveCall(viewer: ChatViewer, callId: string) {
     data: { state: "LEFT", leftAt: new Date() },
   });
   await sweep(callId);
+}
+
+/**
+ * A page going away — reloaded, or closed — keeping its place for a moment.
+ *
+ * Not `leaveCall`: a browser cannot tell a reload from a closed tab, and
+ * treating both as leaving ended the call every time somebody refreshed. This
+ * backdates the last-seen instead, so the ordinary sweep counts them gone
+ * `AWAY_GRACE_MS` from now unless they come back and beat — which a reload
+ * does, in a second or two.
+ *
+ * Deliberately never touches the call itself and never sweeps: the whole point
+ * is that nothing is decided yet.
+ */
+export async function markAway(viewer: ChatViewer, callId: string, now = Date.now()) {
+  await prisma.callParticipant.updateMany({
+    where: { callId, memberKey: memberKeyOf(viewer), state: "JOINED", call: { status: { not: "ENDED" } } },
+    data: { lastSeenAt: new Date(now - (STALE_MS - AWAY_GRACE_MS)) },
+  });
 }
 
 /**

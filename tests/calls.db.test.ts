@@ -10,13 +10,14 @@ import {
   heartbeat,
   joinCall,
   leaveCall,
+  markAway,
   sendSignals,
   signalsFor,
   startCall,
   sweep,
   sweepStale,
 } from "@/lib/call-store";
-import { RING_MS, STALE_MS } from "@/lib/calls";
+import { AWAY_GRACE_MS, RING_MS, STALE_MS } from "@/lib/calls";
 
 // Calls against a real database: ringing the other person, answering,
 // declining, hanging up, ringing out, going quiet; the line each leaves in the
@@ -182,6 +183,46 @@ describe("a call between two people", () => {
 
     await sweepStale();
     const { call } = await lineOf(callId);
+    assert.equal(call.status, "ENDED");
+    assert.equal(call.endReason, "completed");
+  });
+
+  it("survives a reload, because a page on its way out says away and not leave", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // The bug this pins: `pagehide` fires for a reload exactly as it does for
+    // a closed tab, so saying "leave" there ended the call every single time
+    // somebody refreshed the page.
+    const { conversation, channelId } = await directWith(carla);
+    const { callId } = await startCall(manager, conversation, channelId, "AUDIO");
+    await joinCall(carla, callId);
+
+    await markAway(carla, callId);
+
+    // A moment later — the page is still reloading — the call is untouched.
+    await sweep(callId, Date.now() + 2_000);
+    assert.equal((await prisma.call.findUniqueOrThrow({ where: { id: callId } })).status, "ACTIVE");
+
+    // The reloaded page beats, and it is as though nothing happened.
+    assert.equal(await heartbeat(carla, callId), true);
+    await sweep(callId, Date.now() + AWAY_GRACE_MS + 2_000);
+    assert.equal((await prisma.call.findUniqueOrThrow({ where: { id: callId } })).status, "ACTIVE");
+  });
+
+  it("still ends for a tab that really closed, a few seconds later", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // The price of the grace above, and the thing that must not be lost: a
+    // page that went away and never came back is gone, not in the call for
+    // ever.
+    const { conversation, channelId } = await directWith(carla);
+    const { callId } = await startCall(manager, conversation, channelId, "AUDIO");
+    await joinCall(carla, callId);
+
+    await markAway(carla, callId);
+    await sweep(callId, Date.now() + AWAY_GRACE_MS + 1_000);
+
+    const call = await prisma.call.findUniqueOrThrow({ where: { id: callId } });
     assert.equal(call.status, "ENDED");
     assert.equal(call.endReason, "completed");
   });
