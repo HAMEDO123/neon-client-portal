@@ -15,6 +15,10 @@ enum CardFilter: String, CaseIterable, Identifiable {
     }
 }
 
+/// The "Chat" segment of `TasksRootView`: task cards handed out from a
+/// conversation. Embedded, so it owns no `NavigationStack` and no title of
+/// its own — the tab root's `navigationDestination(for: ChatRoute.self)`
+/// carries it to the conversation.
 struct ManagerTasksView: View {
     @EnvironmentObject var api: APIClient
     @StateObject private var cards = ChatCardsLoader()
@@ -22,62 +26,64 @@ struct ManagerTasksView: View {
     @State private var web: WebPortalLink?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    // The board and the review queue are the website's own
-                    // pages until the phone API has them (ios/SERVER-REQUEST.md).
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                NavigationLink { ReviewsRootView() } label: {
                     HStack(spacing: 10) {
-                        WebTile(title: L("Task board"), symbol: "square.grid.3x3") {
-                            web = WebPortalLink(path: "/admin/tasks", title: L("Task board"))
-                        }
-                        WebTile(title: L("Reviews"), symbol: "checkmark.seal", badge: reviewCount) {
-                            web = WebPortalLink(path: "/admin/reviews", title: L("Reviews"),
-                                                hint: L("Approve the proof, or send it back with a reason."))
-                        }
+                        Image(systemName: "checkmark.seal")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(Color.neonPurpleStrong)
+                        Text(L("Reviews"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.neonInk)
+                        Spacer(minLength: 0)
+                        if reviewCount > 0 { CountBadge(reviewCount) }
+                        Image(systemName: "chevron.forward")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.neonInk.opacity(0.3))
                     }
-
-                    WebTile(title: L("Hand out a task"), symbol: "plus.circle") {
-                        web = WebPortalLink(path: "/admin/chat/team", title: L("Hand out a task"),
-                                            hint: L("Press + in the chat and choose Task. For one person, open their chat instead."))
-                    }
-
-                    SectionLabel(L("Handed out in chat"))
-                    Picker(L("Show"), selection: $filter) {
-                        ForEach(CardFilter.allCases) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-
-                    if let cachedAt = cards.cachedAt { OfflineBanner(savedAt: cachedAt) }
-
-                    if !cards.loaded, let error = cards.errorMessage {
-                        ErrorState(message: error) { await cards.load(api) }
-                    } else if !cards.loaded {
-                        SkeletonRows(count: 4)
-                    } else if shown.isEmpty {
-                        EmptyState(symbol: "checklist", title: L("No tasks here"))
-                            .glassCard(radius: 18)
-                    } else {
-                        ForEach(shown) { item in
-                            NavigationLink(value: ChatRoute(item.conversation)) {
-                                ChatTaskRow(item: item, viewer: api.identity)
-                            }
-                            .buttonStyle(.pressable)
-                        }
-                    }
-
-                    Text(L("Tasks from the last 200 messages of each chat."))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.neonInk.opacity(0.4))
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .glassCard(radius: 16)
                 }
-                .padding(16)
+                .buttonStyle(.pressable)
+
+                WebTile(title: L("Hand out a task"), symbol: "plus.circle") {
+                    web = WebPortalLink(path: "/admin/chat/team", title: L("Hand out a task"),
+                                        hint: L("Press + in the chat and choose Task. For one person, open their chat instead."))
+                }
+
+                SectionLabel(L("Handed out in chat"))
+                Picker(L("Show"), selection: $filter) {
+                    ForEach(CardFilter.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+
+                if let cachedAt = cards.cachedAt { OfflineBanner(savedAt: cachedAt) }
+
+                if !cards.loaded, let error = cards.errorMessage {
+                    ErrorState(message: error) { await cards.load(api) }
+                } else if !cards.loaded {
+                    SkeletonRows(count: 4)
+                } else if shown.isEmpty {
+                    EmptyState(symbol: "checklist", title: L("No tasks here"))
+                        .glassCard(radius: 18)
+                } else {
+                    ForEach(shown) { item in
+                        NavigationLink(value: ChatRoute(item.conversation)) {
+                            ChatTaskRow(item: item, viewer: api.identity)
+                        }
+                        .buttonStyle(.pressable)
+                    }
+                }
+
+                Text(L("Tasks from the last 200 messages of each chat."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.neonInk.opacity(0.4))
             }
-            .refreshable { await cards.load(api) }
-            .navigationTitle(L("Tasks"))
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
-            .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
-            .neonAmbientBackground()
+            .padding(16)
         }
+        .refreshable { await cards.load(api) }
         .task { await cards.load(api) }
         .fullScreenCover(item: $web) { WebPortalSheet(link: $0) }
     }
