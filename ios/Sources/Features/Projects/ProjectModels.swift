@@ -188,17 +188,17 @@ extension ProjectsListResponse {
         projects: [
             ProjectSummary(
                 id: "1", name: "Villa Al-Fulan", clientName: "Ahmad Al-Fulan", location: "Amman, Jordan",
-                publishState: "PUBLISHED", pipelineStatus: "EXECUTION", coverImageUrl: nil, updatedAt: "",
+                publishState: "PUBLISHED", pipelineStatus: "EXECUTION", currentStage: "TECHNICAL_DRAWINGS", coverImageUrl: nil, updatedAt: "",
                 approvalsCount: 3, commentsCount: 2
             ),
             ProjectSummary(
                 id: "2", name: "Bond Cafe", clientName: "Mr. Ahmad", location: "Amman",
-                publishState: "PUBLISHED", pipelineStatus: "COMPLETED", coverImageUrl: nil, updatedAt: "",
+                publishState: "PUBLISHED", pipelineStatus: "COMPLETED", currentStage: "HANDOVER", coverImageUrl: nil, updatedAt: "",
                 approvalsCount: 0, commentsCount: 0
             ),
             ProjectSummary(
                 id: "3", name: "Skills", clientName: "Mr. Omair", location: "Amman",
-                publishState: "DRAFT", pipelineStatus: "DESIGN", coverImageUrl: nil, updatedAt: "",
+                publishState: "DRAFT", pipelineStatus: "DESIGN", currentStage: "CONCEPT", coverImageUrl: nil, updatedAt: "",
                 approvalsCount: 0, commentsCount: 0
             ),
         ]
