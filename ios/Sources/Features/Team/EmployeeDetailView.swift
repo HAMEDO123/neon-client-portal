@@ -12,9 +12,6 @@ struct EmployeeDetailView: View {
     @State private var cachedAt: Date?
     @State private var showEdit = false
     @State private var showPasswordReset = false
-    @State private var confirmToggleActive = false
-    @State private var confirmRevoke = false
-    @State private var working = false
 
     var body: some View {
         NeonScroll {
@@ -207,7 +204,7 @@ struct EmployeeDetailView: View {
 
     @ViewBuilder
     private func warningsCard(_ data: TeamEmployeeResponse) -> some View {
-        WarningsCard(employeeId: employeeId, name: data.employee.name, active: data.employee.active, warnings: data.warnings, limit: data.warningLimit) {
+        TeamWarningsCard(employeeId: employeeId, name: data.employee.name, active: data.employee.active, warnings: data.warnings, limit: data.warningLimit) {
             await load()
         }
     }
@@ -295,7 +292,7 @@ struct EmployeeDetailView: View {
 
 // MARK: - Warnings
 
-private struct WarningsCard: View {
+private struct TeamWarningsCard: View {
     let employeeId: String
     let name: String
     let active: Bool

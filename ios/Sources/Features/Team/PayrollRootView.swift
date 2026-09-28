@@ -17,7 +17,7 @@ struct PayrollRootView: View {
 
     var body: some View {
         NeonScroll {
-            LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
+            LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: { await load() }) { data in
                 periodSwitch(data)
                 totals(data.totals, isThisMonth: data.isThisMonth)
                 paySheet(data)
