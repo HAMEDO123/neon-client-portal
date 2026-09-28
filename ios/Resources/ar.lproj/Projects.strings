@@ -1,0 +1,182 @@
+/* Projects tab: the list, a project's page — overview, gallery, hotspots, analytics. */
+
+"Projects" = "المشاريع";
+"An overview of every client project delivery." = "نظرة عامة على كل مشاريع العملاء الجارية.";
+"Search projects" = "ابحث عن مشروع";
+"All" = "الكل";
+"No projects yet" = "لا مشاريع بعد";
+"Nothing matches “%@”." = "ما في شي يطابق “%@”.";
+"Total Projects" = "إجمالي المشاريع";
+"Published" = "منشورة";
+"Pending Approvals" = "بانتظار الموافقة";
+"Updated This Week" = "تحدّثت هالأسبوع";
+
+/* New project */
+"New Project" = "مشروع جديد";
+"Start with the essentials — renders, drawings, BOQ and pricing come right after." = "ابدأ بالأساسيات — الريندر والمخططات وجدول الكميات والتسعير تضيفهم بعدين.";
+"Create Project" = "إنشاء المشروع";
+"Project" = "المشروع";
+"Project Name" = "اسم المشروع";
+"Client Name" = "اسم العميل";
+"Client Email" = "إيميل العميل";
+"Client Phone" = "رقم العميل";
+"Delivery Date" = "تاريخ التسليم";
+"Details" = "التفاصيل";
+"Location" = "الموقع";
+"Area" = "المساحة";
+"Project Type" = "نوع المشروع";
+"Description" = "الوصف";
+"Project created" = "تم إنشاء المشروع";
+
+/* Project page */
+"Overview" = "نظرة عامة";
+"Gallery" = "المعرض";
+"Drawings" = "المخططات";
+"BOQ" = "جدول الكميات";
+"Pricing" = "التسعير";
+"Materials" = "الخامات";
+"Furniture" = "الأثاث";
+"Documents" = "المستندات";
+"Approvals" = "الموافقات";
+"Comments" = "التعليقات";
+"Analytics" = "الإحصائيات";
+"Edit" = "تعديل";
+"Edit Project" = "تعديل المشروع";
+"Delete Project" = "حذف المشروع";
+"Delete this project?" = "حذف هذا المشروع؟";
+"“%@” and every file it holds — cover, renders, drawings, documents, materials, furniture — is deleted for good. This cannot be undone." = "“%@” وكل ملفاته — الغلاف والريندر والمخططات والمستندات والخامات والأثاث — بينحذفوا نهائياً. ما فيك ترجع فيها.";
+"Delete" = "حذف";
+"Project deleted" = "تم حذف المشروع";
+"Publish Project" = "نشر المشروع";
+"Unpublish" = "إلغاء النشر";
+"Archive" = "أرشفة";
+"Archive this project?" = "أرشفة هذا المشروع؟";
+"It will be hidden from the client link." = "بيختفي عن رابط العميل.";
+
+/* Client link */
+"Copy Link" = "نسخ الرابط";
+"Copied" = "تم النسخ";
+"Preview" = "معاينة";
+"Send to Client" = "إرسال للعميل";
+"Send Update" = "إرسال تحديث";
+"Sent" = "تم الإرسال";
+"Nothing was sent" = "ما انبعث شي";
+"Regenerate" = "تجديد الرابط";
+"Regenerate this project's link?" = "تجديد رابط هذا المشروع؟";
+"The old link stops working immediately." = "الرابط القديم بيتوقف فوراً.";
+"Link regenerated" = "تم تجديد الرابط";
+
+/* Overview content */
+"Completion" = "نسبة الإنجاز";
+"Client" = "العميل";
+"Stage" = "المرحلة";
+"Client Visibility" = "ما يشوفه العميل";
+"Execution Pricing" = "تسعير التنفيذ";
+"Detailed Pricing Breakdown" = "تفاصيل التسعير";
+"BOQ Quantities" = "كميات جدول الكميات";
+"BOQ Unit Prices" = "أسعار وحدات جدول الكميات";
+"File Downloads" = "تحميل الملفات";
+"Watermark" = "العلامة المائية";
+
+/* Edit sheet */
+"Cover" = "الغلاف";
+"Upload cover image" = "رفع صورة الغلاف";
+"Replace cover image" = "تغيير صورة الغلاف";
+"Remove current cover image" = "إزالة صورة الغلاف الحالية";
+"Pipeline" = "المسار";
+"Pipeline Status" = "حالة المسار";
+"Journey Stage" = "مرحلة الرحلة";
+"Completion %" = "نسبة الإنجاز %";
+"Sale" = "البيع";
+"Sold by" = "باعه";
+"Sold on" = "تاريخ البيع";
+"Not recorded" = "غير مسجّل";
+"This project counts as a sale for whoever is picked here, in the month of the date beside it. Leave the date empty and today is used." = "هذا المشروع بيُحسب كبيعة لمن تختاره هون، بشهر التاريخ المحدد جنبه. اذا تركت التاريخ فاضي بيُحسب اليوم.";
+"Show Execution Pricing" = "إظهار تسعير التنفيذ";
+"Hide entirely until the proposal is ready." = "يختفي كلياً لحد ما يجهز العرض.";
+"Show Detailed Pricing Breakdown" = "إظهار تفاصيل التسعير";
+"Otherwise only the total is shown." = "غير هيك بيظهر المجموع بس.";
+"Show BOQ Quantities" = "إظهار كميات جدول الكميات";
+"Show BOQ Unit Prices" = "إظهار أسعار وحدات جدول الكميات";
+"Allow File Downloads" = "السماح بتحميل الملفات";
+"Drawings, documents and the handover package." = "المخططات والمستندات وحزمة التسليم.";
+"Enable Watermark" = "تفعيل العلامة المائية";
+"Overlays “NEON DESIGN — CONFIDENTIAL” on renders." = "يحط “NEON DESIGN — سري” فوق الريندر.";
+"Save" = "حفظ";
+"Saved" = "تم الحفظ";
+
+/* Gallery */
+"Add a space" = "إضافة مساحة";
+"Add Space" = "إضافة المساحة";
+"Name" = "الاسم";
+"Living Room" = "غرفة المعيشة";
+"No spaces yet" = "لا مساحات بعد";
+"Add a space like “Living Room” or “Kitchen” to start uploading renders." = "أضف مساحة متل “غرفة المعيشة” أو “المطبخ” عشان تبدأ ترفع الريندر.";
+"Add Photos" = "إضافة صور";
+"Remove Space" = "حذف المساحة";
+"Remove “%@”?" = "حذف “%@”؟";
+"Every photo in it is removed too." = "كل صورها بتنحذف معها.";
+"Before/After" = "قبل/بعد";
+"Add Hotspots" = "إضافة نقاط";
+"Edit Hotspots (%d)" = "تعديل النقاط (%d)";
+"Set as Cover" = "استخدامها كغلاف";
+"Cover updated" = "تم تحديث الغلاف";
+"Delete this photo?" = "حذف هذي الصورة؟";
+"It comes off the client's page too." = "بتختفي عن صفحة العميل كمان.";
+
+/* Upload sheet */
+"Before / After pair" = "زوج قبل/بعد";
+"One “after” photo, with an optional “before” to compare." = "صورة “بعد” وحدة، مع صورة “قبل” اختيارية للمقارنة.";
+"Photos" = "الصور";
+"After photo" = "صورة بعد";
+"Before photo (optional)" = "صورة قبل (اختياري)";
+"Choose photos" = "اختيار صور";
+"%d photo(s) chosen" = "تم اختيار %d صورة";
+"Caption (optional)" = "وصف الصورة (اختياري)";
+"Some photos failed" = "بعض الصور ما انرفعت";
+"Upload" = "رفع";
+"Uploading %d/%d…" = "جاري الرفع %d/%d…";
+"Photos added" = "تمت إضافة الصور";
+
+/* Hotspots */
+"Hotspots" = "النقاط التفاعلية";
+"Tap the photo to place one" = "اضغط على الصورة لتحط نقطة";
+"New Hotspot" = "نقطة جديدة";
+"Label" = "التسمية";
+"Sofa" = "كنبة";
+"Category" = "التصنيف";
+"Reference (material or furniture name)" = "المرجع (اسم خامة أو قطعة أثاث)";
+"Add Hotspot" = "إضافة النقطة";
+"Cancel" = "إلغاء";
+"Remove" = "حذف";
+
+/* Analytics */
+"Project Opens" = "مرات فتح المشروع";
+"Renders Viewed" = "الريندر المُشاهَد";
+"Downloads" = "التحميلات";
+"Approval Responses" = "ردود الموافقة";
+"No client activity yet" = "لا نشاط للعميل بعد";
+"Once the client opens their project link, their activity will appear here." = "أول ما يفتح العميل رابط مشروعه، بيظهر نشاطه هون.";
+"Activity Breakdown" = "تفاصيل النشاط";
+"Recent Activity" = "النشاط الأخير";
+"just now" = "الآن";
+"%dm ago" = "قبل %d دقيقة";
+"%dh ago" = "قبل %d ساعة";
+"%dd ago" = "قبل %d يوم";
+
+/* Activity log codes (lib/activity-labels.ts) */
+"activity.viewed_project" = "فتح المشروع";
+"activity.viewed_render" = "شاهد ريندر";
+"activity.viewed_drawing" = "شاهد مخطط";
+"activity.downloaded_drawing" = "حمّل مخطط";
+"activity.downloaded_document" = "حمّل مستند";
+"activity.downloaded_image" = "حمّل صورة";
+"activity.downloaded_package" = "حمّل حزمة المشروع كاملة";
+"activity.downloaded_gallery_pdf" = "حمّل ملف PDF للمعرض";
+"activity.viewed_boq" = "شاهد جدول الكميات";
+"activity.viewed_pricing" = "شاهد التسعير";
+"activity.approved" = "وافق على تصميم";
+"activity.requested_changes" = "طلب تعديلات";
+"activity.commented" = "ترك تعليق";
+"activity.sent_to_client" = "أُرسل رابط المشروع للعميل (واتساب)";
+"activity.sent_update" = "أُشعر العميل بتحديث (واتساب)";
