@@ -27,7 +27,7 @@ extension APIClient {
     }
 
     func fetchWhatsAppLinkStatus() async throws -> WhatsAppLinkState {
-        try await get("whatsapp/link-status", as: WhatsAppLinkState.self)
+        try await read("whatsapp/link-status", as: WhatsAppLinkState.self).value
     }
 
     @discardableResult
