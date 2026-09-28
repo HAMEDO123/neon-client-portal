@@ -10,9 +10,7 @@ import {
   addDeviceUser,
   clearDeviceAttendanceLog,
   decideSupplyRequest,
-  deleteAttendance,
   deleteDeviceUser,
-  setAttendance,
   setDeviceClockNow,
   setDeviceUserId,
   syncAttendanceNow,
@@ -93,8 +91,9 @@ export const reads: ReadRegistry = {
 
 export const actions: ActionRegistry = {
   // --- Attendance ------------------------------------------------------------
-  "ops/setAttendance": async (input) => setAttendance(input.form),
-  "ops/deleteAttendance": async (input) => deleteAttendance(str(input.args[0], "id")),
+  // Correcting a day's hours is the payroll screen's own action, owned by the
+  // team area (src/app/admin/(dashboard)/payroll/page.tsx) — this area's
+  // website page is the device console and the read-only month grid.
   "ops/setDeviceUserId": async (input) => setDeviceUserId(str(input.args[0], "employeeId"), input.form),
   "ops/syncAttendanceNow": async () => syncAttendanceNow(),
   "ops/setDeviceClockNow": async () => setDeviceClockNow(),
