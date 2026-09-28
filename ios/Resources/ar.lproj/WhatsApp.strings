@@ -1,0 +1,94 @@
+/* WhatsApp — the studio's one number: the inbox, a conversation, and the manager's linking/sending settings. */
+
+"WhatsApp" = "واتساب";
+"WhatsApp settings" = "إعدادات واتساب";
+"Search chats" = "ابحث في المحادثات";
+"No conversations on this number yet." = "لا توجد محادثات على هذا الرقم بعد.";
+"Nothing matches that." = "لا توجد نتائج مطابقة.";
+"Unknown" = "غير معروف";
+"No messages yet" = "لا توجد رسائل بعد";
+"You: %@" = "أنت: %@";
+"Group" = "مجموعة";
+"Sending…" = "جارٍ الإرسال…";
+
+"The studio's number is not linked yet" = "رقم الاستوديو غير مربوط بعد";
+"WhatsApp cannot be read right now" = "تعذّرت قراءة واتساب الآن";
+"Link it once from Settings — scan the code with the phone that holds the company number, and the chats appear here." = "اربطه مرة واحدة من الإعدادات — امسح الرمز بالهاتف الذي يحمل رقم الشركة، وستظهر المحادثات هنا.";
+"Ask the manager to link it from Settings." = "اطلب من المدير ربطه من الإعدادات.";
+"Open settings" = "فتح الإعدادات";
+"Try again" = "حاول مرة أخرى";
+
+"Nothing in this chat yet." = "لا توجد رسائل في هذه المحادثة بعد.";
+"Reading the conversation…" = "جارٍ قراءة المحادثة…";
+"Write a message" = "اكتب رسالة";
+"That is longer than %d characters." = "هذا أطول من %d حرفًا.";
+"Reading only in a group. WhatsApp is hard on a linked session that posts into groups, so the studio's number answers people rather than groups." = "قراءة فقط في المجموعات. واتساب صارم مع الجلسات المربوطة التي تنشر في المجموعات، لذلك يرد رقم الاستوديو على الأشخاص لا على المجموعات.";
+
+/* What a message without words actually is. */
+"Photo" = "صورة";
+"Video" = "فيديو";
+"Audio" = "مقطع صوتي";
+"Voice note" = "رسالة صوتية";
+"Document" = "مستند";
+"Sticker" = "ملصق";
+"Location" = "الموقع";
+"Contact card" = "بطاقة تواصل";
+"Message deleted" = "تم حذف الرسالة";
+"Encryption notice" = "إشعار تشفير";
+"Notice" = "إشعار";
+"Call" = "مكالمة";
+"Attachment" = "مرفق";
+
+/* The attachment row */
+"Downloading…" = "جارٍ التنزيل…";
+"Tap to open" = "اضغط للفتح";
+"Couldn't open that" = "تعذّر فتح هذا";
+"OK" = "حسنًا";
+"The attachment could not be read." = "تعذّرت قراءة هذا المرفق.";
+
+/* Settings — the channel card */
+"Linked" = "مربوط";
+"This number is linked" = "هذا الرقم مربوط";
+"Open WhatsApp on your phone → Settings → Linked devices → Link a device, and scan the code here to send from your own number." = "افتح واتساب على هاتفك ← الإعدادات ← الأجهزة المرتبطة ← ربط جهاز، وامسح الرمز هنا للإرسال من رقمك.";
+"The session worker is not running" = "خدمة الجلسة غير قيد التشغيل";
+"There is nothing to link to yet." = "لا يوجد ما يمكن الربط به بعد.";
+"Unlink" = "إلغاء الربط";
+"Unlink this number?" = "إلغاء ربط هذا الرقم؟";
+"Messages will stop going out until it is linked again." = "ستتوقف الرسائل عن الإرسال حتى يُربط مجددًا.";
+"Link" = "ربط";
+
+/* Settings — the transport card */
+"Sending" = "الإرسال";
+"Not configured" = "غير مُهيّأ";
+
+"Cloud API" = "واجهة السحابة";
+"Session worker" = "خدمة الجلسة";
+"Unreachable" = "غير متاح";
+"Transport" = "وسيلة الإرسال";
+"Official Cloud API" = "واجهة واتساب السحابية الرسمية";
+"Session worker (whatsapp-web.js)" = "خدمة جلسة الاستوديو (whatsapp-web.js)";
+"Phone number ID" = "معرّف رقم الهاتف";
+"Worker" = "الخدمة";
+"Sends from" = "يُرسل من";
+"Line" = "الخط";
+"Status" = "الحالة";
+"No transport is configured yet — the Cloud API or the session worker's keys still need to be added." = "لا توجد وسيلة إرسال مُهيّأة بعد — ما زال يجب إضافة مفاتيح الواجهة السحابية أو خدمة الجلسة.";
+
+/* Settings — the link panel */
+"Link your number" = "اربط رقمك";
+"WhatsApp → Settings → Linked devices → Link a device, then scan this." = "واتساب ← الإعدادات ← الأجهزة المرتبطة ← ربط جهاز، ثم امسح هذا.";
+"Enter this code on your phone" = "أدخل هذا الرمز على هاتفك";
+"Linking failed." = "فشل الربط.";
+"Starting the session — this takes a few seconds." = "جارٍ بدء الجلسة — يستغرق هذا بضع ثوانٍ.";
+"Or link by code, with your number" = "أو اربط برمز، باستخدام رقمك";
+"Get code" = "احصل على الرمز";
+"Waiting for the scan…" = "بانتظار المسح…";
+"The code refreshes on its own." = "يتجدد الرمز تلقائيًا.";
+"The number has been unlinked." = "تم إلغاء ربط الرقم.";
+
+/* Settings — the test message */
+"Send a test" = "إرسال رسالة تجريبية";
+"Send a test to" = "أرسل رسالة تجريبية إلى";
+"Message" = "الرسالة";
+"Send test" = "إرسال الاختبار";
+"Test message from the NEON app." = "رسالة تجريبية من تطبيق نيون.";
