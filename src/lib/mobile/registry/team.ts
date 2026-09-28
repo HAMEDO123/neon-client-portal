@@ -1,10 +1,219 @@
-import type { ActionRegistry, ReadRegistry } from "@/lib/mobile/rpc";
+import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/admin-guard";
+import {
+  createEmployeeAccount,
+  resetEmployeePassword,
+  revokeEmployeeAccount,
+  setEmployeeActive,
+  updateEmployeeAccount,
+} from "@/lib/actions/admin-employee-actions";
+import { giveWarning, removeWarning } from "@/lib/actions/warning-actions";
+import { applyDayPlan, planEmployeeDay, saveDayPlanEdits } from "@/lib/actions/day-plan-actions";
+import {
+  correctReceipt,
+  deleteAttendance,
+  setAttendance,
+  setDeviceUserId,
+  setEmployeePay,
+} from "@/lib/actions/operations-actions";
+import { getAttendanceForPeriod, getPayrollForPeriod, getReceiptsForPeriod } from "@/lib/payroll-queries";
+import { periodLabel, periodOf, previousPeriod } from "@/lib/payroll";
+import { salesCountsForMonth, monthSalesFor } from "@/lib/sales-queries";
+import { WARNING_LIMIT } from "@/lib/warnings";
+import { getTimezone, getWorkHours } from "@/lib/settings";
+import { dayKeyToDate, formatDayIn, todayKey } from "@/lib/time";
+import { nextWorkingDay } from "@/lib/work-hours";
+import { getDayPlan } from "@/lib/day-plan-store";
+import { isAiConfigured } from "@/lib/ai/client";
+import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-queries";
+import { bool, guarded, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 
-// The "team" area of the phone API. See lib/mobile/rpc.ts: keys are
-// "team/<name>"; every read is guarded(<the website page's guard>, …); an action
-// calls the website's own server action, or is guardedAction(…) when it calls
-// a lib function directly.
+// The "team" area of the phone API: employees and payroll. See
+// lib/mobile/rpc.ts: keys are "team/<name>"; every read is guarded(requireAdmin, …),
+// matching the website's admin-only employees and payroll pages; every action
+// calls the website's own server action, so its guard, rules and notifications
+// are the website's own.
 
-export const reads: ReadRegistry = {};
+export const reads: ReadRegistry = {
+  // Mirrors src/app/admin/(dashboard)/employees/page.tsx.
+  "team/employees": guarded(requireAdmin, async () => {
+    const employees = await prisma.employee.findMany({
+      orderBy: [{ active: "desc" }, { order: "asc" }],
+      include: {
+        _count: { select: { tasks: true, assignedEntries: true, subscriptions: true, warnings: true } },
+      },
+    });
+    const timezone = await getTimezone();
+    const sold = await salesCountsForMonth(periodOf(todayKey(timezone)));
 
-export const actions: ActionRegistry = {};
+    return {
+      warningLimit: WARNING_LIMIT,
+      employees: employees.map((employee) => ({
+        id: employee.id,
+        name: employee.name,
+        role: employee.role,
+        email: employee.email,
+        phone: employee.phone,
+        employeeCode: employee.employeeCode,
+        active: employee.active,
+        lastLoginAt: employee.lastLoginAt,
+        monthlySalesTarget: employee.monthlySalesTarget,
+        taskCount: employee._count.tasks,
+        deviceCount: employee._count.subscriptions,
+        warningCount: employee._count.warnings,
+        sold: sold.get(employee.id) ?? 0,
+      })),
+    };
+  }),
+
+  // Mirrors src/app/admin/(dashboard)/employees/[id]/page.tsx.
+  "team/employee": guarded(requireAdmin, async (params) => {
+    const id = param(params, "id");
+    const employee = await prisma.employee.findUnique({
+      where: { id },
+      include: {
+        subscriptions: { where: { active: true }, orderBy: { createdAt: "desc" } },
+        warnings: { orderBy: { createdAt: "asc" }, select: { id: true, reason: true, createdAt: true } },
+        _count: { select: { notifications: true, assignedEntries: true } },
+      },
+    });
+    if (!employee) return null;
+
+    const timezone = await getTimezone();
+    const hours = await getWorkHours();
+    const today = todayKey(timezone);
+    const tomorrow = nextWorkingDay(hours, today);
+    const tomorrowLabel = formatDayIn(timezone, dayKeyToDate(tomorrow)) ?? tomorrow;
+    const period = periodOf(today);
+    const sales = await monthSalesFor(employee.id, period);
+    const colleagues = await prisma.employee.findMany({
+      where: { active: true, accessRole: "EMPLOYEE", NOT: { id: employee.id } },
+      select: { id: true, name: true },
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    });
+    const planToday = await getDayPlan(employee.id, today);
+    const planTomorrow = await getDayPlan(employee.id, tomorrow);
+    const performance = await performanceFor(employee.id, sinceDays());
+
+    return {
+      warningLimit: WARNING_LIMIT,
+      employee: {
+        id: employee.id,
+        name: employee.name,
+        email: employee.email,
+        role: employee.role,
+        phone: employee.phone,
+        employeeCode: employee.employeeCode,
+        active: employee.active,
+        createdAt: employee.createdAt,
+        lastLoginAt: employee.lastLoginAt,
+        monthlySalesTarget: employee.monthlySalesTarget,
+        canReadWhatsApp: employee.canReadWhatsApp,
+        canAssignTasks: employee.canAssignTasks,
+        canLogSiteVisits: employee.canLogSiteVisits,
+        playbook: employee.playbook,
+        skills: employee.skills,
+        examples: employee.examples,
+        dailyCapacityMinutes: employee.dailyCapacityMinutes,
+        reviewerId: employee.reviewerId,
+        deviceCount: employee.subscriptions.length,
+        notificationCount: employee._count.notifications,
+      },
+      warnings: employee.warnings,
+      colleagues,
+      today,
+      tomorrow,
+      tomorrowLabel,
+      aiConfigured: isAiConfigured(),
+      plans: { today: planToday, tomorrow: planTomorrow },
+      sales: { projects: sales.projects, target: sales.target, period },
+      performance,
+      performanceDays: WINDOW_DAYS,
+    };
+  }),
+
+  // Mirrors src/app/admin/(dashboard)/payroll/page.tsx.
+  "team/payroll": guarded(requireAdmin, async (params) => {
+    const timezone = await getTimezone();
+    const thisMonth = periodOf(todayKey(timezone));
+    const requested = optParam(params, "period");
+    const period = requested && /^\d{4}-\d{2}$/.test(requested) ? requested : thisMonth;
+    const isThisMonth = period === thisMonth;
+
+    const rows = await getPayrollForPeriod(period);
+    const attendance = await getAttendanceForPeriod(period);
+    const receipts = await getReceiptsForPeriod(period);
+    const employees = await prisma.employee.findMany({
+      where: { active: true, accessRole: "EMPLOYEE" },
+      orderBy: { order: "asc" },
+      select: { id: true, name: true, deviceUserId: true },
+    });
+
+    const totals = rows.reduce(
+      (sum, row) => ({
+        cut: sum.cut + row.breakdown.totalCut,
+        receipts: sum.receipts + row.breakdown.receiptTotal,
+        final: sum.final + row.breakdown.finalPay,
+      }),
+      { cut: 0, receipts: 0, final: 0 }
+    );
+
+    return {
+      period,
+      periodLabel: periodLabel(period),
+      previousPeriod: previousPeriod(period),
+      thisMonth,
+      isThisMonth,
+      totals: { ...totals, team: rows.length },
+      rows,
+      employees,
+      attendance: attendance.map((record) => ({
+        id: record.id,
+        day: record.day,
+        employeeId: record.employee.id,
+        employeeName: record.employee.name,
+        delayHours: record.delayHours,
+        note: record.note,
+      })),
+      receipts: receipts.map((receipt) => ({
+        id: receipt.id,
+        employeeId: receipt.employee.id,
+        employeeName: receipt.employee.name,
+        imageUrl: receipt.imageUrl,
+        summary: receipt.summary,
+        aiNotes: receipt.aiNotes,
+        vendor: receipt.vendor,
+        rawAmount: receipt.rawAmount,
+        countedAmount: receipt.countedAmount,
+      })),
+    };
+  }),
+};
+
+export const actions: ActionRegistry = {
+  "team/createEmployee": async (input) => createEmployeeAccount(input.form),
+  "team/updateEmployee": async (input) => updateEmployeeAccount(str(input.args[0], "id"), input.form),
+  "team/setEmployeeActive": async (input) =>
+    setEmployeeActive(str(input.args[0], "id"), bool(input.args[1])),
+  "team/resetPassword": async (input) => resetEmployeePassword(str(input.args[0], "id"), input.form),
+  "team/revokeAccount": async (input) => revokeEmployeeAccount(str(input.args[0], "id")),
+
+  "team/giveWarning": async (input) => giveWarning(str(input.args[0], "employeeId"), input.form),
+  "team/removeWarning": async (input) =>
+    removeWarning(str(input.args[0], "employeeId"), str(input.args[1], "warningId")),
+
+  "team/planDay": async (input) => planEmployeeDay(str(input.args[0], "employeeId"), str(input.args[1], "dayKey")),
+  "team/saveDayPlan": async (input) =>
+    saveDayPlanEdits(
+      str(input.args[0], "employeeId"),
+      str(input.args[1], "dayKey"),
+      (input.args[2] as { from: string; to: string; keep: boolean }[]) ?? []
+    ),
+  "team/applyDayPlan": async (input) => applyDayPlan(str(input.args[0], "employeeId"), str(input.args[1], "dayKey")),
+
+  "team/setEmployeePay": async (input) => setEmployeePay(str(input.args[0], "id"), input.form),
+  "team/setAttendance": async (input) => setAttendance(input.form),
+  "team/deleteAttendance": async (input) => deleteAttendance(str(input.args[0], "id")),
+  "team/setDeviceUserId": async (input) => setDeviceUserId(str(input.args[0], "employeeId"), input.form),
+  "team/correctReceipt": async (input) => correctReceipt(str(input.args[0], "id"), input.form),
+};
