@@ -1,5 +1,15 @@
 import { channelFor, chatSide, getChatViewer, parseConversation } from "@/lib/chat";
-import { CallError, declineCall, heartbeat, joinCall, leaveCall, markAway, startCall } from "@/lib/call-store";
+import {
+  CallError,
+  addableToCall,
+  declineCall,
+  heartbeat,
+  inviteToCall,
+  joinCall,
+  leaveCall,
+  markAway,
+  startCall,
+} from "@/lib/call-store";
 import { mayCallIn } from "@/lib/calls";
 import { iceServers } from "@/lib/ice-servers";
 import { sameOrigin } from "@/lib/request-origin";
@@ -14,7 +24,7 @@ import { sameOrigin } from "@/lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
-type Body = { action?: unknown; as?: unknown; conversation?: unknown; kind?: unknown; callId?: unknown };
+type Body = { action?: unknown; as?: unknown; conversation?: unknown; kind?: unknown; callId?: unknown; members?: unknown };
 
 const failure = (message: string, status: number) => Response.json({ error: message }, { status });
 
@@ -59,6 +69,14 @@ export async function POST(request: Request) {
         return Response.json({ ok: true });
       case "heartbeat":
         return Response.json({ inCall: await heartbeat(viewer, callId) });
+      // Who else could be asked into this call, and asking them. Both refuse
+      // anybody who is not themselves in it.
+      case "addable":
+        return Response.json({ members: await addableToCall(viewer, callId) });
+      case "invite": {
+        const keys = Array.isArray(body.members) ? body.members.filter((key): key is string => typeof key === "string") : [];
+        return Response.json(await inviteToCall(viewer, callId, keys));
+      }
       default:
         return failure("That is not something a call can do.", 400);
     }

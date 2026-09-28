@@ -5,9 +5,11 @@ import { channelFor, type ChatViewer } from "@/lib/chat";
 import { peerConversation } from "@/lib/chat-conversations";
 import {
   CallError,
+  addableToCall,
   callsFor,
   declineCall,
   heartbeat,
+  inviteToCall,
   joinCall,
   leaveCall,
   markAway,
@@ -227,6 +229,104 @@ describe("a call between two people", () => {
     assert.equal(call.endReason, "completed");
   });
 });
+
+describe("adding somebody to a call already running", () => {
+  it("rings a person who is not in the chat the call began in", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // The point of adding somebody is that they were not there: this call is
+    // in the manager's private chat with carla, and amal cannot open it.
+    const { conversation, channelId } = await directWith(carla);
+    const { callId } = await startCall(manager, conversation, channelId, "AUDIO");
+    await joinCall(carla, callId);
+
+    const { invited } = await inviteToCall(manager, callId, [amal.id]);
+    assert.equal(invited, 1);
+
+    const row = await prisma.callParticipant.findFirstOrThrow({ where: { callId, memberKey: amal.id } });
+    assert.equal(row.state, "INVITED");
+
+    // And it actually reaches her — the call used to be filtered out of her
+    // stream for being in a chat she is not in, so her phone never rang.
+    const hers = await callsFor(amal);
+    assert.ok(hers.some((call) => call.id === callId), "the call must reach the person asked into it");
+
+    // She can answer it, for the same reason: the row is the permission.
+    await joinCall(amal, callId);
+    assert.equal(
+      (await prisma.callParticipant.findFirstOrThrow({ where: { callId, memberKey: amal.id } })).state,
+      "JOINED"
+    );
+
+    await hangUp(callId);
+  });
+
+  it("refuses anybody who is not in the call themselves", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // Otherwise being able to name a call id would be enough to pull the
+    // whole team into somebody else's private conversation.
+    const { conversation, channelId } = await directWith(carla);
+    const { callId } = await startCall(manager, conversation, channelId, "AUDIO");
+    await joinCall(carla, callId);
+
+    await assert.rejects(() => inviteToCall(basel, callId, [amal.id]), /Only somebody in the call/);
+    assert.equal(await prisma.callParticipant.count({ where: { callId, memberKey: amal.id } }), 0);
+
+    await hangUp(callId);
+  });
+
+  it("offers everybody on the team except the people already in it", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    const { conversation, channelId } = await directWith(carla);
+    const { callId } = await startCall(manager, conversation, channelId, "AUDIO");
+    await joinCall(carla, callId);
+
+    const offered = (await addableToCall(manager, callId)).map((member) => member.key);
+
+    assert.ok(!offered.includes("admin"), "the manager is in the call");
+    assert.ok(!offered.includes(carla.id), "carla is in the call");
+    assert.ok(offered.includes(amal.id), "amal is not, so she can be asked");
+
+    // And somebody outside the call is offered nobody at all, rather than the
+    // team — the list is only for people who could act on it.
+    assert.deepEqual(await addableToCall(basel, callId), []);
+
+    await hangUp(callId);
+  });
+
+  it("does not ask somebody twice", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    const { conversation, channelId } = await directWith(carla);
+    const { callId } = await startCall(manager, conversation, channelId, "AUDIO");
+    await joinCall(carla, callId);
+
+    await inviteToCall(manager, callId, [amal.id]);
+    const second = await inviteToCall(manager, callId, [amal.id, carla.id]);
+
+    assert.equal(second.invited, 0, "already in the call, both of them");
+    assert.equal(await prisma.callParticipant.count({ where: { callId, memberKey: amal.id } }), 1);
+
+    await hangUp(callId);
+  });
+});
+
+/**
+ * Ends a call outright between tests.
+ *
+ * `startCall` joins the call already running in the same conversation rather
+ * than opening a second one — which is right, and means a test that leaves one
+ * open silently hands it to the next test, where it looks like somebody being
+ * invited twice.
+ */
+async function hangUp(callId: string) {
+  await prisma.call.update({
+    where: { id: callId },
+    data: { status: "ENDED", endedAt: new Date(), endReason: "completed" },
+  });
+}
 
 describe("one call at a time", () => {
   it("joins the call already ringing when the other person calls back at the same moment", async (t) => {
