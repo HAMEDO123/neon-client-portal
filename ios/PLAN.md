@@ -96,6 +96,14 @@ decision.
 
 ## 5. What is missing — requests for the server
 
+**Calls and the manager's tasks** are the two biggest gaps, and
+`ios/SERVER-REQUEST.md` is a paste-ready request for both. The web's call
+routes (`/api/calls*`) accept only a browser session plus a same-origin
+check, and reviewing, the day board and handing out work are `requireAdmin`
+server actions. None of these can be called from the app today. The app
+shows call history lines in chat, but has no call buttons until those routes
+exist.
+
 Each of these is a server change, to be made on the office PC. The app works
 without them, and it doesn't fake any of them.
 
