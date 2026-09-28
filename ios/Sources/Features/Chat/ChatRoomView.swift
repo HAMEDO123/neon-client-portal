@@ -35,6 +35,7 @@ struct ChatRoomView: View {
     @State private var searchQuery = ""
     @State private var scrollTarget: String?
     @State private var lastTypingSentAt: Date?
+    @State private var deleteTarget: ChatMessage?
     @FocusState private var composerFocused: Bool
 
     var body: some View {
@@ -82,7 +83,7 @@ struct ChatRoomView: View {
                                     },
                                     onReact: { emoji in Task { try? await api.toggleChatReaction(messageId: message.id, emoji: emoji) } },
                                     onPin: { pin in Task { try? await api.setChatPinned(messageId: message.id, pin: pin) } },
-                                    onDelete: canDelete(message) ? { Task { await delete(message) } } : nil,
+                                    onDelete: canDelete(message) ? { deleteTarget = message } : nil,
                                     onCardChanged: { Task { await load() } }
                                 )
                                 .id(message.id)
@@ -172,6 +173,13 @@ struct ChatRoomView: View {
             ChatMeetingComposeSheet(conversationSlug: route.slug) { Task { await load() } }
         }
         .sheet(isPresented: $showAssistant) { ChatAssistantSheet() }
+        .confirmationDialog(L("Delete this message?"), isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
+            Button(L("Delete"), role: .destructive) {
+                if let target = deleteTarget { Task { await delete(target) } }
+                deleteTarget = nil
+            }
+            Button(L("Cancel"), role: .cancel) { deleteTarget = nil }
+        }
         .photosPicker(isPresented: $showPhotos, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { item in
             guard let item else { return }
