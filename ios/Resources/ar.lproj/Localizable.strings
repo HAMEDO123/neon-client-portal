@@ -135,3 +135,174 @@
 "approval.PENDING" = "معلّق";
 "approval.APPROVED" = "معتمد";
 "approval.CHANGES_REQUESTED" = "طُلبت تعديلات";
+
+/* Signing in — one app for the manager and the team */
+"The studio" = "الاستوديو";
+"Team" = "الفريق";
+"Manager" = "المدير";
+"Admin password" = "كلمة مرور الإدارة";
+"Invalid email or password." = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
+"You have been signed out. Sign in again." = "تم تسجيل خروجك. سجّل الدخول من جديد.";
+"Sign out of NEON?" = "تسجيل الخروج من NEON؟";
+
+/* Errors from the server */
+"Can't reach the studio server. Check the connection and try again." = "تعذّر الوصول إلى خادم الاستوديو. تحقّق من الاتصال وحاول مجددًا.";
+"The server had a problem (%d). Try again." = "حدثت مشكلة في الخادم (%d). حاول مجددًا.";
+"The server answered in a shape this app doesn't understand. Update the app." = "ردّ الخادم بصيغة لا يفهمها هذا الإصدار. حدّث التطبيق.";
+"Offline — showing what the server said at %@" = "غير متصل — يُعرض ما قاله الخادم الساعة %@";
+"That didn't go through" = "لم تتم العملية";
+
+/* Tabs */
+"Today" = "اليوم";
+"Tasks" = "المهام";
+"Chat" = "المحادثة";
+"Alerts" = "التنبيهات";
+"Projects" = "المشاريع";
+
+/* The day */
+"NOW" = "الآن";
+"ON A BREAK" = "استراحة";
+"YOUR DAY" = "يومك";
+"Next" = "التالي";
+"Next at %@" = "التالي الساعة %@";
+"The day starts at %@" = "يبدأ اليوم الساعة %@";
+"That is the day" = "انتهى يوم العمل";
+"Break until %@" = "استراحة حتى %@";
+"Nothing planned for today" = "لا شيء مخطط لليوم";
+"%@ left" = "متبقٍ %@";
+"in %@" = "بعد %@";
+"%@ of the working day left" = "متبقٍ من يوم العمل %@";
+"Working hours %@–%@" = "ساعات العمل %@–%@";
+"no time left" = "لم يبقَ وقت";
+"%dm" = "%d د";
+"%dh" = "%d س";
+"%dh %dm" = "%d س %d د";
+"Today's work" = "عمل اليوم";
+"Tomorrow" = "غدًا";
+"Yesterday" = "أمس";
+"Nothing is scheduled on today" = "لا يوجد عمل مجدول لليوم";
+
+/* Warnings */
+"You have a warning" = "لديك إنذار";
+"You have %d warnings" = "لديك %d إنذارات";
+"Warning %d · %@" = "الإنذار %d · %@";
+"One more warning closes your account." = "إنذار واحد آخر يُغلق حسابك.";
+
+/* Tasks */
+"Open" = "المفتوحة";
+"Completed" = "المكتملة";
+"All" = "الكل";
+"Show" = "عرض";
+"Task" = "مهمة";
+"Pending" = "قيد الانتظار";
+"In progress" = "قيد التنفيذ";
+"Sent for review" = "أُرسلت للمراجعة";
+"Planned for tomorrow" = "مخطط لها غدًا";
+"High priority" = "أولوية عالية";
+"Low priority" = "أولوية منخفضة";
+"Waiting" = "بانتظار غيرها";
+"Blocked" = "متوقفة";
+"Due %@" = "الموعد %@";
+"On the day: %@" = "مجدولة يوم: %@";
+"≈ %@ h" = "≈ %@ س";
+"No approved work yet" = "لا يوجد عمل معتمد بعد";
+"Nothing on your list" = "لا شيء في قائمتك";
+"Work the manager puts on the board for you appears here." = "العمل الذي يضعه المدير لك على اللوحة يظهر هنا.";
+"Start this task" = "ابدأ هذه المهمة";
+"Put back to pending" = "أرجعها إلى الانتظار";
+"Send proof of finished work" = "أرسل إثبات العمل المنجز";
+"With the manager for review" = "لدى المدير للمراجعة";
+"Sent. The manager has been told." = "أُرسلت، وتم إبلاغ المدير.";
+"It is marked done when the manager approves the proof. If they send it back, it returns here as in progress." = "تُعلَّم منجزة عندما يعتمد المدير الإثبات. وإن أعادها، ترجع هنا قيد التنفيذ.";
+"Approved by the manager" = "اعتمدها المدير";
+"Approved %@" = "اعتُمدت %@";
+"Waiting on %@" = "بانتظار %@";
+"Waits for" = "تنتظر";
+"What to hand in" = "ما يجب تسليمه";
+"Counts as done when" = "تُعدّ منجزة عندما";
+"The studio's standard for this step." = "معيار الاستوديو لهذه الخطوة.";
+"Proof to send" = "الإثبات المطلوب";
+"Checklist" = "قائمة التحقق";
+"From the manager" = "من المدير";
+"Next step" = "الخطوة التالية";
+"Last update" = "آخر تحديث";
+"Your note" = "ملاحظتك";
+
+/* Sending proof */
+"Send proof" = "أرسل الإثبات";
+"Send" = "إرسال";
+"It will be checked against" = "سيُراجَع على أساس";
+"Camera" = "الكاميرا";
+"Photos" = "الصور";
+"Photo" = "صورة";
+"File" = "ملف";
+"Note for the manager (optional)" = "ملاحظة للمدير (اختيارية)";
+"What should the manager know?" = "ماذا يجب أن يعرف المدير؟";
+"Add a photo or a file of the finished work" = "أضف صورة أو ملفًا للعمل المنجز";
+"Sending puts this in the manager's review. It is marked done only when they approve it." = "الإرسال يضعها في مراجعة المدير، ولا تُعلَّم منجزة إلا عندما يعتمدها.";
+"That photo could not be read." = "تعذّرت قراءة هذه الصورة.";
+"That file could not be read." = "تعذّرت قراءة هذا الملف.";
+
+/* Chat */
+"Message" = "رسالة";
+"No conversations yet" = "لا توجد محادثات بعد";
+"No messages yet" = "لا توجد رسائل بعد";
+"Say hello." = "ابدأ بالتحية.";
+"You: %@" = "أنت: %@";
+"📷 Photo" = "📷 صورة";
+"🎤 Voice message" = "🎤 رسالة صوتية";
+"Voice message" = "رسالة صوتية";
+"Call" = "مكالمة";
+"Meeting" = "اجتماع";
+"Tap to open" = "اضغط للفتح";
+"Only you" = "أنت فقط";
+"TASK" = "مهمة";
+"To do" = "للتنفيذ";
+"Done" = "منجزة";
+"Proof sent — waiting for review" = "أُرسل الإثبات — بانتظار المراجعة";
+"Proof waiting for your review on the web" = "إثبات بانتظار مراجعتك على الويب";
+"MEETING" = "اجتماع";
+"%@ · %d min" = "%@ · %d دقيقة";
+"In person" = "حضوري";
+"Online" = "عن بُعد";
+"Coming" = "سيحضر";
+"Not coming" = "لن يحضر";
+"Not answered yet" = "لم يردّ بعد";
+
+/* Alerts */
+"No notifications" = "لا توجد تنبيهات";
+"Mark all read" = "تعليم الكل كمقروء";
+"Couldn't load the picture" = "تعذّر تحميل الصورة";
+
+/* Tasks, meetings and calls through the studio's web pages */
+"Close" = "إغلاق";
+"Task board" = "لوحة المهام";
+"Reviews" = "المراجعات";
+"Review" = "راجع";
+"Approve the proof, or send it back with a reason." = "اعتمد الإثبات، أو أرجعه مع السبب.";
+"Handed out in chat" = "موزّعة في المحادثة";
+"To review" = "للمراجعة";
+"No tasks here" = "لا توجد مهام هنا";
+"Tasks from the last 200 messages of each chat." = "المهام من آخر ٢٠٠ رسالة في كل محادثة.";
+"Proof waiting for your review" = "إثبات بانتظار مراجعتك";
+"On the project board" = "على لوحة المشاريع";
+"My week on the web" = "أسبوعي على الويب";
+"My week" = "أسبوعي";
+"Meetings" = "الاجتماعات";
+"Coming up" = "القادمة";
+"Earlier" = "السابقة";
+"No meetings coming up" = "لا توجد اجتماعات قادمة";
+"Meetings set from a chat appear here." = "الاجتماعات التي تُحدَّد من المحادثة تظهر هنا.";
+"Meetings from the last 200 messages of each chat." = "الاجتماعات من آخر ٢٠٠ رسالة في كل محادثة.";
+"Now" = "الآن";
+"Join" = "انضم";
+"Answer" = "ردّ";
+"Press Join on the meeting card to enter the call." = "اضغط «انضم» على بطاقة الاجتماع لتدخل المكالمة.";
+"Answer on the meeting card: coming or not." = "ردّ على بطاقة الاجتماع: ستحضر أم لا.";
+"Voice call" = "مكالمة صوتية";
+"Video call" = "مكالمة فيديو";
+"Start or join the call with the buttons at the top of the chat." = "ابدأ المكالمة أو انضم إليها من الأزرار أعلى المحادثة.";
+"Hand out a task" = "وزّع مهمة";
+"Press + in the chat and choose Task. For one person, open their chat instead." = "اضغط + في المحادثة واختر «مهمة». ولشخص واحد، افتح محادثته بدلًا من ذلك.";
+"Set a meeting" = "حدّد اجتماعًا";
+"Press + in the chat and choose Meeting. For one person, open their chat instead." = "اضغط + في المحادثة واختر «اجتماع». ولشخص واحد، افتح محادثته بدلًا من ذلك.";
