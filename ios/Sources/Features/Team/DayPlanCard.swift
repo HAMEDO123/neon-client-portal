@@ -85,6 +85,13 @@ struct DayPlanCard: View {
                     .font(.neonFootnote)
                     .foregroundStyle(Color.neonTextSecondary)
 
+                // Tick and times only, exactly what the web editor offers.
+                // Reordering blocks or adding one by hand cannot be done from
+                // here: saveDayPlanEdits (day-plan-actions.ts) takes a fixed-
+                // length {from,to,keep}[] mapped onto the stored blocks by
+                // array index — sending it reordered would attach one block's
+                // time to another's task, and it refuses any length but the
+                // stored one, so nothing can be appended. See FEATURES.md.
                 VStack(spacing: 8) {
                     ForEach($blocks) { $block in
                         PlanBlockRow(block: $block, onEdited: { dirty = true; said = nil })

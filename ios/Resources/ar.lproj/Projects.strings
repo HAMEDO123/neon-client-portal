@@ -10,6 +10,12 @@
 "Published" = "منشورة";
 "Pending Approvals" = "بانتظار الموافقة";
 "Updated This Week" = "تحدّثت هالأسبوع";
+"Filters" = "الفلاتر";
+"Filter Projects" = "فلترة المشاريع";
+"Show Results" = "عرض النتائج";
+"Clear Filters" = "مسح الفلاتر";
+"This project is live. Anything you add or remove here changes the client’s page straight away." = "هذا المشروع منشور. أي إضافة أو حذف هون بيتغيّر فوراً على صفحة العميل.";
+"This project is not published, so the client sees nothing until somebody publishes it." = "هذا المشروع مش منشور، فالعميل ما بيشوف شي لحد ما حدا ينشره.";
 
 /* New project */
 "New Project" = "مشروع جديد";

@@ -116,6 +116,8 @@ struct ProjectDetailView: View {
 
             if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
+            if api.side == .employee { liveStatusBanner(detail) }
+
             publishRow(detail)
             linkRow(detail)
 
@@ -145,6 +147,22 @@ struct ProjectDetailView: View {
         case .comments: ProjectCommentsSection(projectId: detail.id)
         case .analytics: ProjectAnalyticsView(projectId: detail.id)
         }
+    }
+
+    // Said plainly, on the screen where the editing happens: this is
+    // publishing, not saving. Mirrors the employee web page's own banner
+    // (src/app/employee/(portal)/projects/[id]/layout.tsx) word for word —
+    // shown only on this side, since it is telling the team something the
+    // manager already knows from the publish badge beside it.
+    @ViewBuilder
+    private func liveStatusBanner(_ detail: ProjectDetail) -> some View {
+        StatusNote(
+            symbol: detail.publishState == "PUBLISHED" ? "dot.radiowaves.left.and.right" : "exclamationmark.triangle.fill",
+            tone: .warning,
+            title: detail.publishState == "PUBLISHED"
+                ? L("This project is live. Anything you add or remove here changes the client’s page straight away.")
+                : L("This project is not published, so the client sees nothing until somebody publishes it.")
+        )
     }
 
     @ViewBuilder

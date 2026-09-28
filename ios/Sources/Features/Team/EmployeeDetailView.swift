@@ -86,7 +86,15 @@ struct EmployeeDetailView: View {
                 if let code = data.employee.employeeCode { KeyValueRow(L("Employee ID"), value: code, symbol: "number") }
                 KeyValueRow(L("Sales target"), value: L("%d projects a month", data.employee.monthlySalesTarget), symbol: "target")
                 if let reviewer = data.colleagues.first(where: { $0.id == data.employee.reviewerId }) {
-                    KeyValueRow(L("Reviewed by"), value: reviewer.name, symbol: "checkmark.seal")
+                    NavigationLink(value: TeamEmployeeRoute(id: reviewer.id)) {
+                        HStack(spacing: 4) {
+                            KeyValueRow(L("Reviewed by"), value: reviewer.name, symbol: "checkmark.seal")
+                            Image(systemName: "chevron.forward")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(Color.neonTextTertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     KeyValueRow(L("Reviewed by"), value: L("The manager"), symbol: "checkmark.seal")
                 }
@@ -131,16 +139,28 @@ struct EmployeeDetailView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(sales.projects.enumerated()), id: \.element.id) { index, project in
                         if index > 0 { NeonDivider() }
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                DirText(project.name, font: .neonSubheadline, color: .neonInk)
-                                DirText(project.clientName, font: .neonCaption, color: .neonTextSecondary)
+                        // Pushed directly (not via a shared route type): this
+                        // screen sits in whichever stack hosts Team, never the
+                        // Projects tab's own, so there is no navigationDestination
+                        // for a ProjectRoute to resolve against here.
+                        NavigationLink {
+                            ProjectDetailView(projectId: project.id)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    DirText(project.name, font: .neonSubheadline, color: .neonInk)
+                                    DirText(project.clientName, font: .neonCaption, color: .neonTextSecondary)
+                                }
+                                Spacer()
+                                Text(formattedISODate(project.soldOn) ?? "—")
+                                    .font(.neonCaption)
+                                    .foregroundStyle(Color.neonTextTertiary)
+                                Image(systemName: "chevron.forward")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.neonTextTertiary)
                             }
-                            Spacer()
-                            Text(formattedISODate(project.soldOn) ?? "—")
-                                .font(.neonCaption)
-                                .foregroundStyle(Color.neonTextTertiary)
                         }
+                        .buttonStyle(.plain)
                         .padding(.vertical, 6)
                     }
                 }
