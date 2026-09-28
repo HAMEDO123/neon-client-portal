@@ -7,22 +7,16 @@ struct TasksView: View {
     @EnvironmentObject var api: APIClient
     @State private var filter: TaskFilter = .open
     @State private var tasks: [StaffTask]?
+    @State private var jobs: [AssignedJob]?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @StateObject private var cards = ChatCardsLoader()
     @State private var proofFor: ProofTarget?
-    @State private var web: WebPortalLink?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    // Jobs handed out on the week board have no phone route
-                    // yet (ios/SERVER-REQUEST.md); the website's list has them.
-                    WebTile(title: L("My week on the web"), symbol: "calendar") {
-                        web = WebPortalLink(path: "/employee/tasks", title: L("My week"))
-                    }
-
                     Picker(L("Show"), selection: $filter) {
                         ForEach(TaskFilter.allCases) { Text($0.label).tag($0) }
                     }
@@ -41,6 +35,18 @@ struct TasksView: View {
                             .glassCard(radius: 18)
                         } else {
                             TaskList(tasks: tasks)
+                        }
+
+                        if let jobs, !jobs.isEmpty {
+                            SectionLabel(L("From the manager"))
+                            VStack(spacing: 10) {
+                                ForEach(jobs) { job in
+                                    NavigationLink(value: JobRoute(id: job.id)) {
+                                        JobRow(job: job)
+                                    }
+                                    .buttonStyle(.pressableCard)
+                                }
+                            }
                         }
 
                         MyChatJobsSection(filter: filter, cards: cards, viewer: api.identity) { part, card in
@@ -66,11 +72,15 @@ struct TasksView: View {
             .navigationDestination(for: TaskRoute.self) { route in
                 TaskDetailView(taskId: route.id)
             }
+            .navigationDestination(for: JobRoute.self) { route in
+                JobDetailView(jobId: route.id)
+            }
             .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
             .neonAmbientBackground()
         }
         .task(id: filter) {
             tasks = nil
+            jobs = nil
             await load()
         }
         .task { await cards.load(api) }
@@ -79,14 +89,16 @@ struct TasksView: View {
                 Task { await cards.load(api) }
             }
         }
-        .fullScreenCover(item: $web) { WebPortalSheet(link: $0) }
     }
 
     private func load() async {
+        async let tasksLoad = api.fetchTasks(filter: filter)
+        async let jobsLoad = api.fetchJobs(filter: filter)
         do {
-            let loaded = try await api.fetchTasks(filter: filter)
-            tasks = loaded.value.tasks
-            cachedAt = loaded.cachedAt
+            let (loadedTasks, loadedJobs) = try await (tasksLoad, jobsLoad)
+            tasks = loadedTasks.value.tasks
+            jobs = loadedJobs.value
+            cachedAt = loadedTasks.cachedAt
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -111,6 +123,7 @@ struct TaskDetailView: View {
     @State private var actionError: String?
     @State private var showProof = false
     @State private var justSubmitted = false
+    @State private var followUp: FollowUpQuestion?
 
     var body: some View {
         ScrollView {
@@ -119,6 +132,10 @@ struct TaskDetailView: View {
 
                 if let task {
                     header(task)
+                    if let followUp {
+                        FollowUpCard(question: followUp) { self.followUp = nil }
+                            .transition(.neonRise)
+                    }
                     actions(task)
                     detail(task)
                 } else if let errorMessage {
@@ -343,6 +360,11 @@ struct TaskDetailView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+        // What the day asked about this task, if anything — the same
+        // `openFollowUpForTask` the website reads. Failing quietly here is
+        // right: a missed question is not worse than the task screen itself
+        // not loading, and the page above already reports that failure.
+        followUp = try? await api.fetchFollowUp(entryId: taskId).value
     }
 
     private func move(_ task: StaffTask, to state: String) async {
@@ -357,6 +379,149 @@ struct TaskDetailView: View {
         } catch {
             Haptic.error()
             actionError = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - What the day asked (follow-up-reply.tsx, native)
+
+/// One tap where the day asked something. The buttons live on this screen on
+/// purpose, mirroring the web: iOS draws no action buttons on a web push at
+/// all, so a reply that only existed there would not exist here either — the
+/// notification opens the task, and this card is the whole answer.
+private struct FollowUpChoice: Identifiable {
+    let id: String
+    let label: String
+    let symbol: String
+    let tone: BadgeTone
+    let asks: String?
+}
+
+private func followUpChoices(for kind: String) -> [FollowUpChoice] {
+    switch kind {
+    case "block-end":
+        return [
+            FollowUpChoice(id: "done", label: L("Done"), symbol: "play.fill", tone: .success, asks: nil),
+            FollowUpChoice(id: "partly", label: L("Partly done"), symbol: "clock", tone: .warning, asks: L("What is left?")),
+            FollowUpChoice(id: "blocked", label: L("Blocked"), symbol: "pause.circle.fill", tone: .pink, asks: L("What is in the way?")),
+            FollowUpChoice(id: "not-started", label: L("Not started"), symbol: "exclamationmark.circle", tone: .neutral, asks: L("What happened?")),
+        ]
+    default: // "block-start" and anything unrecognised, exactly as the website falls back
+        return [
+            FollowUpChoice(id: "started", label: L("Started"), symbol: "play.fill", tone: .success, asks: nil),
+            FollowUpChoice(id: "need-info", label: L("Need information"), symbol: "exclamationmark.circle", tone: .warning, asks: L("What do you need?")),
+            FollowUpChoice(id: "blocked", label: L("Blocked"), symbol: "pause.circle.fill", tone: .pink, asks: L("What is in the way?")),
+            FollowUpChoice(id: "more-time", label: L("Needs more time"), symbol: "clock", tone: .neutral, asks: L("How much longer?")),
+        ]
+    }
+}
+
+private func followUpAsked(_ kind: String) -> String {
+    switch kind {
+    case "block-start": return L("This was due to start now.")
+    case "block-middle": return L("About halfway — how is it going?")
+    case "block-end": return L("This was planned to finish about now.")
+    default: return L("How is this going?")
+    }
+}
+
+private struct FollowUpCard: View {
+    let question: FollowUpQuestion
+    /// Told once the question is settled, so the parent can drop it from the
+    /// screen instead of this card reloading the whole task.
+    let onAnswered: () -> Void
+
+    @EnvironmentObject var api: APIClient
+    @State private var asking: FollowUpChoice?
+    @State private var note = ""
+    @State private var working = false
+    @State private var doneLabel: String?
+    @State private var error: String?
+    @FocusState private var noteFocused: Bool
+
+    private var choices: [FollowUpChoice] { followUpChoices(for: question.kind) }
+
+    var body: some View {
+        Group {
+            if let doneLabel {
+                StatusNote(
+                    symbol: "checkmark.circle.fill",
+                    tone: .success,
+                    title: L("Thanks — that is recorded."),
+                    detail: L("The manager can see it on the board.")
+                )
+                .accessibilityLabel(doneLabel)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    DirText(followUpAsked(question.kind), font: .system(size: 15, weight: .semibold))
+
+                    if let asking {
+                        VStack(alignment: .leading, spacing: 8) {
+                            NeonTextEditor(asking.asks ?? "", text: $note, minLines: 2, maxLines: 5, focus: $noteFocused)
+                            HStack(spacing: 10) {
+                                NeonButton(L("Send"), kind: .primary, size: .medium) {
+                                    await send(asking, note: note)
+                                }
+                                NeonButton(L("Back"), kind: .secondary, size: .medium) {
+                                    withNeonAnimation(.snappy) { self.asking = nil }
+                                    note = ""
+                                }
+                            }
+                        }
+                        .transition(.neonRise)
+                    } else {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            ForEach(choices) { choice in
+                                Button {
+                                    Haptic.selection()
+                                    if choice.asks != nil {
+                                        withNeonAnimation(.snappy) { asking = choice }
+                                    } else {
+                                        Task { await send(choice, note: nil) }
+                                    }
+                                } label: {
+                                    Label(choice.label, systemImage: choice.symbol)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: NeonSize.touch)
+                                        .foregroundStyle(choice.tone.foreground)
+                                }
+                                .buttonStyle(.pressable)
+                                .background(choice.tone.background, in: RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous).strokeBorder(choice.tone.foreground.opacity(0.25)))
+                            }
+                        }
+                        .disabled(working)
+                    }
+
+                    if let error {
+                        Text(error)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.neonPinkStrong)
+                    }
+                }
+                .padding(NeonSpace.lg)
+                .neonSurface(.glass, radius: NeonRadius.lg)
+            }
+        }
+        .animation(NeonMotion.smooth, value: doneLabel)
+    }
+
+    private func send(_ choice: FollowUpChoice, note: String?) async {
+        error = nil
+        working = true
+        defer { working = false }
+        do {
+            try await api.answerFollowUp(id: question.id, answer: choice.id, note: note)
+            Haptic.success()
+            withNeonAnimation(.smooth) { doneLabel = choice.label }
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            onAnswered()
+        } catch APIError.unauthorized {
+            // Signed out; the root view has already taken over.
+        } catch {
+            Haptic.error()
+            self.error = error.localizedDescription
         }
     }
 }

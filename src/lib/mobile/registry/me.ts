@@ -1,5 +1,29 @@
 import { requireEmployee } from "@/lib/employee-session";
-import { guarded, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { requireTaskAssigner } from "@/lib/admin-guard";
+import { prisma } from "@/lib/db";
+import { getTimezone } from "@/lib/settings";
+import { todayKey, dayKeyToDate } from "@/lib/time";
+import { getMyReceipts } from "@/lib/payroll-queries";
+import { periodOf, periodLabel, RECEIPT_CAP } from "@/lib/payroll";
+import { getPreferences } from "@/lib/notifications/engine";
+import { deviceLabel } from "@/lib/devices";
+import { myAssignedTasks, myAssignedTask, assignedTasksForWeek } from "@/lib/assigned-tasks";
+import { submissionsForAssignedTask } from "@/lib/submissions";
+import { openFollowUpForTask } from "@/lib/follow-up-queue";
+import { answerFollowUp } from "@/lib/actions/follow-up-actions";
+import { weekDayKeys, weekStartKey, weekLabel } from "@/lib/week";
+import { createSupplyRequest, cancelSupplyRequest, submitReceipt, deleteReceipt, saveDailyReport } from "@/lib/actions/operations-actions";
+import { saveNotificationPreferences } from "@/lib/actions/employee-actions";
+import { setDeviceActive, forgetDevice } from "@/lib/actions/device-actions";
+import { setMyAssignedTaskStatus } from "@/lib/actions/my-assigned-actions";
+import {
+  createAssignedTask,
+  updateAssignedTask,
+  deleteAssignedTask,
+  setAssignedTaskState,
+} from "@/lib/actions/assigned-task-actions";
+import { guarded, param, optParam, str, oneOf, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import type { TaskState } from "@/generated/prisma/enums";
 
 // The "me" area of the phone API: the signed-in employee's own things. See
 // lib/mobile/rpc.ts: keys are "me/<name>"; every read is guarded(<the website
@@ -14,6 +38,162 @@ export const reads: ReadRegistry = {
     canAssignTasks: me.canAssignTasks,
     canLogSiteVisits: me.canLogSiteVisits,
   })),
+
+  // Jobs handed out by hand (AssignedTask): src/lib/assigned-tasks.ts
+  // `myAssignedTasks`, the same rows `/employee/tasks` folds into its list —
+  // ?filter=open|completed|all, "open" by default.
+  "me/jobs": guarded(requireEmployee, async (params, me) => {
+    const filter = optParam(params, "filter") ?? "open";
+    const jobs = await myAssignedTasks(me.id, { includeDone: true });
+    const filtered = jobs.filter((job) =>
+      filter === "completed" ? job.state === "DONE" : filter === "all" ? true : job.state !== "DONE"
+    );
+    return { jobs: filtered };
+  }),
+
+  // The one open question the day owes about this task, as `/employee/tasks/[id]`
+  // reads it: `openFollowUpForTask` — unanswered and already asked. `null` when
+  // there is nothing to answer right now.
+  "me/tasks/followup": guarded(requireEmployee, async (params, me) => {
+    const entryId = param(params, "entryId");
+    return openFollowUpForTask(me.id, entryId);
+  }),
+
+  // One job, as `/employee/assigned/[id]` reads it, plus what has been sent
+  // for it so far. Scoped to this employee: somebody else's job id is simply
+  // not found, never refused.
+  "me/jobs/detail": guarded(requireEmployee, async (params, me) => {
+    const id = param(params, "id");
+    const job = await myAssignedTask(me.id, id);
+    if (!job) throw new RpcError("Task not found.", 404);
+    const submissions = await submissionsForAssignedTask(job.id);
+    return { job, submissions };
+  }),
+
+  // Everything `/employee/requests` shows across its three tabs, read once:
+  // supply requests, this month's receipts, and today's report if it was
+  // written. One read rather than three, because the whole tab is small.
+  "me/requests": guarded(requireEmployee, async (_params, me) => {
+    const timezone = await getTimezone();
+    const dayKey = todayKey(timezone);
+    const period = periodOf(dayKey);
+
+    const supplyRequests = await prisma.supplyRequest.findMany({
+      where: { employeeId: me.id },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    const receipts = await getMyReceipts(me.id, period);
+    const report = await prisma.dailyReport.findUnique({
+      where: { employeeId_day: { employeeId: me.id, day: dayKeyToDate(dayKey) } },
+      select: { text: true, updatedAt: true },
+    });
+
+    return {
+      supplyRequests,
+      receipts,
+      receiptCap: RECEIPT_CAP,
+      period,
+      periodLabel: periodLabel(period),
+      report,
+    };
+  }),
+
+  // `/employee/profile`: who this is, what to be notified about, and which
+  // devices are registered. Web push subscriptions themselves are a browser
+  // thing the app does not create, so only the list is shown here — the app
+  // may still switch one off or forget it.
+  "me/profile": guarded(requireEmployee, async (_params, me) => {
+    const [preferences, devices, timezone] = await Promise.all([
+      getPreferences(me.id),
+      prisma.pushSubscription.findMany({
+        where: { employeeId: me.id },
+        orderBy: [{ active: "desc" }, { lastUsedAt: "desc" }, { createdAt: "desc" }],
+        select: { id: true, userAgent: true, active: true, lastUsedAt: true, createdAt: true },
+      }),
+      getTimezone(),
+    ]);
+
+    return {
+      employee: {
+        id: me.id,
+        name: me.name,
+        role: me.role,
+        email: me.email,
+        phone: me.phone,
+        employeeCode: me.employeeCode,
+      },
+      preferences,
+      devices: devices.map((device) => ({
+        id: device.id,
+        label: deviceLabel(device.userAgent),
+        active: device.active,
+        lastUsedAt: device.lastUsedAt,
+        addedAt: device.createdAt,
+      })),
+      timezone,
+    };
+  }),
+
+  // The Assign view (`components/tasks/assign-work.tsx` on the web): the team
+  // to hand work to, behind the same guard the website form is behind.
+  "me/assign/team": guarded(requireTaskAssigner, async () => ({
+    team: await prisma.employee.findMany({
+      where: { active: true, accessRole: "EMPLOYEE" },
+      orderBy: [{ order: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, color: true, role: true },
+    }),
+  })),
+
+  // That week's jobs, whoever they are for — the same week `assignedTasksForWeek`
+  // hands the web's Assign view, ?week=YYYY-MM-DD (a Sunday; any day in the
+  // week works, lib/week.ts resolves it).
+  "me/assign/week": guarded(requireTaskAssigner, async (params) => {
+    const timezone = await getTimezone();
+    const requested = optParam(params, "week");
+    const anchor = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : todayKey(timezone);
+    const keys = weekDayKeys(anchor);
+
+    return {
+      weekStart: weekStartKey(anchor),
+      weekLabel: weekLabel(keys),
+      todayKey: todayKey(timezone),
+      tasks: await assignedTasksForWeek(anchor),
+    };
+  }),
 };
 
-export const actions: ActionRegistry = {};
+export const actions: ActionRegistry = {
+  // Answering what the day asked — follow-up-reply.tsx's four choices (or the
+  // end-of-block four), plus the note some of them ask for.
+  "me/tasks/followup/answer": async (input) =>
+    answerFollowUp(str(input.args[0], "followUpId"), str(input.args[1], "answer"), typeof input.args[2] === "string" ? input.args[2] : undefined),
+
+  // Jobs handed out by hand — the employee's own moves. "Done" never appears:
+  // canMove refuses it from this side exactly as the website does.
+  "me/jobs/status": async (input) =>
+    setMyAssignedTaskStatus(str(input.args[0], "id"), oneOf(input.args[1], ["TODO", "IN_PROGRESS"], "state") as TaskState),
+
+  // Supplies, receipts, the daily report.
+  "me/requests/supply/create": async (input) => createSupplyRequest(input.form),
+  "me/requests/supply/cancel": async (input) => cancelSupplyRequest(str(input.args[0], "id")),
+  "me/requests/receipt/submit": async (input) => submitReceipt(input.form),
+  "me/requests/receipt/delete": async (input) => deleteReceipt(str(input.args[0], "id")),
+  "me/requests/report/save": async (input) => saveDailyReport(input.form),
+
+  // Profile: notification preferences and this account's devices.
+  "me/profile/preferences": async (input) => saveNotificationPreferences(input.form),
+  "me/profile/device/active": async (input) => {
+    const [id, active] = input.args;
+    return setDeviceActive(str(id, "id"), active === true);
+  },
+  "me/profile/device/forget": async (input) => forgetDevice(str(input.args[0], "id")),
+
+  // Handing work out — requireTaskAssigner lives inside each of these, so an
+  // employee without the permission is refused by the action itself.
+  "me/assign/create": async (input) => createAssignedTask(input.form),
+  "me/assign/update": async (input) => updateAssignedTask(str(input.args[0], "id"), input.form),
+  "me/assign/delete": async (input) => deleteAssignedTask(str(input.args[0], "id")),
+  "me/assign/state": async (input) =>
+    setAssignedTaskState(str(input.args[0], "id"), oneOf(input.args[1], ["TODO", "IN_PROGRESS", "DONE"], "state")),
+};
