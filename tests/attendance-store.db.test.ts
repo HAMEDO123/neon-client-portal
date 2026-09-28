@@ -45,15 +45,23 @@ async function person(name: string, deviceUserId: string, active: boolean) {
   });
 }
 
-/** One day as the device would describe it. */
-const day = (deviceUserId: string, delayHours: number, dayKey = DAY): DayAttendance => ({
+/** One day as the device would describe it: in at 11:30, out at 19:00. */
+const day = (
+  deviceUserId: string,
+  delayHours: number,
+  dayKey = DAY,
+  earlyHours = 0
+): DayAttendance => ({
   deviceUserId,
   dayKey,
   arrivedAt: new Date(`${dayKey}T08:30:00.000Z`),
   arrivedLocal: "11:30 AM",
   lastAt: new Date(`${dayKey}T16:00:00.000Z`),
+  departedAt: new Date(`${dayKey}T16:00:00.000Z`),
+  departedLocal: "7:00 PM",
   punches: 2,
   delayHours,
+  earlyHours,
 });
 
 before(async () => {

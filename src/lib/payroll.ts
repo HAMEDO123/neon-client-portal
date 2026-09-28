@@ -41,6 +41,15 @@ export type PayrollInput = {
   salaryAmount: number | null;
   payBasis: PayBasis;
   delayHours: number;
+  /**
+   * Hours of the day left unworked at the end, from the clock-out.
+   *
+   * Required rather than defaulted: this is money, and a caller that has not
+   * thought about it should be made to, not quietly charged zero. Zero is the
+   * right answer for a day nobody clocked out of — it is just not a safe
+   * default for a field somebody forgot.
+   */
+  earlyHours: number;
   receiptTotal: number;
   /** Deductions decided elsewhere — a performance shortfall, say. Positive is money off. */
   adjustmentTotal?: number;
@@ -52,6 +61,9 @@ export type PayrollBreakdown = {
   workingDays: number;
   hourlyRate: number;
   delayHours: number;
+  earlyHours: number;
+  /** The two together — what the hourly rate is actually multiplied by. */
+  lostHours: number;
   cutoff: number;
   adjustmentTotal: number;
   /** Everything taken off the salary in this period — lateness and adjustments as one number. */
@@ -64,13 +76,18 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
   const salary = input.salaryAmount ?? 0;
   const rate = hourlyRate(salary, input.payBasis);
   const delayHours = Math.max(0, input.delayHours);
+  const earlyHours = Math.max(0, input.earlyHours);
+  // Both ends of the day cost the same hourly rate, so they are one number
+  // before the multiplication. Kept apart in the breakdown, because a manager
+  // deciding whether a deduction is fair wants to know which end it came from.
+  const lostHours = delayHours + earlyHours;
 
-  // Lateness can reduce the salary to nothing but never below it — a deduction
-  // must not turn into a debt the employee owes.
-  const cutoff = Math.min(round(rate * delayHours), salary);
+  // Lost time can reduce the salary to nothing but never below it — a
+  // deduction must not turn into a debt the employee owes.
+  const cutoff = Math.min(round(rate * lostHours), salary);
 
-  // Every deduction obeys the same limit together: lateness plus anything else
-  // can take the salary to zero and no further.
+  // Every deduction obeys the same limit together: lost time plus anything
+  // else can take the salary to zero and no further.
   const adjustmentTotal = Math.min(round(Math.max(0, input.adjustmentTotal ?? 0)), salary - cutoff);
   const receiptTotal = Math.max(0, input.receiptTotal);
 
@@ -80,11 +97,13 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
     workingDays: workingDaysFor(input.payBasis),
     hourlyRate: round(rate),
     delayHours: round(delayHours),
+    earlyHours: round(earlyHours),
+    lostHours: round(lostHours),
     cutoff,
     adjustmentTotal,
-    // The two deductions added up, because "how much came off" is the question
-    // a pay sheet is actually asked, and adding two columns in your head is how
-    // it gets answered wrongly. Both are already capped together above, so this
+    // Every deduction added up, because "how much came off" is the question a
+    // pay sheet is actually asked, and adding columns in your head is how it
+    // gets answered wrongly. They are already capped together above, so this
     // can never exceed the salary.
     totalCut: round(cutoff + adjustmentTotal),
     receiptTotal: round(receiptTotal),

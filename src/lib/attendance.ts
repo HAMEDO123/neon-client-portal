@@ -36,12 +36,26 @@ export type DayAttendance = {
    * wrong to the person reading the screen.
    */
   arrivedLocal: string;
-  /** The last read of the day. Recorded, but nothing is deducted for it. */
+  /** The last read of the day. Not necessarily a clock-out — see `departedAt`. */
   lastAt: Date;
+  /**
+   * When they clocked out, where they did.
+   *
+   * Null when the last read cannot honestly be called a departure: a single
+   * read, or a second one so soon after the first that it is somebody scanning
+   * twice on the way in. The platform cannot tell that from a person who
+   * arrived and left twenty minutes later, and guessing costs a day's pay — so
+   * it says nothing instead.
+   */
+  departedAt: Date | null;
+  /** The same moment on the studio's clock, for the screen. Null with the above. */
+  departedLocal: string | null;
   /** How many reads that day — one means they never touched it again. */
   punches: number;
   /** Hours late, to two decimals, never negative and never over 24. */
   delayHours: number;
+  /** Hours of the day left unworked at the end. Zero when nobody clocked out. */
+  earlyHours: number;
 };
 
 /**
@@ -88,6 +102,50 @@ export function lateHours(hours: WorkHours, arrival: string, graceMinutes = hour
 
   // Rounded up rather than to two decimals: a part of an hour is an hour.
   return Math.min(Math.ceil(late / 60), MAX_DELAY_HOURS);
+}
+
+/**
+ * The shortest gap between two reads that can be a day's work rather than one
+ * arrival.
+ *
+ * A guard, not a policy. Somebody scanning twice on the way in — because the
+ * first read did not beep — leaves two punches minutes apart, and reading the
+ * second as a clock-out would cut nearly a whole day's pay from somebody who
+ * did nothing wrong. Below this, the day is treated as having no clock-out at
+ * all, which deducts nothing and says so.
+ *
+ * It costs the studio the rare case of a genuinely twenty-minute day, which is
+ * the right way round: an unclaimed hour is an annoyance, an invented one is a
+ * wrong payslip.
+ */
+const MIN_SHIFT_MINUTES = 60;
+
+/**
+ * How much of the day was left unworked by leaving at this wall-clock time.
+ *
+ * The other end of the studio's lateness rule, and deliberately not identical
+ * to it:
+ *
+ * - **Charged in whole hours, rounded up**, exactly as lateness is. 17:20 on a
+ *   day ending at 19:00 is two hours.
+ * - **No allowance.** The studio asked for the five minutes at the start of
+ *   the day and not at the end, so a minute before the end is an hour: 18:59
+ *   costs one. That is a decision about people's pay and it is theirs to make,
+ *   not one to be softened here.
+ *
+ * Staying past the end is not negative — there is no overtime in this studio,
+ * and a negative number here would quietly pay it through payroll's
+ * multiplication, which is exactly the trap `lateHours` avoids at its own end.
+ */
+export function earlyHours(hours: WorkHours, departure: string): number {
+  const leftAt = minutesOf(departure);
+  const endsAt = minutesOf(hours.end);
+  if (leftAt == null || endsAt == null) return 0;
+
+  const early = endsAt - leftAt;
+  if (early <= 0) return 0;
+
+  return Math.min(Math.ceil(early / 60), MAX_DELAY_HOURS);
 }
 
 /**
@@ -142,14 +200,24 @@ export function attendanceFromPunches(
     const arrivedAt = sorted[0].at;
     const lastAt = sorted[sorted.length - 1].at;
 
+    // A clock-out only where the last read can honestly be one — see
+    // MIN_SHIFT_MINUTES. Everything else about the day stands either way.
+    const worked = (lastAt.getTime() - arrivedAt.getTime()) / 60_000;
+    const departedAt = worked >= MIN_SHIFT_MINUTES ? lastAt : null;
+
     days.push({
       deviceUserId,
       dayKey,
       arrivedAt,
       arrivedLocal: formatTimeIn(timeZone, arrivedAt) ?? wallClockIn(timeZone, arrivedAt),
       lastAt,
+      departedAt,
+      departedLocal: departedAt ? formatTimeIn(timeZone, departedAt) ?? wallClockIn(timeZone, departedAt) : null,
       punches: sorted.length,
       delayHours: lateHours(hours, wallClockIn(timeZone, arrivedAt), graceMinutes),
+      // Nothing is deducted for a day nobody clocked out of: the device cannot
+      // tell a forgotten scan from an early finish, and it must not invent one.
+      earlyHours: departedAt ? earlyHours(hours, wallClockIn(timeZone, departedAt)) : 0,
     });
   }
 

@@ -97,11 +97,17 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
         employeeId: person.id,
         day: date,
         delayHours: day.delayHours,
+        arrivedAt: day.arrivedAt,
+        departedAt: day.departedAt,
+        earlyHours: day.earlyHours,
         source: DEVICE,
         note: noteFor(day),
       },
       update: {
         delayHours: day.delayHours,
+        arrivedAt: day.arrivedAt,
+        departedAt: day.departedAt,
+        earlyHours: day.earlyHours,
         source: DEVICE,
         note: noteFor(day),
       },
@@ -126,7 +132,12 @@ function noteFor(day: DayAttendance) {
   // whether a deduction is fair, and "arrived 15:37" for somebody the machine
   // saw at 18:37 is not a detail — it is the wrong answer to the only question
   // they are asking.
-  return `Device · arrived ${day.arrivedLocal} · ${day.punches} ${day.punches === 1 ? "read" : "reads"}`;
+  //
+  // A day with no clock-out says so in as many words. It is the one thing a
+  // manager cannot work out from the numbers — nothing was deducted, and the
+  // reason is that nobody knows, not that the day was complete.
+  const left = day.departedLocal ? `left ${day.departedLocal}` : "no clock-out";
+  return `Device · arrived ${day.arrivedLocal} · ${left} · ${day.punches} ${day.punches === 1 ? "read" : "reads"}`;
 }
 
 /** The newest day the device has already accounted for, so a sync can ask for less. */

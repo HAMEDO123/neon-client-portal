@@ -1238,6 +1238,33 @@ model AttendanceRecord {
 
   day        DateTime @db.Date
   delayHours Float    @default(0)
+  /**
+   * When they clocked in, as the device saw it.
+   *
+   * Kept as a moment rather than only inside `note`, because a manager
+   * checking a disputed deduction wants the time, and a sentence is not
+   * something a screen can sort, compare or format in the studio's own clock.
+   * Null on a day nobody synced from the device — a typed row has an amount
+   * and no arrival.
+   */
+  arrivedAt  DateTime?
+  /**
+   * When they clocked out, where the device saw them do it.
+   *
+   * Null means nobody clocked out — one read that day, or a second so soon
+   * after the first that it is a repeated scan on the way in. The device
+   * cannot tell that from a short day, so the platform says nothing rather
+   * than inventing a departure, and `earlyHours` stays zero.
+   */
+  departedAt DateTime?
+  /**
+   * Hours of the day left unworked at the end, charged the way lateness is:
+   * whole hours, rounded up, and no allowance — the studio asked for its five
+   * minutes at the start of the day only. Never negative: staying past the end
+   * earns nothing, and a negative number here would pay overtime through
+   * payroll's multiplication.
+   */
+  earlyHours Float    @default(0)
   note       String?
   // MANUAL for now; DEVICE once the attendance machine feeds this table.
   source     String   @default("MANUAL")

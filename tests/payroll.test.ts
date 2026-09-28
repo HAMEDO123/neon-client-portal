@@ -52,7 +52,7 @@ describe("monthly payroll", () => {
     const result = computePayroll({
       salaryAmount: 520,
       payBasis: "MONTHLY",
-      delayHours: 3,
+      delayHours: 3, earlyHours: 0,
       receiptTotal: 6,
     });
 
@@ -61,11 +61,56 @@ describe("monthly payroll", () => {
     assert.equal(result.finalPay, 518.5); // 520 − 7.5 + 6
   });
 
+  it("charges leaving early at the same rate as arriving late", () => {
+    // 520 a month is 2.5 an hour: one hour lost at each end of the day is two
+    // hours off, and it makes no difference which end they came from.
+    const bothEnds = computePayroll({
+      salaryAmount: 520,
+      payBasis: "MONTHLY",
+      delayHours: 1,
+      earlyHours: 1,
+      receiptTotal: 0,
+    });
+
+    assert.equal(bothEnds.lostHours, 2);
+    assert.equal(bothEnds.cutoff, 5);
+    assert.equal(bothEnds.finalPay, 515);
+
+    // Kept apart on the breakdown, because a manager deciding whether a
+    // deduction is fair needs to know which end it came from.
+    assert.equal(bothEnds.delayHours, 1);
+    assert.equal(bothEnds.earlyHours, 1);
+
+    const lateOnly = computePayroll({
+      salaryAmount: 520,
+      payBasis: "MONTHLY",
+      delayHours: 2,
+      earlyHours: 0,
+      receiptTotal: 0,
+    });
+    assert.equal(lateOnly.cutoff, bothEnds.cutoff, "two hours is two hours");
+  });
+
+  it("never lets leaving early turn into a debt", () => {
+    // The cap is on everything together: a month of walking out at lunchtime
+    // takes the salary to zero and no further.
+    const result = computePayroll({
+      salaryAmount: 100,
+      payBasis: "MONTHLY",
+      delayHours: 20,
+      earlyHours: 200,
+      receiptTotal: 0,
+    });
+
+    assert.equal(result.cutoff, 100);
+    assert.equal(result.finalPay, 0);
+  });
+
   it("pays the full salary when nobody was late", () => {
     const result = computePayroll({
       salaryAmount: 400,
       payBasis: "MONTHLY",
-      delayHours: 0,
+      delayHours: 0, earlyHours: 0,
       receiptTotal: 0,
     });
     assert.equal(result.cutoff, 0);
@@ -77,7 +122,7 @@ describe("monthly payroll", () => {
     const result = computePayroll({
       salaryAmount: 300,
       payBasis: "MONTHLY",
-      delayHours: 1000,
+      delayHours: 1000, earlyHours: 0,
       receiptTotal: 0,
     });
     assert.equal(result.cutoff, 300);
@@ -88,7 +133,7 @@ describe("monthly payroll", () => {
     const result = computePayroll({
       salaryAmount: 300,
       payBasis: "MONTHLY",
-      delayHours: 1000,
+      delayHours: 1000, earlyHours: 0,
       receiptTotal: 12,
     });
     assert.equal(result.finalPay, 12);
@@ -100,7 +145,7 @@ describe("what came off the salary", () => {
     const result = computePayroll({
       salaryAmount: 520,
       payBasis: "MONTHLY",
-      delayHours: 3,
+      delayHours: 3, earlyHours: 0,
       receiptTotal: 6,
       adjustmentTotal: 2,
     });
@@ -114,7 +159,7 @@ describe("what came off the salary", () => {
     const result = computePayroll({
       salaryAmount: 350,
       payBasis: "MONTHLY",
-      delayHours: 0,
+      delayHours: 0, earlyHours: 0,
       receiptTotal: 0,
     });
     assert.equal(result.totalCut, 0);
@@ -126,7 +171,7 @@ describe("what came off the salary", () => {
     const result = computePayroll({
       salaryAmount: 300,
       payBasis: "MONTHLY",
-      delayHours: 1000,
+      delayHours: 1000, earlyHours: 0,
       receiptTotal: 0,
       adjustmentTotal: 500,
     });
@@ -142,7 +187,7 @@ describe("what came off the salary", () => {
     const result = computePayroll({
       salaryAmount: 75,
       payBasis: "WEEKLY",
-      delayHours: 1.5,
+      delayHours: 1.5, earlyHours: 0,
       receiptTotal: 4,
       adjustmentTotal: 1,
     });
@@ -156,7 +201,7 @@ describe("weekly payroll", () => {
     const result = computePayroll({
       salaryAmount: 120,
       payBasis: "WEEKLY",
-      delayHours: 2,
+      delayHours: 2, earlyHours: 0,
       receiptTotal: 3.5,
     });
 

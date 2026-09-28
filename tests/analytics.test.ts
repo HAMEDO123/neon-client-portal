@@ -68,7 +68,7 @@ describe("a performance deduction on a payslip", () => {
     const pay = computePayroll({
       salaryAmount: 520,
       payBasis: "MONTHLY",
-      delayHours: 0,
+      delayHours: 0, earlyHours: 0,
       receiptTotal: 12,
       adjustmentTotal: PERFORMANCE_PENALTY,
     });
@@ -82,7 +82,7 @@ describe("a performance deduction on a payslip", () => {
       salaryAmount: 100,
       payBasis: "MONTHLY",
       // Enough lateness on its own to wipe out the salary.
-      delayHours: 500,
+      delayHours: 500, earlyHours: 0,
       receiptTotal: 0,
       adjustmentTotal: 25,
     });
@@ -96,7 +96,7 @@ describe("a performance deduction on a payslip", () => {
     const pay = computePayroll({
       salaryAmount: 300,
       payBasis: "MONTHLY",
-      delayHours: 0,
+      delayHours: 0, earlyHours: 0,
       receiptTotal: 0,
       adjustmentTotal: -50,
     });

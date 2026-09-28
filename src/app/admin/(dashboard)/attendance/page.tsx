@@ -6,7 +6,7 @@ import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
 import { buildMonth, monthBounds, monthKeyFor, type MonthEntry } from "@/lib/attendance-month";
 import { setDeviceUserId } from "@/lib/actions/operations-actions";
 import { getTimezone, getWorkHours } from "@/lib/settings";
-import { dateToDayKey, dayKeyToDate, todayKey } from "@/lib/time";
+import { dateToDayKey, dayKeyToDate, formatTimeIn, todayKey } from "@/lib/time";
 import { AttendanceConsole } from "@/components/admin/attendance-console";
 import { AttendanceMonth } from "@/components/admin/attendance-month";
 import { DeviceUsers } from "@/components/admin/device-users";
@@ -76,7 +76,19 @@ export default async function AttendanceDevicePage({
     // A row with no readable day is left out rather than placed somewhere: a
     // day in the wrong column is worse than a day missing from the grid.
     return dayKey
-      ? [{ employeeId: row.employeeId, dayKey, delayHours: row.delayHours, source: row.source, note: row.note }]
+      ? [
+          {
+            employeeId: row.employeeId,
+            dayKey,
+            delayHours: row.delayHours,
+            earlyHours: row.earlyHours,
+            // A departure the device actually recorded, not an assumption
+            // about a day that has none.
+            clockedOut: row.departedAt !== null,
+            source: row.source,
+            note: row.note,
+          },
+        ]
       : [];
   });
 
@@ -198,7 +210,101 @@ export default async function AttendanceDevicePage({
 
       {/* --- What it has recorded, a month at a time ---------------------- */}
       <AttendanceMonth month={month} thisMonth={thisMonth} />
+
+      <ClockTimes rows={monthRecords} timezone={timezone} monthKey={monthKey} />
     </div>
+  );
+}
+
+/**
+ * When each person actually touched the machine, to the minute.
+ *
+ * The grid above answers "was anybody in on the 3rd"; this answers the other
+ * question a manager opens this screen with — "what time did they come in, and
+ * what time did they leave". A tooltip was not enough: it cannot be read down
+ * a column, and it is the first thing asked when somebody disputes an hour.
+ *
+ * Newest first, because the day being argued about is almost always today.
+ */
+function ClockTimes({
+  rows,
+  timezone,
+  monthKey,
+}: {
+  rows: {
+    id: string;
+    day: Date;
+    arrivedAt: Date | null;
+    departedAt: Date | null;
+    delayHours: number;
+    earlyHours: number;
+    source: string;
+    employee: { name: string };
+  }[];
+  timezone: string;
+  monthKey: string;
+}) {
+  const withTimes = [...rows]
+    .filter((row) => row.arrivedAt !== null)
+    .sort((a, b) => b.day.getTime() - a.day.getTime() || a.employee.name.localeCompare(b.employee.name));
+
+  return (
+    <section className="mt-6 rounded-2xl border border-warm-line bg-card p-5">
+      <h2 className="text-sm font-medium text-bark">Clock in and out · {monthKey}</h2>
+      <p className="mt-0.5 text-xs text-bark/45">
+        The times the machine read, on the studio&rsquo;s own clock. Only days the device recorded appear here — a
+        figure you typed has an amount but no times.
+      </p>
+
+      {withTimes.length === 0 ? (
+        <p className="mt-4 rounded-xl border border-dashed border-warm-line px-3 py-6 text-center text-xs text-bark/40">
+          No reads recorded this month yet.
+        </p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[34rem] text-left text-sm">
+            <thead className="text-xs uppercase tracking-wider text-bark/40">
+              <tr>
+                <th className="py-2 pr-3 font-medium">Day</th>
+                <th className="py-2 pr-3 font-medium">Employee</th>
+                <th className="py-2 pr-3 font-medium">In</th>
+                <th className="py-2 pr-3 font-medium">Out</th>
+                <th className="py-2 pr-3 text-right font-medium">Hours off</th>
+              </tr>
+            </thead>
+            <tbody>
+              {withTimes.map((row) => {
+                const off = Math.round((row.delayHours + row.earlyHours) * 100) / 100;
+                return (
+                  <tr key={row.id} className="border-t border-warm-line/60">
+                    <td className="py-2.5 pr-3 tabular-nums text-bark/60">{dateToDayKey(row.day)}</td>
+                    <td className="py-2.5 pr-3 font-medium text-bark">{row.employee.name}</td>
+                    <td className="py-2.5 pr-3 tabular-nums text-bark/70">
+                      {formatTimeIn(timezone, row.arrivedAt)}
+                    </td>
+                    <td className="py-2.5 pr-3 tabular-nums">
+                      {row.departedAt ? (
+                        <span className="text-bark/70">{formatTimeIn(timezone, row.departedAt)}</span>
+                      ) : (
+                        // Said in words rather than left blank: a blank in this
+                        // column reads as "stayed to the end", which is the one
+                        // thing the device cannot tell anybody.
+                        <span className="text-amber-700">no clock-out</span>
+                      )}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-3 text-right tabular-nums ${off > 0 ? "font-medium text-amber-700" : "text-bark/35"}`}
+                    >
+                      {off > 0 ? `${off}h` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -118,6 +118,7 @@ export default async function AdminPayrollPage({
                   <Line label="Late">
                     {breakdown.delayHours.toFixed(2)} h{delayDays > 0 && ` (${delayDays}d)`}
                   </Line>
+                  <Line label="Left early">{breakdown.earlyHours.toFixed(2)} h</Line>
                   <Line label="Cutoff" className="text-red-600">
                     −{breakdown.cutoff.toFixed(2)}
                   </Line>
@@ -155,6 +156,7 @@ export default async function AdminPayrollPage({
                   <th className="px-4 py-3">Salary</th>
                   <th className="px-4 py-3">Per hour</th>
                   <th className="px-4 py-3">Late</th>
+                  <th className="px-4 py-3">Left early</th>
                   <th className="px-4 py-3">Cutoff</th>
                   <th className="px-4 py-3">Adjustments</th>
                   <th className="px-4 py-3">{isThisMonth ? "Cut so far" : "Total cut"}</th>
@@ -186,6 +188,7 @@ export default async function AdminPayrollPage({
                       {breakdown.delayHours.toFixed(2)} h
                       {delayDays > 0 && <span className="ml-1 text-xs text-ink/35">({delayDays}d)</span>}
                     </td>
+                    <td className="px-4 py-3 text-ink/60">{breakdown.earlyHours.toFixed(2)} h</td>
                     <td className="px-4 py-3 text-red-600">−{breakdown.cutoff.toFixed(2)}</td>
                     <td className="px-4 py-3">
                       {breakdown.adjustmentTotal === 0 ? (
@@ -329,6 +332,18 @@ export default async function AdminPayrollPage({
             className="w-28 rounded-lg border border-ink/12 bg-white/70 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
           />
         </label>
+        <label>
+          <span className="mb-1 block text-xs font-medium text-ink/50">Hours left early</span>
+          <input
+            name="earlyHours"
+            type="number"
+            step="0.25"
+            min="0"
+            max="24"
+            defaultValue="0"
+            className="w-28 rounded-lg border border-ink/12 bg-white/70 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+          />
+        </label>
         <label className="min-w-40 flex-1">
           <span className="mb-1 block text-xs font-medium text-ink/50">Note</span>
           <input
@@ -347,6 +362,7 @@ export default async function AdminPayrollPage({
                 <th className="px-4 py-3">Day</th>
                 <th className="px-4 py-3">Employee</th>
                 <th className="px-4 py-3">Hours late</th>
+                <th className="px-4 py-3">Left early</th>
                 <th className="px-4 py-3">Note</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -357,6 +373,7 @@ export default async function AdminPayrollPage({
                   <td className="px-4 py-3 text-ink/60">{record.day.toISOString().slice(0, 10)}</td>
                   <td className="px-4 py-3 font-medium text-ink">{record.employee.name}</td>
                   <td className="px-4 py-3 text-ink/60">{record.delayHours}</td>
+                  <td className="px-4 py-3 text-ink/60">{record.earlyHours}</td>
                   <td className="px-4 py-3 text-xs text-ink/45">{record.note ?? "—"}</td>
                   <td className="px-4 py-3 text-right">
                     <form>
