@@ -37,6 +37,14 @@ struct ChatRoomView: View {
     @State private var lastTypingSentAt: Date?
     @State private var deleteTarget: ChatMessage?
     @FocusState private var composerFocused: Bool
+    // The composer's project tag — chat-room.tsx's own <select>, on both
+    // portals: what is sent next is filed under this project, shown on the
+    // message beside its time (message.project). It is not cleared after a
+    // send, the same as the website, so several messages in a row can be
+    // tagged without reopening the menu each time.
+    @State private var taggableProjects: [ChatMessage.ProjectTag] = []
+    @State private var taggedProjectId: String?
+    private var taggedProject: ChatMessage.ProjectTag? { taggableProjects.first { $0.id == taggedProjectId } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -160,6 +168,7 @@ struct ChatRoomView: View {
         }
         .task { await poll() }
         .task { await listenLive() }
+        .task { taggableProjects = (try? await api.fetchChatProjects()) ?? [] }
         .fullScreenCover(item: $viewer) { ImageViewerView(payload: $0) }
         .sheet(item: $proofFor) { target in
             ProofSheet(targetId: target.id, title: target.title, subtitle: target.detail) {
@@ -228,6 +237,17 @@ struct ChatRoomView: View {
                 .padding(.horizontal, 14)
             }
 
+            if let taggedProject, !recorder.isRecording {
+                HStack(spacing: 6) {
+                    Image(systemName: "folder.fill").font(.system(size: 11))
+                    Text(taggedProject.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    Button { taggedProjectId = nil } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 13)) }
+                        .accessibilityLabel(L("No project"))
+                }
+                .foregroundStyle(Color.neonPurpleStrong)
+                .padding(.horizontal, 14)
+            }
+
             if recorder.isRecording {
                 recordingRow
             } else {
@@ -259,6 +279,25 @@ struct ChatRoomView: View {
                         }
                         Button { showPhotos = true } label: { Label(L("Photo"), systemImage: "photo") }
                         Button { showFiles = true } label: { Label(L("File"), systemImage: "doc") }
+                        if !taggableProjects.isEmpty {
+                            Menu {
+                                if taggedProjectId != nil {
+                                    Button { taggedProjectId = nil } label: { Label(L("No project"), systemImage: "xmark") }
+                                    Divider()
+                                }
+                                ForEach(taggableProjects) { project in
+                                    Button { taggedProjectId = project.id } label: {
+                                        if project.id == taggedProjectId {
+                                            Label(project.name, systemImage: "checkmark")
+                                        } else {
+                                            Text(project.name)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Label(taggedProject?.name ?? L("Project this is about"), systemImage: "folder")
+                            }
+                        }
                         if api.identity?.side == .admin && route.slug != "manager" {
                             Divider()
                             Button { showTaskCompose = true } label: { Label(L("Task"), systemImage: "checklist") }
@@ -443,7 +482,7 @@ struct ChatRoomView: View {
         sendError = nil
         defer { sending = false }
         do {
-            let message = try await api.sendMessage(conversation: route.slug, text: text)
+            let message = try await api.sendMessage(conversation: route.slug, text: text, projectId: taggedProjectId)
             draft = ""
             append(message)
             Haptic.tap()
@@ -471,7 +510,7 @@ struct ChatRoomView: View {
         defer { sending = false }
         let caption = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let message = try await api.sendAttachment(conversation: route.slug, text: caption, file: file)
+            let message = try await api.sendAttachment(conversation: route.slug, text: caption, file: file, projectId: taggedProjectId)
             draft = ""
             append(message)
             Haptic.success()
@@ -488,7 +527,7 @@ struct ChatRoomView: View {
         do {
             let data = try Data(contentsOf: url)
             let file = UploadFile(field: "voice", filename: "voice.m4a", mimeType: "audio/mp4", data: data)
-            let message = try await api.sendVoice(conversation: route.slug, file: file, durationSeconds: seconds)
+            let message = try await api.sendVoice(conversation: route.slug, file: file, durationSeconds: seconds, projectId: taggedProjectId)
             append(message)
             Haptic.success()
         } catch {

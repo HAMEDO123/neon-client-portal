@@ -69,7 +69,7 @@ struct ChatMessage: Decodable, Identifiable, Equatable {
     let call: CallLine?
     let meeting: MeetingCard?
 
-    struct ProjectTag: Decodable, Equatable { let id: String; let name: String }
+    struct ProjectTag: Decodable, Equatable, Identifiable { let id: String; let name: String }
 
     struct CallLine: Decodable, Equatable {
         let kind: String?

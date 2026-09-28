@@ -13,6 +13,8 @@
 "Ask the assistant" = "اسأل المساعد";
 "Assigned to" = "مُسندة إلى";
 "At the time" = "وقت الاجتماع";
+"Attach a photo or file" = "أرفق صورة أو ملفًا";
+"Attachment" = "المرفق";
 "Attendees" = "الحضور";
 "Call" = "مكالمة";
 "Camera" = "الكاميرا";
@@ -51,6 +53,7 @@
 "No matches" = "لا نتائج";
 "No meetings coming up" = "لا اجتماعات قادمة";
 "No messages yet" = "لا رسائل بعد";
+"No project" = "بلا مشروع";
 "No tasks yet" = "لا مهام بعد";
 "Nobody to ask" = "لا أحد لدعوته";
 "Nobody to hand this to" = "لا أحد لإسناد العمل إليه";
@@ -68,10 +71,12 @@
 "Press + in the chat and choose Meeting. For one person, open their chat instead." = "اضغط + في المحادثة واختر اجتماع. لشخص واحد، افتح محادثته بدلًا من ذلك.";
 "Press Join on the meeting card to enter the call." = "اضغط انضمام على بطاقة الاجتماع للدخول إلى المكالمة.";
 "Priority" = "الأولوية";
+"Project this is about" = "المشروع المعني";
 "Proof sent — waiting for review" = "أُرسل الإثبات — بانتظار المراجعة";
 "Proof waiting for your review" = "إثبات بانتظار مراجعتك";
 "Question" = "سؤال";
 "Remind" = "التذكير";
+"Remove %@" = "إزالة %@";
 "Review" = "مراجعة";
 "Say hello." = "ابدأ بالسلام.";
 "Search" = "بحث";
