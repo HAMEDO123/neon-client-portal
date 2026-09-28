@@ -28,6 +28,9 @@ struct NeonAdminApp: App {
             }
             // A ringing or running call sits above every screen.
             .overlay { if api.isLoggedIn { CallOverlay() } }
+            #if DEBUG
+            .task { if DecodeCheck.requested, api.isLoggedIn { await DecodeCheck.run(api) } }
+            #endif
             .environmentObject(api)
             .tint(.neonPurpleStrong)
             .preferredColorScheme(.light)
