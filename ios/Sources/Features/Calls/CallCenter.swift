@@ -50,6 +50,9 @@ final class CallCenter: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private var lastEventId = 0
     private var started = false
+    /// Why the stream last failed, so a loop that retries every two seconds
+    /// says each reason once rather than over and over.
+    private var streamProblem: String?
     private let streamURL = URL(string: "https://clients.neonjo.com/api/mobile/calls/stream")!
 
     private init() {
@@ -98,6 +101,7 @@ final class CallCenter: ObservableObject {
         streamTask = nil
         ready = nil
         calls = []
+        streamProblem = nil
         Task { [weak self] in await self?.session?.leave() }
         session = nil
     }
@@ -110,8 +114,24 @@ final class CallCenter: ObservableObject {
         }
     }
 
+    /// Says why calls are not connecting — once per reason.
+    ///
+    /// Every one of these used to be a bare `return`: the loop outside waited
+    /// two seconds and tried again, for ever, so being signed out, a route
+    /// that is not there and a connection still being made all looked the same
+    /// from the screen — "Calls are still connecting". That is the one thing
+    /// a person cannot act on, and it is exactly what they were shown.
+    private func reportStream(_ problem: String?) {
+        guard streamProblem != problem else { return }
+        streamProblem = problem
+        if let problem { notice = problem }
+    }
+
     private func connectOnce() async {
-        guard let token = APIClient.shared.token else { return }
+        guard let token = APIClient.shared.token else {
+            reportStream(L("You are signed out. Sign in again to make calls."))
+            return
+        }
         var request = URLRequest(url: streamURL)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
@@ -120,7 +140,26 @@ final class CallCenter: ObservableObject {
 
         do {
             let (bytes, response) = try await URLSession.shared.bytes(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
+            guard let http = response as? HTTPURLResponse else {
+                reportStream(L("Calls could not reach the server."))
+                return
+            }
+            guard http.statusCode == 200 else {
+                // 401 is a token this server will not take any more; anything
+                // else is worth showing as itself, because a 404 here means
+                // this build is asking for a route the server does not have —
+                // an app that needs rebuilding, which no amount of waiting
+                // fixes.
+                reportStream(
+                    http.statusCode == 401
+                        ? L("You are signed out. Sign in again to make calls.")
+                        : L("Calls are unavailable (%ld). The app may need updating.", http.statusCode)
+                )
+                return
+            }
+
+            // Connected: whatever was wrong before is not wrong now.
+            reportStream(nil)
 
             var eventName = "message"
             var dataLines: [String] = []
