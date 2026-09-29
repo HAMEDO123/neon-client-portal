@@ -283,7 +283,7 @@ struct ChatStoryPlayer: View {
             ready = true
             if !paused { next.play() }
         } else if let url = story.mediaURL {
-            if let (data, _) = try? await URLSession.shared.data(from: url), let loaded = UIImage(data: data) {
+            if let loaded = await ImagePipeline.shared.image(url, pixels: 1600) {
                 guard !Task.isCancelled else { return }
                 image = loaded
             } else {

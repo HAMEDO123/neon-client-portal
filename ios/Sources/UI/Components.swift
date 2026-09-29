@@ -225,13 +225,7 @@ struct AvatarView: View {
                 .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
                 .foregroundStyle(accent)
             if let url {
-                AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill().transition(.opacity)
-                    } else {
-                        Color.clear
-                    }
-                }
+                PipelineImage(url: url, points: size)
             }
         }
         .frame(width: size, height: size)

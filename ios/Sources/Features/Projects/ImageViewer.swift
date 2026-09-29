@@ -98,20 +98,7 @@ private struct ZoomableImageView: View {
         GeometryReader { geo in
             Group {
                 if let url {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        case .failure:
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 28))
-                                .foregroundStyle(.white.opacity(0.5))
-                        default:
-                            ProgressView().tint(.white)
-                        }
-                    }
+                    ZoomSource(url: url)
                 } else {
                     Image(systemName: "photo")
                         .font(.system(size: 28))
@@ -166,5 +153,33 @@ private struct ZoomableImageView: View {
         lastScale = 1
         offset = .zero
         lastOffset = .zero
+    }
+}
+
+/// The full-screen picture: the largest size the server keeps (1600 wide),
+/// which stays sharp when zoomed on a phone without decoding the original.
+private struct ZoomSource: View {
+    let url: URL
+    @State private var image: UIImage?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image = image ?? ImagePipeline.shared.cached(url, pixels: 1600) {
+                Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
+            } else if failed {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.white.opacity(0.5))
+            } else {
+                ProgressView().tint(.white)
+            }
+        }
+        .task(id: url) {
+            let loaded = await ImagePipeline.shared.image(url, pixels: 1600)
+            guard !Task.isCancelled else { return }
+            image = loaded
+            failed = loaded == nil
+        }
     }
 }

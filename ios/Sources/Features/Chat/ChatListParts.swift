@@ -72,17 +72,7 @@ struct ChatAvatar: View {
                     .foregroundStyle(.white)
             }
             if let url {
-                AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
-                    if let image = phase.image {
-                        ZStack {
-                            Color.white
-                            image.resizable().scaledToFill()
-                        }
-                        .transition(.opacity)
-                    } else {
-                        Color.clear
-                    }
-                }
+                PipelineImage(url: url, points: size)
             }
         }
         .frame(width: size, height: size)

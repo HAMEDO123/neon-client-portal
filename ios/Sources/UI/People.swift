@@ -5,10 +5,15 @@ import SwiftUI
 /// A picture from the server that fades in, with a soft branded placeholder
 /// (shimmering while it loads, a symbol if it can't). It fills whatever frame
 /// it is given and clips to it — set the frame and the corner shape outside.
+/// Loads through `ImagePipeline`, at the size it is drawn.
 struct RemoteImage: View {
     let url: URL?
     var contentMode: ContentMode
     var placeholderSymbol: String
+
+    @Environment(\.displayScale) private var displayScale
+    @State private var loaded: UIImage?
+    @State private var failed = false
 
     init(url: URL?, contentMode: ContentMode = .fill, placeholderSymbol: String = "photo") {
         self.url = url
@@ -17,26 +22,33 @@ struct RemoteImage: View {
     }
 
     var body: some View {
-        Group {
-            if let url {
-                AsyncImage(url: url, transaction: Transaction(animation: .easeOut(duration: 0.35))) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: contentMode)
-                            .transition(.opacity)
-                    case .failure:
-                        placeholder(loading: false)
-                    default:
-                        placeholder(loading: true)
-                    }
+        GeometryReader { geo in
+            let pixels = max(geo.size.width, geo.size.height * (contentMode == .fill ? 1 : 0)) * displayScale
+            let shown = loaded ?? ImagePipeline.shared.cached(url, pixels: pixels)
+            ZStack {
+                if let shown {
+                    Image(uiImage: shown)
+                        .resizable()
+                        .aspectRatio(contentMode: contentMode)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .transition(.opacity)
+                } else {
+                    placeholder(loading: url != nil && !failed)
                 }
-            } else {
-                placeholder(loading: false)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .task(id: RemoteImageKey(url: url, width: ImagePipeline.bucket(pixels))) {
+                guard let url, pixels > 0 else { return }
+                if ImagePipeline.shared.cached(url, pixels: pixels) != nil { return }
+                failed = false
+                let image = await ImagePipeline.shared.image(url, pixels: pixels)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    loaded = image
+                    failed = image == nil
+                }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
     }
 
@@ -52,6 +64,39 @@ struct RemoteImage: View {
                 .foregroundStyle(Color.neonPurpleStrong.opacity(0.35))
         }
         .shimmer(loading)
+    }
+}
+
+private struct RemoteImageKey: Equatable {
+    let url: URL?
+    let width: Int?
+}
+
+/// A server picture drawn into a fixed round or square slot (avatars):
+/// nothing while it loads, so the initials underneath show through.
+struct PipelineImage: View {
+    let url: URL?
+    let points: CGFloat
+
+    @Environment(\.displayScale) private var displayScale
+    @State private var loaded: UIImage?
+
+    var body: some View {
+        let pixels = points * displayScale
+        let shown = loaded ?? ImagePipeline.shared.cached(url, pixels: pixels)
+        ZStack {
+            if let shown {
+                Image(uiImage: shown).resizable().scaledToFill().transition(.opacity)
+            } else {
+                Color.clear
+            }
+        }
+        .task(id: url) {
+            guard let url, ImagePipeline.shared.cached(url, pixels: pixels) == nil else { return }
+            let image = await ImagePipeline.shared.image(url, pixels: pixels)
+            guard !Task.isCancelled, let image else { return }
+            withAnimation(.easeOut(duration: 0.25)) { loaded = image }
+        }
     }
 }
 

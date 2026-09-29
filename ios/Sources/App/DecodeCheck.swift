@@ -49,6 +49,28 @@ enum DecodeCheck {
         // items look like, so only a project that has some proves the model.
         for projectId in projectIds {
             await check("projects/detail") { _ = try await api.read("projects/detail", ["id": projectId], as: ProjectDetail.self) }
+            // The pictures themselves, as the gallery grid and the viewer ask
+            // for them — a thumbnail and the full-screen size.
+            await check("gallery images load") {
+                let detail = try await api.read("projects/detail", ["id": projectId], as: ProjectDetail.self).value
+                let urls = detail.spaces.flatMap(\.images).prefix(6).compactMap(\.resolvedURL)
+                guard !urls.isEmpty else { return }
+                // One file missing from storage is a placeholder, not a broken
+                // gallery; most of them missing is.
+                var missing = 0
+                for url in urls {
+                    guard let thumb = await ImagePipeline.shared.image(url, pixels: 390) else {
+                        missing += 1
+                        print("DECODE note  thumbnail did not load: \(url)")
+                        continue
+                    }
+                    guard thumb.size.width <= 640 else { throw DecodeCheckError("thumbnail is \(thumb.size.width)px wide: the server is not resizing (media route not deployed?)") }
+                }
+                if missing * 2 > urls.count { throw DecodeCheckError("\(missing) of \(urls.count) thumbnails did not load") }
+                guard await ImagePipeline.shared.image(urls[urls.startIndex], pixels: 1600) != nil else {
+                    throw DecodeCheckError("full-screen picture did not load")
+                }
+            }
             await check("projects/analytics") { _ = try await api.read("projects/analytics", ["id": projectId], as: ProjectAnalytics.self) }
             await check("projectfiles/drawings") { _ = try await api.fetchDrawings(projectId: projectId) }
             await check("projectfiles/documents") { _ = try await api.fetchDocuments(projectId: projectId) }
@@ -140,4 +162,11 @@ enum DecodeCheck {
         print("DECODE DONE passed=\(passed) failed=\(failed)")
     }
 }
+struct DecodeCheckError: LocalizedError, CustomStringConvertible {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var errorDescription: String? { text }
+    var description: String { text }
+}
+
 #endif

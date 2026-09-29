@@ -222,7 +222,18 @@ final class CallCenter: ObservableObject {
     func cancelPreJoin() { prejoinRequest = nil }
 
     private func begin(_ request: PreJoinRequest, mic: RTCAudioTrack?, camera: RTCVideoTrack?, audioMuted: Bool) async throws {
-        guard let ready else { throw CallCenterError.notReady }
+        // Tapped before the stream's first event arrived (just after launch,
+        // or on a slow connection): wait for it rather than refusing at once.
+        if ready == nil {
+            if !started { start() }
+            for _ in 0..<40 where ready == nil {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+        }
+        guard let ready else {
+            if let streamProblem { throw CallCenterError.stream(streamProblem) }
+            throw CallCenterError.notReady
+        }
 
         if let current = session { await current.leave() }
 
@@ -285,5 +296,11 @@ final class CallCenter: ObservableObject {
 
 enum CallCenterError: LocalizedError {
     case notReady
-    var errorDescription: String? { L("Calls are still connecting. Try again in a moment.") }
+    case stream(String)
+    var errorDescription: String? {
+        switch self {
+        case .notReady: return L("Calls could not connect to the server. Check the connection and try again.")
+        case .stream(let problem): return problem
+        }
+    }
 }

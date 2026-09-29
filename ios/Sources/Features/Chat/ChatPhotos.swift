@@ -55,20 +55,12 @@ final class ChatPhotoCache {
     /// not be fetched or read.
     func load(_ url: URL) async -> UIImage? {
         if let cached = image(for: url) { return cached }
-        return await Task.detached(priority: .userInitiated) { () -> UIImage? in
-            guard let (data, response) = try? await URLSession.shared.data(from: url),
-                  (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
-                  let full = UIImage(data: data) else { return nil }
-            // A phone shows a chat photo about 250 points wide; three times
-            // that covers the sharpest screen without holding a 2400-pixel
-            // original in memory for every photo scrolled past.
-            let longest: CGFloat = 900
-            let scale = min(1, longest / max(full.size.width, full.size.height))
-            let target = CGSize(width: full.size.width * scale, height: full.size.height * scale)
-            let shrunk = await full.byPreparingThumbnail(ofSize: target) ?? full
-            ChatPhotoCache.shared.store(shrunk, for: url)
-            return shrunk
-        }.value
+        // A phone shows a chat photo about 250 points wide; 900 pixels covers
+        // the sharpest screen without holding a 2400-pixel original in memory
+        // for every photo scrolled past.
+        guard let image = await ImagePipeline.shared.image(url, pixels: 900) else { return nil }
+        store(image, for: url)
+        return image
     }
 }
 
