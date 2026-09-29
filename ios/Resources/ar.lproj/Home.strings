@@ -139,3 +139,84 @@
 "Late" = "متأخر";
 "On time" = "في الوقت";
 "−%.2f deducted" = "خُصم %.2f";
+
+/* Home tab, redesigned (the owner's mockup) */
+"Good morning," = "صباح الخير،";
+"Good afternoon," = "مساء الخير،";
+"Good evening," = "مساء الخير،";
+"Open projects" = "افتح المشاريع";
+"Amman" = "عمّان";
+"%@ in Amman, %@" = "%@ في عمّان، %@";
+"clear" = "صافٍ";
+"partly cloudy" = "غائم جزئيًا";
+"cloudy" = "غائم";
+"fog" = "ضباب";
+"drizzle" = "رذاذ";
+"rain" = "مطر";
+"snow" = "ثلج";
+"thunderstorms" = "عواصف رعدية";
+
+/* The four figures */
+"of %d projects" = "من أصل %d مشاريع";
+"in the last 7 days" = "في آخر 7 أيام";
+"this month" = "هذا الشهر";
+"this week" = "هذا الأسبوع";
+"None new" = "لا جديد";
+
+/* Project Progress */
+"Project Progress" = "تقدّم المشاريع";
+"Live status of all projects" = "الحالة الحالية لكل المشاريع";
+
+/* Today's Tasks */
+"Today's Tasks" = "مهام اليوم";
+"No board steps, jobs or meetings are on today's calendar." = "لا توجد خطوات لوحة أو مهام أو اجتماعات على تقويم اليوم.";
+"%d more today" = "%d أخرى اليوم";
+"%d today" = "%d اليوم";
+"%d invited" = "%d مدعوّين";
+"until %@" = "حتى %@";
+"Board steps" = "خطوات اللوحة";
+"Jobs handed out" = "مهام مُسندة";
+"approved" = "معتمدة";
+"Opens the project" = "يفتح المشروع";
+"Opens the meetings" = "يفتح الاجتماعات";
+"Opens the week board in Tasks" = "يفتح لوحة الأسبوع في المهام";
+
+/* This Month */
+"This Month" = "هذا الشهر";
+"Work done" = "أعمال منجزة";
+"Projects sold" = "مشاريع مُباعة";
+"New projects" = "مشاريع جديدة";
+"Board steps and jobs marked done, by the day they were marked" = "خطوات اللوحة والمهام المعلَّمة كمنجزة، حسب يوم تعليمها";
+"Projects by their Sold on date" = "المشاريع حسب تاريخ البيع";
+"Projects by the day they were created" = "المشاريع حسب يوم إنشائها";
+"vs the same days last month" = "مقابل الأيام نفسها من الشهر الماضي";
+"W%d" = "أسبوع %d";
+
+/* Quick Actions */
+"Quick Actions" = "إجراءات سريعة";
+"Hand out a Task" = "إسناد مهمة";
+"Set a Meeting" = "تحديد اجتماع";
+"Upload Photos" = "رفع صور";
+
+/* Right now, projects */
+"Who is on what, and for how long" = "مَن يعمل على ماذا، ومنذ متى";
+"Most recently updated first" = "الأحدث تحديثًا أولًا";
+
+/* Search */
+"Projects, people, chats" = "مشاريع، أشخاص، محادثات";
+"Search the studio" = "ابحث في الاستوديو";
+"Projects by name, client or place; the team by name or role; your conversations by name." = "المشاريع بالاسم أو العميل أو المكان؛ الفريق بالاسم أو الدور؛ ومحادثاتك بالاسم.";
+"Conversations" = "المحادثات";
+"Conversations couldn't be searched" = "تعذّر البحث في المحادثات";
+"Nothing matches “%@”" = "لا شيء يطابق «%@»";
+"Still looking through your conversations…" = "ما زلنا نبحث في محادثاتك…";
+"No project, person or conversation has that in its name." = "لا يوجد مشروع أو شخص أو محادثة يحمل ذلك في اسمه.";
+
+/* Upload Photos */
+"Which project are they for?" = "لأي مشروع هذه الصور؟";
+"Which room of %@?" = "أي غرفة في %@؟";
+"No project matches" = "لا يوجد مشروع مطابق";
+"Another project" = "مشروع آخر";
+"No rooms yet" = "لا توجد غرف بعد";
+"Photos go into a room of the project's gallery. Add a room on the project's Gallery first, then upload into it." = "تُرفع الصور إلى غرفة في معرض المشروع. أضف غرفة من معرض المشروع أولًا، ثم ارفع إليها.";
+"Open the project" = "افتح المشروع";

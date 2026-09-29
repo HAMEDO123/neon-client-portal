@@ -53,3 +53,14 @@ extension APIClient {
         try await perform("home/applyDeductions", args: [period])
     }
 }
+
+// The redesigned Home tab's own reads (app-only; see registry/home.ts).
+extension APIClient {
+    func fetchHomePulse() async throws -> Loaded<HomePulse> {
+        try await read("home/pulse", as: HomePulse.self)
+    }
+
+    func fetchHomeToday() async throws -> Loaded<HomeToday> {
+        try await read("home/today", as: HomeToday.self)
+    }
+}

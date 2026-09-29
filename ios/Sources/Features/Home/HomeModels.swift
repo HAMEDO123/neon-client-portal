@@ -441,3 +441,121 @@ func homeDayHeading(_ dayKey: String, today: String) -> String {
     if dayKey == shiftHomeDayKey(today, by: 1) { return L("Tomorrow · %@", date) }
     return date
 }
+
+// MARK: - The Home tab's figures over time (home/pulse)
+
+/// `homePulse()` in src/lib/mobile/home-pulse.ts: only what timestamps really
+/// record. Published and Updated This Week have no history on the server, so
+/// nothing here describes them — the cards draw no trend for them.
+struct HomePulse: Codable {
+    let timezone: String
+    let today: String
+    /// The manager's own row (accessRole MANAGER), when the studio has one.
+    let manager: HomeManager?
+    let projects: HomeProjectsTrend
+    let approvals: HomeApprovalsTrend
+    let month: HomeMonthMetrics
+    let reviews: HomeReviewQueue
+}
+
+struct HomeManager: Codable {
+    let name: String
+}
+
+struct HomeProjectsTrend: Codable {
+    let createdThisMonth: Int
+    /// How many projects existed at the end of each of the last six months,
+    /// oldest first; the last is this month so far.
+    let monthEnds: [Int]
+}
+
+struct HomeApprovalsTrend: Codable {
+    /// Approvals waiting on a client at the end of each of the last six
+    /// weeks, oldest first; the last is now.
+    let weekEnds: [Int]
+    /// Now, against a week ago.
+    let change: Int
+}
+
+/// One metric of "This month" (`MonthSeries` in home-pulse-rules.ts): weeks
+/// of the month from the 1st (1–7, 8–14, …), against last month's.
+struct HomeMonthSeries: Codable {
+    let period: String
+    let previousPeriod: String
+    let throughDay: Int
+    let weeks: [Int]
+    let previousWeeks: [Int]
+    /// This month so far.
+    let total: Int
+    /// Last month through the same day of the month.
+    let previousToDate: Int
+    let previousTotal: Int
+}
+
+struct HomeMonthMetrics: Codable {
+    /// Board steps and jobs marked done (only the manager can), by `completedAt`.
+    let completed: HomeMonthSeries
+    /// Projects by their Sold on day.
+    let sold: HomeMonthSeries
+    /// Projects by the day they were created.
+    let created: HomeMonthSeries
+}
+
+struct HomeReviewPerson: Codable, Identifiable {
+    let id: String
+    let name: String
+    let color: String
+}
+
+struct HomeReviewQueue: Codable {
+    let waiting: Int
+    /// Everybody with work waiting, each once, oldest first.
+    let people: [HomeReviewPerson]
+}
+
+// MARK: - Today's Tasks (home/today)
+
+struct HomeTodayPerson: Codable {
+    let id: String
+    let name: String
+    let color: String
+}
+
+/// One thing on today's calendar (`homeToday()` in home-today.ts): a board
+/// cell ("cell"), a job handed out by hand ("job") or a meeting ("meeting").
+struct HomeTodayItem: Codable, Identifiable {
+    let kind: String
+    /// The cell's, job's or meeting's own id.
+    let itemId: String
+    let title: String
+    let projectId: String?
+    let projectName: String?
+    let coverImageUrl: String?
+    let person: HomeTodayPerson?
+    /// The board's state word; nil for a meeting, which has none.
+    let state: String?
+    let priority: String?
+    /// When it happens or is due, when that moment is today.
+    let at: String?
+    let scheduled: Bool
+    /// A job running past today: its last day (YYYY-MM-DD).
+    let until: String?
+    let durationMinutes: Int?
+    let mode: String?
+    let place: String?
+    let attendees: Int?
+
+    var id: String { "\(kind)-\(itemId)" }
+    var isDone: Bool { state == "DONE" }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, itemId = "id", title, projectId, projectName, coverImageUrl, person, state, priority
+        case at, scheduled, until, durationMinutes, mode, place, attendees
+    }
+}
+
+struct HomeToday: Codable {
+    let timezone: String
+    let dayKey: String
+    let items: [HomeTodayItem]
+}

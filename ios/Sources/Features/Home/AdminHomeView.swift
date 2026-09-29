@@ -1,201 +1,378 @@
 import SwiftUI
 
-/// The manager's home tab — the admin dashboard: a warm gradient greeting,
-/// the studio's four figures, what needs the manager first, quick actions,
-/// the team's day (who needs the manager, most pressing first — silence is
-/// shown as silence, never as a verdict), and every project.
+/// Where the Home tab pushes, inside its own stack.
+enum HomeRoute: Hashable {
+    case project(String)
+    case employee(String)
+    case reviews
+    case alerts
+    case analytics
+    case requests
+    case employees
+    case payroll
+    case meetings
+    case today
+    case search
+    case chat(ChatRoute)
+}
+
+/// Another tab, opened the way a tapped notification opens one: the shell
+/// (`AdminHome` in NeonAdminApp.swift) reads `PushCenter.pendingPath`, turns
+/// the web path into its tab and clears it. The Projects, Tasks and More tabs
+/// each own a `NavigationStack`, so they cannot be pushed onto Home's.
+enum HomeTabLink {
+    static let projects = "/admin/projects"
+    static let tasks = "/admin/tasks"
+    static let more = "/admin/more"
+
+    @MainActor static func open(_ webPath: String) {
+        PushCenter.shared.pendingPath = webPath
+    }
+}
+
+/// The manager's Home tab, laid out as the owner's mockup: the NEON header,
+/// the greeting card, the studio's four figures, where every project stands,
+/// today's work, this month by week, what is waiting on the manager, quick
+/// actions — then who is on what right now, the team's day (silence shown as
+/// silence, never as a verdict) and every project.
 struct AdminHomeView: View {
     @EnvironmentObject var api: APIClient
+    @State private var path: [HomeRoute] = []
+
     @State private var overview: HomeOverview?
     @State private var overviewCachedAt: Date?
     @State private var overviewError: String?
+    @State private var pulse: HomePulse?
+    @State private var pulseError: String?
+    @State private var today: HomeToday?
+    @State private var todayError: String?
     @State private var day: HomeDay?
-    @State private var dayCachedAt: Date?
     @State private var dayError: String?
     @State private var now: HomeNow?
-    @State private var nowCachedAt: Date?
     @State private var nowError: String?
+
     @State private var showNewProject = false
-    @State private var newProjectId: String?
     @State private var showHandOutTask = false
     @State private var showSetMeeting = false
-    @State private var showAlerts = false
-    @State private var destination: HomeLinkDestination?
+    @State private var showUploadPhotos = false
 
     var body: some View {
-        NavigationStack {
-            NeonScroll(spacing: NeonSpace.xxl) {
-                HomeGreetingHero()
+        NavigationStack(path: $path) {
+            ScrollViewReader { proxy in
+                NeonScroll(spacing: NeonSpace.stack) {
+                    header
 
-                LoadStateView(value: overview, error: overviewError, cachedAt: overviewCachedAt, retry: loadOverview) {
-                    StatGrid {
-                        ForEach(0..<4, id: \.self) { _ in SkeletonStatTile() }
-                    }
-                } content: { overview in
-                    StatGrid {
-                        StatTile(L("Total Projects"), value: Double(overview.stats.total), symbol: "folder.fill", tint: .neonCyanStrong)
-                        StatTile(L("Published"), value: Double(overview.stats.published), symbol: "checkmark.seal.fill", tint: .neonPurpleStrong)
-                        StatTile(L("Pending Approvals"), value: Double(overview.stats.pendingApprovals), symbol: "clock.fill", tint: .neonOrangeStrong)
-                        StatTile(L("Updated This Week"), value: Double(overview.stats.recentlyUpdated), symbol: "chart.line.uptrend.xyaxis", tint: .neonPinkStrong)
+                    if let overviewCachedAt {
+                        OfflineBanner(savedAt: overviewCachedAt)
                     }
 
-                    SectionLabel(L("Needs you"))
-                    NeedsYouStrip(
-                        badges: overview.badges,
-                        onReviews: { destination = .reviews },
-                        onAlerts: { showAlerts = true },
-                        onRequests: { destination = .requests }
+                    hero
+
+                    figures.id("kpis")
+
+                    HomeTodayCard(
+                        today: today,
+                        error: todayError,
+                        retry: loadToday,
+                        onOpen: open,
+                        onViewAll: { path.append(.today) }
                     )
-                }
+                    .id("today")
 
-                SectionLabel(L("Quick actions"))
-                QuickActionsGrid(
-                    onNewProject: { showNewProject = true },
-                    onHandOutTask: { showHandOutTask = true },
-                    onSetMeeting: { showSetMeeting = true },
-                    onOpenBoard: { destination = .tasksBoard }
-                )
+                    HomeMonthCard(pulse: pulse, error: pulseError, retry: loadPulse)
+                        .id("month")
 
-                SectionLabel(L("Right now"))
-                if let now {
-                    if now.people.isEmpty {
-                        EmptyState(symbol: "person.2", title: L("No employees yet"), detail: L("Add the team, and their day appears here."))
-                    } else {
-                        VStack(spacing: NeonSpace.sm) {
-                            ForEach(now.people) { person in
-                                RightNowCard(person: person, onTap: { destination = .employee(id: person.id) })
-                            }
-                        }
-                    }
-                } else if let nowError {
-                    ErrorState(message: nowError, retry: loadNow)
-                } else {
-                    SkeletonRows(count: 3)
-                }
+                    waiting.id("reviews")
 
-                if let day {
-                    SectionHeader(L("The day"), subtitle: longDayLabel(day.dayKey))
-                    if !day.everyone.isEmpty {
-                        TeamDayAvatarRow(people: day.everyone, onTap: { destination = .employee(id: $0) })
-                    }
-                    DayBoardSummary(summary: day.summary)
-                    DayBoardPressing(days: day.pressing, dayLabel: longDayLabel(day.dayKey))
-                    Text(L("An unanswered question is a question, not a verdict: nobody here is marked as having done nothing."))
-                        .font(.neonCaption)
-                        .foregroundStyle(Color.neonTextFaint)
-                } else if let dayError {
-                    ErrorState(message: dayError, retry: loadDay)
-                } else {
-                    SectionHeader(L("The day"))
-                    SkeletonRows(count: 3)
-                }
+                    HomeQuickActionsCard(actions: quickActions)
+                        .id("actions")
 
-                if let overview {
-                    if !overview.projects.isEmpty {
-                        SectionLabel(L("Recent projects"))
-                        ProjectCarousel(
-                            projects: Array(overview.projects.prefix(8)),
-                            onTap: { destination = .project(id: $0) }
+                    HomeRightNowCard(
+                        now: now,
+                        error: nowError,
+                        retry: loadNow,
+                        onPerson: { path.append(.employee($0)) }
+                    )
+                    .id("now")
+
+                    HomeDayCard(
+                        day: day,
+                        error: dayError,
+                        retry: loadDay,
+                        onPerson: { path.append(.employee($0)) }
+                    )
+                    .id("day")
+
+                    if let overview {
+                        HomeProjectsCard(
+                            projects: overview.projects,
+                            onProject: { path.append(.project($0)) },
+                            onViewAll: { HomeTabLink.open(HomeTabLink.projects) }
                         )
-                    }
-
-                    SectionHeader(L("All Projects"), count: overview.projects.count)
-                    if overview.projects.isEmpty {
-                        EmptyState(symbol: "folder", title: L("No projects yet"), detail: L("Create your first client project to start building its delivery portal."))
-                    } else {
-                        VStack(spacing: NeonSpace.sm) {
-                            ForEach(overview.projects) { project in
-                                HomeProjectRow(project: project, onTap: { destination = .project(id: project.id) })
-                            }
-                        }
+                        .id("projects")
                     }
                 }
-            }
-            .refreshable {
-                Haptic.tap()
-                await load()
-            }
-            .navigationTitle(L("Home"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: NeonSpace.sm) {
-                        Button {
-                            Haptic.tap()
-                            showNewProject = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                        }
-                        .foregroundStyle(Color.neonInk)
-                        AccountMenu()
-                    }
+                .refreshable {
+                    Haptic.tap()
+                    await load()
                 }
+                .debugScroll(proxy)
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: HomeRoute.self) { route in
+                destination(route)
             }
             .sheet(isPresented: $showNewProject) {
                 // The projects area's own new-project form, reused rather than
                 // rebuilt: same fields, same action ("projects" → createProject).
                 NewProjectSheet { newId in
-                    newProjectId = newId
                     Task { await loadOverview() }
+                    if let newId { path.append(.project(newId)) }
                 }
             }
             .sheet(isPresented: $showHandOutTask) {
-                // The chat area's own compose sheet, reused with the team
-                // channel: the same form, the same action, one fewer place
-                // this could drift from the chat's own "+ → Task".
-                ChatTaskComposeSheet(conversationSlug: "team") { Task { await loadDay() } }
+                // The chat area's own compose sheet, with the team channel: the
+                // same form and action as the chat's own "+ → Task".
+                ChatTaskComposeSheet(conversationSlug: "team") {
+                    Task { await loadDay() }
+                    Task { await loadToday() }
+                }
             }
             .sheet(isPresented: $showSetMeeting) {
-                ChatMeetingComposeSheet(conversationSlug: "team")
+                ChatMeetingComposeSheet(conversationSlug: "team") {
+                    Task { await loadToday() }
+                }
             }
-            .navigationDestination(isPresented: Binding(get: { newProjectId != nil }, set: { if !$0 { newProjectId = nil } })) {
-                if let newProjectId { ProjectDetailView(projectId: newProjectId) }
-            }
-            .navigationDestination(isPresented: Binding(get: { destination != nil }, set: { if !$0 { destination = nil } })) {
-                homeDestinationView(destination)
-            }
-            .navigationDestination(isPresented: $showAlerts) {
-                AlertsRootView()
+            .sheet(isPresented: $showUploadPhotos) {
+                HomeUploadPhotosSheet(
+                    projects: overview?.projects ?? [],
+                    onUploaded: { Task { await loadOverview() } },
+                    onOpenProject: { path.append(.project($0)) }
+                )
             }
         }
         .task { await load() }
         .task {
             // "Right now" moves on its own — somebody starts a task, a break
             // ends — so it refreshes every 60 s while Home is on screen, same
-            // as pull-to-refresh but without waiting for a tug. Cancelled
-            // automatically when the tab is torn down.
+            // as pull-to-refresh but without waiting for a tug.
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
                 guard !Task.isCancelled else { return }
                 await loadNow()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
+            // Work approved or sent back, an alert read, a project or a task
+            // changed elsewhere: the counts and today's list are what moved.
+            guard let name = note.object as? String,
+                  ["home/", "projects/", "tasks/", "ops/"].contains(where: { name.hasPrefix($0) })
+            else { return }
+            Task { await loadOverview() }
+            Task { await loadPulse() }
+            if name.hasPrefix("tasks/") { Task { await loadToday() } }
+        }
     }
+
+    // MARK: - The top
+
+    private var header: some View {
+        ScreenHeader.brand {
+            IconButton("magnifyingglass", label: L("Search"), size: NeonSize.circleButton) {
+                path.append(.search)
+            }
+            IconButton("bell", label: L("Alerts"), size: NeonSize.circleButton, dot: (overview?.badges.alerts ?? 0) > 0) {
+                path.append(.alerts)
+            }
+            Button {
+                Haptic.tap()
+                HomeTabLink.open(HomeTabLink.more)
+            } label: {
+                AvatarView(url: nil, name: "NEON", size: NeonSize.circleButton, ring: true)
+                    .neonShadow(.low)
+            }
+            .buttonStyle(PressableStyle(scale: 0.88))
+            .accessibilityLabel(L("More"))
+        }
+    }
+
+    private var hero: some View {
+        let greeting = HomeGreeting.now()
+        let firstName = pulse?.manager.map { homeFirstName($0.name) }.flatMap { $0.isEmpty ? nil : $0 }
+        return HeroCard(
+            firstName.map { "\($0) 👋" } ?? "\(greeting.plain) 👋",
+            eyebrow: firstName == nil ? nil : greeting.withComma,
+            eyebrowSymbol: greeting.symbol,
+            subtitle: homeLongDate(Date()),
+            footnote: L("An overview of every client project delivery."),
+            photo: coverPhoto,
+            actionLabel: L("Open projects"),
+            action: { HomeTabLink.open(HomeTabLink.projects) }
+        ) {
+            HomeWeatherBadge()
+        }
+        .animation(NeonMotion.smooth, value: firstName)
+    }
+
+    /// The most recently updated project that has a cover: the studio's own work.
+    private var coverPhoto: HeroPhoto {
+        guard let cover = overview?.projects.first(where: { ($0.coverImageUrl ?? "").isEmpty == false })?.coverImageUrl else {
+            return .none
+        }
+        return .url(resolvedMediaURL(cover))
+    }
+
+    // MARK: - Figures
+
+    @ViewBuilder
+    private var figures: some View {
+        if let overview {
+            HomeKPIRow(
+                stats: overview.stats,
+                pulse: pulse,
+                onOpenProjects: { HomeTabLink.open(HomeTabLink.projects) },
+                onNewProject: { showNewProject = true }
+            )
+            HomeProgressCard(projects: overview.projects) {
+                HomeTabLink.open(HomeTabLink.projects)
+            }
+            .id("progress")
+        } else if let overviewError {
+            ErrorState(message: overviewError, retry: loadOverview)
+                .neonSurface(.glass, radius: NeonRadius.lg)
+        } else {
+            StatGrid(columns: 4) {
+                ForEach(0..<4, id: \.self) { _ in SkeletonKPICard(compact: true) }
+            }
+            SkeletonCard(lines: 2)
+        }
+    }
+
+    @ViewBuilder
+    private var waiting: some View {
+        HStack(alignment: .top, spacing: NeonSpace.stack) {
+            HomeReviewsCard(
+                count: pulse?.reviews.waiting ?? overview?.badges.reviews,
+                people: pulse?.reviews.people ?? [],
+                onOpen: { path.append(.reviews) }
+            )
+            HomeNeedsYouCard(
+                alerts: overview?.badges.alerts,
+                requests: overview?.badges.requests,
+                onAlerts: { path.append(.alerts) },
+                onRequests: { path.append(.requests) }
+            )
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var quickActions: [QuickAction] {
+        [
+            QuickAction(L("New Project"), symbol: "plus", hue: .purple) { showNewProject = true },
+            QuickAction(L("Hand out a Task"), symbol: "checklist", hue: .green) { showHandOutTask = true },
+            QuickAction(L("Set a Meeting"), symbol: "calendar.badge.plus", hue: .blue) { showSetMeeting = true },
+            QuickAction(L("Upload Photos"), symbol: "camera.fill", hue: .pink) { showUploadPhotos = true },
+            QuickAction(L("Open the board"), symbol: "square.grid.3x3.fill", hue: .orange) { HomeTabLink.open(HomeTabLink.tasks) },
+            QuickAction(L("Employees"), symbol: "person.2.fill", hue: .cyan) { path.append(.employees) },
+            QuickAction(L("Payroll"), symbol: "banknote.fill", hue: .amber) { path.append(.payroll) },
+            QuickAction(L("More"), symbol: "ellipsis", hue: .grey) { HomeTabLink.open(HomeTabLink.more) },
+        ]
+    }
+
+    // MARK: - Going places
+
+    private func open(_ item: HomeTodayItem) {
+        switch item.kind {
+        case "cell":
+            if let projectId = item.projectId { path.append(.project(projectId)) }
+        case "meeting":
+            path.append(.meetings)
+        default:
+            // A job handed out by hand lives on the week board, in Tasks;
+            // there is no screen for one job on its own to push.
+            HomeTabLink.open(HomeTabLink.tasks)
+        }
+    }
+
+    @ViewBuilder
+    private func destination(_ route: HomeRoute) -> some View {
+        switch route {
+        case .project(let id): ProjectDetailView(projectId: id)
+        case .employee(let id): EmployeeDetailView(employeeId: id)
+        case .reviews: ReviewsRootView()
+        case .alerts: AlertsRootView()
+        case .analytics: AnalyticsRootView()
+        case .requests: RequestsRootView()
+        case .employees: EmployeesRootView()
+        case .payroll: PayrollRootView()
+        case .meetings: MeetingsView()
+        case .today:
+            HomeTodayView(today: today, error: todayError, retry: loadToday, onOpen: open)
+        case .search:
+            HomeSearchView(
+                projects: overview?.projects ?? [],
+                people: homeSearchPeople(now: now, day: day),
+                onOpen: { path.append($0) }
+            )
+        case .chat(let route): ChatRoomView(route: route)
+        }
+    }
+
+    // MARK: - Loading
 
     private func load() async {
         async let overviewTask: Void = loadOverview()
+        async let pulseTask: Void = loadPulse()
+        async let todayTask: Void = loadToday()
         async let dayTask: Void = loadDay()
         async let nowTask: Void = loadNow()
-        _ = await (overviewTask, dayTask, nowTask)
+        _ = await (overviewTask, pulseTask, todayTask, dayTask, nowTask)
     }
 
     private func loadOverview() async {
         do {
             let loaded = try await api.fetchHomeOverview()
-            overview = loaded.value
-            overviewCachedAt = loaded.cachedAt
-            overviewError = nil
+            withNeonAnimation(NeonMotion.smooth) {
+                overview = loaded.value
+                overviewCachedAt = loaded.cachedAt
+                overviewError = nil
+            }
         } catch {
             overviewError = error.localizedDescription
+        }
+    }
+
+    private func loadPulse() async {
+        do {
+            let loaded = try await api.fetchHomePulse()
+            withNeonAnimation(NeonMotion.smooth) {
+                pulse = loaded.value
+                pulseError = nil
+            }
+        } catch {
+            pulseError = error.localizedDescription
+        }
+    }
+
+    private func loadToday() async {
+        do {
+            let loaded = try await api.fetchHomeToday()
+            withNeonAnimation(NeonMotion.smooth) {
+                today = loaded.value
+                todayError = nil
+            }
+        } catch {
+            todayError = error.localizedDescription
         }
     }
 
     private func loadDay() async {
         do {
             let loaded = try await api.fetchHomeDay()
-            day = loaded.value
-            dayCachedAt = loaded.cachedAt
-            dayError = nil
+            withNeonAnimation(NeonMotion.smooth) {
+                day = loaded.value
+                dayError = nil
+            }
         } catch {
             dayError = error.localizedDescription
         }
@@ -204,581 +381,43 @@ struct AdminHomeView: View {
     private func loadNow() async {
         do {
             let loaded = try await api.fetchHomeNow()
-            now = loaded.value
-            nowCachedAt = loaded.cachedAt
-            nowError = nil
+            withNeonAnimation(NeonMotion.smooth) {
+                now = loaded.value
+                nowError = nil
+            }
         } catch {
             nowError = error.localizedDescription
         }
     }
 }
 
-// MARK: - Hero
+// MARK: - The greeting
 
-/// The top of the dashboard: a greeting by time of day, today's date and the
-/// studio's own mark, on the brand's own gradient. Nothing here reads from
-/// the server — it says when it is, not what happened.
-private struct HomeGreetingHero: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: NeonSpace.md) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(greeting)
-                        .font(.system(size: 23, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text(dateLabel)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.82))
-                }
-                Spacer(minLength: 8)
-                Text(verbatim: "NEON")
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
-                    .tracking(2.2)
-                    .foregroundStyle(.white.opacity(0.9))
-                    .environment(\.layoutDirection, .leftToRight)
-            }
-            Text(L("An overview of every client project delivery."))
-                .font(.system(size: 13))
-                .foregroundStyle(.white.opacity(0.8))
-        }
-        .padding(NeonSpace.xl)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .neonSurface(.brand, radius: NeonRadius.xxl)
-        .neonAppear()
-    }
+/// Good morning, afternoon or evening by the phone's own clock, with the
+/// symbol that goes with it.
+struct HomeGreeting {
+    let plain: String
+    let withComma: String
+    let symbol: String
 
-    private var greeting: String {
-        switch Calendar.current.component(.hour, from: Date()) {
-        case 0..<12: return L("Good morning")
-        case 12..<17: return L("Good afternoon")
-        default: return L("Good evening")
-        }
-    }
-
-    private var dateLabel: String {
-        var style = Date.FormatStyle(date: .omitted, time: .omitted, locale: AppLanguage.current.locale)
-        style = style.weekday(.wide).day().month(.wide)
-        return Date().formatted(style)
-    }
-}
-
-// MARK: - Needs you
-
-/// Bright, tappable counts for the three things most likely to be waiting on
-/// the manager right now — each opens this area's own screen for it.
-private struct NeedsYouStrip: View {
-    let badges: HomeAdminBadges
-    let onReviews: () -> Void
-    let onAlerts: () -> Void
-    let onRequests: () -> Void
-
-    private struct Item {
-        let title: String
-        let count: Int
-        let symbol: String
-        let tint: Color
-        let action: () -> Void
-    }
-
-    var body: some View {
-        let items: [Item] = [
-            Item(title: L("Reviews waiting"), count: badges.reviews, symbol: "tray.and.arrow.down.fill", tint: .neonPurpleStrong, action: onReviews),
-            Item(title: L("Unread alerts"), count: badges.alerts, symbol: "bell.badge.fill", tint: .neonPinkStrong, action: onAlerts),
-            Item(title: L("Open requests"), count: badges.requests, symbol: "shippingbox.fill", tint: .neonOrangeStrong, action: onRequests),
-        ]
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: NeonSpace.sm) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    Button {
-                        Haptic.tap()
-                        item.action()
-                    } label: {
-                        HStack(spacing: 10) {
-                            IconTile(item.symbol, tint: item.tint, size: 36, style: item.count > 0 ? .filled : .soft)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(NeonFormat.integer(item.count))
-                                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color.neonInk)
-                                Text(item.title)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(Color.neonTextSecondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        .padding(.horizontal, NeonSpace.md)
-                        .padding(.vertical, NeonSpace.sm)
-                        .neonSurface(item.count > 0 ? .tinted(item.tint) : .glass, radius: NeonRadius.lg)
-                    }
-                    .buttonStyle(.pressableCard)
-                }
-            }
-            .padding(.vertical, 2)
+    static func now(_ date: Date = Date()) -> HomeGreeting {
+        switch Calendar.current.component(.hour, from: date) {
+        case 5..<12: return HomeGreeting(plain: L("Good morning"), withComma: L("Good morning,"), symbol: "sun.max.fill")
+        case 12..<17: return HomeGreeting(plain: L("Good afternoon"), withComma: L("Good afternoon,"), symbol: "sun.max.fill")
+        case 17..<20: return HomeGreeting(plain: L("Good evening"), withComma: L("Good evening,"), symbol: "sunset.fill")
+        default: return HomeGreeting(plain: L("Good evening"), withComma: L("Good evening,"), symbol: "moon.stars.fill")
         }
     }
 }
 
-// MARK: - Quick actions
-
-private struct QuickActionsGrid: View {
-    let onNewProject: () -> Void
-    let onHandOutTask: () -> Void
-    let onSetMeeting: () -> Void
-    let onOpenBoard: () -> Void
-
-    private struct Action {
-        let title: String
-        let symbol: String
-        let tint: Color
-        let action: () -> Void
-    }
-
-    var body: some View {
-        let actions: [Action] = [
-            Action(title: L("New project"), symbol: "plus.circle.fill", tint: .neonPurpleStrong, action: onNewProject),
-            Action(title: L("Hand out a task"), symbol: "checklist", tint: .neonCyanStrong, action: onHandOutTask),
-            Action(title: L("Set a meeting"), symbol: "calendar.badge.plus", tint: .neonPinkStrong, action: onSetMeeting),
-            Action(title: L("Open the board"), symbol: "square.grid.3x3.fill", tint: .neonOrangeStrong, action: onOpenBoard),
-        ]
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: NeonSpace.sm), GridItem(.flexible(), spacing: NeonSpace.sm)], spacing: NeonSpace.sm) {
-            ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
-                Button {
-                    Haptic.tap()
-                    action.action()
-                } label: {
-                    VStack(spacing: 10) {
-                        IconTile(action.symbol, tint: action.tint, size: 40, style: .filled)
-                        Text(action.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.neonInk)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, NeonSpace.lg)
-                    .neonSurface(.glass, radius: NeonRadius.lg)
-                }
-                .buttonStyle(.pressableCard)
-                .staggered(index)
-            }
-        }
-    }
+/// "Hamed" from "Hamed Samir": the greeting uses a first name, as a person would.
+func homeFirstName(_ name: String) -> String {
+    name.split(whereSeparator: { $0.isWhitespace }).first.map(String.init) ?? name
 }
 
-// MARK: - The day
-
-/// The team's day as a row of coloured avatar cards — planned (quiet),
-/// blocked or a mismatch (red), waiting on the manager or overloaded
-/// (amber), and unanswered (grey: a silence, never a verdict).
-private struct TeamDayAvatarRow: View {
-    let people: [HomePersonDay]
-    let onTap: (String) -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: NeonSpace.sm) {
-                ForEach(people) { person in
-                    Button {
-                        Haptic.tap()
-                        onTap(person.employeeId)
-                    } label: {
-                        VStack(spacing: 6) {
-                            ZStack {
-                                Circle()
-                                    .stroke(dayStateTone(person.describeKind), lineWidth: 2.5)
-                                    .frame(width: 54, height: 54)
-                                AvatarView(url: nil, name: person.name, size: 46)
-                            }
-                            DirText(person.name, font: .system(size: 11, weight: .semibold), fill: false, lineLimit: 1)
-                                .frame(width: 74)
-                            Text(describeDayKind(
-                                person.describeKind,
-                                blocked: person.blocked.count,
-                                contradictions: person.contradictions.count,
-                                waiting: person.needsManager.count,
-                                unanswered: person.unanswered
-                            ))
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(dayStateTone(person.describeKind))
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.75)
-                            .multilineTextAlignment(.center)
-                            .frame(width: 74)
-                        }
-                        .padding(.vertical, NeonSpace.sm)
-                    }
-                    .buttonStyle(.pressableCard)
-                }
-            }
-            .padding(.horizontal, 2)
-        }
-    }
-}
-
-/// A colour for `describeKind` — the same judgement the pressing list and
-/// `describeDayKind` already read, just as a ring instead of a sentence.
-/// "unanswered" stays a quiet grey on purpose: it is a silence, not a fault.
-private func dayStateTone(_ kind: String) -> Color {
-    switch kind {
-    case "blocked", "contradiction": return .neonDangerStrong
-    case "waiting", "overloaded", "unplanned": return .neonWarningStrong
-    case "allStarted": return .neonSuccessStrong
-    default: return .neonTextTertiary
-    }
-}
-
-private struct DayBoardSummary: View {
-    let summary: DaySummary
-
-    private struct Tile {
-        let title: String
-        let value: Int
-        let symbol: String
-        let tone: Color?
-    }
-
-    var body: some View {
-        let tiles: [Tile] = [
-            Tile(title: L("On the day"), value: summary.planned, symbol: "checkmark.circle.fill", tone: nil),
-            Tile(title: L("No plan yet"), value: summary.unplanned, symbol: "calendar.badge.exclamationmark", tone: summary.unplanned > 0 ? .neonWarningStrong : nil),
-            Tile(title: L("Blocked"), value: summary.blocked, symbol: "pause.circle.fill", tone: summary.blocked > 0 ? .neonDangerStrong : nil),
-            Tile(title: L("Said started"), value: summary.contradictions, symbol: "exclamationmark.triangle.fill", tone: summary.contradictions > 0 ? .neonDangerStrong : nil),
-            Tile(title: L("Overloaded"), value: summary.overloaded, symbol: "clock.badge.exclamationmark.fill", tone: summary.overloaded > 0 ? .neonWarningStrong : nil),
-            Tile(title: L("Unanswered"), value: summary.unanswered, symbol: "questionmark.circle.fill", tone: nil),
-        ]
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: NeonSpace.sm), count: 3), spacing: NeonSpace.sm) {
-            ForEach(Array(tiles.enumerated()), id: \.offset) { index, tile in
-                VStack(spacing: 6) {
-                    Image(systemName: tile.symbol)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(tile.tone ?? Color.neonPurpleStrong.opacity(0.5))
-                    Text(NeonFormat.integer(tile.value))
-                        .font(.neonTitle3)
-                        .foregroundStyle(tile.tone ?? Color.neonInk)
-                    Text(tile.title)
-                        .font(.neonOverline)
-                        .foregroundStyle(Color.neonTextTertiary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, NeonSpace.md)
-                .neonSurface(tile.tone != nil ? .tinted(tile.tone!) : .glass, radius: NeonRadius.md)
-                .staggered(index)
-            }
-        }
-    }
-}
-
-private struct DayBoardPressing: View {
-    let days: [HomePersonDay]
-    let dayLabel: String
-
-    var body: some View {
-        if days.isEmpty {
-            Text(L("Nothing on %@ needs you right now.", dayLabel))
-                .font(.neonSubheadline)
-                .foregroundStyle(Color.neonTextSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, NeonSpace.xl)
-                .neonSurface(.glass, radius: NeonRadius.lg)
-        } else {
-            VStack(spacing: NeonSpace.sm) {
-                ForEach(days) { person in
-                    PressingPersonCard(person: person)
-                }
-            }
-        }
-    }
-}
-
-private struct PressingPersonCard: View {
-    let person: HomePersonDay
-
-    var body: some View {
-        NeonCard {
-            HStack(alignment: .firstTextBaseline) {
-                HStack(spacing: 8) {
-                    Circle().fill(employeeFill(person.color)).frame(width: 8, height: 8)
-                    DirText(person.name, font: .neonHeadline, fill: false)
-                }
-                Spacer(minLength: 8)
-                Text(describeDayKind(
-                    person.describeKind,
-                    blocked: person.blocked.count,
-                    contradictions: person.contradictions.count,
-                    waiting: person.needsManager.count,
-                    unanswered: person.unanswered
-                ))
-                .font(.neonFootnote)
-                .foregroundStyle(Color.neonTextTertiary)
-            }
-
-            if person.overloaded {
-                Label(
-                    L("%@ more than the day holds (%@ planned, %@ available)",
-                      describeMinutes(Double(person.overBy)),
-                      describeMinutes(Double(person.plannedMinutes)),
-                      describeMinutes(Double(person.capacityMinutes))),
-                    systemImage: "clock.fill"
-                )
-                .font(.neonCaption)
-                .foregroundStyle(Color.neonWarningStrong)
-            }
-
-            ForEach(person.blocked) { row in
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "pause.circle.fill").font(.neonFootnote)
-                    VStack(alignment: .leading, spacing: 2) {
-                        DirText(row.taskName, font: .neonFootnote.weight(.semibold), color: .neonDangerStrong)
-                        DirText(
-                            row.who != nil ? "\(row.reason) — \(L("%@ can clear it", row.who!))" : row.reason,
-                            font: .neonCaption, color: .neonTextSecondary
-                        )
-                    }
-                }
-                .foregroundStyle(Color.neonDangerStrong)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(NeonSpace.sm)
-                .neonSurface(.tinted(.neonDanger), radius: NeonRadius.sm)
-            }
-
-            ForEach(person.contradictions) { row in
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill").font(.neonFootnote)
-                    DirText(L("%@: said started, the board still says pending", row.taskName), font: .neonFootnote, color: .neonTextSecondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(NeonSpace.sm)
-                .neonSurface(.outline, radius: NeonRadius.sm)
-            }
-
-            ForEach(person.needsManager) { row in
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "exclamationmark.circle.fill").font(.neonFootnote)
-                    VStack(alignment: .leading, spacing: 2) {
-                        DirText("\(row.taskName ?? L("Their day")) — \(describeManagerAnswer(row.answer))", font: .neonFootnote.weight(.semibold), color: .neonWarningStrong)
-                        if let note = row.note {
-                            DirText(note, font: .neonCaption, color: .neonTextSecondary)
-                        }
-                    }
-                }
-                .foregroundStyle(Color.neonWarningStrong)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(NeonSpace.sm)
-                .neonSurface(.tinted(.neonWarning), radius: NeonRadius.sm)
-            }
-        }
-    }
-}
-
-// MARK: - Right now
-
-/// One employee, right now: the block their published day plan says they are
-/// on, and/or whatever board cell or hand-assigned job they have IN_PROGRESS
-/// — the two can agree, run ahead of each other, or disagree entirely — plus
-/// what is next. Neither existing is not idleness: the platform cannot tell
-/// "nothing to do" from "hasn't started" from "no plan was made", so it says
-/// so in as many neutral words rather than implying anybody did nothing.
-private struct RightNowCard: View {
-    let person: HomeNowPerson
-    let onTap: () -> Void
-
-    var body: some View {
-        Button {
-            Haptic.tap()
-            onTap()
-        } label: {
-            NeonCard {
-                HStack(alignment: .top, spacing: NeonSpace.md) {
-                    AvatarView(url: resolvedMediaURL(person.avatar), name: person.name, size: 46, online: person.online)
-                    VStack(alignment: .leading, spacing: 6) {
-                        DirText(person.name, font: .neonHeadline, fill: false)
-                        activity
-                        if let next = person.next {
-                            DirText(L("Next: %@ at %@", next.what, next.from), font: .neonCaption, color: .neonTextTertiary)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.forward")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.neonTextTertiary)
-                }
-            }
-        }
-        .buttonStyle(.pressableCard)
-    }
-
-    @ViewBuilder
-    private var activity: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            if let now = person.now {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Circle().fill(Color.neonSuccessStrong).frame(width: 6, height: 6)
-                    DirText(now.what, font: .neonSubheadline.weight(.semibold), fill: false)
-                }
-                if let leftMinutes = now.leftMinutes {
-                    Text(L("%@–%@ · %@ left", now.from, now.to, describeMinutes(Double(leftMinutes))))
-                        .font(.neonCaption)
-                        .foregroundStyle(Color.neonTextSecondary)
-                } else {
-                    Text(L("%@–%@", now.from, now.to))
-                        .font(.neonCaption)
-                        .foregroundStyle(Color.neonTextSecondary)
-                }
-            }
-
-            ForEach(person.inProgress) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: item.kind == "job" ? "bolt.fill" : "checklist")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.neonPurpleStrong)
-                    VStack(alignment: .leading, spacing: 1) {
-                        DirText(
-                            item.projectName != nil ? "\(item.title) · \(item.projectName!)" : item.title,
-                            font: .neonSubheadline.weight(.semibold), fill: false
-                        )
-                        Text(item.minutes.map { L("for %@", describeMinutes(Double($0))) } ?? L("In progress"))
-                            .font(.neonCaption)
-                            .foregroundStyle(Color.neonTextSecondary)
-                    }
-                }
-            }
-
-            if person.now == nil && person.inProgress.isEmpty {
-                Text(neutralState)
-                    .font(.neonSubheadline)
-                    .foregroundStyle(Color.neonTextTertiary)
-            }
-        }
-    }
-
-    private var neutralState: String {
-        if person.beforeWork { return L("The day hasn't started yet") }
-        if person.afterWork { return L("Outside working hours") }
-        return L("Nothing planned right now")
-    }
-}
-
-// MARK: - Projects
-
-/// The top few projects (by the server's own recency order) as cover-image
-/// cards with a completion ring — the same figure the project's own page
-/// shows, just reachable at a glance.
-private struct ProjectCarousel: View {
-    let projects: [HomeProject]
-    let onTap: (String) -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: NeonSpace.md) {
-                ForEach(projects) { project in
-                    Button {
-                        Haptic.tap()
-                        onTap(project.id)
-                    } label: {
-                        ZStack(alignment: .bottomLeading) {
-                            RemoteImage(url: resolvedMediaURL(project.coverImageUrl), contentMode: .fill)
-                            LinearGradient(
-                                colors: [.black.opacity(0), .black.opacity(0.16), .black.opacity(0.78)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            VStack(alignment: .leading, spacing: 4) {
-                                BadgeView(text: localizedEnum("publishState", project.publishState), tone: publishTone(project.publishState))
-                                DirText(project.name, font: .system(size: 15, weight: .bold, design: .rounded), color: .white, fill: false, lineLimit: 1)
-                                DirText(project.clientName, font: .system(size: 12, weight: .medium), color: .white.opacity(0.82), fill: false, lineLimit: 1)
-                            }
-                            .padding(12)
-                        }
-                        .frame(width: 168, height: 190)
-                        .clipShape(RoundedRectangle(cornerRadius: NeonRadius.xl, style: .continuous))
-                        .overlay(alignment: .topTrailing) {
-                            ProgressRing(progress: Double(project.completionPercent) / 100, size: 38, lineWidth: 4, tint: .white) {
-                                Text(verbatim: "\(project.completionPercent)%")
-                                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.white)
-                            }
-                            .padding(8)
-                        }
-                        .overlay(
-                            RoundedRectangle(cornerRadius: NeonRadius.xl, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-                        )
-                        .neonShadow(.raised)
-                    }
-                    .buttonStyle(.pressableCard)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-}
-
-private struct HomeProjectRow: View {
-    let project: HomeProject
-    let onTap: () -> Void
-
-    var body: some View {
-        Button {
-            Haptic.tap()
-            onTap()
-        } label: {
-            HStack(spacing: NeonSpace.md) {
-                RemoteImage(url: resolvedMediaURL(project.coverImageUrl), contentMode: .fill)
-                    .frame(width: 64, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    DirText(project.name, font: .neonHeadline, fill: false, lineLimit: 1)
-                    HStack(spacing: 6) {
-                        BadgeView(text: localizedEnum("publishState", project.publishState), tone: publishTone(project.publishState))
-                        BadgeView(text: localizedEnum("pipelineStatus", project.pipelineStatus), tone: .neutral)
-                    }
-                    DirText(
-                        project.location != nil ? "\(project.clientName) · \(project.location!)" : project.clientName,
-                        font: .system(size: 13)
-                    )
-                    .foregroundStyle(Color.neonTextTertiary)
-                    .lineLimit(1)
-                }
-
-                Spacer(minLength: 4)
-
-                ProgressRing(progress: Double(project.completionPercent) / 100, size: 34, lineWidth: 3.5) {
-                    Text(verbatim: "\(project.completionPercent)%")
-                        .font(.system(size: 8.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.neonInk)
-                        .minimumScaleFactor(0.7)
-                }
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(L("%d approvals", project.approvals)).font(.neonCaption2Ish)
-                    Text(L("%d comments", project.comments)).font(.neonCaption2Ish)
-                }
-                .foregroundStyle(Color.neonTextFaint)
-            }
-            .padding(NeonSpace.sm)
-            .neonSurface(.glass, radius: NeonRadius.lg)
-        }
-        .buttonStyle(.pressableCard)
-    }
-}
-
-private extension Font {
-    /// A touch smaller than `.neonCaption`, for two stacked figures.
-    static var neonCaption2Ish: Font { .system(size: 10) }
-}
-
-private struct SkeletonStatTile: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            IconTile("circle", tint: .neonTextFaint, size: 34)
-            Text("00").font(.neonNumber).hidden()
-        }
-        .padding(NeonSpace.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .neonSurface(.glass, radius: NeonRadius.lg)
-        .skeleton(true)
-    }
+/// "Wednesday, September 30", in the app's language.
+func homeLongDate(_ date: Date) -> String {
+    var style = Date.FormatStyle(date: .omitted, time: .omitted, locale: AppLanguage.current.locale)
+    style = style.weekday(.wide).day().month(.wide)
+    return date.formatted(style)
 }
