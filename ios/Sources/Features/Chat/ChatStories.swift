@@ -11,19 +11,30 @@ import UniformTypeIdentifiers
 
 // MARK: - The rail
 
+/// The row under the header, as in the owner's mockup: My Story first (a
+/// "+" to add one), then everybody with a live story — a colourful ring
+/// while there is something new, grey once it is all seen — and then the
+/// rest of the studio's people and groups as plain faces with their green
+/// dots, each opening that chat.
 struct ChatStoriesRail: View {
     let stories: ChatStoriesResponse?
     let isLoading: Bool
     let myName: String
     let isManager: Bool
+    /// The conversations whose person or group has no live story, in the list's order.
+    let people: [ConversationSummary]
     /// Whether an author ("admin" or an employee id) is here right now.
     let isOnline: (String) -> Bool
     let onOpen: (ChatStoryRing) -> Void
     let onCompose: () -> Void
+    let onOpenChat: (ConversationSummary) -> Void
+
+    /// The ring's size; the name sits under it.
+    static let bubble: CGFloat = 64
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .top, spacing: NeonSpace.md) {
                 myStory
                 if let others = stories?.others {
                     ForEach(Array(others.enumerated()), id: \.element.id) { index, ring in
@@ -33,28 +44,42 @@ struct ChatStoriesRail: View {
                         } label: {
                             ChatStoryBubble(
                                 name: ring.name,
-                                avatarURL: ring.avatarURL ?? ring.stories.last(where: { !$0.isVideo })?.mediaURL,
-                                seen: ring.allViewed,
-                                online: isOnline(ring.authorKey),
-                                isStudio: ring.authorKey == "admin" && ring.avatar == nil
-                            )
+                                ring: ring.allViewed ? .seen : .unseen,
+                                online: isOnline(ring.authorKey)
+                            ) { size in
+                                ChatStoryFace(ring: ring, size: size)
+                            }
                         }
                         .buttonStyle(PressableStyle(scale: 0.92))
                         .staggered(index + 1)
+                        .accessibilityHint(ring.allViewed ? L("Seen") : L("New story"))
                     }
                 } else if isLoading {
-                    ForEach(0..<4, id: \.self) { index in
-                        VStack(spacing: 7) {
-                            Circle().fill(Color.neonInk.opacity(0.07)).frame(width: 74, height: 74)
-                            SkeletonBlock(width: 52, height: 10)
+                    ForEach(0..<3, id: \.self) { index in
+                        VStack(spacing: 6) {
+                            Circle().fill(Color.neonInk.opacity(0.07)).frame(width: Self.bubble, height: Self.bubble)
+                            SkeletonBlock(width: 48, height: 10)
                         }
                         .shimmer()
-                        .staggered(index)
+                        .staggered(index + 1)
                     }
+                }
+                ForEach(Array(people.enumerated()), id: \.element.id) { index, conversation in
+                    Button {
+                        Haptic.tap()
+                        onOpenChat(conversation)
+                    } label: {
+                        ChatStoryBubble(name: conversation.title, ring: .none, online: conversation.online == true) { size in
+                            ChatConversationAvatar(conversation: conversation, size: size, showsOnline: false)
+                        }
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.92))
+                    .staggered(index + (stories?.others.count ?? 0) + 1)
+                    .accessibilityHint(L("Opens the chat"))
                 }
             }
             .padding(.horizontal, NeonSpace.gutter)
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
         }
     }
 
@@ -64,97 +89,119 @@ struct ChatStoriesRail: View {
     }
 
     private var myStory: some View {
-        VStack(spacing: 7) {
-            ZStack(alignment: .bottomTrailing) {
-                Button {
-                    Haptic.tap()
-                    if let mine { onOpen(mine) } else { onCompose() }
-                } label: {
-                    ZStack {
-                        if mine != nil {
-                            Circle().strokeBorder(ChatTint.storyRing, lineWidth: 3)
-                        }
-                        Group {
-                            if isManager && stories?.mine?.avatar == nil {
-                                ChatStudioMark(size: 68)
-                            } else {
-                                ChatAvatar(
-                                    url: stories?.mine?.avatarURL ?? mine?.stories.last(where: { !$0.isVideo })?.mediaURL,
-                                    name: myName,
-                                    size: 68
-                                )
-                            }
-                        }
+        let size = Self.bubble
+        return ZStack(alignment: .topTrailing) {
+            Button {
+                Haptic.tap()
+                if let mine { onOpen(mine) } else { onCompose() }
+            } label: {
+                ChatStoryBubble(name: L("My Story"), ring: mine == nil ? .none : .unseen, showsAdd: true) { inner in
+                    if let mine {
+                        ChatStoryFace(ring: mine, size: inner)
+                    } else if isManager {
+                        ChatStudioMark(size: inner)
+                    } else {
+                        ChatAvatar(url: nil, name: myName, size: inner)
                     }
-                    .frame(width: 76, height: 76)
                 }
-                .buttonStyle(PressableStyle(scale: 0.92))
-
-                Button {
-                    Haptic.impact(.light)
-                    onCompose()
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
-                        .background(Circle().fill(ChatTint.accent))
-                        .overlay(Circle().strokeBorder(Color.white, lineWidth: 2.5))
-                        .neonShadow(.glow(.neonPurple))
-                }
-                .buttonStyle(PressableStyle(scale: 0.85))
-                .accessibilityLabel(L("Add to your story"))
-                .offset(x: 2, y: 2)
             }
-            Text(L("My Story"))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.neonInk.opacity(0.8))
-                .lineLimit(1)
-                .frame(width: 78)
+            .buttonStyle(PressableStyle(scale: 0.92))
+            .accessibilityLabel(mine == nil ? L("Add to your story") : L("Your story"))
+
+            // The "+" adds another even while one is up; the face opens what is there.
+            Button {
+                Haptic.impact(.light)
+                onCompose()
+            } label: {
+                Color.clear
+                    .frame(width: size * 0.46, height: size * 0.46)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, size * 0.58)
+            .accessibilityLabel(L("Add to your story"))
         }
         .staggered(0)
     }
 }
 
-/// One ring: colourful while there is something new, grey once it is all seen.
-struct ChatStoryBubble: View {
+/// One face in the rail: its ring, the picture inside it, the green dot or
+/// the "+", and the name under it. The kit's StoryAvatar, with the picture
+/// supplied — the studio's mark, a story's photo, a face in its own colour.
+struct ChatStoryBubble<Picture: View>: View {
     let name: String
-    let avatarURL: URL?
-    let seen: Bool
+    var ring: StoryRingStyle
     var online = false
-    var isStudio = false
+    var showsAdd = false
+    var size: CGFloat = ChatStoriesRail.bubble
+    @ViewBuilder let picture: (CGFloat) -> Picture
 
     var body: some View {
-        VStack(spacing: 7) {
+        let ringWidth = max(2.5, size * 0.045)
+        let inner = size - ringWidth * 2 - size * 0.07
+        VStack(spacing: 6) {
             ZStack {
-                if seen {
-                    Circle().strokeBorder(Color.neonInk.opacity(0.16), lineWidth: 2)
-                } else {
-                    Circle().strokeBorder(ChatTint.storyRing, lineWidth: 3)
+                switch ring {
+                case .none:
+                    Circle().fill(Color.white).neonShadow(.low)
+                case .unseen:
+                    Circle().strokeBorder(AngularGradient.neonStory, lineWidth: ringWidth)
+                case .seen:
+                    Circle().strokeBorder(Color.neonLineStrong, lineWidth: ringWidth)
                 }
-                if isStudio && avatarURL == nil {
-                    ChatStudioMark(size: 66)
-                } else {
-                    ChatAvatar(url: avatarURL, name: name, size: 66)
-                }
+                picture(inner)
+                    .frame(width: inner, height: inner)
+                    .clipShape(Circle())
+                    .opacity(ring == .seen ? 0.9 : 1)
             }
-            .frame(width: 76, height: 76)
+            .frame(width: size, height: size)
             .overlay(alignment: .bottomTrailing) {
-                if online {
-                    Circle()
-                        .fill(Color.neonSuccess)
-                        .frame(width: 18, height: 18)
-                        .overlay(Circle().strokeBorder(Color.white, lineWidth: 3))
-                        .offset(x: -2, y: -2)
+                if showsAdd {
+                    Image(systemName: "plus")
+                        .font(.system(size: size * 0.17, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: size * 0.34, height: size * 0.34)
+                        .background(Circle().fill(LinearGradient.neonAction))
+                        .overlay(Circle().strokeBorder(Color.white, lineWidth: max(2, size * 0.04)))
+                        .neonShadow(.glow(.neonIndigo))
+                        .offset(x: size * 0.02, y: size * 0.02)
+                } else if online {
+                    OnlineDot(size: size * 0.26)
+                        .offset(x: -size * 0.02, y: -size * 0.02)
                 }
             }
-            .opacity(seen ? 0.85 : 1)
-
-            DirText(name, font: .system(size: 13, weight: seen ? .regular : .medium), color: Color.neonInk.opacity(seen ? 0.55 : 0.85), fill: false, lineLimit: 1)
-                .frame(width: 78)
+            DirText(name, font: .system(.footnote, weight: ring == .unseen ? .semibold : .medium),
+                    color: ring == .seen ? .neonTextSecondary : .neonInk.opacity(0.85), fill: false, lineLimit: 1)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(seen ? L("Seen") : L("New story"))
+        .frame(width: size + 12)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: name))
+        .accessibilityValue(online ? Text(L("Online now")) : Text(""))
+    }
+}
+
+/// Inside a story ring: the newest photo of the ring, the way WhatsApp's
+/// updates show the latest one, over the author's face (which stays when the
+/// newest is a video, or while the photo loads).
+struct ChatStoryFace: View {
+    let ring: ChatStoryRing
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            if ring.authorKey == "admin" && ChatFace(url: ring.avatarURL).photo == nil {
+                ChatStudioMark(size: size)
+            } else {
+                ChatAvatar(url: ring.avatarURL, name: ring.name, size: size)
+            }
+            if let latest = ring.stories.last, !latest.isVideo {
+                PipelineImage(url: latest.mediaURL, points: size)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            }
+        }
+        .frame(width: size, height: size)
     }
 }
 
@@ -164,6 +211,11 @@ struct ChatStoryBubble: View {
 private enum ChatStoryMedia {
     case photo(UIImage)
     case video(URL)
+
+    var isVideo: Bool {
+        if case .video = self { return true }
+        return false
+    }
 
     var upload: UploadFile? {
         switch self {
@@ -285,7 +337,9 @@ struct ChatStoryComposer: View {
             if let media {
                 preview(media)
                     .transition(.neonPop)
-                NeonTextField(L("Caption"), text: $caption, prompt: L("Add a caption (optional)"), symbol: "text.bubble")
+                FormSection {
+                    NeonTextField(L("Caption"), text: $caption, prompt: L("Add a caption (optional)"), symbol: "text.bubble")
+                }
                 HStack(spacing: 10) {
                     NeonButton(L("Library"), symbol: "photo.on.rectangle", kind: .secondary, size: .medium) { showLibrary = true }
                     if CameraPicker.isAvailable {
@@ -293,23 +347,29 @@ struct ChatStoryComposer: View {
                     }
                 }
             } else if preparing {
-                VStack(spacing: 12) {
-                    ProgressView()
+                VStack(spacing: 14) {
+                    IconTile("film", hue: .purple, size: 56)
+                        .neonPulse()
                     Text(L("Preparing the video…"))
-                        .font(.system(size: 14))
+                        .font(.neonLabel)
                         .foregroundStyle(Color.neonTextSecondary)
+                    ProgressView().tint(.neonPurple)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 60)
+                .padding(.vertical, 48)
+                .neonSurface(.glass, radius: NeonRadius.lg)
+                .transition(.neonPop)
             } else {
                 sourceTiles
             }
             if let problem {
                 StatusNote(symbol: "exclamationmark.triangle.fill", tone: .danger, title: problem, detail: nil)
+                    .transition(.neonRise)
             }
         }
         .neonSheet([.large])
         .animation(NeonMotion.smooth, value: media == nil)
+        .animation(NeonMotion.smooth, value: preparing)
         .photosPicker(isPresented: $showLibrary, selection: $pickerItem, matching: .any(of: [.images, .videos]))
         .fullScreenCover(isPresented: $showCamera) {
             ChatStoryCamera(
@@ -326,39 +386,32 @@ struct ChatStoryComposer: View {
         .onDisappear { player?.pause() }
     }
 
+    /// Where the story comes from: two big tiles in the kit's colours.
     private var sourceTiles: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: NeonSpace.stack) {
             if CameraPicker.isAvailable {
-                sourceTile(L("Camera"), detail: L("Take a photo or a video"), symbol: "camera.fill",
-                           gradient: [.neonPink, .neonOrange]) { showCamera = true }
+                sourceTile(L("Camera"), detail: L("Take a photo or a video"), symbol: "camera.fill", hue: .pink) { showCamera = true }
             }
             sourceTile(L("Photo library"), detail: L("Pick a photo or a video up to a minute"), symbol: "photo.on.rectangle.angled",
-                       gradient: [Color(hex: 0x6366F1), .neonPurple]) { showLibrary = true }
+                       hue: .indigo) { showLibrary = true }
+            HStack(spacing: 10) {
+                IconTile("clock.fill", hue: .grey, size: 30, style: .soft)
+                Text(L("Stories disappear by themselves after 24 hours. Only you see who viewed yours."))
+                    .font(.neonSubtitle)
+                    .foregroundStyle(Color.neonTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 4)
+            .padding(.top, 4)
         }
-        .neonAppear()
     }
 
-    private func sourceTile(_ title: String, detail: String, symbol: String, gradient: [Color], action: @escaping () -> Void) -> some View {
+    private func sourceTile(_ title: String, detail: String, symbol: String, hue: NeonHue, action: @escaping () -> Void) -> some View {
         Button {
             Haptic.tap()
             action()
         } label: {
-            HStack(spacing: 14) {
-                Image(systemName: symbol)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 54, height: 54)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing)))
-                    .shadow(color: gradient[0].opacity(0.35), radius: 10, y: 5)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Color.neonInk)
-                    Text(detail).font(.system(size: 13)).foregroundStyle(Color.neonTextSecondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.forward").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.neonTextFaint)
-            }
-            .padding(16)
-            .neonSurface(.strong, radius: NeonRadius.lg)
+            ChatListActionTile(title: title, detail: detail, symbol: symbol, hue: hue)
         }
         .buttonStyle(.pressableCard)
     }
@@ -382,8 +435,18 @@ struct ChatStoryComposer: View {
         .frame(height: 420)
         .background(Color.black)
         .clipShape(shape)
-        .overlay(shape.strokeBorder(Color.white, lineWidth: 1))
-        .neonShadow(.card)
+        .overlay(shape.strokeBorder(Color.white, lineWidth: 2))
+        .overlay(alignment: .topLeading) {
+            Label(media.isVideo ? L("Video") : L("Photo"), systemImage: media.isVideo ? "video.fill" : "photo.fill")
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(.ultraThinMaterial))
+                .environment(\.colorScheme, .dark)
+                .padding(12)
+        }
+        .neonShadow(.raised)
     }
 
     private func setMedia(_ value: ChatStoryMedia) {
@@ -460,24 +523,28 @@ struct ChatStoryViewersSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(L("Seen by"), subtitle: viewers.map { L("%d people", $0.count) }, symbol: "eye")
+            SheetHeader(L("Seen by"), subtitle: viewers.map { L("%d people", $0.count) }, symbol: "eye.fill")
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: NeonSpace.stack) {
                     if let viewers {
                         if viewers.isEmpty {
-                            EmptyState(symbol: "eye.slash", title: L("No one has seen it yet"))
-                        }
-                        ForEach(Array(viewers.enumerated()), id: \.element.id) { index, viewer in
-                            HStack(spacing: 12) {
-                                ChatAvatar(url: viewer.avatarURL, name: viewer.name, size: 44)
-                                DirText(viewer.name, font: .system(size: 16, weight: .semibold), lineLimit: 1)
-                                Text(chatTimeAgo(viewer.viewedAt))
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color.neonTextTertiary)
+                            EmptyState(symbol: "eye.slash", title: L("No one has seen it yet"),
+                                       detail: L("Whoever opens it appears here, with when they saw it."), hue: .purple, card: true)
+                        } else {
+                            CardList(viewers, dividerInset: 66) { viewer in
+                                HStack(spacing: NeonSpace.md) {
+                                    ChatAvatar(url: viewer.avatarURL, name: viewer.name, size: 42)
+                                    DirText(viewer.name, font: .neonRowTitle, lineLimit: 1)
+                                    Text(chatTimeAgo(viewer.viewedAt))
+                                        .font(.neonMeta)
+                                        .foregroundStyle(Color.neonTextTertiary)
+                                        .fixedSize()
+                                }
+                                .padding(.horizontal, NeonSpace.card)
+                                .padding(.vertical, 10)
+                                .accessibilityElement(children: .combine)
                             }
-                            .padding(12)
-                            .neonSurface(.strong, radius: NeonRadius.md)
-                            .staggered(index)
+                            .neonAppear()
                         }
                     } else if let problem {
                         ErrorState(message: problem) { await load() }
@@ -485,19 +552,23 @@ struct ChatStoryViewersSheet: View {
                         SkeletonRows(count: 3)
                     }
                 }
-                .padding(NeonSpace.gutter)
+                .padding(.horizontal, NeonSpace.gutter)
+                .padding(.bottom, NeonSpace.xxl)
             }
+            .refreshable { await load() }
         }
+        .background(NeonAmbient().ignoresSafeArea())
         .task { await load() }
         .neonSheet([.medium, .large])
     }
 
     private func load() async {
         do {
-            viewers = try await api.fetchChatStoryViewers(storyId: storyId)
+            let loaded = try await api.fetchChatStoryViewers(storyId: storyId)
+            withNeonAnimation(NeonMotion.smooth) { viewers = loaded }
             problem = nil
         } catch {
-            problem = error.localizedDescription
+            if viewers == nil { problem = error.localizedDescription }
         }
     }
 }
