@@ -87,6 +87,13 @@ final class APIClient: ObservableObject {
             identity = Identity(side: .admin, id: nil, name: "Manager")
         }
         #if DEBUG
+        // Screenshots from a fresh simulator: the manager's token handed in
+        // through the launch environment (SIMCTL_CHILD_NEON_DEBUG_TOKEN), held
+        // in memory only — never written to the Keychain or anywhere else.
+        if let debugToken = ProcessInfo.processInfo.environment["NEON_DEBUG_TOKEN"], !debugToken.isEmpty {
+            token = debugToken
+            identity = Identity(side: .admin, id: nil, name: "Manager")
+        }
         if Self.uiTestMode {
             token = "preview"
             identity = Identity(side: .admin, id: nil, name: "Manager")
@@ -180,6 +187,12 @@ final class APIClient: ObservableObject {
     private func send(_ request: URLRequest) async throws -> Data {
         #if DEBUG
         if Self.uiTestMode { throw APIError.network }
+        // A screen opened for a screenshot (-neonScreen) only looks: nothing
+        // is sent that would change the live studio — not a read marker, not
+        // a presence beat, not a device registration.
+        if DebugScreens.requested != nil, (request.httpMethod ?? "GET") != "GET" {
+            throw APIError.refused("Read-only: this build was opened for a screenshot.")
+        }
         #endif
         guard let token else { throw APIError.unauthorized }
         var request = request
@@ -319,6 +332,13 @@ final class APIClient: ObservableObject {
 
     func fetchDashboard() async throws -> Loaded<DashboardResponse> {
         #if DEBUG
+        // Screenshots from a fresh simulator: the manager's token handed in
+        // through the launch environment (SIMCTL_CHILD_NEON_DEBUG_TOKEN), held
+        // in memory only — never written to the Keychain or anywhere else.
+        if let debugToken = ProcessInfo.processInfo.environment["NEON_DEBUG_TOKEN"], !debugToken.isEmpty {
+            token = debugToken
+            identity = Identity(side: .admin, id: nil, name: "Manager")
+        }
         if Self.uiTestMode { return Loaded(value: .preview, cachedAt: nil) }
         #endif
         return try await load("dashboard", as: DashboardResponse.self)

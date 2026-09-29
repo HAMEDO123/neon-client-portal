@@ -13,25 +13,43 @@ struct NeonAdminApp: App {
         URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 512 * 1024 * 1024)
     }
 
+    @ViewBuilder private var root: some View {
+        if api.isLoggedIn {
+            // One app, two sides: the server's `side` at sign-in decides.
+            if api.side == .employee {
+                EmployeeHome()
+            } else {
+                AdminHome()
+            }
+        } else {
+            LoginView()
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ZStack {
-                if api.isLoggedIn {
-                    // One app, two sides: the server's `side` at sign-in decides.
-                    if api.side == .employee {
-                        EmployeeHome()
-                    } else {
-                        AdminHome()
-                    }
+                #if DEBUG
+                if let screen = DebugScreens.requested, api.isLoggedIn || screen == "login" || screen == "kit" {
+                    DebugScreenHost(id: screen)
                 } else {
-                    LoginView()
+                    root
                 }
+                #else
+                root
+                #endif
             }
             // A ringing or running call sits above every screen.
             .overlay { if api.isLoggedIn { CallOverlay() } }
             // Signed in: ask for notifications (once — iOS remembers the answer)
             // and register this phone for the person's pushes.
-            .task(id: api.isLoggedIn) { if api.isLoggedIn { PushCenter.shared.start() } }
+            .task(id: api.isLoggedIn) {
+                #if DEBUG
+                // A screenshot run asks nothing of the simulator: no alert on top.
+                if DebugScreens.requested != nil { return }
+                #endif
+                if api.isLoggedIn { PushCenter.shared.start() }
+            }
             #if DEBUG
             .task { if DecodeCheck.requested, api.isLoggedIn { await DecodeCheck.run(api) } }
             #endif
@@ -107,9 +125,13 @@ enum AdminTab: Hashable {
 
 struct AdminHome: View {
     @EnvironmentObject var api: APIClient
-    @State private var tab: AdminTab = .home
+    @State private var tab: AdminTab
     @State private var unreadChat = 0
     @Environment(\.scenePhase) private var scenePhase
+
+    init(initialTab: AdminTab = .home) {
+        _tab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         TabView(selection: $tab) {
