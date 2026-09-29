@@ -103,6 +103,35 @@ enum DecodeCheck {
             await check("me/profile") { _ = try await api.read("me/profile", as: ProfileResponse.self) }
         }
 
+        // The live streams: the calls stream's first event is "ready" (the
+        // thing a call cannot start without), and a conversation's stream
+        // says "ready" too the moment it is open.
+        await check("calls stream ready") {
+            CallCenter.shared.start()
+            for _ in 0..<40 where CallCenter.shared.ready == nil {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            }
+            if CallCenter.shared.ready == nil { throw APIError.server(0) }
+        }
+        await check("chat stream event") {
+            guard let token = api.token else { throw APIError.unauthorized }
+            let heard = await withTaskGroup(of: Bool.self) { group -> Bool in
+                group.addTask {
+                    var got = false
+                    let listener = Task {
+                        await ChatStream.listen(conversation: "team", token: token) { event in
+                            if case .connected = event { got = true }
+                        }
+                    }
+                    for _ in 0..<40 where !got { try? await Task.sleep(nanoseconds: 250_000_000) }
+                    listener.cancel()
+                    return got
+                }
+                return await group.next() ?? false
+            }
+            if !heard { throw APIError.server(0) }
+        }
+
         print("DECODE DONE passed=\(passed) failed=\(failed)")
     }
 }

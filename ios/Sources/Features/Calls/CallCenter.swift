@@ -161,27 +161,11 @@ final class CallCenter: ObservableObject {
             // Connected: whatever was wrong before is not wrong now.
             reportStream(nil)
 
-            var eventName = "message"
-            var dataLines: [String] = []
-            var eventId: Int?
-
-            for try await rawLine in bytes.lines {
+            // serverSentEvents, not `bytes.lines`: that sequence drops the
+            // empty line that ends each event, so none was ever handled.
+            for try await event in bytes.serverSentEvents() {
                 if Task.isCancelled { return }
-                if rawLine.isEmpty {
-                    if !dataLines.isEmpty { handleEvent(eventName, dataLines.joined(separator: "\n"), id: eventId) }
-                    eventName = "message"
-                    dataLines = []
-                    eventId = nil
-                    continue
-                }
-                if rawLine.hasPrefix(":") { continue }
-                if rawLine.hasPrefix("event:") {
-                    eventName = String(rawLine.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-                } else if rawLine.hasPrefix("data:") {
-                    dataLines.append(String(rawLine.dropFirst(5)).trimmingCharacters(in: .whitespaces))
-                } else if rawLine.hasPrefix("id:") {
-                    eventId = Int(rawLine.dropFirst(3).trimmingCharacters(in: .whitespaces))
-                }
+                handleEvent(event.name, event.data, id: event.id.flatMap { Int($0) })
             }
         } catch {
             // A network drop; the loop above reconnects after a short delay,

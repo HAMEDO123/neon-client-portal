@@ -7,8 +7,17 @@ let portalOrigin = URL(string: "https://clients.neonjo.com")!
 
 // The API returns some file/image paths as web-relative (e.g. "/seed-images/…"),
 // which URL(string:) alone can't load — resolve those against the portal origin.
+//
+// Stored files live on R2, at a public `*.r2.dev` address some networks cannot
+// reach at all (the photos simply never load). Those are fetched through the
+// platform's own `/api/media` instead, which reads the same file from storage.
 func resolvedMediaURL(_ raw: String?) -> URL? {
     guard let raw, !raw.isEmpty else { return nil }
+    if let direct = URL(string: raw), let host = direct.host, host.hasSuffix(".r2.dev") {
+        var components = URLComponents(url: portalOrigin.appendingPathComponent("api/media"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "u", value: raw)]
+        return components?.url ?? direct
+    }
     return URL(string: raw, relativeTo: portalOrigin)
 }
 

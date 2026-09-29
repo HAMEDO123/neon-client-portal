@@ -1,5 +1,5 @@
 import { put, del } from "@vercel/blob";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
@@ -201,6 +201,49 @@ export async function saveFile(
   await mkdir(destDir, { recursive: true });
   await writeFile(path.join(UPLOAD_ROOT, relativePath), buffer);
   return { url: `/uploads/${relativePath}`, fileType: ext, fileSize: buffer.length };
+}
+
+/**
+ * A stored file read back through the storage API rather than its public URL.
+ *
+ * R2's public `r2.dev` address is not reachable from every network the studio
+ * uses — a phone on some Jordanian connections cannot open it at all — while
+ * the platform's own address always is. So `/api/media` serves a stored file
+ * from here, and only a file in this bucket: anything else is null, which
+ * keeps the route from being a proxy to the rest of the internet.
+ */
+export async function readStoredFile(
+  url: string,
+  range: string | null
+): Promise<{
+  body: ReadableStream;
+  contentType: string | null;
+  contentLength: number | null;
+  contentRange: string | null;
+  status: 200 | 206;
+} | null> {
+  const r2 = getR2Config();
+  if (!r2 || !url.startsWith(`${r2.publicUrl}/`)) return null;
+
+  const key = decodeURIComponent(url.slice(r2.publicUrl.length + 1).split("?")[0]);
+  if (!key || key.includes("..")) return null;
+
+  const client = getR2Client(r2.accountId, r2.accessKeyId, r2.secretAccessKey);
+  try {
+    const object = await client.send(
+      new GetObjectCommand({ Bucket: r2.bucket, Key: key, ...(range ? { Range: range } : {}) })
+    );
+    if (!object.Body) return null;
+    return {
+      body: object.Body.transformToWebStream() as ReadableStream,
+      contentType: object.ContentType ?? null,
+      contentLength: typeof object.ContentLength === "number" ? object.ContentLength : null,
+      contentRange: object.ContentRange ?? null,
+      status: object.ContentRange ? 206 : 200,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteFile(url: string | null | undefined) {

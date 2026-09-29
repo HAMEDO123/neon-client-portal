@@ -137,7 +137,9 @@ export function json(value: unknown, status = 200): Response {
   const body = JSON.stringify(value === undefined ? null : value, (_key, item) =>
     typeof item === "bigint" ? Number(item) : item
   );
-  return new Response(body, { status, headers: { "content-type": "application/json" } });
+  // no-store: the app must always see the server's current answer, never a
+  // copy kept by the phone or anything in between.
+  return new Response(body, { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
 type Digested = { digest?: unknown };

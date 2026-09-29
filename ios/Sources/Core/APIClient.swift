@@ -184,11 +184,20 @@ final class APIClient: ObservableObject {
         guard let token else { throw APIError.unauthorized }
         var request = request
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Always the server's answer now, never a copy URLCache kept.
+        request.cachePolicy = .reloadIgnoringLocalCacheData
 
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            // Run apart from the calling screen's task. When a screen goes
+            // away mid-request (a tab switch, a refresh) SwiftUI cancels its
+            // task; a cancelled request used to arrive here as "the network is
+            // down", which put the offline banner over the whole app while the
+            // server was perfectly fine. The answer is simply used or dropped.
+            (data, response) = try await Task.detached(priority: .userInitiated) {
+                try await URLSession.shared.data(for: request)
+            }.value
         } catch {
             throw APIError.network
         }
@@ -228,7 +237,15 @@ final class APIClient: ObservableObject {
         let target = url(path, query)
         let key = cacheKey(for: target)
         do {
-            let data = try await send(URLRequest(url: target))
+            let data: Data
+            do {
+                data = try await send(URLRequest(url: target))
+            } catch APIError.network {
+                // One quiet retry before calling anything "offline": a single
+                // dropped request on a phone is common and means nothing.
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                data = try await send(URLRequest(url: target))
+            }
             let value = try decode(T.self, from: data)
             ResponseCache.save(data, for: key)
             return Loaded(value: value, cachedAt: nil)

@@ -108,20 +108,13 @@ enum ChatStream {
             let (bytes, response) = try await URLSession.shared.bytes(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
             reached = true
-            for try await line in bytes.lines {
+            // serverSentEvents, not `bytes.lines`: that sequence drops the
+            // empty line that ends each event, so none was ever handled.
+            for try await event in bytes.serverSentEvents() {
                 if Task.isCancelled { break }
-                if line.isEmpty {
-                    eventName = "message"
-                    flush()
-                    continue
-                }
-                if line.hasPrefix("event:") {
-                    eventName = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-                } else if line.hasPrefix("data:") {
-                    dataLines.append(String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces))
-                }
-                // Anything else (the ": keep-alive" comment) is only there to
-                // hold the connection open and carries no event of its own.
+                eventName = event.name
+                dataLines = [event.data]
+                flush()
             }
         } catch {
             // A dropped connection or a cancel — `listen` reconnects, or the
