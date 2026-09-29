@@ -76,7 +76,10 @@ enum CallAudioSession {
             if activate {
                 try session.setConfiguration(config, active: true)
             } else {
-                try session.setConfiguration(config)
+                // Mid-call only the category moves: re-applying the whole
+                // configuration would also re-ask for WebRTC's sample rate,
+                // which on a Bluetooth headset reroutes the sound for nothing.
+                try session.setCategory(.playAndRecord, mode: .voiceChat, options: config.categoryOptions)
             }
         } catch {
             // The call still works on whatever route iOS already had; WebRTC

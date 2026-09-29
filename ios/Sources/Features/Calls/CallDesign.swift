@@ -134,6 +134,32 @@ struct CallRoundButton: View {
     }
 }
 
+/// A small round button on the stage (minimise, close, the layout switch):
+/// the same dark glass as the controls, so nothing on a call reads as a
+/// light sticker on a dark screen.
+struct CallGlassIconButton: View {
+    let symbol: String
+    let label: String
+    var size: CGFloat = NeonSize.circleButton
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            Haptic.tap()
+            action()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.4, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(CallGlass(shape: Circle(), strength: 0.22))
+                .contentShape(Circle())
+        }
+        .buttonStyle(PressableStyle(scale: 0.88))
+        .accessibilityLabel(Text(label))
+    }
+}
+
 // MARK: - People
 
 /// A person, large: their avatar in their colour, a soft glow of it behind,
@@ -231,25 +257,27 @@ struct CallNameTag: View {
     let name: String
     var muted = false
     var quality: CallQuality?
+    /// For the small tiles of the speaker view's strip.
+    var compact = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: compact ? 4 : 6) {
             if muted {
                 Image(systemName: "mic.slash.fill")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: compact ? 8 : 9, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 18, height: 18)
+                    .frame(width: compact ? 15 : 18, height: compact ? 15 : 18)
                     .background(Circle().fill(Color.neonDanger))
                     .accessibilityLabel(L("Muted"))
             }
-            DirText(name, font: .system(.footnote, weight: .semibold), color: .white, fill: false, lineLimit: 1)
+            DirText(name, font: .system(compact ? .caption2 : .footnote, weight: .semibold), color: .white, fill: false, lineLimit: 1)
             if let quality {
                 CallQualityBars(quality: quality)
             }
         }
-        .padding(.leading, muted ? 4 : 10)
-        .padding(.trailing, 10)
-        .padding(.vertical, 5)
+        .padding(.leading, muted ? 3 : (compact ? 7 : 10))
+        .padding(.trailing, compact ? 7 : 10)
+        .padding(.vertical, compact ? 3 : 5)
         .background(CallGlass(shape: Capsule(), strength: 0.35))
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }

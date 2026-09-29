@@ -22,7 +22,7 @@ struct CallMiniWindow: View {
     var onFrame: ((CGRect) -> Void)?
 
     var body: some View {
-        CallDraggable(topInset: NeonSpace.sm, bottomInset: 96, horizontalInset: NeonSpace.md, onFrame: onFrame) {
+        CallDraggable(topInset: NeonSpace.sm, bottomInset: 96, horizontalInset: NeonSpace.md, startsAtBottom: true, onFrame: onFrame) {
             Group {
                 if let focus = model.focus, focus.video != nil {
                     videoWindow(focus)

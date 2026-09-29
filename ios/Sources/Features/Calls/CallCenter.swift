@@ -146,7 +146,16 @@ final class CallCenter: ObservableObject {
         var request = URLRequest(url: streamURL)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        if lastEventId > 0 { request.setValue(String(lastEventId), forHTTPHeaderField: "Last-Event-ID") }
+        if lastEventId > 0 {
+            request.setValue(String(lastEventId), forHTTPHeaderField: "Last-Event-ID")
+        } else if session != nil {
+            // In a call, but no signal has arrived yet, so there is no id to
+            // resume from — and a stream opened without one starts at the
+            // newest signal, silently skipping an offer sent while this one
+            // was reconnecting. Asking from the start replays only what is
+            // addressed to this device, and the session ignores other calls'.
+            request.setValue("1", forHTTPHeaderField: "Last-Event-ID")
+        }
         request.timeoutInterval = 300
 
         do {
@@ -310,10 +319,6 @@ final class CallCenter: ObservableObject {
         updateRinging()
         let media = LocalMedia()
         let opened = await openCallMedia(video: video, media: media)
-        // Dismissed only now: the ringing screen stays (with its spinner)
-        // through the permission prompt, instead of vanishing and leaving
-        // nothing on screen until the call opens.
-        dismissedCallIds.insert(call.id)
         do {
             try await begin(.join(callId: call.id, kind: call.kind, title: call.title), media: media, mic: opened.mic, camera: opened.camera, audioMuted: false)
             if let problem = opened.problem { notice = problem.text }
@@ -321,6 +326,10 @@ final class CallCenter: ObservableObject {
             media.stopAll()
             notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+        // Dismissed only now: the ringing screen stays, with its spinner,
+        // through the permission prompt and the join, instead of vanishing
+        // and leaving nothing on screen until the call opens.
+        dismissedCallIds.insert(call.id)
         answering = false
         updateRinging()
     }

@@ -144,7 +144,7 @@ enum CallsScreens {
         return CallStageModel(
             title: title, isVideo: video, isGroup: false, status: status,
             waiting: ringing ? L("Calling…") : status, phase: phase, ringing: ringing,
-            me: CallTileModel(id: "admin", name: L("You"), video: nil, isSelf: true),
+            me: CallTileModel(id: "admin", name: "Manager", video: nil, isSelf: true),
             others: others, audioMuted: false, cameraOn: false, onSpeaker: video,
             inCall: others.count + 1, notice: nil
         )
@@ -153,7 +153,7 @@ enum CallsScreens {
     private static func groupStage() -> CallStageModel {
         CallStageModel(
             title: "NEON Team", isVideo: true, isGroup: true, status: "12:07", waiting: "12:07", phase: .live, ringing: false,
-            me: CallTileModel(id: "admin", name: L("You"), video: nil, audioMuted: true, isSelf: true),
+            me: CallTileModel(id: "admin", name: "Manager", video: nil, audioMuted: true, isSelf: true),
             others: [
                 person("Sally", speaking: true, quality: .good),
                 person("Salem", muted: true, quality: .fair),

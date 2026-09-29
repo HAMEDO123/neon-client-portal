@@ -62,3 +62,48 @@
 "Calls could not reach the server." = "تعذّر على المكالمات الوصول إلى الخادم.";
 "You are signed out. Sign in again to make calls." = "تم تسجيل خروجك. سجّل الدخول من جديد لإجراء المكالمات.";
 "Calls could not connect to the server. Check the connection and try again." = "تعذّر على المكالمات الاتصال بالخادم. تحقّق من الاتصال وحاول مجددًا.";
+
+/* The redesigned call screens */
+"%@ in the call" = "%@ في المكالمة";
+"%@ in the call · %@ ringing" = "%@ في المكالمة · %@ يرن";
+"Asked into this call" = "المدعوون إلى هذه المكالمة";
+"Who is in, who is still being rung, and who said no." = "من انضم، ومن ما زال هاتفه يرن، ومن رفض.";
+"Ring someone in" = "أضف شخصًا بالاتصال به";
+"Their phone rings the same way as any call." = "يرنّ هاتفه كأي مكالمة.";
+"Ring %@" = "الاتصال بـ %@ الآن";
+"Couldn't load who else can be rung." = "تعذّر تحميل من يمكن الاتصال به أيضًا.";
+"Nobody else can be rung in right now." = "لا يمكن الاتصال بأحد آخر الآن.";
+"Nobody else is in the call right now." = "لا أحد غيرك في المكالمة الآن.";
+"Calling…" = "جارٍ الرنين…";
+"Still connecting…" = "ما زال الاتصال جاريًا…";
+"NEON video call" = "مكالمة فيديو NEON";
+"NEON voice call" = "مكالمة صوتية NEON";
+"End" = "إنهاء";
+"Flip" = "قلب";
+"Voice only" = "صوت فقط";
+"Turned on" = "مُفعّل";
+"Turned off" = "مُطفأ";
+"Speaking" = "يتحدث";
+"Show large" = "عرض بحجم كبير";
+"Speaker view" = "عرض المتحدث";
+"Grid view" = "عرض الشبكة";
+"Good connection" = "اتصال جيد";
+"Fair connection" = "اتصال متوسط";
+"Poor connection" = "اتصال ضعيف";
+"Connection not measured yet" = "لم تُقَس جودة الاتصال بعد";
+"Open Settings" = "فتح الإعدادات";
+
+/* Pre-join */
+"Check how you look and sound before anybody is rung." = "تأكّد من صورتك وصوتك قبل أن يرنّ هاتف أحد.";
+"The call is already going. Check how you look and sound first." = "المكالمة جارية بالفعل. تأكّد من صورتك وصوتك أولًا.";
+"Opening the microphone and camera…" = "جارٍ تشغيل الميكروفون والكاميرا…";
+"Voice only — no camera on this call." = "صوت فقط — لا كاميرا في هذه المكالمة.";
+"Microphone on" = "الميكروفون يعمل";
+"You'll join muted" = "ستنضم وصوتك مكتوم";
+"No microphone" = "لا ميكروفون";
+"Camera on" = "الكاميرا تعمل";
+
+/* Media problems */
+"The microphone is blocked for this app, so nobody can hear you. Allow it in Settings." = "الميكروفون محظور لهذا التطبيق، لذلك لن يسمعك أحد. اسمح به من الإعدادات.";
+"The camera is blocked for this app. You can join with sound only, or allow it in Settings." = "الكاميرا محظورة لهذا التطبيق. يمكنك الانضمام بالصوت فقط، أو السماح بها من الإعدادات.";
+"The camera could not be switched." = "تعذّر تبديل الكاميرا.";

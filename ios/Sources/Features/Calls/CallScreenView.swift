@@ -187,8 +187,12 @@ struct CallStage: View {
                     VStack(spacing: NeonSpace.sm) {
                         CallCenteredName(person.name, font: .neonDisplay)
                         HStack(spacing: NeonSpace.sm) {
-                            CallLiveDot(phase: model.phase)
-                            Text(model.status)
+                            if person.connection == .connected {
+                                CallLiveDot(phase: model.phase)
+                            } else {
+                                ProgressView().tint(.white).controlSize(.small)
+                            }
+                            Text(person.connection == .connected ? model.status : CallConnectionNote.text(person.connection, stalled: person.stalled))
                                 .font(.neonCallout.monospacedDigit())
                                 .foregroundStyle(.white.opacity(0.8))
                             if person.quality != .unknown {
@@ -212,7 +216,8 @@ struct CallStage: View {
                 .transition(.opacity)
             }
 
-            if person.connection != .connected {
+            // Over a picture there is no status line to carry it.
+            if person.video != nil, person.connection != .connected {
                 CallConnectionNote(connection: person.connection, stalled: person.stalled)
                     .transition(.neonPop)
             }
@@ -276,15 +281,13 @@ struct CallStage: View {
 
     private var topBar: some View {
         HStack(spacing: NeonSpace.sm) {
-            IconButton("chevron.down", label: L("Minimise"), look: .glass, tint: .white, size: NeonSize.circleButton) {
-                actions.minimize()
-            }
-            Spacer(minLength: 0)
+            CallGlassIconButton(symbol: "chevron.down", label: L("Minimise"), action: actions.minimize)
+            topCenter
+                .frame(maxWidth: .infinity)
             if tiled {
-                IconButton(
-                    layout == .grid ? "rectangle.inset.topleft.filled" : "square.grid.2x2.fill",
-                    label: layout == .grid ? L("Speaker view") : L("Grid view"),
-                    look: .glass, tint: .white, size: NeonSize.circleButton
+                CallGlassIconButton(
+                    symbol: layout == .grid ? "rectangle.inset.filled.and.person.filled" : "square.grid.2x2.fill",
+                    label: layout == .grid ? L("Speaker view") : L("Grid view")
                 ) {
                     layout = layout == .grid ? .speaker : .grid
                     pinned = nil
@@ -306,9 +309,9 @@ struct CallStage: View {
             .accessibilityLabel(L("People"))
             .accessibilityValue(L("%@ in the call", NeonFormat.integer(model.inCall)))
         }
-        .overlay { topCenter.padding(.horizontal, 104) }
         .padding(.horizontal, NeonSpace.gutter)
         .padding(.top, NeonSpace.xs)
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
     /// Over a picture or a grid, the name and the time; over the big avatar
@@ -331,6 +334,7 @@ struct CallStage: View {
                 .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .padding(.horizontal, NeonSpace.md)
                 .padding(.vertical, 7)
                 .background(CallGlass(shape: Capsule(), strength: 0.2))
@@ -341,13 +345,13 @@ struct CallStage: View {
         HStack(alignment: .top, spacing: 0) {
             CallRoundButton(
                 symbol: model.onSpeaker ? "speaker.wave.2.fill" : "speaker.fill", title: L("Speaker"),
-                look: model.onSpeaker ? .active : .glass, value: model.onSpeaker ? L("On") : L("Off"),
+                look: model.onSpeaker ? .active : .glass, value: model.onSpeaker ? L("Turned on") : L("Turned off"),
                 action: actions.toggleSpeaker
             )
             .frame(maxWidth: .infinity)
             CallRoundButton(
                 symbol: model.cameraOn ? "video.fill" : "video.slash.fill", title: L("Camera"),
-                look: model.cameraOn ? .glass : .active, value: model.cameraOn ? L("On") : L("Off"),
+                look: model.isVideo && !model.cameraOn ? .active : .glass, value: model.cameraOn ? L("Turned on") : L("Turned off"),
                 action: actions.toggleCamera
             )
             .frame(maxWidth: .infinity)
@@ -358,7 +362,7 @@ struct CallStage: View {
             }
             CallRoundButton(
                 symbol: model.audioMuted ? "mic.slash.fill" : "mic.fill", title: L("Mute"),
-                look: model.audioMuted ? .active : .glass, value: model.audioMuted ? L("On") : L("Off"),
+                look: model.audioMuted ? .active : .glass, value: model.audioMuted ? L("Turned on") : L("Turned off"),
                 action: actions.toggleMute
             )
             .frame(maxWidth: .infinity)
@@ -410,17 +414,17 @@ struct CallTileView: View {
                     }
                 }
                 if !tile.isSelf, tile.connection != .connected {
-                    Color.black.opacity(0.35)
-                    VStack(spacing: 6) {
+                    Color.black.opacity(0.4)
+                    if style == .strip || style == .pip {
                         ProgressView().tint(.white)
-                        if style != .strip && style != .pip {
-                            Text(CallConnectionNote.text(tile.connection, stalled: tile.stalled))
-                                .font(.neonCaption)
-                                .foregroundStyle(.white.opacity(0.9))
-                                .multilineTextAlignment(.center)
+                    } else {
+                        VStack {
+                            CallConnectionNote(connection: tile.connection, stalled: tile.stalled)
+                                .scaleEffect(0.9)
+                                .padding(.top, NeonSpace.md)
+                            Spacer(minLength: 0)
                         }
                     }
-                    .padding(NeonSpace.sm)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -447,8 +451,7 @@ struct CallTileView: View {
         case .pip:
             if tile.audioMuted { CallNameTag(name: L("You"), muted: true) }
         case .strip:
-            CallNameTag(name: tile.isSelf ? L("You") : tile.name, muted: tile.audioMuted)
-                .scaleEffect(0.86, anchor: .bottomLeading)
+            CallNameTag(name: tile.isSelf ? L("You") : tile.name, muted: tile.audioMuted, compact: true)
         case .grid, .large:
             CallNameTag(name: tile.isSelf ? L("You") : tile.name, muted: tile.audioMuted, quality: tile.isSelf ? nil : tile.quality)
         }
@@ -580,13 +583,28 @@ struct CallCenteredName: View {
 struct CallDraggable<Content: View>: View {
     var topInset: CGFloat
     var bottomInset: CGFloat
-    var horizontalInset: CGFloat = NeonSpace.gutter
+    var horizontalInset: CGFloat
     var onFrame: ((CGRect) -> Void)?
-    @ViewBuilder let content: Content
+    let content: Content
 
-    @State private var corner: Alignment = AppLanguage.current == .arabic ? .topLeading : .topTrailing
+    @State private var corner: Alignment
     @State private var size: CGSize = .zero
     @GestureState private var drag: CGSize = .zero
+
+    /// Starts in the trailing corner (the right in English, the left in
+    /// Arabic), at the top or the bottom.
+    init(
+        topInset: CGFloat, bottomInset: CGFloat, horizontalInset: CGFloat = NeonSpace.gutter, startsAtBottom: Bool = false,
+        onFrame: ((CGRect) -> Void)? = nil, @ViewBuilder content: () -> Content
+    ) {
+        self.topInset = topInset
+        self.bottomInset = bottomInset
+        self.horizontalInset = horizontalInset
+        self.onFrame = onFrame
+        self.content = content()
+        let horizontal: HorizontalAlignment = AppLanguage.current == .arabic ? .leading : .trailing
+        _corner = State(initialValue: Alignment(horizontal: horizontal, vertical: startsAtBottom ? .bottom : .top))
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -687,8 +705,8 @@ struct CallScreenView: View {
             )
         }
         let mine = CallTileModel(
-            id: me, name: L("You"), video: session.cameraTrack, mirror: session.mirrorSelf,
-            audioMuted: session.audioMuted, isSelf: true
+            id: me, name: center.ready?.name ?? L("You"), video: session.cameraTrack, mirror: session.mirrorSelf,
+            audioMuted: session.audioMuted || session.micTrack == nil, isSelf: true
         )
         let joined = call?.participants.filter { $0.state == "JOINED" && $0.memberKey != me }.count ?? others.count
         return CallStageModel(
@@ -701,7 +719,7 @@ struct CallScreenView: View {
             ringing: ringing,
             me: mine,
             others: others,
-            audioMuted: session.audioMuted,
+            audioMuted: session.audioMuted || session.micTrack == nil,
             cameraOn: session.cameraTrack != nil,
             onSpeaker: session.onSpeaker,
             inCall: joined + 1,
@@ -730,10 +748,7 @@ struct CallScreenView: View {
 
     private var actions: CallStageActions {
         CallStageActions(
-            minimize: {
-                Haptic.tap()
-                center.minimize()
-            },
+            minimize: { center.minimize() },
             toggleMute: {
                 Haptic.selection()
                 session.setMuted(!session.audioMuted)

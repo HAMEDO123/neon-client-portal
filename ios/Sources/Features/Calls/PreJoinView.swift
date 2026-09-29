@@ -91,9 +91,7 @@ struct CallPreJoinStage: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
-            IconButton("xmark", label: L("Cancel"), look: .glass, tint: .white, size: NeonSize.circleButton) {
-                actions.cancel()
-            }
+            CallGlassIconButton(symbol: "xmark", label: L("Cancel"), action: actions.cancel)
         }
         .padding(.top, NeonSpace.sm)
     }
@@ -173,7 +171,7 @@ struct CallPreJoinStage: View {
         HStack(alignment: .top, spacing: 0) {
             CallRoundButton(
                 symbol: model.micOn && model.micAvailable ? "mic.fill" : "mic.slash.fill", title: L("Microphone"),
-                look: model.micOn && model.micAvailable ? .glass : .active, value: model.micOn ? L("On") : L("Off"),
+                look: model.micOn && model.micAvailable ? .glass : .active, value: model.micOn ? L("Turned on") : L("Turned off"),
                 action: actions.toggleMic
             )
             .disabled(!model.micAvailable || model.loading)
@@ -181,7 +179,7 @@ struct CallPreJoinStage: View {
             if model.isVideo {
                 CallRoundButton(
                     symbol: model.cameraOn ? "video.fill" : "video.slash.fill", title: L("Camera"),
-                    look: model.cameraOn ? .glass : .active, value: model.cameraOn ? L("On") : L("Off"),
+                    look: model.cameraOn ? .glass : .active, value: model.cameraOn ? L("Turned on") : L("Turned off"),
                     action: actions.toggleCamera
                 )
                 .disabled(model.loading)
@@ -232,10 +230,7 @@ struct PreJoinView: View {
                 mirror: mirror, problem: problem
             ),
             actions: CallPreJoinActions(
-                cancel: {
-                    Haptic.tap()
-                    onCancel()
-                },
+                cancel: onCancel,
                 toggleMic: {
                     Haptic.selection()
                     micOn.toggle()
