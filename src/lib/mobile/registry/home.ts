@@ -11,6 +11,8 @@ import {
   markHomeAlertRead,
 } from "@/lib/mobile/home-reads";
 import { homeNow } from "@/lib/mobile/home-now";
+import { homePulse } from "@/lib/mobile/home-pulse";
+import { homeToday } from "@/lib/mobile/home-today";
 import {
   guarded,
   guardedAction,
@@ -41,6 +43,16 @@ export const reads: ReadRegistry = {
   // what is next. Not on the website — an app-only read, still guarded like
   // the rest of the dashboard because it is the same admin-only figures.
   "home/now": guarded(requireAdmin, async () => homeNow()),
+
+  // The Home tab's figures over time — the trend and bars under the counts,
+  // the "This month" card, the manager's name for the greeting and who is
+  // waiting on a review. App-only, and only what timestamps really record
+  // (lib/mobile/home-pulse.ts); guarded like the dashboard it sits on.
+  "home/pulse": guarded(requireAdmin, async () => homePulse()),
+
+  // The Home tab's "Today's Tasks": board cells scheduled or due today, jobs
+  // running today and meetings starting today (lib/mobile/home-today.ts).
+  "home/today": guarded(requireAdmin, async () => homeToday()),
 
   // Activity (src/app/admin/(dashboard)/alerts/page.tsx).
   "home/alerts": guarded(requireAdmin, async () => homeAlerts()),
