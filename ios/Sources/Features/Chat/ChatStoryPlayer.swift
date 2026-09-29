@@ -9,6 +9,12 @@ import SwiftUI
 struct ChatStoryPlayer: View {
     let myKey: String
     var onClose: () -> Void = {}
+    /// Opens the author's chat, for somebody else's story: the list closes the
+    /// viewer and pushes the conversation. nil when there is no chat to open.
+    var onMessage: ((ChatStoryRing) -> Void)?
+    /// A still for the debug router's screenshots: nothing is marked seen and
+    /// nothing moves on by itself.
+    var isPreview = false
 
     @EnvironmentObject private var api: APIClient
     @Environment(\.dismiss) private var dismiss
@@ -22,6 +28,8 @@ struct ChatStoryPlayer: View {
     @State private var mediaFailed = false
     @State private var player: AVPlayer?
     @State private var holding = false
+    /// A press held past a tap's length: the controls step aside and the pause shows.
+    @State private var longHold = false
     @State private var pressStart: Date?
     @State private var dragOffset: CGFloat = 0
     @State private var viewersFor: ViewersTarget?
@@ -34,9 +42,18 @@ struct ChatStoryPlayer: View {
     /// How long a photo stays up.
     private let photoSeconds: Double = 5
 
-    init(rings: [ChatStoryRing], startRing: Int, myKey: String, onClose: @escaping () -> Void = {}) {
+    init(
+        rings: [ChatStoryRing],
+        startRing: Int,
+        myKey: String,
+        isPreview: Bool = false,
+        onMessage: ((ChatStoryRing) -> Void)? = nil,
+        onClose: @escaping () -> Void = {}
+    ) {
         self.myKey = myKey
         self.onClose = onClose
+        self.onMessage = onMessage
+        self.isPreview = isPreview
         let start = min(max(startRing, 0), max(rings.count - 1, 0))
         _rings = State(initialValue: rings)
         _ringIndex = State(initialValue: start)
@@ -60,11 +77,11 @@ struct ChatStoryPlayer: View {
                     .id(story?.id)
                     .transition(.opacity)
 
-                LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .top, endPoint: .center)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                // Shades so the white bars, names and caption read on any picture.
+                LinearGradient(colors: [.black.opacity(0.6), .black.opacity(0.2), .clear], startPoint: .top, endPoint: .center)
                     .allowsHitTesting(false)
                     .ignoresSafeArea()
-                LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .center, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .black.opacity(0.25), .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
                     .allowsHitTesting(false)
                     .ignoresSafeArea()
 
@@ -73,22 +90,35 @@ struct ChatStoryPlayer: View {
                     .contentShape(Rectangle())
                     .gesture(pressGesture(width: proxy.size.width))
 
-                VStack(spacing: 10) {
+                VStack(spacing: NeonSpace.md) {
                     progressBars
                     header
                     Spacer()
                     footer
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-                .opacity(holding ? 0 : 1)
-                .animation(NeonMotion.quick, value: holding)
+                .padding(.horizontal, NeonSpace.md)
+                .padding(.top, NeonSpace.sm)
+                .padding(.bottom, NeonSpace.md)
+                .opacity(longHold ? 0 : 1)
+                .animation(NeonMotion.quick, value: longHold)
+
+                if longHold {
+                    Image(systemName: "pause.fill")
+                        .font(.system(.title2, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 64, height: 64)
+                        .background(Circle().fill(.ultraThinMaterial))
+                        .environment(\.colorScheme, .dark)
+                        .transition(.neonPop)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
             }
             .offset(y: dragOffset)
             .scaleEffect(1 - min(dragOffset, 400) / 2400)
             .id(ring?.id)
             .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
+            .animation(NeonMotion.snappy, value: longHold)
         }
         .background(Color.black.opacity(1 - Double(min(dragOffset, 400)) / 600).ignoresSafeArea())
         .statusBarHidden(true)
@@ -125,13 +155,21 @@ struct ChatStoryPlayer: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea()
             } else if mediaFailed {
-                VStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle").font(.system(size: 30))
-                    Text(L("This story could not be loaded.")).font(.system(size: 15, weight: .medium))
+                VStack(spacing: NeonSpace.md) {
+                    IconTile("exclamationmark.triangle.fill", hue: .orange, size: 56, style: .filled)
+                    Text(L("This story could not be loaded."))
+                        .font(.system(.callout, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
                 }
-                .foregroundStyle(.white.opacity(0.8))
             } else {
-                ProgressView().tint(.white).scaleEffect(1.2)
+                ZStack {
+                    if let ring {
+                        ChatStoryFace(ring: ring, size: 96)
+                            .blur(radius: 18)
+                            .opacity(0.5)
+                    }
+                    ProgressView().tint(.white).scaleEffect(1.3)
+                }
             }
         }
     }
@@ -141,16 +179,18 @@ struct ChatStoryPlayer: View {
             ForEach(Array((ring?.stories ?? []).enumerated()), id: \.element.id) { index, _ in
                 GeometryReader { bar in
                     Capsule()
-                        .fill(Color.white.opacity(0.32))
+                        .fill(Color.white.opacity(0.3))
                         .overlay(alignment: .leading) {
                             Capsule()
                                 .fill(Color.white)
                                 .frame(width: bar.size.width * fill(for: index))
+                                .shadow(color: .white.opacity(0.6), radius: 2)
                         }
                 }
                 .frame(height: 3)
             }
         }
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
         .accessibilityHidden(true)
     }
 
@@ -163,19 +203,33 @@ struct ChatStoryPlayer: View {
     private var header: some View {
         HStack(spacing: 10) {
             if let ring {
-                if ring.authorKey == "admin" && ring.avatar == nil {
-                    ChatStudioMark(size: 38)
-                } else {
-                    ChatAvatar(url: ring.avatarURL, name: ring.name, size: 38)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    DirText(isMine ? L("Your story") : ring.name, font: .system(size: 15, weight: .semibold), color: .white, fill: false, lineLimit: 1)
-                    if let story {
-                        Text(chatTimeAgo(story.createdAt))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.75))
+                ZStack {
+                    Circle().strokeBorder(AngularGradient.neonStory, lineWidth: 2)
+                    if ring.authorKey == "admin" && ChatFace(url: ring.avatarURL).photo == nil {
+                        ChatStudioMark(size: 34)
+                    } else {
+                        ChatAvatar(url: ring.avatarURL, name: ring.name, size: 34)
                     }
                 }
+                .frame(width: 40, height: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    DirText(isMine ? L("Your story") : ring.name, font: .system(.subheadline, weight: .bold), color: .white, fill: false, lineLimit: 1)
+                    if let story {
+                        HStack(spacing: 5) {
+                            Text(chatTimeAgo(story.createdAt))
+                            if ring.stories.count > 1 {
+                                Text(verbatim: "·")
+                                Text(L("%d of %d", storyIndex + 1, ring.stories.count))
+                            }
+                            if story.isVideo {
+                                Image(systemName: "video.fill").font(.system(.caption2, weight: .bold))
+                            }
+                        }
+                        .font(.system(.caption, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+                .shadow(color: .black.opacity(0.35), radius: 4)
             }
             Spacer(minLength: 8)
             if isMine {
@@ -187,34 +241,57 @@ struct ChatStoryPlayer: View {
 
     @ViewBuilder
     private var footer: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: NeonSpace.md) {
             if let caption = story?.caption, !caption.isEmpty {
-                DirText(caption, font: .system(size: 17, weight: .medium), color: .white, lineLimit: 4)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.black.opacity(0.35)))
-                    .shadow(color: .black.opacity(0.4), radius: 6)
+                DirText(caption, font: .system(.body, weight: .medium), color: .white, lineLimit: 4)
+                    .padding(.horizontal, NeonSpace.lg)
+                    .padding(.vertical, NeonSpace.md)
+                    .background(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous).fill(.ultraThinMaterial))
+                    .environment(\.colorScheme, .dark)
+                    .transition(.neonRise)
+                    .id(story?.id)
             }
             if isMine, let story {
                 Button {
                     Haptic.tap()
                     viewersFor = ViewersTarget(id: story.id)
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "eye.fill")
-                        Text(L("%d views", story.viewCount ?? 0))
-                        Image(systemName: "chevron.up").font(.system(size: 11, weight: .bold))
-                    }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .frame(height: 38)
-                    .background(Capsule().fill(.ultraThinMaterial))
-                    .environment(\.colorScheme, .dark)
+                    footerCapsule(symbol: "eye.fill", title: L("%d views", story.viewCount ?? 0), trailing: "chevron.up")
+                }
+                .buttonStyle(PressableStyle(scale: 0.94))
+                .accessibilityHint(L("Shows who has seen it"))
+            } else if let ring, let onMessage {
+                Button {
+                    Haptic.tap()
+                    closing = true
+                    player?.pause()
+                    onMessage(ring)
+                } label: {
+                    footerCapsule(symbol: "bubble.left.fill", title: L("Message %@", ring.name), trailing: nil)
                 }
                 .buttonStyle(PressableStyle(scale: 0.94))
             }
         }
+        .animation(NeonMotion.smooth, value: story?.id)
+    }
+
+    /// A frosted capsule at the foot of the story: views for the author, a
+    /// way into the chat for everybody else.
+    private func footerCapsule(symbol: String, title: String, trailing: String?) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol)
+            Text(title).lineLimit(1)
+            if let trailing {
+                Image(systemName: trailing).font(.system(.caption2, weight: .bold))
+            }
+        }
+        .font(.system(.subheadline, weight: .semibold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, NeonSpace.lg + 2)
+        .frame(minHeight: NeonSize.touch)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+        .environment(\.colorScheme, .dark)
     }
 
     private func storyButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
@@ -222,13 +299,10 @@ struct ChatStoryPlayer: View {
             Haptic.tap()
             action()
         } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
-                .background(Circle().fill(.black.opacity(0.28)))
+            // A white glyph makes the kit's round button the dark frosted disc.
+            IconButtonLabel(symbol, tint: .white, size: 38)
         }
-        .buttonStyle(PressableStyle(scale: 0.9))
+        .buttonStyle(PressableStyle(scale: 0.88))
         .accessibilityLabel(label)
     }
 
@@ -240,8 +314,12 @@ struct ChatStoryPlayer: View {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 if pressStart == nil {
-                    pressStart = Date()
+                    let started = Date()
+                    pressStart = started
                     holding = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if holding, pressStart == started { longHold = true }
+                    }
                 }
                 let down = value.translation.height
                 if down > 0, abs(down) > abs(value.translation.width) {
@@ -252,6 +330,7 @@ struct ChatStoryPlayer: View {
                 let held = Date().timeIntervalSince(pressStart ?? Date())
                 pressStart = nil
                 holding = false
+                longHold = false
                 if dragOffset > 120 || value.predictedEndTranslation.height > 320 {
                     close()
                     return
@@ -302,6 +381,10 @@ struct ChatStoryPlayer: View {
             let elapsed = now.timeIntervalSince(last)
             last = now
             guard ready, !paused else { continue }
+            if isPreview {
+                progress = 0.4
+                continue
+            }
             if story.isVideo, let player, let item = player.currentItem {
                 if item.status == .failed {
                     mediaFailed = true
@@ -323,7 +406,7 @@ struct ChatStoryPlayer: View {
     }
 
     private func markViewed(_ story: ChatStory) {
-        guard !isMine, !story.viewed else { return }
+        guard !isPreview, !isMine, !story.viewed else { return }
         let ringAt = ringIndex
         let storyAt = storyIndex
         rings[ringAt].stories[storyAt].viewed = true
