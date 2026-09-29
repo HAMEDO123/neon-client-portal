@@ -3,14 +3,21 @@ import SwiftUI
 /// The "Week" segment: jobs the manager (or anybody ticked `canAssignTasks`)
 /// hands out by hand, outside any project — `assignedTasksForWeek`, one week
 /// at a time, weeks starting Sunday. A phone can't show the web's grid, so
-/// this lists each day of the week with the jobs that cover it.
+/// this is the week as a strip of seven days on top, then a card for each day
+/// with the jobs that cover it.
+///
+/// Content only: `TasksRootView` owns the scroll, the floating "New job" and
+/// the job sheet (`editing`), so the button stays put while the days scroll.
 struct WeekBoardView: View {
     @EnvironmentObject var api: APIClient
     @ObservedObject var store: TaskWeekStore
+    @Binding var editing: JobSheetTarget?
+    /// The page's scroll, so tapping a day in the strip goes to its card.
+    var proxy: ScrollViewProxy?
 
     @State private var person: String?
-    @State private var editing: JobSheetTarget?
     @State private var deleting: AssignedJob?
+    @State private var moving = false
 
     enum JobSheetTarget: Identifiable {
         case new(day: String)
@@ -23,58 +30,139 @@ struct WeekBoardView: View {
         }
     }
 
+    /// The states a job moves through, in the order a tally reads them.
+    static let jobStates = ["DONE", "SUBMITTED", "IN_PROGRESS", "TODO"]
+
     var body: some View {
-        LoadStateView(value: store.value, error: store.errorMessage, cachedAt: store.cachedAt, retry: { await store.load(api) }) { week in
-            NeonScroll {
-                weekNavigator(week)
+        LoadStateView(value: store.value, error: store.errorMessage, cachedAt: store.cachedAt, retry: { await store.load(api) }) {
+            VStack(spacing: NeonSpace.stack) {
+                SkeletonCard(lines: 3)
+                SkeletonRows(count: 3)
+            }
+        } content: { week in
+            let jobs = week.tasks.filter { person == nil || $0.employeeId == person }
+            VStack(alignment: .leading, spacing: NeonSpace.stack) {
+                weekCard(week, jobs: jobs)
+                    .neonAppear()
 
-                FilterChips(selection: $person, options: [nil] + week.team.map(\.id), inset: 16,
-                            title: { id in id.flatMap { pid in week.team.first { $0.id == pid }?.name } ?? L("Everyone") })
-                    .padding(.horizontal, -16)
-
-                ForEach(week.weekKeys, id: \.self) { day in
-                    daySection(day, week: week)
+                if !week.team.isEmpty {
+                    TasksPersonFilter(selection: $person, people: week.team)
+                        .padding(.horizontal, -NeonSpace.gutter)
                 }
+
+                VStack(spacing: NeonSpace.stack) {
+                    ForEach(Array(week.weekKeys.enumerated()), id: \.element) { index, day in
+                        dayCard(day, week: week, jobs: jobs.filter { $0.startKey <= day && day <= $0.endKey })
+                            .id("day-\(day)")
+                            .staggered(index)
+                    }
+                }
+                .id("days")
             }
-            .refreshable { await store.load(api) }
-            .floatingActionButton(label: L("New job")) {
-                editing = .new(day: week.todayKey)
-            }
-        }
-        .sheet(item: $editing) { target in
-            JobEditorSheet(target: target, team: store.value?.team ?? [])
-                .neonSheet([.large])
+            .animation(NeonMotion.smooth, value: person)
         }
         .confirmDestructive(
-            item: $deleting, title: { L("Delete \"%@\"?", $0.title) }, actionTitle: L("Delete")
+            item: $deleting, title: { L("Delete \"%@\"?", $0.title) }, message: { _ in L("It comes off the week for good.") }, actionTitle: L("Delete")
         ) { job in
             Task {
-                do { try await api.deleteJob(id: job.id); Toast.success(L("Deleted")) } catch { Toast.error(error) }
+                do {
+                    try await api.deleteJob(id: job.id)
+                    Haptic.success()
+                    Toast.success(L("Deleted"))
+                } catch { Toast.error(error) }
             }
         }
     }
 
-    @ViewBuilder
-    private func weekNavigator(_ week: WeekBoardResponse) -> some View {
-        HStack {
-            IconButton("chevron.backward", label: L("Previous week")) {
-                store.week = week.previousWeek
-                Task { await store.load(api) }
+    // MARK: - The week
+
+    private func weekCard(_ week: WeekBoardResponse, jobs: [AssignedJob]) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            TasksPeriodNavigator(
+                label: weekLabel(week),
+                isCurrent: week.weekKeys.contains(week.todayKey),
+                currentTitle: L("This week"),
+                backTitle: L("Back to this week"),
+                previousLabel: L("Previous week"),
+                nextLabel: L("Next week"),
+                loading: moving,
+                onPrevious: { go(to: week.previousWeek) },
+                onNext: { go(to: week.nextWeek) },
+                onCurrent: { go(to: nil) }
+            )
+
+            dayStrip(week, jobs: jobs)
+
+            NeonDivider()
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(NeonFormat.integer(jobs.count))
+                    .font(.system(.title2, weight: .heavy))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.neonInk)
+                Text(jobs.count == 1 ? L("job this week") : L("jobs this week"))
+                    .font(.neonLabel)
+                    .foregroundStyle(Color.neonTextSecondary)
+                Spacer(minLength: 0)
             }
-            Spacer()
-            VStack(spacing: 2) {
-                Text(weekLabel(week))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                if week.weekKeys.contains(week.todayKey) {
-                    Text(L("This week")).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.neonPurpleStrong)
-                }
-            }
-            Spacer()
-            IconButton("chevron.forward", label: L("Next week")) {
-                store.week = week.nextWeek
-                Task { await store.load(api) }
+            if jobs.isEmpty {
+                Text(L("Nothing handed out for this week yet."))
+                    .font(.neonSubtitle)
+                    .foregroundStyle(Color.neonTextTertiary)
+            } else {
+                TasksBreakdown(parts: TasksBreakdownPart.states(jobs.map(\.state), order: Self.jobStates), barHeight: 8, columns: 4)
             }
         }
+        .padding(NeonSpace.card)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+    }
+
+    /// The seven days, today in the brand's colours, each with how many jobs
+    /// cover it. Tapping one goes to its card.
+    private func dayStrip(_ week: WeekBoardResponse, jobs: [AssignedJob]) -> some View {
+        HStack(spacing: 6) {
+            ForEach(week.weekKeys, id: \.self) { day in
+                let parts = tasksDayParts(day)
+                let count = jobs.filter { $0.startKey <= day && day <= $0.endKey }.count
+                let today = day == week.todayKey
+                Button {
+                    Haptic.selection()
+                    withAnimation(NeonMotion.smooth) { proxy?.scrollTo("day-\(day)", anchor: .top) }
+                } label: {
+                    VStack(spacing: 4) {
+                        Text(parts.weekday)
+                            .font(.system(.caption2, weight: .semibold))
+                            .foregroundStyle(today ? Color.white.opacity(0.85) : Color.neonTextTertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Text(parts.day)
+                            .font(.system(.headline, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(today ? Color.white : Color.neonInk)
+                        Circle()
+                            .fill(count > 0 ? (today ? Color.white : Color.neonIndigo) : Color.clear)
+                            .frame(width: 5, height: 5)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background {
+                        let shape = RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous)
+                        if today {
+                            shape.fill(LinearGradient.neonBrand)
+                                .shadow(color: Color.neonIndigo.opacity(0.3), radius: 6, x: 0, y: 3)
+                        } else {
+                            shape.fill(NeonHue.indigo.wash.opacity(count > 0 ? 1 : 0.5))
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle(scale: 0.92))
+                .accessibilityLabel(Text(verbatim: "\(tasksWeekdayName(day)) \(formattedDayKey(day))"))
+                .accessibilityValue(Text(L("%d jobs", count)))
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
     private func weekLabel(_ week: WeekBoardResponse) -> String {
@@ -82,49 +170,134 @@ struct WeekBoardView: View {
         return "\(formattedDayKey(first)) – \(formattedDayKey(last))"
     }
 
-    @ViewBuilder
-    private func daySection(_ day: String, week: WeekBoardResponse) -> some View {
-        let jobs = week.tasks.filter { $0.startKey <= day && day <= $0.endKey && (person == nil || $0.employeeId == person) }
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                SectionLabel(formattedDayKey(day) + (day == week.todayKey ? " · \(L("Today"))" : ""))
-                Spacer()
-                IconButton("plus", label: L("New job on this day"), look: .tinted, size: 28) {
+    private func go(to weekKey: String?) {
+        store.week = weekKey
+        Task {
+            withNeonAnimation(NeonMotion.quick) { moving = true }
+            await store.load(api)
+            withNeonAnimation(NeonMotion.quick) { moving = false }
+        }
+    }
+
+    // MARK: - A day
+
+    private func dayCard(_ day: String, week: WeekBoardResponse, jobs: [AssignedJob]) -> some View {
+        let parts = tasksDayParts(day)
+        let today = day == week.todayKey
+        let past = day < week.todayKey
+        return VStack(alignment: .leading, spacing: jobs.isEmpty ? 0 : 6) {
+            HStack(spacing: 12) {
+                VStack(spacing: 0) {
+                    Text(parts.month)
+                        .font(.system(.caption2, weight: .bold))
+                        .textCase(.uppercase)
+                        .foregroundStyle(today ? Color.white.opacity(0.85) : NeonHue.indigo.deep.opacity(0.8))
+                        .lineLimit(1)
+                    Text(parts.day)
+                        .font(.system(.title3, weight: .heavy))
+                        .monospacedDigit()
+                        .foregroundStyle(today ? Color.white : NeonHue.indigo.deep)
+                }
+                .frame(width: 46, height: 46)
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: NeonRadius.tile(46), style: .continuous)
+                    if today {
+                        shape.fill(LinearGradient.neonBrand)
+                    } else {
+                        shape.fill(LinearGradient(colors: [NeonHue.indigo.wash, NeonHue.indigo.pastel], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                }
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(tasksWeekdayName(day))
+                            .font(.neonCardTitle)
+                            .foregroundStyle(Color.neonInk)
+                        if today {
+                            Text(L("Today"))
+                                .font(.system(.caption, weight: .bold))
+                                .foregroundStyle(Color.neonIndigoStrong)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(NeonHue.indigo.wash))
+                        }
+                    }
+                    Text(jobs.isEmpty ? L("Nothing planned") : (jobs.count == 1 ? L("1 job") : L("%d jobs", jobs.count)))
+                        .font(.neonSubtitle)
+                        .foregroundStyle(jobs.isEmpty ? Color.neonTextTertiary : Color.neonTextSecondary)
+                }
+                Spacer(minLength: 8)
+                IconButton("plus", label: L("New job on this day"), look: .tinted, tint: .neonIndigoStrong, size: 34) {
                     editing = .new(day: day)
                 }
             }
-            if jobs.isEmpty {
-                Text(L("Nothing planned")).font(.system(size: 12.5)).foregroundStyle(Color.neonTextFaint).padding(.leading, 4)
-            } else {
-                CardList(jobs) { job in
-                    jobRow(job, week: week)
+            .padding(.bottom, jobs.isEmpty ? 0 : 4)
+
+            if !jobs.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(jobs.enumerated()), id: \.element.id) { index, job in
+                        if index > 0 { NeonDivider().padding(.leading, 58) }
+                        jobRow(job, week: week)
+                    }
                 }
+                .padding(.horizontal, -NeonSpace.card + 2)
             }
         }
+        .padding(NeonSpace.card)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+        .opacity(past && jobs.isEmpty ? 0.75 : 1)
     }
 
     @ViewBuilder
     private func jobRow(_ job: AssignedJob, week: WeekBoardResponse) -> some View {
         let owner = week.team.first { $0.id == job.employeeId }
+        let span = job.days > 1 ? L("%d days · %@ – %@", job.days, formattedDayKey(job.startKey), formattedDayKey(job.endKey)) : nil
         Button {
             Haptic.tap()
             editing = .existing(job)
         } label: {
-            ListRow(
-                job.title,
-                subtitle: owner?.name ?? job.employeeId,
-                meta: job.days > 1 ? L("%d days", job.days) : nil,
-                leading: .avatar(url: nil, name: owner?.name ?? "?", online: false),
-                badge: taskStateLabel(job.state), badgeTone: taskStateTone(job.state),
-                chevron: true
-            )
+            ListRow(job.title, subtitle: owner?.name ?? job.employeeId, meta: span,
+                    leading: .avatar(url: nil, name: owner?.name ?? "?"), chevron: true) {
+                VStack(alignment: .trailing, spacing: 5) {
+                    StateBadge(state: job.state)
+                    HStack(spacing: 5) {
+                        if job.priority == "HIGH" {
+                            Image(systemName: "flame.fill")
+                                .foregroundStyle(Color.neonPinkStrong)
+                                .accessibilityLabel(L("High"))
+                        }
+                        if job.chatTaskId?.isEmpty == false {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .foregroundStyle(Color.neonTextTertiary)
+                                .accessibilityLabel(L("From a chat task card"))
+                        }
+                    }
+                    .font(.system(.caption2, weight: .bold))
+                }
+                .fixedSize()
+            }
         }
         .buttonStyle(.pressableCard)
         .contextMenu {
             ForEach(["TODO", "IN_PROGRESS", "DONE"], id: \.self) { state in
-                Button(taskStateLabel(state)) { Task { try? await api.setJobState(id: job.id, state: state) } }
+                Button {
+                    Task {
+                        do {
+                            try await api.setJobState(id: job.id, state: state)
+                            Haptic.success()
+                        } catch { Toast.error(error) }
+                    }
+                } label: {
+                    Label(taskStateLabel(state), systemImage: tasksStateSymbol(state))
+                }
+                .disabled(job.state == state)
             }
-            Button(L("Delete"), role: .destructive) { deleting = job }
+            Divider()
+            Button(role: .destructive) { deleting = job } label: {
+                Label(L("Delete"), systemImage: "trash")
+            }
         }
     }
 }
@@ -148,7 +321,6 @@ struct JobEditorSheet: View {
     @State private var deliverable: String
     @State private var acceptance: String
     @State private var state: String
-    @State private var deleting = false
 
     private var existing: AssignedJob? {
         if case .existing(let job) = target { return job }
@@ -187,33 +359,63 @@ struct JobEditorSheet: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && employeeId != nil
     }
 
+    /// Whole days from the first to the last, both counted.
+    private var dayCount: Int {
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: startDay), to: calendar.startOfDay(for: endDay)).day ?? 0
+        return max(1, days + 1)
+    }
+
     var body: some View {
-        SheetScaffold(existing == nil ? L("New job") : L("Edit job"), symbol: "calendar.badge.clock",
-                      primaryTitle: existing == nil ? L("Hand out") : L("Save"), isPrimaryEnabled: isValid,
+        SheetScaffold(existing == nil ? L("New job") : L("Edit job"),
+                      subtitle: existing == nil ? L("Handed out by hand, outside any project") : nil,
+                      symbol: "calendar.badge.clock",
+                      primaryTitle: existing == nil ? L("Hand out") : L("Save"),
+                      primaryKind: existing == nil ? .brand : .primary,
+                      isPrimaryEnabled: isValid,
                       onPrimary: { await save() }) {
             if let existing {
-                FormSection(L("State")) {
-                    HStack(spacing: 8) {
-                        ForEach(["TODO", "IN_PROGRESS", "DONE"], id: \.self) { option in
-                            NeonButton(taskStateLabel(option), kind: state == option ? .tinted(taskStateTone(option).foreground) : .secondary, size: .small) {
-                                await setState(option, jobId: existing.id)
-                            }
-                        }
+                FormSection(L("State"), footer: L("A state changes the moment you tap it — it is not part of Save.")) {
+                    TasksStatePicker(states: ["TODO", "IN_PROGRESS", "DONE"], current: state) { option in
+                        await setState(option, jobId: existing.id)
+                    }
+                    if state == "SUBMITTED" {
+                        StatusNote(symbol: "paperplane.fill", tone: .purple, title: L("Sent for review"),
+                                   detail: L("The proof waits in Reviews, to approve or send back."))
                     }
                 }
                 if let chatTaskId = existing.chatTaskId, !chatTaskId.isEmpty {
-                    StatusNote(symbol: "bubble.left.and.bubble.right", tone: .info, title: L("From a chat task card"),
+                    StatusNote(symbol: "bubble.left.and.bubble.right.fill", tone: .info, title: L("From a chat task card"),
                                detail: L("This job was handed out from a conversation."))
+                }
+                if let last = existing.lastUpdateNote, !last.isEmpty {
+                    FormSection(L("Last word from the team")) {
+                        DirText(last, font: .neonCallout)
+                        if let when = formattedISODate(existing.lastUpdateAt) {
+                            MetaLabel(when, symbol: "clock")
+                        }
+                    }
                 }
             }
 
             FormSection(L("Job")) {
-                NeonTextField(L("Title"), text: $title, isRequired: true)
-                MenuField(L("For"), selection: $employeeId, options: team.map(\.id),
-                          title: { id in team.first { $0.id == id }?.name ?? id }, isRequired: true)
+                NeonTextField(L("Title"), text: $title, prompt: L("What needs doing"), symbol: "textformat", isRequired: true)
+                if team.isEmpty {
+                    StatusNote(symbol: "person.crop.circle.badge.exclamationmark", tone: .warning, title: L("Nobody on the board yet"),
+                               detail: L("Add the team in Settings, and their work shows here."))
+                } else {
+                    MenuField(L("For"), selection: $employeeId, options: team.map(\.id),
+                              title: { id in team.first { $0.id == id }?.name ?? id }, isRequired: true)
+                }
+            }
+
+            FormSection(L("When"), footer: dayCount > 1 ? L("Runs %d days.", dayCount) : L("One day.")) {
                 DateField(L("Starts"), date: $startDay)
                 DateField(L("Ends"), date: $endDay, in: startDay...Date.distantFuture)
                 MenuField(L("Priority"), selection: $priority, options: taskPriorities, title: localizedPriority)
+            }
+            .onChange(of: startDay) { newStart in
+                if endDay < newStart { endDay = newStart }
             }
 
             FormSection(L("What it takes")) {
@@ -224,10 +426,11 @@ struct JobEditorSheet: View {
             }
 
             if existing != nil {
-                NeonButton(L("Delete this job"), symbol: "trash", kind: .destructive,
+                NeonButton(L("Delete this job"), symbol: "trash", kind: .destructive, size: .medium,
                            confirm: L("Delete this job?"), confirmMessage: L("It comes off the week for good.")) {
                     await delete()
                 }
+                .frame(maxWidth: .infinity)
             }
         }
         .neonSheet([.large])
@@ -237,7 +440,7 @@ struct JobEditorSheet: View {
         guard target != state else { return }
         do {
             try await api.setJobState(id: jobId, state: target)
-            state = target
+            withNeonAnimation(NeonMotion.snappy) { state = target }
             Haptic.success()
         } catch { Toast.error(error) }
     }
@@ -262,9 +465,13 @@ struct JobEditorSheet: View {
             } else {
                 _ = try await api.createJob(form: form())
             }
-            Toast.success(L("Saved"))
+            Haptic.success()
+            Toast.success(existing == nil ? L("Handed out") : L("Saved"))
             dismiss()
-        } catch { Toast.error(error) }
+        } catch {
+            Haptic.error()
+            Toast.error(error)
+        }
     }
 
     private func delete() async {

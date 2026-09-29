@@ -321,15 +321,3 @@ func localizedPriority(_ value: String) -> String {
     default: return L("Medium")
     }
 }
-
-/// The employee accent a section/column carries — `EMPLOYEE_COLORS` in
-/// src/lib/task-board.ts.
-func sectionAccentColor(_ name: String) -> Color {
-    switch name {
-    case "cyan": return .neonCyanStrong
-    case "purple": return .neonPurpleStrong
-    case "pink": return .neonPinkStrong
-    case "orange": return .neonOrangeStrong
-    default: return .neonInk.opacity(0.5)
-    }
-}
