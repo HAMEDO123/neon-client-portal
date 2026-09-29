@@ -106,3 +106,26 @@ here via `ProjectDrawingsSection(projectId:)` … `ProjectCommentsSection(projec
   are the common case this exists for. `addGalleryImage(..., compress:)` on
   the server side still accepts either, so exposing a toggle later is a
   one-line change in `AddPhotosSheet`.
+
+## Redesign (branch ux-projects) — what the app now does beyond the list above
+
+See `ios/redesign/projects.md` for every screen. Behaviour that is new or fixed:
+
+- **Camera in Add Photos.** "(library, several at once, or camera)" above was
+  written before the camera existed in the sheet; it does now ("Take a photo").
+- **Retry sends only what didn't go up.** A failed upload keeps the photos that
+  reached the server (the gallery refreshes) and the button becomes "Upload
+  the rest"; an unreadable photo is reported rather than skipped silently.
+- **Hotspots are placed on the whole photo.** The editor showed the photo
+  cropped to a fixed frame, so x/y percentages did not match what the client
+  sees; it now shows the photo at its own proportions.
+- **Before/after pairs and hotspots show in the viewer.** The "before" photo was
+  uploaded but never shown in the app; the viewer switches Before | After and
+  draws the photo's hotspots.
+- **Preview opens the client's page** (the website's `<a target=_blank>`);
+  sharing the link is its own Share tile.
+- **The publish filter's labels** read "Published / Draft / Archived" (the chips
+  showed the raw key `publish.PUBLISHED`).
+- **Renders Viewed** carries a note that the client page does not log render
+  views (README, Known issues) — its 0 is "not recorded".
+- `projects/list` rows carry `completionPercent` (additive), shown on the cards.

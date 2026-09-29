@@ -25,6 +25,9 @@ struct ProjectSummary: Codable, Identifiable, Equatable {
     let updatedAt: String
     let approvalsCount: Int
     let commentsCount: Int
+    /// Newer servers send it with the list; an older one (or a saved copy
+    /// from before) leaves it out, and the card simply shows no percentage.
+    var completionPercent: Int? = nil
 
     var resolvedCoverURL: URL? { resolvedMediaURL(coverImageUrl) }
 }
