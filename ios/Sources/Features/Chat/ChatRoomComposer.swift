@@ -316,7 +316,6 @@ struct ChatLiveLevels: View {
         .frame(maxWidth: .infinity, maxHeight: 24, alignment: .trailing)
         .clipped()
         .animation(NeonMotion.resolved(NeonMotion.quick), value: levels)
-        .environment(\.layoutDirection, .leftToRight)
         .accessibilityHidden(true)
     }
 }

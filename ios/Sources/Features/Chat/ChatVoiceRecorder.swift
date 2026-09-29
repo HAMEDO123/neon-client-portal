@@ -318,9 +318,8 @@ struct ChatWaveform: View {
             .animation(NeonMotion.resolved(NeonMotion.smooth), value: levels)
         }
         .frame(height: height)
-        // A recording runs forward in time on either kind of phone, as the
-        // progress bar under a video does; not mirrored.
-        .environment(\.layoutDirection, .leftToRight)
+        // Laid out in the reading direction, like the system's own progress
+        // bars: in Arabic the note plays from the play button leftwards.
         .accessibilityHidden(true)
     }
 }

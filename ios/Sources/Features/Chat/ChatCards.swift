@@ -98,17 +98,17 @@ struct ChatTaskRow: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
                     IconTile("checklist", hue: .purple, size: NeonSize.iconTile)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 5) {
                         DirText(card.title, font: .neonRowTitle, lineLimit: 2)
+                        StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
+                                   symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
                         MetaLabel(item.conversation.title, symbol: item.conversation.isGroup ? "person.3.fill" : "bubble.left.fill")
                         if let due = formattedISODate(card.dueAt) {
                             MetaLabel(L("Due %@", due), symbol: card.isOverdue ? "exclamationmark.circle.fill" : "clock",
                                       tint: card.isOverdue ? .neonDangerStrong : .neonTextTertiary)
                         }
                     }
-                    Spacer(minLength: 4)
-                    StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
-                               symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
+                    Spacer(minLength: 0)
                 }
 
                 if !card.assignments.isEmpty {

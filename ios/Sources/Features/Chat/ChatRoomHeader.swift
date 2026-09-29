@@ -33,7 +33,7 @@ struct ChatRoomHeader<Trailing: View>: View {
                 Image(systemName: "chevron.backward")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Color.neonInk)
-                    .frame(width: 30, height: NeonSize.touch)
+                    .frame(width: 26, height: NeonSize.touch)
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.82))
@@ -54,9 +54,10 @@ struct ChatRoomHeader<Trailing: View>: View {
 
             Spacer(minLength: 4)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 trailing
             }
+            .layoutPriority(1)
         }
         .padding(.leading, 8)
         .padding(.trailing, NeonSpace.gutter - 4)
@@ -65,12 +66,12 @@ struct ChatRoomHeader<Trailing: View>: View {
     }
 
     private func identity(showsChevron: Bool) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Group {
                 if studioMark {
-                    ChatStudioMark(size: 42)
+                    ChatStudioMark(size: 40)
                 } else {
-                    AvatarView(url: avatarURL, name: title, size: 42, online: online, style: .solid)
+                    AvatarView(url: avatarURL, name: title, size: 40, online: online, style: .solid)
                 }
             }
             .animation(NeonMotion.resolved(NeonMotion.bouncy), value: online)
@@ -121,6 +122,7 @@ struct ChatRoomHeader<Trailing: View>: View {
         }
         .font(.system(.caption, weight: .medium))
         .lineLimit(1)
+        .minimumScaleFactor(0.85)
         .animation(NeonMotion.resolved(NeonMotion.snappy), value: status)
     }
 }

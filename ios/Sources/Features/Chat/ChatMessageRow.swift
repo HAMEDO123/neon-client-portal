@@ -231,8 +231,6 @@ struct ChatMessageRow: View {
     var onDiscard: (() -> Void)?
     var onMediaResize: (() -> Void)?
 
-    @Environment(\.openURL) private var openURL
-
     private var bubbleShape: ChatBubbleShape { ChatBubbleShape(mine: mine, tail: tail) }
     private var isAgent: Bool { message.authorType == "AGENT" }
 
@@ -322,10 +320,13 @@ struct ChatMessageRow: View {
             VStack(alignment: mine ? .trailing : .leading, spacing: 0) {
                 if authorAbove, showAuthor, !mine, let name = message.authorName {
                     authorLabel(name)
-                        .padding(.leading, 6)
+                        .padding(.leading, ChatBubbleShape.tailWidth + 4)
                         .padding(.bottom, 3)
                 }
+                // What is not a bubble (a photo, a card, big emoji) lines up
+                // with the bubbles' bodies, clear of where their tails go.
                 content()
+                    .padding(mine ? .trailing : .leading, authorAbove ? ChatBubbleShape.tailWidth : 0)
                 // Tucked up against the bubble's lower edge.
                 ChatReactionRow(tallies: tallies, onToggle: onReact)
                     .fixedSize(horizontal: true, vertical: false)
@@ -338,7 +339,7 @@ struct ChatMessageRow: View {
                         .padding(.vertical, 3)
                         .background(Capsule().fill(Color.white.opacity(0.85)))
                         .padding(.top, 4)
-                        .padding(.horizontal, 4)
+                        .padding(mine ? .trailing : .leading, ChatBubbleShape.tailWidth)
                 }
                 if let failure = outgoing?.failure {
                     Button { onRetry?() } label: {
@@ -761,7 +762,7 @@ struct ChatAlbumRow: View {
                     Text(verbatim: name)
                         .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(chatAuthorColor(name))
-                        .padding(.horizontal, 6)
+                        .padding(.leading, ChatBubbleShape.tailWidth + 4)
                 }
                 VStack(spacing: gap) {
                     HStack(spacing: gap) {
@@ -782,6 +783,7 @@ struct ChatAlbumRow: View {
                 .clipShape(shape)
                 .overlay(shape.strokeBorder(Color.white.opacity(0.7), lineWidth: 1).allowsHitTesting(false))
                 .neonShadow(.low)
+                .padding(mine ? .trailing : .leading, ChatBubbleShape.tailWidth)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(L("%d photos", photos.count))
             }

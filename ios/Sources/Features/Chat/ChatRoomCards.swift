@@ -29,27 +29,26 @@ struct ChatTaskCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
                 IconTile("checklist", hue: .purple, size: 34, style: .filled)
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(L("TASK"))
                         .font(.neonOverline)
                         .tracking(0.6)
                         .foregroundStyle(NeonHue.purple.deep)
-                    StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
-                               symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
-                        .scaleEffect(0.92, anchor: .leading)
-                }
-                Spacer(minLength: 4)
-                if let priority = priorityLabel(card.priority) {
-                    BadgeView(text: priority, tone: statusTone(card.priority ?? ""), symbol: card.priority == "HIGH" ? "flame.fill" : nil)
+                    DirText(card.title, font: .neonCardTitle)
                 }
             }
 
-            VStack(alignment: .leading, spacing: 5) {
-                DirText(card.title, font: .neonCardTitle)
-                if let description = card.description, !description.isEmpty {
-                    DirText(description, font: .neonSubheadline, color: .neonTextSecondary)
+            if let description = card.description, !description.isEmpty {
+                DirText(description, font: .neonSubheadline, color: .neonTextSecondary)
+            }
+
+            FlowRow(spacing: 6) {
+                StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
+                           symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
+                if let priority = priorityLabel(card.priority) {
+                    StateBadge(priority, tone: statusTone(card.priority ?? ""), symbol: card.priority == "HIGH" ? "flame.fill" : "arrow.down")
                 }
             }
 
@@ -319,7 +318,11 @@ struct ChatMeetingCardView: View {
 
             if meeting.mode != "IN_PERSON", isUpcoming {
                 HStack(spacing: 8) {
-                    StateBadge(isLive ? L("Now") : L("Starting soon"), tone: isLive ? .pink : .cyan, pulsing: isLive)
+                    if isLive {
+                        StateBadge(L("Now"), tone: .pink, pulsing: true)
+                    } else if !hasStarted {
+                        StateBadge(L("Starting soon"), tone: .cyan)
+                    }
                     Spacer(minLength: 0)
                     CallButtons(slug: callSlug, title: callTitle)
                 }
@@ -389,9 +392,15 @@ struct ChatMeetingCardView: View {
         return Date() > starts.addingTimeInterval(-600) && Date() < starts.addingTimeInterval(duration + 1800)
     }
 
-    private var isLive: Bool {
+    private var hasStarted: Bool {
         guard let starts = parseISODate(meeting.startsAt) else { return false }
         return Date() >= starts
+    }
+
+    /// Between its start and its planned end.
+    private var isLive: Bool {
+        guard let starts = parseISODate(meeting.startsAt) else { return false }
+        return Date() >= starts && Date() < starts.addingTimeInterval(TimeInterval((meeting.durationMinutes ?? 60) * 60))
     }
 
     private func rsvp(_ answer: String) async {

@@ -229,19 +229,19 @@ struct ChatRoomView: View {
     @ViewBuilder
     private var headerButtons: some View {
         if route.slug == "team", api.identity?.side == .admin {
-            IconButton("sparkles", label: L("Ask the assistant"), tint: .neonPurpleStrong, size: 38) {
+            IconButton("sparkles", label: L("Ask the assistant"), tint: .neonPurpleStrong, size: 36) {
                 showAssistant = true
             }
         }
-        IconButton(searching ? "xmark" : "magnifyingglass", label: searching ? L("Close search") : L("Search"), size: 38) {
+        IconButton(searching ? "xmark" : "magnifyingglass", label: searching ? L("Close search") : L("Search"), size: 36) {
             withNeonAnimation {
                 searching.toggle()
                 if !searching { searchQuery = "" }
             }
         }
         CallButtons(slug: route.slug, title: route.title)
-            .padding(.horizontal, 2)
-            .frame(minHeight: 38)
+            .padding(.horizontal, 1)
+            .frame(minHeight: 36)
             .background(Capsule().fill(Color.white.opacity(0.96)))
             .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1))
             .neonShadow(.low)

@@ -150,7 +150,10 @@ struct ChatRoomSwipeBack: UIViewControllerRepresentable {
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            (navigationController?.viewControllers.count ?? 0) > 1
+            // Never mid-push: a swipe that starts during a transition can
+            // leave the stack stuck halfway.
+            guard let navigation = navigationController, navigation.transitionCoordinator == nil else { return false }
+            return navigation.viewControllers.count > 1
         }
     }
 }
