@@ -11,44 +11,49 @@ struct RequestsRootView: View {
     @State private var deciding: (request: SupplyRequest, status: String)?
 
     var body: some View {
-        NeonScroll {
-            LoadStateView(value: requests, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
-                SectionHeader(L("Today's reports"), count: data.reports.count)
-                if data.team.isEmpty {
-                    EmptyState(symbol: "note.text", title: L("No team yet"))
-                } else {
-                    ForEach(data.team) { member in
-                        ReportCard(member: member, report: reportBy(data)[member.id])
+        ScrollViewReader { proxy in
+            NeonScroll {
+                LoadStateView(value: requests, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
+                    SectionHeader(L("Today's reports"), count: data.reports.count).id("reports")
+                    if data.team.isEmpty {
+                        EmptyState(symbol: "note.text", title: L("No team yet"), hue: .grey)
+                    } else {
+                        ForEach(Array(data.team.enumerated()), id: \.element.id) { index, member in
+                            ReportCard(member: member, report: reportBy(data)[member.id])
+                                .staggered(index)
+                        }
                     }
-                }
 
-                SectionHeader(L("Waiting for you"), count: data.pending.count)
-                if data.pending.isEmpty {
-                    EmptyState(symbol: "shippingbox", title: L("Nothing waiting"), detail: L("New requests appear here."))
-                } else {
-                    ForEach(data.pending) { request in
-                        SupplyRequestCard(request: request) { status in deciding = (request, status) }
+                    SectionHeader(L("Waiting for you"), count: data.pending.count).id("pending")
+                    if data.pending.isEmpty {
+                        EmptyState(symbol: "shippingbox", title: L("Nothing waiting"), detail: L("New requests appear here."), hue: .orange)
+                    } else {
+                        ForEach(Array(data.pending.enumerated()), id: \.element.id) { index, request in
+                            SupplyRequestCard(request: request) { status in deciding = (request, status) }
+                                .staggered(index)
+                        }
                     }
-                }
 
-                if !data.decided.isEmpty {
-                    SectionHeader(L("Decided"), count: data.decided.count)
-                    CardList(data.decided) { request in
-                        ListRow(
-                            request.item,
-                            subtitle: request.employee.name,
-                            meta: request.decidedAt.flatMap(formattedISODate),
-                            badge: supplyStatusLabel(request.status),
-                            badgeTone: supplyStatusTone(request.status)
-                        )
-                        .contextMenu {
-                            if request.status == "APPROVED" {
-                                Button { deciding = (request, "PURCHASED") } label: { Label(L("Mark bought"), systemImage: "checkmark.circle") }
+                    if !data.decided.isEmpty {
+                        SectionHeader(L("Decided"), count: data.decided.count).id("decided")
+                        CardList(data.decided) { request in
+                            ListRow(
+                                request.item,
+                                subtitle: request.employee.name,
+                                meta: request.decidedAt.flatMap(formattedISODate),
+                                badge: supplyStatusLabel(request.status),
+                                badgeTone: supplyStatusTone(request.status)
+                            )
+                            .contextMenu {
+                                if request.status == "APPROVED" {
+                                    Button { deciding = (request, "PURCHASED") } label: { Label(L("Mark bought"), systemImage: "checkmark.circle") }
+                                }
                             }
                         }
                     }
                 }
             }
+            .debugScroll(proxy)
         }
         .refreshable { await load() }
         .navigationTitle(L("Requests"))
@@ -92,7 +97,8 @@ private struct ReportCard: View {
 
     var body: some View {
         NeonCard {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: 10) {
+                AvatarView(url: nil, name: member.name, size: NeonSize.avatar)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(member.name).font(.neonHeadline)
                     if let role = member.role { Text(role).font(.neonFootnote).foregroundStyle(Color.neonTextTertiary) }
@@ -119,7 +125,8 @@ private struct SupplyRequestCard: View {
 
     var body: some View {
         NeonCard {
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 10) {
+                IconTile("shippingbox.fill", hue: request.urgent ? .pink : .orange, size: NeonSize.iconTile)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         DirText(request.item, font: .neonHeadline)

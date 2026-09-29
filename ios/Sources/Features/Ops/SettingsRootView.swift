@@ -12,22 +12,29 @@ struct SettingsRootView: View {
     @State private var cachedAt: Date?
 
     var body: some View {
-        NeonScroll {
-            NavigationLink(destination: ProcessSettingsView()) {
-                ListRow(L("Delivery process"), subtitle: L("Process sections, stage periods, what each kind of work needs"), leading: .icon("list.bullet.rectangle"), chevron: true)
-            }
-            .buttonStyle(.pressableCard)
-            .neonSurface(.solid, radius: NeonRadius.md)
+        ScrollViewReader { proxy in
+            NeonScroll {
+                NavigationLink(destination: ProcessSettingsView()) {
+                    ListRow(L("Delivery process"), subtitle: L("Process sections, stage periods, what each kind of work needs"), leading: .icon("list.bullet.rectangle", tint: .neonBlueStrong), chevron: true)
+                }
+                .buttonStyle(.pressableCard)
+                .neonSurface(.solid, radius: NeonRadius.md)
 
-            LoadStateView(value: settings, error: errorMessage, cachedAt: cachedAt, retry: load) { settings in
-                PushHealthCard(health: settings.pushHealth, managerPaired: settings.managerPaired, managerDevices: settings.managerDevices)
-                WorkingDayCard(workHours: settings.workHours, dayLengthMinutes: settings.dayLengthMinutes, capacityMinutes: settings.capacityMinutes, onTimeUntil: settings.onTimeUntil, onSaved: load)
-                PlanningNotesCard(notes: settings.planningNotes, onSaved: load)
-                AutomationCard(rules: settings.automationRules, switchedOn: settings.automationSwitchedOn, onChanged: load)
-                WhatsAppStatusCard(whatsapp: settings.whatsapp)
-                TimezoneCard(timezone: settings.timezone, options: settings.timezoneOptions, onSaved: load)
-                OtherIntegrationsCard(aiConfigured: settings.aiConfigured)
+                LoadStateView(value: settings, error: errorMessage, cachedAt: cachedAt, retry: load) { settings in
+                    PushHealthCard(health: settings.pushHealth, managerPaired: settings.managerPaired, managerDevices: settings.managerDevices)
+                        .id("push")
+                    WorkingDayCard(workHours: settings.workHours, dayLengthMinutes: settings.dayLengthMinutes, capacityMinutes: settings.capacityMinutes, onTimeUntil: settings.onTimeUntil, onSaved: load)
+                        .id("workingday")
+                    PlanningNotesCard(notes: settings.planningNotes, onSaved: load)
+                    AutomationCard(rules: settings.automationRules, switchedOn: settings.automationSwitchedOn, onChanged: load)
+                        .id("automation")
+                    WhatsAppStatusCard(whatsapp: settings.whatsapp)
+                    TimezoneCard(timezone: settings.timezone, options: settings.timezoneOptions, onSaved: load)
+                    OtherIntegrationsCard(aiConfigured: settings.aiConfigured)
+                        .id("integrations")
+                }
             }
+            .debugScroll(proxy)
         }
         .refreshable { await load() }
         .navigationTitle(L("Settings"))
@@ -55,8 +62,7 @@ private struct PushHealthCard: View {
     let managerDevices: Int
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("Push notifications"), subtitle: L("Why a notification is or isn't arriving."))
+        SectionCard(L("Push notifications"), subtitle: L("Why a notification is or isn't arriving."), symbol: "bell.badge.fill", hue: .amber) {
             StatGrid {
                 StatTile(L("Server keys"), text: health.configured ? (health.source == "database" ? L("Generated") : L("Set")) : L("Not set"), symbol: "key", tint: health.configured ? .neonSuccessStrong : .neonTextFaint)
                 StatTile(L("Devices reachable"), value: Double(health.activeTotal), symbol: "iphone")
@@ -120,9 +126,7 @@ private struct WorkingDayCard: View {
     }
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("The working day"), subtitle: L("What can be planned, which days are worked, when nobody should be messaged."))
-
+        SectionCard(L("The working day"), subtitle: L("What can be planned, which days are worked, when nobody should be messaged."), symbol: "calendar.badge.clock", hue: .blue) {
             SectionLabel(L("Working days"))
             FlowRow {
                 ForEach(Array(workingDayNames().enumerated()), id: \.offset) { index, name in
@@ -188,8 +192,7 @@ private struct PlanningNotesCard: View {
     }
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("How we plan a day"), subtitle: L("Your rules, in your own words — read whenever a day is proposed for somebody."))
+        SectionCard(L("How we plan a day"), subtitle: L("Your rules, in your own words — read whenever a day is proposed for somebody."), symbol: "text.book.closed.fill", hue: .purple) {
             NeonTextEditor(L("Rules for planning"), text: $text, minLines: 4, maxLines: 10)
             if let error { ValidationMessage(error) }
             NeonButton(L("Save rules"), kind: .secondary, size: .medium) {
@@ -222,11 +225,7 @@ private struct AutomationCard: View {
     @State private var toggling = false
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("Rules that watch the day"), subtitle: L("A rule can only ever speak — it never moves, ticks or approves work.")) {
-                IconButton("plus", label: L("Add")) { showNew = true }
-            }
-
+        SectionCard(L("Rules that watch the day"), subtitle: L("A rule can only ever speak — it never moves, ticks or approves work."), symbol: "bolt.fill", hue: .cyan) {
             ToggleRow(L("Rules are switched on"), detail: L("The one switch that stops all of them at once."), symbol: "bolt.badge.a", isOn: Binding(
                 get: { switchedOn },
                 set: { on in
@@ -241,7 +240,7 @@ private struct AutomationCard: View {
             .disabled(toggling)
 
             if rules.isEmpty {
-                EmptyState(symbol: "bolt.slash", title: L("No rules yet"))
+                EmptyState(symbol: "bolt.slash", title: L("No rules yet"), hue: .grey)
             } else {
                 ForEach(rules) { rule in
                     Button { editing = rule } label: {
@@ -282,6 +281,8 @@ private struct AutomationCard: View {
                 )
                 Text(L("Writes nothing — no state, no notification.")).font(.neonCaption).foregroundStyle(Color.neonTextFaint)
             }
+        } trailing: {
+            IconButton("plus", label: L("Add")) { showNew = true }
         }
         .sheet(isPresented: $showNew) {
             AutomationRuleSheet(rule: nil) { await onChanged() }
@@ -384,13 +385,7 @@ private struct WhatsAppStatusCard: View {
     let whatsapp: OpsSettings.WhatsApp
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("Company channel")) {
-                BadgeView(
-                    text: whatsapp.transport == "none" ? L("Not configured") : (whatsapp.connected ? L("Connected") : L("Unreachable")),
-                    tone: whatsapp.transport == "none" ? .neutral : (whatsapp.connected ? .success : .warning)
-                )
-            }
+        SectionCard(L("Company channel"), symbol: "message.fill", hue: .green) {
             if whatsapp.transport != "none" {
                 KeyValueRow(L("Transport"), value: whatsapp.transport == "cloud" ? L("Official Cloud API") : L("Session worker"), symbol: "antenna.radiowaves.left.and.right")
                 if let number = whatsapp.number { KeyValueRow(L("Sends from"), value: number, symbol: "phone") }
@@ -400,10 +395,15 @@ private struct WhatsAppStatusCard: View {
             }
 
             NavigationLink(destination: WhatsAppRootView()) {
-                ListRow(L("WhatsApp inbox"), subtitle: L("Link or unlink the number, and read the studio's chats"), leading: .icon("message.badge.circle.fill"), chevron: true)
+                ListRow(L("WhatsApp inbox"), subtitle: L("Link or unlink the number, and read the studio's chats"), leading: .icon("message.badge.circle.fill", tint: .neonSuccessStrong), chevron: true)
             }
             .buttonStyle(.pressableCard)
             .neonSurface(.sunken, radius: NeonRadius.md)
+        } trailing: {
+            BadgeView(
+                text: whatsapp.transport == "none" ? L("Not configured") : (whatsapp.connected ? L("Connected") : L("Unreachable")),
+                tone: whatsapp.transport == "none" ? .neutral : (whatsapp.connected ? .success : .warning)
+            )
         }
     }
 }
@@ -427,8 +427,7 @@ private struct TimezoneCard: View {
     }
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("Company timezone"), subtitle: L("Decides which day a task belongs to and when the daily jobs run."))
+        SectionCard(L("Company timezone"), subtitle: L("Decides which day a task belongs to and when the daily jobs run."), symbol: "globe", hue: .cyan) {
             MenuField(L("Timezone"), selection: $selection, options: options, title: { $0.replacingOccurrences(of: "_", with: " ") })
             if let error { ValidationMessage(error) }
             NeonButton(L("Save timezone"), kind: .secondary, size: .medium) {
@@ -451,8 +450,7 @@ private struct OtherIntegrationsCard: View {
     let aiConfigured: Bool
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("Other integrations"))
+        SectionCard(L("Other integrations"), symbol: "puzzlepiece.extension.fill", hue: .indigo) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L("AI assistant & receipt reading")).font(.neonSubheadline)

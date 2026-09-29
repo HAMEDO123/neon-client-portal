@@ -72,13 +72,11 @@ struct WhatsAppThreadView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
-                    ZStack {
-                        Circle().fill(Color.neonInk.opacity(0.06))
-                        Image(systemName: chat.isGroup ? "person.2.fill" : "message.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.neonInk.opacity(0.4))
+                    if chat.isGroup {
+                        IconTile("person.2.fill", hue: .green, size: 30)
+                    } else {
+                        AvatarView(url: nil, name: chat.displayName, size: 30)
                     }
-                    .frame(width: 30, height: 30)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(chat.displayName).font(.system(size: 15, weight: .semibold)).lineLimit(1)
                         Text(chat.isGroup ? L("Group") : (chat.number ?? ""))
