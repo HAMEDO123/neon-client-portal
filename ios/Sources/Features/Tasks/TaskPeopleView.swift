@@ -3,26 +3,40 @@ import SwiftUI
 // MARK: - The "Team" segment
 
 /// For every person on the board, what share of the work they were given
-/// this week (or month) is done — `tasks/people`. A colourful card each: their
-/// face, a big ring with the percentage, and where the rest of it stands.
-/// Tapping a card opens that person's list. "Done" is the manager's word: work
-/// sent for review is counted separately, never as done, and somebody given
-/// nothing reads "Nothing given", never 0%.
+/// this week (or month) is done — `tasks/people`. The whole team first, then a
+/// colourful card each: their face, a ring with the percentage, a bar split
+/// by where the rest stands. Tapping a card opens that person's list. "Done"
+/// is the manager's word: work sent for review is counted separately, never
+/// as done, and somebody given nothing reads "Nothing given", never 0%.
+///
+/// Content only: `TasksRootView` owns the scroll and the refresh.
 struct TaskPeopleView: View {
     @EnvironmentObject var api: APIClient
     @ObservedObject var store: TaskPeopleStore
 
     var body: some View {
-        LoadStateView(value: store.value, error: store.errorMessage, cachedAt: store.cachedAt, retry: { await store.load(api) }) { data in
-            NeonScroll {
+        LoadStateView(value: store.value, error: store.errorMessage, cachedAt: store.cachedAt, retry: { await store.load(api) }) {
+            VStack(spacing: NeonSpace.stack) {
+                SkeletonCard(lines: 2)
+                SkeletonRows(count: 4)
+            }
+        } content: { data in
+            VStack(alignment: .leading, spacing: NeonSpace.stack) {
                 TaskPeoplePeriodBar(store: store, data: data)
+                    .neonAppear()
 
                 if data.people.isEmpty {
                     EmptyState(symbol: "person.3", title: L("Nobody on the board yet"),
-                               detail: L("Add the team in Settings, and their work shows here."))
-                        .glassCard(radius: 18)
+                               detail: L("Add the team in Settings, and their work shows here."), hue: .indigo, card: true)
                 } else {
-                    teamLine(data)
+                    TaskPeopleTeamCard(data: data)
+                        .id("team")
+                        .neonAppear(delay: 0.05)
+
+                    SectionHeader(L("People"), count: data.people.count)
+                        .padding(.top, NeonSpace.sm)
+                        .id("people")
+
                     ForEach(Array(data.people.enumerated()), id: \.element.id) { index, person in
                         NavigationLink(value: TaskPeopleRoute(id: person.id)) {
                             TaskPeopleCard(person: person, period: data.period)
@@ -32,28 +46,10 @@ struct TaskPeopleView: View {
                     }
                 }
             }
-            .refreshable { await store.load(api) }
         }
         .task {
             if !store.loaded { await store.load(api) }
         }
-    }
-
-    /// The whole team in one line, by the same rule as each card.
-    @ViewBuilder
-    private func teamLine(_ data: TaskPeopleResponse) -> some View {
-        let given = data.people.reduce(0) { $0 + $1.total }
-        let done = data.people.reduce(0) { $0 + $1.done }
-        let late = data.people.reduce(0) { $0 + $1.overdue }
-        HStack(spacing: 12) {
-            MetaLabel(given == 0 ? taskPeopleNothingGiven(data.period) : L("Team: %d of %d done", done, given),
-                      symbol: "person.3.fill", tint: .neonTextSecondary)
-            if late > 0 {
-                MetaLabel(L("%d overdue", late), symbol: "exclamationmark.triangle.fill", tint: .neonDangerStrong)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 4)
     }
 }
 
@@ -66,15 +62,21 @@ func taskPeopleNothingGiven(_ period: String) -> String {
     period == "month" ? L("Nothing given this month") : L("Nothing given this week")
 }
 
-/// The accent a person carries on the board — `EMPLOYEE_COLORS` in
-/// src/lib/task-board.ts — as a soft fill and a strong ink.
-func taskPeopleAccent(_ color: String) -> (fill: Color, ink: Color) {
-    switch color {
-    case "cyan": return (.neonCyan, .neonCyanStrong)
-    case "pink": return (.neonPink, .neonPinkStrong)
-    case "orange": return (.neonOrange, .neonOrangeStrong)
-    default: return (.neonPurple, .neonPurpleStrong)
-    }
+/// The colour a person carries on the board — `EMPLOYEE_COLORS` in
+/// src/lib/task-board.ts — as a kit hue.
+func taskPeopleHue(_ color: String) -> NeonHue {
+    tasksColorHue(color, fallback: .purple)
+}
+
+/// A person's period split the way the website counts it (`countStates`):
+/// done, sent for review, in progress, and everything else still to do.
+func taskPeopleParts(done: Int, submitted: Int, inProgress: Int, todo: Int) -> [TasksBreakdownPart] {
+    [
+        TasksBreakdownPart(id: "DONE", label: L("Done"), count: done, hue: tasksStateHue("DONE")),
+        TasksBreakdownPart(id: "SUBMITTED", label: L("Sent for review"), count: submitted, hue: tasksStateHue("SUBMITTED")),
+        TasksBreakdownPart(id: "IN_PROGRESS", label: L("In progress"), count: inProgress, hue: tasksStateHue("IN_PROGRESS")),
+        TasksBreakdownPart(id: "TODO", label: L("To do"), count: todo, hue: tasksStateHue("TODO")),
+    ]
 }
 
 // MARK: - Week / Month, and which one
@@ -85,41 +87,25 @@ struct TaskPeoplePeriodBar: View {
     let data: TaskPeopleResponse
 
     var body: some View {
-        VStack(spacing: 10) {
-            SegmentedPill(selection: $store.period, options: TaskPeopleStore.Period.allCases, title: \.label)
-
-            HStack {
-                IconButton("chevron.backward", label: data.period == "month" ? L("Previous month") : L("Previous week")) {
-                    go(to: data.previous)
-                }
-                Spacer()
-                VStack(spacing: 2) {
-                    Text(taskPeoplePeriodLabel(data))
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.neonInk)
-                    if data.current {
-                        Text(data.period == "month" ? L("This month") : L("This week"))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.neonPurpleStrong)
-                    } else {
-                        Button(data.period == "month" ? L("Back to this month") : L("Back to this week")) {
-                            go(to: nil)
-                        }
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.neonPurpleStrong)
-                    }
-                }
-                .overlay(alignment: .trailing) {
-                    if store.loading {
-                        ProgressView().controlSize(.small).offset(x: 26)
-                    }
-                }
-                Spacer()
-                IconButton("chevron.forward", label: data.period == "month" ? L("Next month") : L("Next week")) {
-                    go(to: data.next)
-                }
-            }
+        let month = data.period == "month"
+        VStack(spacing: 14) {
+            SegmentedPill(selection: $store.period, options: TaskPeopleStore.Period.allCases, title: \.label,
+                          symbol: { $0 == .week ? "calendar" : "calendar.circle" })
+            TasksPeriodNavigator(
+                label: taskPeoplePeriodLabel(data),
+                isCurrent: data.current,
+                currentTitle: month ? L("This month") : L("This week"),
+                backTitle: month ? L("Back to this month") : L("Back to this week"),
+                previousLabel: month ? L("Previous month") : L("Previous week"),
+                nextLabel: month ? L("Next month") : L("Next week"),
+                loading: store.loading,
+                onPrevious: { go(to: data.previous) },
+                onNext: { go(to: data.next) },
+                onCurrent: { go(to: nil) }
+            )
         }
+        .padding(NeonSpace.card)
+        .neonSurface(.glass, radius: NeonRadius.lg)
         .onChange(of: store.period) { _ in
             store.day = nil
             Task { await store.load(api) }
@@ -139,7 +125,43 @@ func taskPeoplePeriodLabel(_ data: TaskPeopleResponse) -> String {
         style.timeZone = TimeZone(identifier: "UTC")!
         return date.formatted(style)
     }
-    return "\(formattedDayKey(data.from)) – \(formattedDayKey(data.to))"
+    return tasksDayRange(data.from, data.to)
+}
+
+// MARK: - The whole team
+
+/// Everybody's period in one card, by the same rule as each person's: done
+/// over given, and nothing given is said as that, never as 0%.
+struct TaskPeopleTeamCard: View {
+    let data: TaskPeopleResponse
+
+    var body: some View {
+        let given = data.people.reduce(0) { $0 + $1.total }
+        let done = data.people.reduce(0) { $0 + $1.done }
+        let late = data.people.reduce(0) { $0 + $1.overdue }
+        SectionCard(L("The team"),
+                    subtitle: given == 0 ? taskPeopleNothingGiven(data.period) : L("Team: %d of %d done", done, given),
+                    symbol: "person.3.fill", hue: .indigo) {
+            if given > 0 {
+                TasksBreakdown(parts: taskPeopleParts(
+                    done: done,
+                    submitted: data.people.reduce(0) { $0 + $1.submitted },
+                    inProgress: data.people.reduce(0) { $0 + $1.inProgress },
+                    todo: data.people.reduce(0) { $0 + $1.todo }
+                ), columns: 4)
+                if late > 0 {
+                    StatusNote(symbol: "exclamationmark.triangle.fill", tone: .danger, title: L("%d overdue", late),
+                               detail: L("Past the day it was due, and not done."))
+                }
+            } else {
+                Text(L("Nothing given is not a mark against anybody."))
+                    .font(.neonSubtitle)
+                    .foregroundStyle(Color.neonTextSecondary)
+            }
+        } trailing: {
+            TaskPeopleRing(percent: given > 0 ? Int((Double(done) / Double(given) * 100).rounded()) : nil, size: 48, lineWidth: 6)
+        }
+    }
 }
 
 // MARK: - A person's card
@@ -149,47 +171,47 @@ struct TaskPeopleCard: View {
     let period: String
 
     var body: some View {
-        let accent = taskPeopleAccent(person.color)
+        let hue = taskPeopleHue(person.color)
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        AvatarView(url: resolvedMediaURL(person.avatar), name: person.name, size: 46, ring: true)
-                            .shadow(color: accent.fill.opacity(0.35), radius: 8, x: 0, y: 3)
-                        VStack(alignment: .leading, spacing: 2) {
-                            DirText(person.name, font: .system(size: 17, weight: .bold, design: .rounded), lineLimit: 1)
-                            if let role = person.role, !role.isEmpty {
-                                DirText(role, font: .system(size: 12.5), color: .neonTextSecondary, lineLimit: 1)
-                            }
-                        }
+            HStack(alignment: .center, spacing: 12) {
+                AvatarView(url: resolvedMediaURL(person.avatar), name: person.name, size: 52, ring: true)
+                    .neonShadow(.glow(hue.color))
+                VStack(alignment: .leading, spacing: 3) {
+                    DirText(person.name, font: .system(.body, weight: .bold), fill: false, lineLimit: 1)
+                    if let role = person.role, !role.isEmpty {
+                        DirText(role, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 1)
                     }
                     Text(person.total == 0 ? taskPeopleNothingGiven(period) : L("%d of %d done", person.done, person.total))
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(person.total == 0 ? Color.neonTextTertiary : accent.ink)
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(person.total == 0 ? Color.neonTextTertiary : hue.deep)
+                        .padding(.top, 1)
                 }
-                Spacer(minLength: 4)
-                TaskPeopleRing(percent: person.percent, size: 82, lineWidth: 10, accent: accent.fill)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                TaskPeopleRing(percent: person.percent, size: 64, lineWidth: 8)
             }
 
             if person.total > 0 {
+                TasksBreakdown(parts: taskPeopleParts(done: person.done, submitted: person.submitted,
+                                                      inProgress: person.inProgress, todo: person.todo),
+                               barHeight: 8, showsKey: false)
                 TaskPeopleCounts(person: person)
                 HStack(spacing: 12) {
-                    MetaLabel(L("Board steps %d/%d", person.boardCells.done, person.boardCells.total), symbol: "square.grid.3x3")
+                    MetaLabel(L("Board steps %d/%d", person.boardCells.done, person.boardCells.total), symbol: "square.grid.3x3.fill")
                     MetaLabel(L("Jobs %d/%d", person.jobs.done, person.jobs.total), symbol: "calendar.badge.clock")
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.forward")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.neonInk.opacity(0.3))
-                        .flipsForRightToLeftLayoutDirection(true)
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(Color.neonTextFaint)
                 }
             }
         }
-        .padding(16)
+        .padding(NeonSpace.card)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
+            // The person's own colour, washing in from the leading corner.
             RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous)
-                .fill(LinearGradient(colors: [accent.fill.opacity(0.20), accent.fill.opacity(0.04)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [hue.wash, hue.wash.opacity(0)], startPoint: .topLeading, endPoint: .center))
+                .flipsForRightToLeftLayoutDirection(true)
         }
         .neonSurface(.glass, radius: NeonRadius.lg)
         .neonContextShape(radius: NeonRadius.lg)
@@ -197,24 +219,22 @@ struct TaskPeopleCard: View {
     }
 }
 
-/// The big ring: the percentage done, filling as it appears — green once
-/// everything given is done. Nothing given is a dashed empty ring and a dash,
-/// never 0%.
+/// The ring: the percentage done, filling as it appears — green with a seal
+/// once everything given is done. Nothing given is a dashed empty ring and a
+/// dash, never 0%.
 struct TaskPeopleRing: View {
     let percent: Int?
     var size: CGFloat = 82
     var lineWidth: CGFloat = 10
-    var accent: Color = .neonPurple
 
     var body: some View {
         if let percent {
             ProgressRing(progress: Double(percent) / 100, size: size, lineWidth: lineWidth,
                          tint: percent >= 100 ? Color.neonSuccess : nil)
-                .background(Circle().fill(Color.white.opacity(0.55)).padding(lineWidth / 2))
                 .overlay(alignment: .topTrailing) {
                     if percent >= 100 {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: size * 0.22))
+                            .font(.system(size: max(12, size * 0.22)))
                             .foregroundStyle(Color.neonSuccessStrong)
                             .background(Circle().fill(Color.white).padding(2))
                             .transition(.neonPop)
@@ -224,13 +244,14 @@ struct TaskPeopleRing: View {
             ZStack {
                 Circle()
                     .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                    .foregroundStyle(Color.neonInk.opacity(0.18))
+                    .foregroundStyle(Color.neonTextFaint)
                 Text(verbatim: "—")
-                    .font(.system(size: size * 0.26, weight: .bold, design: .rounded))
+                    .font(.system(size: max(12, size * 0.26), weight: .bold))
                     .foregroundStyle(Color.neonTextTertiary)
             }
             .frame(width: size, height: size)
             .padding(lineWidth / 2)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(L("Nothing given")))
         }
     }
@@ -260,9 +281,9 @@ struct TaskPeopleCountChip: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 9.5, weight: .bold))
-            Text(verbatim: "\(count)").font(.system(size: 12.5, weight: .bold, design: .rounded)).monospacedDigit()
-            Text(label).font(.system(size: 12, weight: .medium))
+            Image(systemName: symbol).font(.system(.caption2, weight: .bold))
+            Text(NeonFormat.integer(count)).font(.system(.caption, weight: .bold)).monospacedDigit()
+            Text(label).font(.system(.caption, weight: .medium))
         }
         .foregroundStyle(tone.foreground)
         .padding(.horizontal, 9)
@@ -289,88 +310,95 @@ struct TaskPeopleDetailView: View {
     var body: some View {
         Group {
             if let data = store.value, let person = data.people.first(where: { $0.id == personId }) {
-                NeonScroll {
-                    header(person, data: data)
-                    stats(person)
-                    lists(person, data: data)
-                }
-                .refreshable {
-                    await store.load(api)
-                    await board.load(api)
+                ScrollViewReader { proxy in
+                    NeonScroll(spacing: NeonSpace.stack) {
+                        header(person, data: data)
+                        if person.total > 0 {
+                            SectionCard(L("Where it stands"), subtitle: L("%d of %d done", person.done, person.total),
+                                        symbol: "chart.bar.fill", hue: taskPeopleHue(person.color)) {
+                                TasksBreakdown(parts: taskPeopleParts(done: person.done, submitted: person.submitted,
+                                                                      inProgress: person.inProgress, todo: person.todo), columns: 4)
+                                if person.overdue > 0 {
+                                    MetaLabel(L("%d overdue", person.overdue), symbol: "exclamationmark.triangle.fill", tint: .neonDangerStrong)
+                                }
+                            }
+                            .neonAppear(delay: 0.05)
+                        }
+                        lists(person, data: data)
+                            .id("lists")
+                    }
+                    .refreshable {
+                        await store.load(api)
+                        await board.load(api)
+                    }
+                    #if DEBUG
+                    .debugScroll(proxy)
+                    #endif
                 }
                 .navigationTitle(person.name)
             } else if store.value != nil {
-                EmptyState(symbol: "person.crop.circle.badge.questionmark", title: L("No longer on the board"))
+                EmptyState(symbol: "person.crop.circle.badge.questionmark", title: L("No longer on the board"),
+                           detail: L("They are not among the active people for this period."))
                     .frame(maxHeight: .infinity)
+                    .neonAmbientBackground()
+            } else if let error = store.errorMessage {
+                ErrorState(message: error) { await store.load(api) }
+                    .frame(maxHeight: .infinity)
+                    .neonAmbientBackground()
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                NeonScroll {
+                    SkeletonCard(lines: 4)
+                    SkeletonRows(count: 4)
+                }
+                    .task { await store.load(api) }
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .neonAmbientBackground()
         .sheet(item: $editing) { editing in
             CellEditorSheet(project: editing.project, cell: editing.cell, step: editing.step, board: board.value)
-                .neonSheet([.large])
         }
     }
 
     // MARK: Header
 
-    @ViewBuilder
     private func header(_ person: TaskPeopleMember, data: TaskPeopleResponse) -> some View {
-        let accent = taskPeopleAccent(person.color)
-        VStack(spacing: 14) {
-            HStack(spacing: 12) {
-                AvatarView(url: resolvedMediaURL(person.avatar), name: person.name, size: 56, ring: true)
-                    .shadow(color: accent.fill.opacity(0.4), radius: 10, x: 0, y: 4)
-                VStack(alignment: .leading, spacing: 3) {
-                    DirText(person.name, font: .system(size: 20, weight: .bold, design: .rounded))
+        let hue = taskPeopleHue(person.color)
+        return VStack(spacing: 16) {
+            HStack(spacing: 14) {
+                AvatarView(url: resolvedMediaURL(person.avatar), name: person.name, size: 60, ring: true)
+                    .neonShadow(.glow(hue.color))
+                VStack(alignment: .leading, spacing: 4) {
+                    DirText(person.name, font: .neonTitle2, fill: false, lineLimit: 2)
                     if let role = person.role, !role.isEmpty {
-                        DirText(role, font: .system(size: 13), color: .neonTextSecondary)
+                        DirText(role, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 1)
                     }
-                    Text(taskPeoplePeriodLabel(data))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(accent.ink)
+                    MetaLabel(taskPeoplePeriodLabel(data), symbol: "calendar", tint: hue.deep)
                 }
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
 
-            TaskPeopleRing(percent: person.percent, size: 132, lineWidth: 14, accent: accent.fill)
+            TaskPeopleRing(percent: person.percent, size: 128, lineWidth: 14)
+                .padding(.vertical, 4)
 
             Text(person.total == 0 ? taskPeopleNothingGiven(data.period) : L("%d of %d done", person.done, person.total))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(.headline, weight: .semibold))
                 .foregroundStyle(person.total == 0 ? Color.neonTextTertiary : Color.neonInk)
 
             if person.total > 0 {
-                HStack(spacing: 12) {
-                    MetaLabel(L("Board steps %d/%d", person.boardCells.done, person.boardCells.total), symbol: "square.grid.3x3")
-                    MetaLabel(L("Jobs %d/%d", person.jobs.done, person.jobs.total), symbol: "calendar.badge.clock")
+                HStack(spacing: 16) {
+                    MetaLabel(L("Board steps %d/%d", person.boardCells.done, person.boardCells.total), symbol: "square.grid.3x3.fill", tint: .neonTextSecondary)
+                    MetaLabel(L("Jobs %d/%d", person.jobs.done, person.jobs.total), symbol: "calendar.badge.clock", tint: .neonTextSecondary)
                 }
             }
         }
-        .padding(18)
+        .padding(20)
         .frame(maxWidth: .infinity)
         .background {
             RoundedRectangle(cornerRadius: NeonRadius.xl, style: .continuous)
-                .fill(LinearGradient(colors: [accent.fill.opacity(0.22), accent.fill.opacity(0.05)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [hue.wash, hue.wash.opacity(0)], startPoint: .top, endPoint: .bottom))
         }
         .neonSurface(.glass, radius: NeonRadius.xl)
         .neonAppear()
-    }
-
-    @ViewBuilder
-    private func stats(_ person: TaskPeopleMember) -> some View {
-        if person.total > 0 {
-            StatGrid {
-                StatTile(L("Done"), value: Double(person.done), symbol: "checkmark.seal", tint: .neonSuccessStrong)
-                StatTile(L("Sent for review"), value: Double(person.submitted), symbol: "paperplane", tint: .neonPurpleStrong)
-                StatTile(L("In progress"), value: Double(person.inProgress), symbol: "bolt", tint: .neonCyanStrong)
-                StatTile(L("To do"), value: Double(person.todo), symbol: "circle.dashed", tint: .neonInk.opacity(0.6))
-                StatTile(L("Overdue"), value: Double(person.overdue), symbol: "exclamationmark.triangle",
-                         tint: person.overdue > 0 ? .neonDangerStrong : .neonInk.opacity(0.4))
-            }
-        }
     }
 
     // MARK: The list
@@ -379,37 +407,44 @@ struct TaskPeopleDetailView: View {
     private func lists(_ person: TaskPeopleMember, data: TaskPeopleResponse) -> some View {
         if person.items.isEmpty {
             EmptyState(symbol: "tray", title: taskPeopleNothingGiven(data.period),
-                       detail: L("Nothing given is not a mark against anybody."))
-                .glassCard(radius: 18)
+                       detail: L("Nothing given is not a mark against anybody."), hue: .indigo, card: true)
         } else {
             let late = person.items.filter { $0.overdue }
             let open = person.items.filter { !$0.overdue && $0.state != "SUBMITTED" && $0.state != "DONE" }
             let review = person.items.filter { !$0.overdue && $0.state == "SUBMITTED" }
             let done = person.items.filter { $0.state == "DONE" }
-            group(L("Overdue"), late, data: data)
-            group(L("Still to do"), open, data: data)
-            group(L("Sent for review"), review, data: data)
-            group(L("Done"), done, data: data)
+            VStack(spacing: NeonSpace.stack) {
+                group(L("Overdue"), symbol: "exclamationmark.triangle.fill", hue: .red, late, data: data)
+                group(L("Still to do"), symbol: "circle.dashed", hue: .blue, open, data: data)
+                group(L("Sent for review"), symbol: "paperplane.fill", hue: .purple, review, data: data)
+                group(L("Done"), symbol: "checkmark.seal.fill", hue: .green, done, data: data)
+            }
         }
     }
 
     @ViewBuilder
-    private func group(_ title: String, _ items: [TaskPeopleItem], data: TaskPeopleResponse) -> some View {
+    private func group(_ title: String, symbol: String, hue: NeonHue, _ items: [TaskPeopleItem], data: TaskPeopleResponse) -> some View {
         if !items.isEmpty {
-            SectionHeader(title, count: items.count)
-            CardList(items) { item in
-                let target = editingCell(for: item)
-                if let target {
-                    Button {
-                        Haptic.tap()
-                        editing = target
-                    } label: {
-                        TaskPeopleItemRow(item: item, timezone: data.timezone, opens: true)
+            SectionCard(title, symbol: symbol, hue: hue, spacing: 6) {
+                VStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { NeonDivider().padding(.leading, 62) }
+                        if let target = editingCell(for: item) {
+                            Button {
+                                Haptic.tap()
+                                editing = target
+                            } label: {
+                                TaskPeopleItemRow(item: item, timezone: data.timezone, todayKey: data.todayKey, opens: true)
+                            }
+                            .buttonStyle(.pressableCard)
+                        } else {
+                            TaskPeopleItemRow(item: item, timezone: data.timezone, todayKey: data.todayKey, opens: false)
+                        }
                     }
-                    .buttonStyle(.pressableCard)
-                } else {
-                    TaskPeopleItemRow(item: item, timezone: data.timezone, opens: false)
                 }
+                .padding(.horizontal, -NeonSpace.card + 2)
+            } trailing: {
+                CountBadge(items.count, tone: .neutral)
             }
         }
     }
@@ -431,19 +466,20 @@ struct TaskPeopleDetailView: View {
 struct TaskPeopleItemRow: View {
     let item: TaskPeopleItem
     let timezone: String
+    let todayKey: String
     let opens: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            IconTile(item.isCell ? "square.grid.3x3" : "calendar.badge.clock",
-                     tint: item.overdue ? .neonDangerStrong : (item.isCell ? .neonPurpleStrong : .neonCyanStrong), size: 36)
+        HStack(alignment: .top, spacing: 12) {
+            IconTile(item.isCell ? "square.grid.3x3.fill" : "calendar.badge.clock",
+                     hue: item.overdue ? .red : (item.isCell ? .purple : .cyan), size: 38)
             VStack(alignment: .leading, spacing: 5) {
-                DirText(item.title, font: .system(size: 15, weight: .semibold), lineLimit: 2)
+                DirText(item.title, font: .neonRowTitle, fill: false, lineLimit: 2)
                 if let project = item.projectName, !project.isEmpty {
-                    DirText(project, font: .system(size: 12.5), color: .neonTextSecondary, lineLimit: 1)
+                    DirText(project, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 1)
                 } else if !item.isCell {
                     Text(L("Job handed out by hand"))
-                        .font(.system(size: 12.5))
+                        .font(.neonSubtitle)
                         .foregroundStyle(Color.neonTextSecondary)
                 }
                 FlowRow(spacing: 6) {
@@ -457,12 +493,12 @@ struct TaskPeopleItemRow: View {
                     }
                 }
             }
-            Spacer(minLength: 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
             if opens {
                 Image(systemName: "chevron.forward")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.neonInk.opacity(0.3))
-                    .flipsForRightToLeftLayoutDirection(true)
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(Color.neonTextFaint)
+                    .padding(.top, 10)
             }
         }
         .padding(.horizontal, 14)
@@ -475,13 +511,13 @@ struct TaskPeopleItemRow: View {
             return (L("Completed %@", completed), "checkmark", Color.neonSuccessStrong)
         }
         if let due = item.dueDay {
-            var text = formattedDayKey(due)
+            var text = tasksShortDay(due, today: todayKey)
             if let time = item.dueTime { text += " · \(time)" }
             if item.overdue { return (L("Was due %@", text), "exclamationmark.triangle.fill", Color.neonDangerStrong) }
             return (L("Due %@", text), item.dueSource == "derived" ? "timer" : "clock", Color.neonTextTertiary)
         }
         if let scheduled = item.scheduledFor {
-            return (L("Scheduled %@", formattedDayKey(scheduled)), "calendar", Color.neonTextTertiary)
+            return (L("Scheduled %@", tasksShortDay(scheduled, today: todayKey)), "calendar", Color.neonTextTertiary)
         }
         return nil
     }
@@ -489,8 +525,12 @@ struct TaskPeopleItemRow: View {
     /// The day it was finished, on the studio's calendar.
     private var completedDay: String? {
         guard let date = parseISODate(item.completedAt) else { return nil }
-        var style = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: AppLanguage.current.locale)
-        style.timeZone = TimeZone(identifier: timezone) ?? .current
+        let zone = TimeZone(identifier: timezone) ?? .current
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        var style = Date.FormatStyle(date: .omitted, time: .omitted, locale: AppLanguage.current.locale).month(.abbreviated).day()
+        if String(calendar.component(.year, from: date)) != todayKey.prefix(4) { style = style.year() }
+        style.timeZone = zone
         return date.formatted(style)
     }
 }

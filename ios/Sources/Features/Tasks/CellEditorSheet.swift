@@ -16,7 +16,6 @@ struct CellEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var currentState: String
-    @State private var settingState = false
     @State private var assigneeId: String?
     @State private var scheduledFor: Date?
     @State private var dueTime: Date?
@@ -29,7 +28,6 @@ struct CellEditorSheet: View {
     @State private var blockedById: String?
     @State private var excludedFromProgress: Bool
     @State private var dependsOn: Set<String>
-    @State private var clearing = false
 
     init(project: BoardProject, cell: BoardCell, step: BoardStepRef, board: TaskBoardResponse?) {
         self.project = project
@@ -54,38 +52,51 @@ struct CellEditorSheet: View {
     private var team: [TaskPerson] { board?.team ?? [] }
     private var otherSteps: [BoardStep] { (board?.steps ?? []).filter { $0.id != cell.taskId } }
     private var stepStandard: BoardStep? { board?.steps.first { $0.id == cell.taskId } }
+    private var section: BoardSection? { board?.sections.first { $0.steps.contains { $0.id == cell.taskId } } }
+    private var owner: TaskPerson? { team.first { $0.id == cell.ownerId } }
+    private var isBlocked: Bool { !blockedReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    /// Nobody set on the cell. Named only when nobody was set to begin with:
+    /// then the owner the board resolved is exactly who "whoever" is.
+    private var whoever: String {
+        guard cell.assigneeId == nil, let owner else { return L("Whoever owns this step") }
+        return L("Whoever owns this step (%@)", owner.name)
+    }
 
     var body: some View {
-        SheetScaffold(step.name, subtitle: project.name, symbol: "square.grid.3x3",
+        SheetScaffold(step.name, subtitle: project.name, symbol: "square.grid.3x3.fill",
                       primaryTitle: L("Save"), onPrimary: { await save() }) {
-            FormSection(L("State")) {
-                HStack(spacing: 8) {
-                    StateBadge(state: currentState)
-                    Spacer()
-                    if settingState { ProgressView().controlSize(.small) }
+            summary
+                .neonAppear()
+
+            FormSection(L("State"), footer: L("A state changes the moment you tap it — it is not part of Save.")) {
+                TasksStatePicker(states: ["TODO", "DONE", "TOMORROW"], current: currentState) { target in
+                    await setState(target)
                 }
-                HStack(spacing: 8) {
-                    stateButton("TODO")
-                    stateButton("DONE")
-                    stateButton("TOMORROW")
+                if currentState == "SUBMITTED" {
+                    StatusNote(symbol: "paperplane.fill", tone: .purple, title: L("Sent for review"),
+                               detail: L("The proof waits in Reviews, to approve or send back."))
+                } else if currentState == "IN_PROGRESS" {
+                    StatusNote(symbol: "bolt.fill", tone: .cyan, title: L("In progress"),
+                               detail: L("Somebody has started it."))
                 }
                 if let lastNote = cell.lastUpdateNote, !lastNote.isEmpty {
-                    DetailCard(title: L("Last word from the team"), symbol: "text.bubble") {
-                        DirText(lastNote, font: .system(size: 13.5))
-                    }
+                    lastWord(lastNote)
                 }
             }
 
             FormSection(L("Assignment")) {
                 MenuField(L("Assignee"), selection: $assigneeId, options: team.map(\.id),
                           title: { id in team.first { $0.id == id }?.name ?? id },
-                          noneTitle: L("Whoever owns this step"))
+                          placeholder: whoever, noneTitle: whoever)
                 OptionalDateField(L("Scheduled for"), date: $scheduledFor)
                 if scheduledFor != nil {
                     OptionalDateField(L("Due time"), date: $dueTime, components: .hourAndMinute, addTitle: L("Add a time"))
+                        .transition(.neonRise)
                 }
                 MenuField(L("Priority"), selection: $priority, options: taskPriorities, title: localizedPriority)
             }
+            .animation(NeonMotion.smooth, value: scheduledFor != nil)
 
             FormSection(L("What finishing means"), footer: stepStandard?.deliverable == nil && stepStandard?.acceptance == nil ? nil : L("Left empty, this cell uses the step's own standard.")) {
                 NeonTextEditor(L("Deliverable"), text: $deliverable, prompt: stepStandard?.deliverable ?? L("What to hand in"), minLines: 2, limit: 2000)
@@ -95,15 +106,17 @@ struct CellEditorSheet: View {
 
             FormSection(L("Notes")) {
                 NeonTextEditor(L("Note to the team"), text: $adminNote, minLines: 2, limit: 2000)
-                ToggleRow(L("Not counted in progress"), detail: L("Left out of the board's totals."), symbol: "minus.circle", isOn: $excludedFromProgress)
+                ToggleRow(L("Not counted in progress"), detail: L("Left out of the board's totals."), symbol: "circle.lefthalf.filled", isOn: $excludedFromProgress)
             }
 
             FormSection(L("Blocked")) {
                 NeonTextEditor(L("Reason"), text: $blockedReason, prompt: L("Why this can't move"), minLines: 2, limit: 1000)
                 MenuField(L("Blocked by"), selection: $blockedById, options: team.map(\.id),
-                          title: { id in team.first { $0.id == id }?.name ?? id }, noneTitle: L("Nobody in particular"))
-                    .disabled(blockedReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .opacity(blockedReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
+                          title: { id in team.first { $0.id == id }?.name ?? id },
+                          placeholder: L("Nobody in particular"), noneTitle: L("Nobody in particular"))
+                    .disabled(!isBlocked)
+                    .opacity(isBlocked ? 1 : 0.4)
+                    .animation(NeonMotion.quick, value: isBlocked)
             }
 
             if !otherSteps.isEmpty {
@@ -113,29 +126,84 @@ struct CellEditorSheet: View {
                 }
             }
 
-            NeonButton(L("Clear scheduling"), symbol: "eraser", kind: .destructive,
+            NeonButton(L("Clear scheduling"), symbol: "eraser", kind: .destructive, size: .medium,
                        confirm: L("Clear this cell's scheduling?"),
                        confirmMessage: L("The assignee, dates, note and priority go back to nothing. The tick history stays.")) {
                 await clear()
             }
+            .frame(maxWidth: .infinity)
         }
         .neonSheet([.large])
     }
 
-    @ViewBuilder
-    private func stateButton(_ target: String) -> some View {
-        NeonButton(taskStateLabel(target), kind: currentState == target ? .tinted(taskStateTone(target).foreground) : .secondary, size: .small) {
-            await setState(target)
+    // MARK: - Pieces
+
+    /// Where this step sits and who is on the hook, before anything changes.
+    private var summary: some View {
+        HStack(alignment: .center, spacing: 12) {
+            if let url = resolvedMediaURL(project.coverImageUrl) {
+                RemoteImage(url: url)
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
+                    .accessibilityHidden(true)
+            } else {
+                IconTile("folder.fill", hue: .blue, size: 48)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                if let section {
+                    HStack(spacing: 6) {
+                        Circle().fill(tasksColorHue(section.color).color).frame(width: 7, height: 7)
+                        DirText(section.name, font: .system(.caption, weight: .bold), color: .neonTextSecondary, fill: false, lineLimit: 1)
+                    }
+                }
+                FlowRow(spacing: 6) {
+                    StateBadge(state: currentState)
+                    if priority == "HIGH" { BadgeView(text: L("High"), tone: .pink, symbol: "flame.fill") }
+                    if isBlocked { BadgeView(text: L("Blocked"), tone: .danger, symbol: "exclamationmark.octagon.fill") }
+                    if excludedFromProgress { BadgeView(text: L("Not counted"), tone: .neutral) }
+                }
+                if let owner {
+                    MetaLabel(L("On the hook: %@", owner.name), symbol: "person.fill", tint: .neonTextSecondary)
+                }
+            }
+            Spacer(minLength: 0)
         }
+        .padding(NeonSpace.card)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+        .animation(NeonMotion.snappy, value: currentState)
     }
+
+    /// What the person doing it last said about it, and when.
+    private func lastWord(_ note: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            IconTile("text.bubble.fill", hue: .blue, size: 32)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("Last word from the team"))
+                    .font(.system(.caption, weight: .bold))
+                    .foregroundStyle(Color.neonBlueStrong)
+                DirText(note, font: .neonCallout)
+                if let next = cell.nextStep, !next.isEmpty {
+                    DirText(L("Next: %@", next), font: .neonSubtitle, color: .neonTextSecondary)
+                }
+                if let when = formattedISODate(cell.lastUpdateAt) {
+                    MetaLabel(when, symbol: "clock")
+                        .padding(.top, 2)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .neonSurface(.tinted(.neonBlue), radius: NeonRadius.md)
+    }
+
+    // MARK: - Actions
 
     private func setState(_ target: String) async {
         guard target != currentState else { return }
-        settingState = true
-        defer { settingState = false }
         do {
             try await api.setBoardCellState(projectId: project.id, taskId: cell.taskId, state: target)
-            currentState = target
+            withNeonAnimation(NeonMotion.snappy) { currentState = target }
             Haptic.success()
         } catch {
             Toast.error(error)
@@ -154,22 +222,22 @@ struct CellEditorSheet: View {
             "acceptance": acceptance,
             "estimateHours": estimateHours.map { String($0) } ?? "",
             "blockedReason": blockedReason,
-            "blockedById": blockedReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : (blockedById ?? ""),
+            "blockedById": isBlocked ? (blockedById ?? "") : "",
             "dependsOnPresent": "1",
             "dependsOn": Array(dependsOn),
         ]
         do {
             try await api.updateCellDetails(projectId: project.id, taskId: cell.taskId, form: form)
+            Haptic.success()
             Toast.success(L("Saved"))
             dismiss()
         } catch {
+            Haptic.error()
             Toast.error(error)
         }
     }
 
     private func clear() async {
-        clearing = true
-        defer { clearing = false }
         do {
             try await api.clearCellDetails(projectId: project.id, taskId: cell.taskId)
             Toast.success(L("Cleared"))
