@@ -35,6 +35,8 @@ enum DecodeCheck {
         await check("chat/meetings") { _ = try await api.fetchChatMeetings() }
         await check("chat/projects") { _ = try await api.fetchChatProjects() }
         await check("chat/members team") { _ = try await api.read("chat/members", ["conversation": "team"], as: ChatMembers.self) }
+        await check("chat/stories") { _ = try await api.read("chat/stories", as: ChatStoriesResponse.self) }
+        await check("chat/receipts team") { _ = try await api.read("chat/receipts", ["conversation": "team"], as: ChatPeopleSnapshot.self) }
         await check("chat/reactions team") { _ = try await api.read("chat/reactions", ["conversation": "team"], as: ChatReactionSnapshot.self) }
 
         // Projects, for both sides.
@@ -67,6 +69,9 @@ enum DecodeCheck {
             await check("tasks/board") { _ = try await api.read("tasks/board", as: TaskBoardResponse.self) }
             await check("tasks/week") { _ = try await api.read("tasks/week", as: WeekBoardResponse.self) }
             await check("tasks/process") { _ = try await api.read("tasks/process", as: ProcessResponse.self) }
+            await check("tasks/people week") { _ = try await api.read("tasks/people", ["period": "week"], as: TaskPeopleResponse.self) }
+            await check("tasks/people month") { _ = try await api.read("tasks/people", ["period": "month"], as: TaskPeopleResponse.self) }
+            await check("home/now") { _ = try await api.read("home/now", as: HomeNow.self) }
 
             var employeeId: String?
             await check("team/employees") {
