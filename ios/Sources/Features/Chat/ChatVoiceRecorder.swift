@@ -45,6 +45,12 @@ final class ChatVoiceRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     }
 
     private func beginRecording() {
+        // A call owns the microphone and the audio session; changing the
+        // category under it silences the call and its echo cancellation.
+        if CallCenter.shared.session != nil {
+            Toast.error(L("You can't record a voice message during a call."))
+            return
+        }
         ChatVoicePlayer.shared.stop()
         let session = AVAudioSession.sharedInstance()
         do {
@@ -156,8 +162,12 @@ final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     private func play(data: Data, url: URL) {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // During a call the session is already playing and recording; leave
+        // it as the call set it, or the call loses its microphone.
+        if CallCenter.shared.session == nil {
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
         guard let player = try? AVAudioPlayer(data: data) else {
             Toast.error(L("That voice message could not be played."))
             return
