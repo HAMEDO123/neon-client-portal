@@ -1,7 +1,8 @@
 import SwiftUI
 
-// A call ringing, over whatever screen is open — the Swift counterpart of
-// components/calls/incoming-call.tsx.
+// A call ringing, full screen over whatever was open, as a phone call rings —
+// the Swift counterpart of components/calls/incoming-call.tsx. Decline,
+// answer, and for a video call answer with sound only.
 
 struct IncomingCallView: View {
     let call: CallView
@@ -11,81 +12,127 @@ struct IncomingCallView: View {
     let onDecline: () -> Void
 
     private var video: Bool { call.isVideo }
-    private var caller: CallParticipant? { call.participants.first { $0.memberKey == call.startedByKey } }
-    private var title: String { call.isGroup ? call.title : call.startedByName }
+    private var callerName: String {
+        call.participants.first { $0.memberKey == call.startedByKey }?.name ?? call.startedByName
+    }
+    /// A group call is the group's; a private one is the caller's.
+    private var title: String { call.isGroup ? call.title : callerName }
     private var line: String {
-        if call.isGroup { return L("%@ started a %@", call.startedByName, video ? L("video call") : L("call")) }
+        if call.isGroup { return L("%@ started a %@", callerName, video ? L("video call") : L("call")) }
         return video ? L("Incoming video call…") : L("Incoming call…")
     }
+    private var inTheCall: [CallParticipant] { call.participants.filter { $0.state == "JOINED" } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: NeonSpace.md) {
-            HStack(spacing: NeonSpace.md) {
-                ZStack {
-                    Circle().fill(Color.neonSuccess.opacity(0.35)).frame(width: 56, height: 56).neonPulse(true)
-                    AvatarView(url: nil, name: caller?.name ?? call.startedByName, size: 48)
+        ZStack {
+            CallBackdrop(hue: NeonPalette.hue(for: title), animated: true)
+
+            VStack(spacing: 0) {
+                Label(video ? L("NEON video call") : L("NEON voice call"), systemImage: video ? "video.fill" : "phone.fill")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, NeonSpace.md)
+                    .padding(.vertical, 7)
+                    .background(CallGlass(shape: Capsule(), strength: 0.2))
+                    .padding(.top, NeonSpace.lg)
+                    .neonAppear()
+
+                Spacer(minLength: NeonSpace.xl)
+
+                CallHalo(name: title, size: 140, ringing: !answering)
+                    .neonAppear(delay: 0.05, distance: 20)
+
+                VStack(spacing: NeonSpace.sm) {
+                    CallCenteredName(title, font: .neonLargeTitle)
+                    Text(answering ? L("Connecting…") : line)
+                        .font(.neonCallout)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                    if call.isGroup, !inTheCall.isEmpty {
+                        HStack(spacing: NeonSpace.sm) {
+                            AvatarStack(inTheCall.map { AvatarItem(id: $0.memberKey, name: $0.name) }, size: 26, limit: 4)
+                            Text(L("%@ in the call", NeonFormat.integer(inTheCall.count)))
+                                .font(.system(.footnote, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                        .padding(.leading, 6)
+                        .padding(.trailing, NeonSpace.md)
+                        .padding(.vertical, 5)
+                        .background(CallGlass(shape: Capsule(), strength: 0.25))
+                        .padding(.top, NeonSpace.xs)
+                    }
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    DirText(title, font: .system(size: 16, weight: .semibold))
-                    Text(line).font(.neonFootnote).foregroundStyle(.white.opacity(0.65))
-                }
+                .padding(.horizontal, NeonSpace.xxl)
+                .padding(.top, NeonSpace.lg)
+                .neonAppear(delay: 0.1)
+
+                Spacer(minLength: NeonSpace.xl)
                 Spacer(minLength: 0)
-            }
 
-            if inCall {
-                Text(L("Answering ends the call you are in."))
-                    .font(.neonCaption)
-                    .foregroundStyle(.white.opacity(0.8))
-                    .padding(.horizontal, NeonSpace.sm)
-                    .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
-            }
-
-            HStack(spacing: NeonSpace.sm) {
-                Button {
-                    Haptic.tap()
-                    onDecline()
-                } label: {
-                    Label(L("Decline"), systemImage: "phone.down.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                }
-                .buttonStyle(.neon(.destructive, size: .medium, fullWidth: true))
-                .disabled(answering)
-
-                if video {
-                    IconButton("phone.fill", label: L("Answer with sound only"), look: .glass, tint: .white, size: 48) {
-                        onAccept(false)
-                    }
-                    .disabled(answering)
+                if inCall {
+                    Label(L("Answering ends the call you are in."), systemImage: "exclamationmark.circle.fill")
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, NeonSpace.lg)
+                        .padding(.vertical, 10)
+                        .background(CallGlass(shape: Capsule(), strength: 0.35))
+                        .padding(.bottom, NeonSpace.xl)
+                        .transition(.neonRise)
                 }
 
-                Button {
-                    Haptic.success()
-                    onAccept(video)
-                } label: {
-                    if answering {
-                        ProgressView().tint(.white).frame(maxWidth: .infinity).frame(height: 48)
-                    } else {
-                        Label(L("Answer"), systemImage: video ? "video.fill" : "phone.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                    }
-                }
-                .buttonStyle(.neon(.tinted(.neonSuccessStrong), size: .medium, fullWidth: true))
-                .disabled(answering)
+                answerRow
+                    .padding(.horizontal, NeonSpace.xl)
+                    .padding(.bottom, NeonSpace.xxl)
+                    .neonAppear(delay: 0.15, distance: 24)
             }
         }
-        .padding(NeonSpace.lg)
-        .background(
-            RoundedRectangle(cornerRadius: NeonRadius.xxl, style: .continuous)
-                .fill(Color.neonInk.opacity(0.94))
-                .overlay(RoundedRectangle(cornerRadius: NeonRadius.xxl, style: .continuous).strokeBorder(Color.white.opacity(0.1)))
-                .neonShadow(.floating)
-        )
-        .padding(.horizontal, NeonSpace.gutter)
-        .transition(.neonDrop)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private var answerRow: some View {
+        HStack(alignment: .top, spacing: 0) {
+            CallRoundButton(symbol: "phone.down.fill", title: L("Decline"), look: .danger, size: 72) {
+                Haptic.tap()
+                onDecline()
+            }
+            .frame(maxWidth: .infinity)
+            .disabled(answering)
+
+            if video {
+                CallRoundButton(symbol: "phone.fill", title: L("Voice only"), look: .glass, size: 72) {
+                    Haptic.success()
+                    onAccept(false)
+                }
+                .accessibilityLabel(L("Answer with sound only"))
+                .frame(maxWidth: .infinity)
+                .disabled(answering)
+            }
+
+            ZStack(alignment: .top) {
+                if !answering {
+                    Circle()
+                        .fill(Color.neonSuccess.opacity(0.35))
+                        .frame(width: 72, height: 72)
+                        .neonPulse()
+                        .accessibilityHidden(true)
+                }
+                CallRoundButton(symbol: video ? "video.fill" : "phone.fill", title: L("Answer"), look: .accept, size: 72) {
+                    Haptic.success()
+                    onAccept(video)
+                }
+                .overlay(alignment: .top) {
+                    if answering {
+                        ProgressView()
+                            .tint(.white)
+                            .controlSize(.large)
+                            .frame(width: 72, height: 72)
+                            .background(Circle().fill(NeonHue.green.fill))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .disabled(answering)
+        }
     }
 }

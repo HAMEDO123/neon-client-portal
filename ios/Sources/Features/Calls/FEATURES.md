@@ -17,16 +17,19 @@ What the web's calls area does (`src/components/calls/*`, `src/lib/calls.ts`,
 - **Built.**
 
 ## Ringing
-- An overlay on top of whatever screen is open: caller's name/avatar, "video
+- Full screen over whatever is open, in the calls' own window (CallWindow.swift)
+  so no sheet can cover it: caller's name/avatar with spreading rings, "video
   call"/"call" wording, Decline, Answer — and for a video call, "answer with
-  sound only".
+  sound only". The phone vibrates every two seconds while it rings (no
+  ringtone: the app ships no sound for it — see the redesign notes).
 - A banner when answering would end a call already in progress.
 - Escape/back dismissal — **not built** (no hardware back gesture equivalent
   worth adding; Decline is one tap away).
 - **Built** (`IncomingCallView`).
 
 ## Before joining (pre-join)
-- See yourself, hear the mic, choose to go in muted or camera-off.
+- See yourself, choose to go in muted or camera-off; a refused microphone or
+  camera says so and offers Settings.
 - Web: pick which microphone/camera among several. iOS: one front and one
   back camera — **replaced with a flip-camera button**, which is the native
   equivalent.
@@ -48,17 +51,17 @@ What the web's calls area does (`src/components/calls/*`, `src/lib/calls.ts`,
 - **Built.**
 - Grid layout (1 up to many), a name/mute badge per tile, a speaking ring,
   per-connection quality glyph, a "reconnecting" spinner on a tile.
-- **Built** (`CallScreenView`), grid layout only — the web's **speaker view**
-  toggle (one big tile + a filmstrip) is **not built**; the grid alone covers
-  every size a phone call realistically has today. Screen-share layout
-  (fitting the shared screen instead of covering it) is likewise not built,
-  though a shared screen *is* received and shown as an ordinary tile — see
-  below.
+- **Built** (`CallScreenView` / `CallStage`): one other person fills the
+  screen with this phone's own picture in a corner that drags to any other;
+  three or more share a grid, or the web's **speaker view** (one large, the
+  rest in a strip; tap one to show it large). A shared screen is fitted rather
+  than cropped.
 - Duration, connection state ("Connecting…"/"Reconnecting…"), a People sheet
   listing everyone asked and their state.
 - **Built.**
-- Mute, camera on/off, flip camera, speaker toggle, leave, minimise to a
-  floating pill.
+- Mute, camera on/off (in a voice call too, as on the web), flip camera,
+  speaker toggle, leave, minimise to a floating window that drags to any
+  corner and floats above the app's sheets.
 - **Built.**
 - **Screen sharing:** the web can start one (`startSharing`/`stopSharing`,
   `getDisplayMedia`). Native screen sharing needs a Broadcast Upload

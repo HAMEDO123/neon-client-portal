@@ -38,6 +38,9 @@ struct CallPersonState: Identifiable {
     let speaking: Bool
     let quality: CallQuality
     let connection: CallPeerConnState
+    /// When this connection started trying, while it has never connected —
+    /// so the screen can say plainly that it is taking long.
+    let connectingSince: Date?
     var id: String { key }
 }
 
@@ -57,6 +60,8 @@ private final class PeerConn {
     var quality: CallQuality = .unknown
     var lastPackets: (lost: Int, received: Int)?
     var connectionState: CallPeerConnState = .connecting
+    var everConnected = false
+    let createdAt = Date()
     var restartWork: Task<Void, Never>?
     var queue: Task<Void, Never> = Task {}
 
@@ -146,7 +151,7 @@ final class CallSession: ObservableObject {
     let me: String
     private let iceServers: [RTCIceServer]
     private let onEnded: (String?) -> Void
-    private let media = LocalMedia()
+    private let media: LocalMedia
 
     @Published private(set) var phase: CallSessionPhase = .joining
     @Published var problem: String?
@@ -155,9 +160,12 @@ final class CallSession: ObservableObject {
     @Published private(set) var audioMuted: Bool
     @Published private(set) var people: [CallPersonState] = []
     @Published var onSpeaker = false
+    /// This device's own picture is shown mirrored while it is the front camera.
+    @Published private(set) var mirrorSelf = true
+    /// Hung up here, rather than ended by the server or the other side.
+    private(set) var endedByMe = false
 
     var videoOff: Bool { cameraTrack == nil }
-    var cameraPosition: String { media.cameraPosition == .front ? "front" : "back" }
 
     private var peers: [String: PeerConn] = [:]
     private var peopleInfo: [String: (name: String, color: String?, joined: Bool)] = [:]
@@ -172,20 +180,28 @@ final class CallSession: ObservableObject {
     private var flushTask: Task<Void, Never>?
     private var flushing = false
 
-    init(callId: String, me: String, iceServers: [IceServerInfo], mic: RTCAudioTrack?, camera: RTCVideoTrack?, audioMuted: Bool, onEnded: @escaping (String?) -> Void) {
+    /// `media` is the microphone and camera the pre-join screen (or the
+    /// answer button) opened; the session owns them from here, so turning the
+    /// camera off, flipping it and hanging up all reach the real capturer.
+    init(
+        callId: String, me: String, iceServers: [IceServerInfo], media: LocalMedia,
+        mic: RTCAudioTrack?, camera: RTCVideoTrack?, audioMuted: Bool, onEnded: @escaping (String?) -> Void
+    ) {
         self.callId = callId
         self.me = me
         self.iceServers = iceServers.map { RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential) }
+        self.media = media
         self.micTrack = mic
         self.cameraTrack = camera
         self.audioMuted = audioMuted
         self.onEnded = onEnded
+        self.mirrorSelf = media.cameraPosition == .front
         mic?.isEnabled = !audioMuted
     }
 
     func start() {
         CallAudioSession.configure(video: cameraTrack != nil)
-        onSpeaker = CallAudioSession.isOnSpeaker
+        onSpeaker = cameraTrack != nil || CallAudioSession.isOnSpeaker
         heartbeatTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: HEARTBEAT_NS)
@@ -203,9 +219,13 @@ final class CallSession: ObservableObject {
     /// Hanging up.
     func leave() async {
         guard phase != .ended else { return }
-        _ = try? await APIClient.shared.callLeave(callId: callId)
+        endedByMe = true
+        // The screen closes at once; the server hears about it as soon as it
+        // can (a slow network used to hold the call open for the round trip).
+        let callId = callId
         teardown()
         onEnded(nil)
+        _ = try? await APIClient.shared.callLeave(callId: callId)
     }
 
     private func end(_ problem: String?) {
@@ -237,8 +257,8 @@ final class CallSession: ObservableObject {
         seenOnServer = true
 
         if let mine = call.participants.first(where: { $0.memberKey == me }),
-           mine.state == "JOINED", let joinedAt = mine.joinedAt, let date = parseISODate(joinedAt) {
-            mySessionMillis = date.timeIntervalSince1970 * 1000
+           mine.state == "JOINED", let millis = callSessionMillis(mine.joinedAt) {
+            mySessionMillis = millis
         }
 
         for part in call.participants where part.memberKey != me {
@@ -250,9 +270,9 @@ final class CallSession: ObservableObject {
                 continue
             }
 
-            let sessionMs = part.joinedAt.flatMap(parseISODate).map { $0.timeIntervalSince1970 * 1000 } ?? 0
+            let sessionMs = callSessionMillis(part.joinedAt) ?? 0
             if let existing = peers[part.memberKey], sessionMs != 0, existing.sessionMillis != 0,
-               Int(existing.sessionMillis) != Int(sessionMs) {
+               existing.sessionMillis != sessionMs {
                 closePeer(part.memberKey)
             }
 
@@ -286,8 +306,11 @@ final class CallSession: ObservableObject {
             let payload = CallSignalPayload(json: signal.payload)
 
             var peer = peers[signal.fromKey]
-            if let existing = peer, let payloadSession = payload.session, existing.sessionMillis != 0,
-               payloadSession != Int(existing.sessionMillis) {
+            // 0 is "not known yet" on the web (a falsy session is skipped
+            // there), not a different session: treating it as one closed a
+            // good connection and dropped the answer it carried.
+            if let existing = peer, let payloadSession = payload.session, payloadSession != 0, existing.sessionMillis != 0,
+               Double(payloadSession) != existing.sessionMillis {
                 closePeer(signal.fromKey)
                 peer = nil
             }
@@ -296,11 +319,17 @@ final class CallSession: ObservableObject {
                 peer = createPeer(key: signal.fromKey, sessionMillis: Double(payload.session ?? 0), initiator: false)
             }
             guard let target = peer else { continue }
-            let previous = target.queue
-            target.queue = Task { [weak self] in
-                _ = await previous.value
-                await self?.handle(target, type: signal.type, payload: payload)
-            }
+            enqueue(target) { [weak self] in await self?.handle(target, type: signal.type, payload: payload) }
+        }
+    }
+
+    /// One connection's work, one step at a time: a description being
+    /// applied and an offer being made never interleave.
+    private func enqueue(_ peer: PeerConn, _ work: @escaping @MainActor () async -> Void) {
+        let previous = peer.queue
+        peer.queue = Task { @MainActor in
+            _ = await previous.value
+            await work()
         }
     }
 
@@ -351,6 +380,11 @@ final class CallSession: ObservableObject {
         config.iceServers = iceServers
         config.sdpSemantics = .unifiedPlan
         config.continualGatheringPolicy = .gatherContinually
+        // What a browser does on its own: the polite side, holding an offer
+        // of its own when the other side's arrives, rolls its own back and
+        // answers. Native WebRTC refuses that offer instead unless asked, and
+        // with both sides then waiting for an answer the call never connected.
+        config.enableImplicitRollback = true
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
         let handler = PeerHandler(session: self, key: key)
         let pc = RTCEnvironment.factory.peerConnection(with: config, constraints: constraints, delegate: handler)!
@@ -406,6 +440,7 @@ final class CallSession: ObservableObject {
         switch state {
         case .connected:
             peer.connectionState = .connected
+            peer.everConnected = true
             if phase != .ended { phase = .live }
         case .disconnected:
             peer.connectionState = .reconnecting
@@ -425,26 +460,33 @@ final class CallSession: ObservableObject {
         refreshPeople()
     }
 
+    /// WebRTC's native "negotiation needed" fires as soon as something
+    /// changes — even while an offer from the other side is still being
+    /// applied, which a browser never does. So the offer waits its turn in
+    /// the connection's queue, and is only made from a settled state; WebRTC
+    /// asks again once it is back there if an offer is still owed.
     func negotiationNeeded(key: String) {
         guard let peer = peers[key] else { return }
-        Task { [weak self] in
-            guard let self else { return }
-            peer.makingOffer = true
-            defer { peer.makingOffer = false }
-            do {
-                try await self.setLocalDescriptionAuto(peer.pc)
-                if let local = peer.pc.localDescription {
-                    self.send(
-                        peer.key, "description",
-                        CallSignalPayload(
-                            session: Int(self.mySessionMillis),
-                            description: RTCSessionDescriptionJSON(type: RTCSessionDescription.string(for: local.type), sdp: local.sdp)
-                        )
+        enqueue(peer) { [weak self] in await self?.makeOffer(peer) }
+    }
+
+    private func makeOffer(_ peer: PeerConn) async {
+        guard phase != .ended, peers[peer.key] === peer, peer.pc.signalingState == .stable else { return }
+        peer.makingOffer = true
+        defer { peer.makingOffer = false }
+        do {
+            try await setLocalDescriptionAuto(peer.pc)
+            if let local = peer.pc.localDescription {
+                send(
+                    peer.key, "description",
+                    CallSignalPayload(
+                        session: Int(mySessionMillis),
+                        description: RTCSessionDescriptionJSON(type: RTCSessionDescription.string(for: local.type), sdp: local.sdp)
                     )
-                }
-            } catch {
-                // Closed while offering.
+                )
             }
+        } catch {
+            // Closed while offering.
         }
     }
 
@@ -524,7 +566,8 @@ final class CallSession: ObservableObject {
                     audioMuted: remote.audioMuted, videoOff: remote.videoOff, sharing: remote.sharing,
                     speaking: speakingKeys.contains(key),
                     quality: peer?.quality ?? .unknown,
-                    connection: peer?.connectionState ?? .connecting
+                    connection: peer?.connectionState ?? .connecting,
+                    connectingSince: peer.flatMap { $0.everConnected ? nil : $0.createdAt }
                 )
             )
         }
@@ -563,6 +606,10 @@ final class CallSession: ObservableObject {
         do {
             let signals = batch.map { JSONValue.object(["to": .string($0.to), "type": .string($0.type), "payload": $0.payload.toJSON()]) }
             try await APIClient.shared.callSendSignals(callId: callId, signals: signals)
+        } catch APIError.refused, APIError.unauthorized {
+            // The server said no (this device is not in the call any more):
+            // sending the same batch again every second would not change
+            // that. The web drops it too; the heartbeat rejoins if it can.
         } catch {
             outbox.insert(contentsOf: batch, at: 0)
             flushing = false
@@ -592,10 +639,18 @@ final class CallSession: ObservableObject {
             cameraTrack = nil
             await swap(.camera, track: nil)
         } else {
+            guard await callMediaAllowed(.video) else {
+                problem = CallMediaProblem.cameraDenied.text
+                return
+            }
             do {
-                let track = try await media.startCamera(position: media.cameraPosition == .front ? .front : .front)
+                let track = try await media.startCamera(position: .front)
                 cameraTrack = track
-                CallAudioSession.configure(video: true)
+                mirrorSelf = media.cameraPosition == .front
+                if !onSpeaker {
+                    onSpeaker = true
+                    CallAudioSession.setSpeaker(true)
+                }
                 await swap(.camera, track: track)
             } catch {
                 problem = (error as? CallMediaProblem)?.text ?? L("The camera is not available.")
@@ -606,10 +661,16 @@ final class CallSession: ObservableObject {
 
     func flipCamera() async {
         guard cameraTrack != nil else { return }
-        if let track = try? await media.flipCamera() {
-            cameraTrack = track
-            await swap(.camera, track: track)
+        do {
+            let track = try await media.flipCamera()
+            mirrorSelf = media.cameraPosition == .front
+            if track !== cameraTrack {
+                cameraTrack = track
+                await swap(.camera, track: track)
+            }
             broadcastState()
+        } catch {
+            problem = L("The camera could not be switched.")
         }
     }
 
@@ -683,8 +744,14 @@ final class CallSession: ObservableObject {
             phase = .reconnecting
             do {
                 _ = try await APIClient.shared.callJoin(callId: callId)
+            } catch APIError.refused(let message) {
+                end(message)
+            } catch APIError.unauthorized {
+                end(APIError.unauthorized.errorDescription)
             } catch {
-                end((error as? LocalizedError)?.errorDescription ?? L("The call has ended."))
+                // No network (the very gap that made the server count this
+                // device as gone): not a refusal, so the call is not ended —
+                // the next beat tries again, as the web's does.
             }
         } catch {
             if phase != .ended { phase = .reconnecting }
@@ -720,6 +787,16 @@ final class CallSession: ObservableObject {
 }
 
 private let HEARTBEAT_NS: UInt64 = 5_000_000_000
+
+/// When somebody joined, in whole milliseconds — the number the web sends as
+/// a message's `session` (`Date.getTime()`). Rounded, not truncated: a
+/// parsed ".123" can land a hair under 123 ms, and a session that is out by
+/// one looks like a different one, which closed the connection and dropped
+/// the other side's answer.
+func callSessionMillis(_ iso: String?) -> Double? {
+    guard let date = parseISODate(iso) else { return nil }
+    return (date.timeIntervalSince1970 * 1000).rounded()
+}
 
 /// `RTCRtpTransceiver.setDirection(_:error:)` takes an `NSError**`, so a
 /// small wrapper is worth it at every call site above.
