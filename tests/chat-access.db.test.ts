@@ -110,11 +110,10 @@ describe("private conversations", () => {
     assert.ok((await listMessages(amal, channel.id)).some((row) => row.id === message.id));
 
     const list = await conversationsFor(amal);
-    assert.deepEqual(
-      list.slice(0, 2).map((item) => item.slug),
-      ["team", "manager"],
-      "an employee has the group, then the chat that has just had a message"
-    );
+    // Nothing pinned, so the list runs by the last message: the chat that has
+    // just had one is on top, and the team is still in it.
+    assert.equal(list[0].slug, "manager", "the chat that has just had a message comes first");
+    assert.ok(list.some((item) => item.slug === "team"), "the team is always in the list");
     const withManager = list.find((item) => item.slug === "manager");
     assert.equal(withManager?.unread, 1);
     assert.equal(withManager?.last?.body, "Can you call the supplier?");
@@ -148,7 +147,8 @@ describe("private conversations", () => {
     assert.equal((await getAdminBadges()).chat - before.chat, 1);
 
     const list = await conversationsFor(manager);
-    assert.equal(list[0].slug, "team", "the group stays on top");
+    assert.equal(list[0].slug, amal.id, "the chat that has just had a message comes first");
+    assert.ok(list.some((item) => item.slug === "team"), "the team is always in the list");
     const row = list.find((item) => item.slug === amal.id);
     assert.ok(row, "Amal's chat is in the manager's list");
     assert.equal(row.unread, 1);

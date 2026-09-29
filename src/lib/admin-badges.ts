@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { DIRECT_KEY_PATTERN, TEAM_CHANNEL_KEY } from "@/lib/chat-conversations";
+import { DIRECT_KEY_PATTERN, GROUP_KEY_PATTERN, TEAM_CHANNEL_KEY } from "@/lib/chat-conversations";
 
 // The counts beside the admin sidebar's links, in one round trip.
 //
@@ -7,8 +7,8 @@ import { DIRECT_KEY_PATTERN, TEAM_CHANNEL_KEY } from "@/lib/chat-conversations";
 // the same reason the employee badges are one query rather than four. A new
 // count belongs in this statement as another subquery, never as a second call.
 //
-// The chat count covers every conversation the manager is in: the team's and
-// each private one, each measured against its own read marker.
+// The chat count covers every conversation the manager is in: the team's, every
+// group and each private one, each measured against its own read marker.
 
 export type AdminBadges = { chat: number; requests: number; reviews: number; alerts: number; team: number };
 
@@ -21,7 +21,7 @@ export async function getAdminBadges(): Promise<AdminBadges> {
         (
           SELECT COUNT(*) FROM "ChatMessage" m
           JOIN "ChatChannel" c ON c.id = m."channelId"
-            AND (c.key = ${TEAM_CHANNEL_KEY} OR c.key LIKE ${DIRECT_KEY_PATTERN})
+            AND (c.key = ${TEAM_CHANNEL_KEY} OR c.key LIKE ${DIRECT_KEY_PATTERN} OR c.key LIKE ${GROUP_KEY_PATTERN})
           LEFT JOIN "ChatRead" r ON r."channelId" = c.id AND r."readerKey" = 'admin'
           -- The manager's own messages, and their private exchanges with the
           -- assistant, are not unread news for them.

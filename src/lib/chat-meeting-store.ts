@@ -5,11 +5,13 @@ import { chatMeetingSelect } from "@/lib/chat-meeting-select";
 import {
   conversationFromKey,
   conversationSlug,
+  isGroupConversation,
   mayOpen,
   type ChatViewer,
   type Conversation,
 } from "@/lib/chat-conversations";
 import { sortMeetingList } from "@/lib/chat-meetings";
+import { groupEmployees, groupMemberMap } from "@/lib/chat-group-store";
 
 // Meeting cards in the database: writing one together with everybody asked to
 // it, what the live stream and the Meetings list read, and the meetings a
@@ -30,7 +32,8 @@ export const MANAGER_MEMBER = { key: "admin", name: "Manager", color: "ink" } as
 export async function meetingMembers(conversation: Conversation) {
   if (conversation.kind === "peer") return [];
 
-  const employees = await prisma.employee.findMany({
+  // A group the manager made asks its own members, and the manager.
+  const employees = conversation.kind === "group" ? await groupEmployees(conversation.groupId) : await prisma.employee.findMany({
     where: {
       active: true,
       accessRole: "EMPLOYEE",
@@ -194,16 +197,23 @@ export async function meetingListFor(viewer: ChatViewer, now = Date.now()) {
     select: listSelect,
   });
 
+  const groupIds = rows.flatMap(({ channel }) => {
+    const conversation = conversationFromKey(channel.key);
+    return conversation?.kind === "group" ? [conversation.groupId] : [];
+  });
+  const groupMembers = await groupMemberMap(groupIds);
+
   const items = rows.flatMap(({ channel, ...meeting }) => {
     const conversation = conversationFromKey(channel.key);
     // The same door as every other read: a card is listed only for somebody who may open its chat.
-    if (!conversation || !mayOpen(viewer, conversation)) return [];
+    const members = conversation?.kind === "group" ? groupMembers.get(conversation.groupId) : undefined;
+    if (!conversation || !mayOpen(viewer, conversation, members)) return [];
     return [
       {
         ...meeting,
         conversationSlug: conversationSlug(conversation, viewer),
         conversationTitle: conversation.kind === "direct" && viewer.type === "EMPLOYEE" ? "Manager" : channel.name,
-        isGroup: conversation.kind === "team",
+        isGroup: isGroupConversation(conversation),
       },
     ];
   });

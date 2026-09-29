@@ -5,11 +5,13 @@ import { chatTaskSelect } from "@/lib/chat-task-select";
 import {
   conversationFromKey,
   conversationSlug,
+  isGroupConversation,
   mayOpen,
   type ChatViewer,
   type Conversation,
 } from "@/lib/chat-conversations";
 import { sortTaskList } from "@/lib/chat-tasks";
+import { groupEmployees, groupMemberMap } from "@/lib/chat-group-store";
 import { dayKeyToDate } from "@/lib/time";
 import { daysBetween } from "@/lib/week";
 
@@ -25,11 +27,12 @@ const memberSelect = { id: true, name: true, color: true } as const;
 
 /**
  * The people a task in this conversation can go to: everyone on the team in
- * the group, the one person in a private chat with the manager, and nobody in
- * a chat between two employees.
+ * the group, the one person in a private chat with the manager, the members
+ * of a group the manager made, and nobody in a chat between two employees.
  */
 export async function taskMembers(conversation: Conversation) {
   if (conversation.kind === "peer") return [];
+  if (conversation.kind === "group") return groupEmployees(conversation.groupId);
   return prisma.employee.findMany({
     where: {
       active: true,
@@ -216,16 +219,23 @@ export async function taskListFor(viewer: ChatViewer) {
     select: listSelect,
   });
 
+  const groupIds = rows.flatMap(({ channel }) => {
+    const conversation = conversationFromKey(channel.key);
+    return conversation?.kind === "group" ? [conversation.groupId] : [];
+  });
+  const groupMembers = await groupMemberMap(groupIds);
+
   const items = rows.flatMap(({ channel, ...task }) => {
     const conversation = conversationFromKey(channel.key);
     // The same door as every other read: a card is listed only for somebody who may open its chat.
-    if (!conversation || !mayOpen(viewer, conversation)) return [];
+    const members = conversation?.kind === "group" ? groupMembers.get(conversation.groupId) : undefined;
+    if (!conversation || !mayOpen(viewer, conversation, members)) return [];
     return [
       {
         ...task,
         conversationSlug: conversationSlug(conversation, viewer),
         conversationTitle: conversation.kind === "direct" && viewer.type === "EMPLOYEE" ? "Manager" : channel.name,
-        isGroup: conversation.kind === "team",
+        isGroup: isGroupConversation(conversation),
       },
     ];
   });

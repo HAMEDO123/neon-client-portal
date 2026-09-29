@@ -1,7 +1,8 @@
 "use server";
 
 import { chatSide, requireChatViewer } from "@/lib/chat";
-import { conversationFromKey, mayOpen } from "@/lib/chat-conversations";
+import { conversationFromKey } from "@/lib/chat-conversations";
+import { mayOpenNow } from "@/lib/chat-group-store";
 import { MAX_PINNED, isReaction, mayPinAnother } from "@/lib/chat-reactions";
 import {
   countPinned,
@@ -30,7 +31,7 @@ async function openMessage(messageId: string, as: string) {
   if (!message) throw new Error("That message no longer exists.");
 
   const conversation = conversationFromKey(message.channel.key);
-  if (!conversation || !mayOpen(viewer, conversation)) {
+  if (!conversation || !(await mayOpenNow(viewer, conversation))) {
     throw new Error("That conversation is not yours.");
   }
 

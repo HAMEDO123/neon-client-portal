@@ -10,7 +10,8 @@ import {
   requireChatViewer,
   type ChatViewer,
 } from "@/lib/chat";
-import { conversationFromKey, conversationSlug, employeeChatUrl, mayOpen } from "@/lib/chat-conversations";
+import { conversationFromKey, conversationSlug, employeeChatUrl } from "@/lib/chat-conversations";
+import { mayOpenNow } from "@/lib/chat-group-store";
 import {
   TASK_COMMENT_MAX,
   TASK_DESCRIPTION_MAX,
@@ -178,7 +179,7 @@ export async function addChatTaskComment(formData: FormData) {
 
   const conversation = conversationFromKey(task.channel.key);
   const assigneeIds = task.assignments.map((part) => part.employeeId);
-  if (!conversation || !mayOpen(viewer, conversation) || !mayComment(viewer, assigneeIds)) {
+  if (!conversation || !(await mayOpenNow(viewer, conversation)) || !mayComment(viewer, assigneeIds)) {
     throw new Error("Only the manager and the people on this task can comment on it.");
   }
 

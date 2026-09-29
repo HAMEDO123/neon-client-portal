@@ -45,11 +45,17 @@ export function memberKeyOf(viewer: ChatViewer) {
 
 /**
  * Where calls can be made: every conversation. A call in the team's group rings
- * everybody on the team and carries on while anybody is in it; a call in a
- * private chat is between its two people.
+ * everybody on the team and carries on while anybody is in it, and a call in a
+ * group the manager made does the same for its members; a call in a private
+ * chat is between its two people.
  */
 export function mayCallIn(conversation: Conversation) {
-  return conversation.kind === "team" || conversation.kind === "direct" || conversation.kind === "peer";
+  return (
+    conversation.kind === "team" ||
+    conversation.kind === "group" ||
+    conversation.kind === "direct" ||
+    conversation.kind === "peer"
+  );
 }
 
 function time(value: Date | string) {
