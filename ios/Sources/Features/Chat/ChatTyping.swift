@@ -37,6 +37,20 @@ struct ChatTypingBubble: View {
     let isGroup: Bool
 
     var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            // In a group, the same column as everybody else's bubbles, under
+            // the (first) writer's initials.
+            if isGroup {
+                ChatAuthorBadge(name: typers.first.map { chatMemberName(key: $0.memberKey, name: $0.name) })
+            }
+            bubble
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(chatTypingLine(typers, isGroup: true) ?? L("typing…"))
+    }
+
+    private var bubble: some View {
         VStack(alignment: .leading, spacing: 3) {
             if isGroup {
                 Text(verbatim: typers.map { chatMemberName(key: $0.memberKey, name: $0.name) }.joined(separator: AppLanguage.current == .arabic ? "، " : ", "))
@@ -53,9 +67,6 @@ struct ChatTypingBubble: View {
                 .overlay(ChatBubbleShape(mine: false, tail: true).stroke(Color.neonLine, lineWidth: 0.75))
                 .neonShadow(.low)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(chatTypingLine(typers, isGroup: true) ?? L("typing…"))
     }
 }
 
