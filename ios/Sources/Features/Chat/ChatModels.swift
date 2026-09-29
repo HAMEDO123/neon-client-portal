@@ -10,7 +10,8 @@ struct ConversationsResponse: Decodable {
 
 struct ConversationSummary: Decodable, Identifiable {
     /// How this conversation is named from the viewer's side: "team",
-    /// "manager", or somebody's id. It is what `/chat/messages` takes.
+    /// "manager", somebody's id, or "g-<groupId>" for a group. It is what
+    /// `/chat/messages` takes.
     let slug: String
     let title: String
     let subtitle: String?
@@ -18,8 +19,136 @@ struct ConversationSummary: Decodable, Identifiable {
     let isGroup: Bool
     let last: LastMessage?
     let unread: Int
+    // This viewer's own settings for the conversation (do/chat/prefs). Kept
+    // as `var` so the list can show a change the moment it is made.
+    var pinned: Bool
+    var muted: Bool
+    var favorite: Bool
+    /// Days in a row both people wrote — direct and peer chats only.
+    let streak: ChatStreak?
+    /// The other person is here right now — direct and peer chats only.
+    let online: Bool?
+    /// The team's and a group's size; nil for a one-to-one chat.
+    let memberCount: Int?
 
     var id: String { slug }
+    var avatarURL: URL? { resolvedMediaURL(avatar) }
+
+    /// A group the manager made, as opposed to the whole team's chat.
+    var isCustomGroup: Bool { slug.hasPrefix("g-") }
+    var groupId: String? { isCustomGroup ? String(slug.dropFirst(2)) : nil }
+
+    private enum CodingKeys: String, CodingKey {
+        case slug, title, subtitle, avatar, isGroup, last, unread, pinned, muted, favorite, streak, online, memberCount
+    }
+
+    // Every field the server added later is read leniently, so an answer
+    // saved before it existed still opens offline.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        slug = try container.decode(String.self, forKey: .slug)
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
+        isGroup = try container.decodeIfPresent(Bool.self, forKey: .isGroup) ?? false
+        last = try container.decodeIfPresent(LastMessage.self, forKey: .last)
+        unread = try container.decodeIfPresent(Int.self, forKey: .unread) ?? 0
+        pinned = (try? container.decodeIfPresent(Bool.self, forKey: .pinned)) ?? false
+        muted = (try? container.decodeIfPresent(Bool.self, forKey: .muted)) ?? false
+        favorite = (try? container.decodeIfPresent(Bool.self, forKey: .favorite)) ?? false
+        streak = try? container.decodeIfPresent(ChatStreak.self, forKey: .streak)
+        online = try? container.decodeIfPresent(Bool.self, forKey: .online)
+        memberCount = try? container.decodeIfPresent(Int.self, forKey: .memberCount)
+    }
+}
+
+/// A Snapchat-style streak: `count` days in a row, and `atRisk` when today
+/// is not complete yet but yesterday was.
+struct ChatStreak: Decodable, Equatable {
+    let count: Int
+    let atRisk: Bool
+}
+
+/// What `do/chat/prefs` answers: this person's settings for one conversation.
+struct ChatPrefs: Decodable, Equatable {
+    let pinned: Bool
+    let muted: Bool
+    let favorite: Bool
+}
+
+// MARK: - Groups and people
+
+/// Someone a group can include, or a private chat can be opened with
+/// (`get/chat/people`). For an employee, "manager" is the manager's id.
+struct ChatPerson: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let role: String?
+    let color: String?
+    let avatar: String?
+
+    var avatarURL: URL? { resolvedMediaURL(avatar) }
+}
+
+/// `get/chat/groups/detail`.
+struct ChatGroupDetail: Decodable {
+    let id: String
+    let name: String
+    let avatar: String?
+    let createdAt: String?
+    let members: [ChatPerson]
+    let canManage: Bool
+
+    var avatarURL: URL? { resolvedMediaURL(avatar) }
+}
+
+// MARK: - Stories
+
+/// `get/chat/stories`.
+struct ChatStoriesResponse: Decodable {
+    let mine: ChatStoryRing?
+    let others: [ChatStoryRing]
+}
+
+/// One person's stories from the last 24 hours, oldest first.
+struct ChatStoryRing: Decodable, Identifiable, Equatable {
+    /// "admin" or an employee id.
+    let authorKey: String
+    let name: String
+    let avatar: String?
+    var allViewed: Bool
+    var stories: [ChatStory]
+
+    var id: String { authorKey }
+    var avatarURL: URL? { resolvedMediaURL(avatar) }
+    /// Where the viewer opens: the first one not seen yet.
+    var firstUnviewedIndex: Int { stories.firstIndex { !$0.viewed } ?? 0 }
+}
+
+struct ChatStory: Decodable, Identifiable, Equatable {
+    let id: String
+    let mediaUrl: String
+    /// "image" or "video".
+    let mediaType: String
+    let caption: String?
+    let createdAt: String
+    let expiresAt: String?
+    var viewed: Bool
+    /// Only the author is told this.
+    let viewCount: Int?
+
+    var mediaURL: URL? { resolvedMediaURL(mediaUrl) }
+    var isVideo: Bool { mediaType == "video" }
+}
+
+/// `get/chat/stories/viewers`: who saw one of your stories.
+struct ChatStoryViewer: Decodable, Identifiable {
+    let key: String
+    let name: String
+    let avatar: String?
+    let viewedAt: String
+
+    var id: String { key }
     var avatarURL: URL? { resolvedMediaURL(avatar) }
 }
 
