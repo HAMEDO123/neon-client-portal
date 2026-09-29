@@ -232,6 +232,84 @@ struct ProcessMember: Decodable, Identifiable, Hashable {
     let active: Bool
 }
 
+// MARK: - The team's share of its work done (tasks/people)
+
+/// `mobileTaskPeople` in src/lib/mobile/tasks-people.ts: for every active
+/// person on the board, the work they were given over one week (Sunday to
+/// Saturday) or one payroll month, and how much of it is done.
+struct TaskPeopleResponse: Decodable {
+    let timezone: String
+    let todayKey: String
+    /// "week" or "month".
+    let period: String
+    /// First and last day of the period, inclusive ("YYYY-MM-DD").
+    let from: String
+    let to: String
+    /// A day inside the period before, and the one after.
+    let previous: String
+    let next: String
+    /// Whether today falls inside the period.
+    let current: Bool
+    let people: [TaskPeopleMember]
+}
+
+struct TaskPeopleCount: Decodable, Hashable {
+    let total: Int
+    let done: Int
+}
+
+struct TaskPeopleMember: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let role: String?
+    let color: String
+    /// The studio's initials-on-colour face, web-relative.
+    let avatar: String?
+    let total: Int
+    /// Approved by the manager. Sent for review is not done.
+    let done: Int
+    let submitted: Int
+    let inProgress: Int
+    let todo: Int
+    let overdue: Int
+    /// 0…100 — or nil when nothing was given in the period, which is never
+    /// shown as 0%: nothing given is not a failure.
+    let percent: Int?
+    let boardCells: TaskPeopleCount
+    let jobs: TaskPeopleCount
+    let items: [TaskPeopleItem]
+}
+
+/// One piece of a person's period: a board cell they own, or a job handed
+/// to them by hand. Late first, then open, then sent for review, then done.
+struct TaskPeopleItem: Decodable, Identifiable {
+    /// "cell" or "job".
+    let kind: String
+    let id: String
+    let title: String
+    let projectId: String?
+    let projectName: String?
+    /// The step, for a cell — with `projectId`, finds it on the board.
+    let taskId: String?
+    let state: String
+    let priority: String
+    let scheduledFor: String?
+    let startDay: String?
+    let endDay: String?
+    /// The deadline instant (a cell's: typed, or from the stage periods).
+    let dueAt: String?
+    /// The studio's calendar day it is due ("YYYY-MM-DD") — read this for display.
+    let dueDay: String?
+    /// "HH:MM" in the studio's timezone, only when somebody typed a time.
+    let dueTime: String?
+    /// "explicit", "derived" (from the stage periods) or nil.
+    let dueSource: String?
+    let completedAt: String?
+    let overdue: Bool
+
+    var isCell: Bool { kind == "cell" }
+}
+
 // MARK: - Shared small vocabularies
 
 let taskPriorities = ["LOW", "MEDIUM", "HIGH"]

@@ -19,6 +19,10 @@ extension APIClient {
         try await read("tasks/process", as: ProcessResponse.self)
     }
 
+    func fetchTaskPeople(period: String, day: String?) async throws -> Loaded<TaskPeopleResponse> {
+        try await read("tasks/people", ["period": period, "day": day], as: TaskPeopleResponse.self)
+    }
+
     // MARK: The board
 
     @discardableResult
@@ -188,6 +192,45 @@ final class TaskWeekStore: ObservableObject {
             week = loaded.value.weekStart
         } catch {
             if !self.loaded { errorMessage = error.localizedDescription }
+        }
+    }
+}
+
+/// The Team segment: each person's share of the work they were given, over a
+/// week or a payroll month. `period` and `day` say which; changing them and
+/// calling `load` reads that one. A slower answer for a period the manager has
+/// already moved away from is dropped rather than shown under the wrong label.
+@MainActor
+final class TaskPeopleStore: ObservableObject {
+    enum Period: String, CaseIterable, Identifiable {
+        case week, month
+        var id: String { rawValue }
+        var label: String { self == .week ? L("Week") : L("Month") }
+    }
+
+    @Published private(set) var value: TaskPeopleResponse?
+    @Published private(set) var cachedAt: Date?
+    @Published private(set) var errorMessage: String?
+    @Published private(set) var loaded = false
+    @Published private(set) var loading = false
+    @Published var period: Period = .week
+    /// A day inside the period to show; nil is the current one.
+    @Published var day: String?
+
+    func load(_ api: APIClient) async {
+        let asked = (period, day)
+        loading = true
+        defer { if asked == (period, day) { loading = false } }
+        do {
+            let loaded = try await api.fetchTaskPeople(period: asked.0.rawValue, day: asked.1)
+            guard asked == (period, day) else { return }
+            value = loaded.value
+            cachedAt = loaded.cachedAt
+            errorMessage = nil
+            self.loaded = true
+        } catch {
+            guard asked == (period, day) else { return }
+            if !self.loaded { errorMessage = error.localizedDescription } else { Toast.error(error) }
         }
     }
 }
