@@ -17,27 +17,40 @@ struct AlertsRootView: View {
         } content: { data in
             if data.alerts.isEmpty {
                 NeonScroll {
-                    EmptyState(symbol: "bell", title: L("Nothing yet"), detail: L("Task updates, finished work and supply requests land here the moment they happen."))
+                    EmptyState(
+                        symbol: "bell", title: L("Nothing yet"),
+                        detail: L("Task updates, finished work and supply requests land here the moment they happen."),
+                        hue: .indigo, card: true
+                    )
                 }
             } else {
-                List {
-                    Text(subtitle)
-                        .font(.neonFootnote)
-                        .foregroundStyle(Color.neonTextSecondary)
+                ScrollViewReader { proxy in
+                    List {
+                        HStack(spacing: NeonSpace.sm) {
+                            Text(L("Everything your team changes, as it happens."))
+                                .font(.neonFootnote)
+                                .foregroundStyle(Color.neonTextSecondary)
+                            Spacer(minLength: 4)
+                            CountBadge(data.unread)
+                        }
                         .neonListRow(top: 0, bottom: 8)
 
-                    ForEach(data.alerts) { alert in
-                        AlertRow(alert: alert)
-                            .neonListRow()
-                            .swipeAction(L("Mark read"), symbol: "checkmark.circle", tint: .neonCyan) {
-                                Task { await markRead(alert) }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { Task { await open(alert) } }
+                        ForEach(Array(data.alerts.enumerated()), id: \.element.id) { index, alert in
+                            AlertRow(alert: alert)
+                                .id(index == 5 ? "row-5" : "row-\(index)")
+                                .neonListRow()
+                                .swipeAction(L("Mark read"), symbol: "checkmark.circle", tint: .neonCyan) {
+                                    Task { await markRead(alert) }
+                                }
+                                .contentShape(Rectangle())
+                                .onTapGesture { Task { await open(alert) } }
+                                .staggered(index)
+                        }
                     }
+                    .neonListStyle()
+                    .refreshable { Haptic.tap(); await load() }
+                    .debugScroll(proxy)
                 }
-                .neonListStyle()
-                .refreshable { Haptic.tap(); await load() }
             }
         }
         .navigationTitle(L("Activity"))
@@ -64,11 +77,6 @@ struct AlertsRootView: View {
             if let chatRoute { ChatRoomView(route: chatRoute) }
         }
         .task { await load() }
-    }
-
-    private var subtitle: String {
-        guard let data else { return "" }
-        return data.unread > 0 ? L("Everything your team changes, as it happens. %d new.", data.unread) : L("Everything your team changes, as it happens.")
     }
 
     private func load() async {
@@ -150,19 +158,36 @@ struct AlertsRootView: View {
     }
 }
 
+/// One family of colour per kind of alert, kept the same wherever the app
+/// mentions that kind — the same rule the kit asks for tasks, chat, money.
+private func insightsAlertHue(_ type: String) -> NeonHue {
+    switch type {
+    case "TASK_SUBMITTED": return .purple
+    case "TASK_STATUS_CHANGED": return .cyan
+    case "TASK_OVERDUE": return .orange
+    case "SUPPLY_REQUEST": return .amber
+    case "CHAT_MESSAGE": return .indigo
+    default: return .grey
+    }
+}
+
 private struct AlertRow: View {
     let alert: HomeAlert
 
     private var isUnread: Bool { alert.readAt == nil }
+    private var hue: NeonHue { insightsAlertHue(alert.type) }
 
     var body: some View {
-        HStack(alignment: .top, spacing: NeonSpace.sm) {
-            Circle()
-                .fill(alert.employee.map { employeeFill($0.color) } ?? Color.neonTextFaint)
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
-
-            IconTile(homeAlertSymbol(alert.type), tint: .neonPurpleStrong, size: 34, style: .soft)
+        HStack(alignment: .top, spacing: NeonSpace.md) {
+            ZStack(alignment: .bottomTrailing) {
+                IconTile(homeAlertSymbol(alert.type), hue: hue, size: NeonSize.iconTileLarge, style: isUnread ? .filled : .soft)
+                if let employee = alert.employee {
+                    Circle()
+                        .fill(employeeFill(employee.color))
+                        .frame(width: 11, height: 11)
+                        .overlay(Circle().strokeBorder(Color.white, lineWidth: 2))
+                }
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 DirText(alert.title, font: .neonSubheadline.weight(.semibold), fill: false)
@@ -171,16 +196,9 @@ private struct AlertRow: View {
                     .font(.neonCaption)
                     .foregroundStyle(Color.neonTextFaint)
             }
-
             Spacer(minLength: 4)
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, NeonSpace.sm)
-        .neonSurface(isUnread ? .tinted(.neonPink) : .glass, radius: NeonRadius.md)
-        .overlay(alignment: .leading) {
-            if isUnread {
-                RoundedRectangle(cornerRadius: 1.5).fill(Color.neonPink).frame(width: 3).padding(.vertical, 4)
-            }
-        }
+        .padding(NeonSpace.sm)
+        .rowCard(pinned: isUnread, highlighted: isUnread)
     }
 }

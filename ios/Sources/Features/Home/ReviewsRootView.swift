@@ -14,20 +14,29 @@ struct ReviewsRootView: View {
         LoadStateView(value: data, error: errorMessage, cachedAt: cachedAt, retry: load) {
             NeonScroll { SkeletonRows(count: 4) }
         } content: { data in
-            NeonScroll {
-                Text(L("Work your team says is finished, with the proof attached. Approving marks the task complete on the board; sending it back returns it to In Progress with your reason."))
-                    .font(.neonFootnote)
-                    .foregroundStyle(Color.neonTextSecondary)
+            ScrollViewReader { proxy in
+                NeonScroll {
+                    Text(L("Work your team says is finished, with the proof attached. Approving marks the task complete on the board; sending it back returns it to In Progress with your reason."))
+                        .font(.neonFootnote)
+                        .foregroundStyle(Color.neonTextSecondary)
 
-                if data.submissions.isEmpty {
-                    EmptyState(symbol: "checkmark.seal", title: L("Nothing waiting"), detail: L("When someone finishes a task and sends a photo of it, it appears here."))
-                } else {
-                    ForEach(data.submissions) { submission in
-                        SubmissionCard(submission: submission) { await refreshAfter($0) }
+                    if data.submissions.isEmpty {
+                        EmptyState(
+                            symbol: "checkmark.seal", title: L("Nothing waiting"),
+                            detail: L("When someone finishes a task and sends a photo of it, it appears here."),
+                            hue: .indigo, card: true
+                        )
+                    } else {
+                        ForEach(Array(data.submissions.enumerated()), id: \.element.id) { index, submission in
+                            SubmissionCard(submission: submission) { await refreshAfter($0) }
+                                .id(index == 1 ? "second" : "row-\(index)")
+                                .staggered(index)
+                        }
                     }
                 }
+                .refreshable { Haptic.tap(); await load() }
+                .debugScroll(proxy)
             }
-            .refreshable { Haptic.tap(); await load() }
         }
         .navigationTitle(L("Reviews"))
         .task { await load() }
@@ -209,6 +218,22 @@ private struct SubmissionChecksView: View {
     }
 }
 
+/// The verdict's badge tone — `verdictLook` (HomeModels.swift) gives the
+/// colour and symbol; this is only the small uppercase label's tone, kept
+/// local since HomeModels belongs to the Home area.
+private func insightsVerdictTone(_ verdict: String) -> BadgeTone {
+    switch verdict {
+    case "met": return .success
+    case "partly": return .warning
+    case "not-met": return .danger
+    case "cannot-tell": return .neutral
+    default: return .purple
+    }
+}
+
+/// One acceptance criterion's verdict. `not-met` (a fault in the work) and
+/// `cannot-tell` (a limit of the evidence) must never read the same weight —
+/// red versus a grey question mark, kept from the web's own distinction.
 private struct CheckRow: View {
     let check: CriterionCheckRow
 
@@ -216,9 +241,9 @@ private struct CheckRow: View {
         let look = verdictLook(check.verdict)
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: look.symbol).font(.system(size: 13)).padding(.top, 1)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 DirText(check.required, font: .neonFootnote.weight(.semibold), fill: false)
-                Text(look.label.uppercased()).font(.system(size: 10, weight: .semibold)).opacity(0.75)
+                BadgeView(text: look.label, tone: insightsVerdictTone(check.verdict))
                 if let evidence = check.evidence {
                     DirText(evidence, font: .neonCaption, fill: false)
                 }
