@@ -13,13 +13,13 @@ struct AdminHomeView: View {
     @State private var dayError: String?
     @State private var showNewProject = false
     @State private var newProjectId: String?
+    @State private var openProjectId: String?
 
     var body: some View {
         NavigationStack {
             NeonScroll {
-                Text(L("An overview of every client project delivery."))
-                    .font(.neonSubheadline)
-                    .foregroundStyle(Color.neonTextSecondary)
+                HomeGreetingHero(projectCount: overview?.stats.total)
+                    .neonAppear()
 
                 LoadStateView(value: overview, error: overviewError, cachedAt: overviewCachedAt, retry: loadOverview) {
                     StatGrid {
@@ -54,8 +54,15 @@ struct AdminHomeView: View {
                         EmptyState(symbol: "folder", title: L("No projects yet"), detail: L("Create your first client project to start building its delivery portal."))
                     } else {
                         VStack(spacing: NeonSpace.sm) {
-                            ForEach(overview.projects) { project in
-                                HomeProjectRow(project: project)
+                            ForEach(Array(overview.projects.enumerated()), id: \.element.id) { index, project in
+                                Button {
+                                    Haptic.tap()
+                                    openProjectId = project.id
+                                } label: {
+                                    HomeProjectRow(project: project)
+                                }
+                                .buttonStyle(.pressableCard)
+                                .staggered(index)
                             }
                         }
                     }
@@ -91,6 +98,9 @@ struct AdminHomeView: View {
             .navigationDestination(isPresented: Binding(get: { newProjectId != nil }, set: { if !$0 { newProjectId = nil } })) {
                 if let newProjectId { ProjectDetailView(projectId: newProjectId) }
             }
+            .navigationDestination(isPresented: Binding(get: { openProjectId != nil }, set: { if !$0 { openProjectId = nil } })) {
+                if let openProjectId { ProjectDetailView(projectId: openProjectId) }
+            }
         }
         .task { await load() }
     }
@@ -124,34 +134,102 @@ struct AdminHomeView: View {
     }
 }
 
+// MARK: - Greeting hero
+
+/// The brand-gradient welcome card at the top of the home tab: a time-of-day
+/// greeting, today's date, and — once it has loaded — how many projects the
+/// studio is running. Purely decorative chrome; no server data of its own.
+private struct HomeGreetingHero: View {
+    let projectCount: Int?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: NeonSpace.md) {
+            VStack(alignment: .leading, spacing: NeonSpace.xs) {
+                Text(L(greetingKey))
+                    .font(.neonTitle2)
+                    .foregroundStyle(.white)
+                Text(todayLabel)
+                    .font(.neonSubheadline)
+                    .foregroundStyle(.white.opacity(0.85))
+                if let projectCount {
+                    Text(L("%d projects in the studio", projectCount))
+                        .font(.neonFootnote.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .padding(.top, 2)
+                }
+            }
+            Spacer(minLength: NeonSpace.sm)
+            BrandMark(size: 46)
+        }
+        .padding(NeonSpace.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient.neonBrand)
+        .clipShape(RoundedRectangle(cornerRadius: NeonRadius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeonRadius.xl, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+        )
+        .neonShadow(.raised)
+    }
+
+    private var greetingKey: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 0..<12: return "Good morning"
+        case 12..<17: return "Good afternoon"
+        default: return "Good evening"
+        }
+    }
+
+    private var todayLabel: String {
+        let formatter = DateFormatter()
+        formatter.locale = AppLanguage.current.locale
+        formatter.setLocalizedDateFormatFromTemplate("EEEE, MMMM d")
+        return formatter.string(from: Date())
+    }
+}
+
 // MARK: - The day
+
+private struct DayBoardTile {
+    let title: String
+    let value: Int
+    let symbol: String
+    let tint: Color
+    let isAlert: Bool
+}
 
 private struct DayBoardSummary: View {
     let summary: DaySummary
 
     var body: some View {
-        let tiles: [(String, Int, Color?)] = [
-            (L("On the day"), summary.planned, nil),
-            (L("No plan yet"), summary.unplanned, summary.unplanned > 0 ? .neonWarningStrong : nil),
-            (L("Blocked"), summary.blocked, summary.blocked > 0 ? .neonDangerStrong : nil),
-            (L("Said started"), summary.contradictions, summary.contradictions > 0 ? .neonDangerStrong : nil),
-            (L("Overloaded"), summary.overloaded, summary.overloaded > 0 ? .neonWarningStrong : nil),
-            (L("Unanswered"), summary.unanswered, nil),
+        let tiles: [DayBoardTile] = [
+            DayBoardTile(title: L("On the day"), value: summary.planned, symbol: "calendar", tint: .neonCyanStrong, isAlert: false),
+            DayBoardTile(title: L("No plan yet"), value: summary.unplanned, symbol: "questionmark.circle.fill", tint: .neonWarningStrong, isAlert: summary.unplanned > 0),
+            DayBoardTile(title: L("Blocked"), value: summary.blocked, symbol: "pause.circle.fill", tint: .neonDangerStrong, isAlert: summary.blocked > 0),
+            DayBoardTile(title: L("Said started"), value: summary.contradictions, symbol: "exclamationmark.triangle.fill", tint: .neonDangerStrong, isAlert: summary.contradictions > 0),
+            DayBoardTile(title: L("Overloaded"), value: summary.overloaded, symbol: "clock.fill", tint: .neonWarningStrong, isAlert: summary.overloaded > 0),
+            DayBoardTile(title: L("Unanswered"), value: summary.unanswered, symbol: "bubble.left.and.exclamationmark.bubble.right.fill", tint: .neonPurpleStrong, isAlert: false),
         ]
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: NeonSpace.sm), count: 3), spacing: NeonSpace.sm) {
-            ForEach(Array(tiles.enumerated()), id: \.offset) { _, tile in
-                VStack(spacing: 2) {
-                    Text(NeonFormat.integer(tile.1))
+            ForEach(Array(tiles.enumerated()), id: \.offset) { index, tile in
+                VStack(spacing: 6) {
+                    Image(systemName: tile.symbol)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(tile.value > 0 ? tile.tint : Color.neonTextFaint)
+                    Text(NeonFormat.integer(tile.value))
                         .font(.neonTitle3)
-                        .foregroundStyle(tile.2 ?? Color.neonInk)
-                    Text(tile.0)
+                        .foregroundStyle(tile.isAlert ? tile.tint : Color.neonInk)
+                    Text(tile.title)
                         .font(.neonOverline)
                         .foregroundStyle(Color.neonTextTertiary)
                         .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, NeonSpace.sm)
-                .neonSurface(.glass, radius: NeonRadius.md)
+                .neonSurface(tile.isAlert ? .tinted(tile.tint) : .glass, radius: NeonRadius.md)
+                .staggered(index)
             }
         }
     }
@@ -264,11 +342,22 @@ private struct PressingPersonCard: View {
 private struct HomeProjectRow: View {
     let project: HomeProject
 
+    private var accentColor: Color { publishTone(project.publishState).color }
+
     var body: some View {
         HStack(spacing: NeonSpace.md) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(accentColor)
+                .frame(width: 3)
+                .padding(.vertical, 2)
+
             RemoteImage(url: resolvedMediaURL(project.coverImageUrl), contentMode: .fill)
                 .frame(width: 64, height: 56)
                 .clipShape(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous)
+                        .strokeBorder(Color.neonLine, lineWidth: 1)
+                )
 
             VStack(alignment: .leading, spacing: 4) {
                 DirText(project.name, font: .neonHeadline, fill: false, lineLimit: 1)
@@ -286,15 +375,35 @@ private struct HomeProjectRow: View {
 
             Spacer(minLength: 4)
 
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(L("%d approvals", project.approvals)).font(.neonCaption2Ish)
-                Text(L("%d comments", project.comments)).font(.neonCaption2Ish)
+            VStack(alignment: .trailing, spacing: 4) {
+                Label(L("%d approvals", project.approvals), systemImage: "checkmark.seal")
+                    .font(.neonCaption2Ish)
+                Label(L("%d comments", project.comments), systemImage: "bubble.left")
+                    .font(.neonCaption2Ish)
             }
+            .labelStyle(.trailingIconLabel)
             .foregroundStyle(Color.neonTextFaint)
+
+            Image(systemName: "chevron.forward")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.neonTextFaint)
         }
         .padding(NeonSpace.sm)
         .neonSurface(.glass, radius: NeonRadius.lg)
     }
+}
+
+private struct TrailingIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.title
+            configuration.icon.font(.system(size: 9))
+        }
+    }
+}
+
+private extension LabelStyle where Self == TrailingIconLabelStyle {
+    static var trailingIconLabel: TrailingIconLabelStyle { TrailingIconLabelStyle() }
 }
 
 private extension Font {

@@ -1,5 +1,9 @@
 /* Home tab: dashboard */
 "Home" = "الرئيسية";
+"Good morning" = "صباح الخير";
+"Good afternoon" = "مساء الخير";
+"Good evening" = "مساء الخير";
+"%d projects in the studio" = "%d مشروعًا في الاستوديو";
 "All Projects" = "كل المشاريع";
 "No projects yet" = "لا توجد مشاريع بعد";
 "Create your first client project to start building its delivery portal." = "أنشئ أول مشروع عميل لبدء بناء بوابة تسليمه.";
