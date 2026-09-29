@@ -78,10 +78,14 @@ struct TasksBreakdown: View {
                                     .font(.system(.headline, weight: .bold))
                                     .monospacedDigit()
                                     .foregroundStyle(part.count == 0 ? Color.neonTextTertiary : Color.neonInk)
+                                // Words wrap onto a second line; a single
+                                // word too long for its column ("Completed"
+                                // on a narrow card) shrinks rather than breaks.
                                 Text(part.label)
                                     .font(.neonSubtitle)
                                     .foregroundStyle(Color.neonTextSecondary)
-                                    .lineLimit(2)
+                                    .lineLimit(part.label.contains(" ") ? 2 : 1)
+                                    .minimumScaleFactor(0.75)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -331,6 +335,33 @@ func tasksDayParts(_ key: String) -> (weekday: String, day: String, month: Strin
     var month = Date.FormatStyle(date: .omitted, time: .omitted, locale: locale).month(.abbreviated)
     month.timeZone = utc
     return (date.formatted(weekday), date.formatted(day), date.formatted(month))
+}
+
+/// A studio day, short: "Sep 29" in the year `today` falls in (this year
+/// when it is not given), "Sep 29, 2025" in any other. In UTC, as above.
+func tasksShortDay(_ key: String, today: String? = nil) -> String {
+    guard let date = parseISODate("\(key)T00:00:00.000Z") else { return key }
+    let year = (today ?? NeonFormat.dayKey(Date())).prefix(4)
+    var style = Date.FormatStyle(date: .omitted, time: .omitted, locale: AppLanguage.current.locale).month(.abbreviated).day()
+    if key.prefix(4) != year { style = style.year() }
+    style.timeZone = TimeZone(identifier: "UTC")!
+    return date.formatted(style)
+}
+
+/// Two studio days as one range, the year said once: "Sep 27 – Oct 3, 2026".
+func tasksDayRange(_ from: String, _ to: String) -> String {
+    guard let start = parseISODate("\(from)T00:00:00.000Z"),
+          let end = parseISODate("\(to)T00:00:00.000Z"), start <= end
+    else { return "\(formattedDayKey(from)) – \(formattedDayKey(to))" }
+    let style = Date.IntervalFormatStyle(date: .abbreviated, time: .omitted, locale: AppLanguage.current.locale,
+                                         calendar: Calendar(identifier: .gregorian), timeZone: TimeZone(identifier: "UTC")!)
+    return (start..<end).formatted(style)
+}
+
+/// Two names joined by an arrow that points the way the words read: "→"
+/// between English names, "←" between Arabic ones.
+func tasksArrowJoin(_ from: String, _ to: String) -> String {
+    naturalDirection(from) == .rightToLeft ? "\(from) ← \(to)" : "\(from) → \(to)"
 }
 
 /// "Sunday" for a day key, in the app's language.

@@ -125,7 +125,7 @@ func taskPeoplePeriodLabel(_ data: TaskPeopleResponse) -> String {
         style.timeZone = TimeZone(identifier: "UTC")!
         return date.formatted(style)
     }
-    return "\(formattedDayKey(data.from)) – \(formattedDayKey(data.to))"
+    return tasksDayRange(data.from, data.to)
 }
 
 // MARK: - The whole team
@@ -434,11 +434,11 @@ struct TaskPeopleDetailView: View {
                                 Haptic.tap()
                                 editing = target
                             } label: {
-                                TaskPeopleItemRow(item: item, timezone: data.timezone, opens: true)
+                                TaskPeopleItemRow(item: item, timezone: data.timezone, todayKey: data.todayKey, opens: true)
                             }
                             .buttonStyle(.pressableCard)
                         } else {
-                            TaskPeopleItemRow(item: item, timezone: data.timezone, opens: false)
+                            TaskPeopleItemRow(item: item, timezone: data.timezone, todayKey: data.todayKey, opens: false)
                         }
                     }
                 }
@@ -466,6 +466,7 @@ struct TaskPeopleDetailView: View {
 struct TaskPeopleItemRow: View {
     let item: TaskPeopleItem
     let timezone: String
+    let todayKey: String
     let opens: Bool
 
     var body: some View {
@@ -510,13 +511,13 @@ struct TaskPeopleItemRow: View {
             return (L("Completed %@", completed), "checkmark", Color.neonSuccessStrong)
         }
         if let due = item.dueDay {
-            var text = formattedDayKey(due)
+            var text = tasksShortDay(due, today: todayKey)
             if let time = item.dueTime { text += " · \(time)" }
             if item.overdue { return (L("Was due %@", text), "exclamationmark.triangle.fill", Color.neonDangerStrong) }
             return (L("Due %@", text), item.dueSource == "derived" ? "timer" : "clock", Color.neonTextTertiary)
         }
         if let scheduled = item.scheduledFor {
-            return (L("Scheduled %@", formattedDayKey(scheduled)), "calendar", Color.neonTextTertiary)
+            return (L("Scheduled %@", tasksShortDay(scheduled, today: todayKey)), "calendar", Color.neonTextTertiary)
         }
         return nil
     }
@@ -524,8 +525,12 @@ struct TaskPeopleItemRow: View {
     /// The day it was finished, on the studio's calendar.
     private var completedDay: String? {
         guard let date = parseISODate(item.completedAt) else { return nil }
-        var style = Date.FormatStyle(date: .abbreviated, time: .omitted, locale: AppLanguage.current.locale)
-        style.timeZone = TimeZone(identifier: timezone) ?? .current
+        let zone = TimeZone(identifier: timezone) ?? .current
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        var style = Date.FormatStyle(date: .omitted, time: .omitted, locale: AppLanguage.current.locale).month(.abbreviated).day()
+        if String(calendar.component(.year, from: date)) != todayKey.prefix(4) { style = style.year() }
+        style.timeZone = zone
         return date.formatted(style)
     }
 }

@@ -110,7 +110,8 @@ struct ProcessSettingsView: View {
     private func timeline(_ process: ProcessResponse) -> some View {
         SectionCard(L("Timed process"), subtitle: L("%d days", process.totalDays), symbol: "timer", hue: .orange) {
             let parts = process.timeline.enumerated().map { index, range in
-                ProgressSegment(stepName(range.fromTaskId, process) + (range.fromTaskId == range.toTaskId ? "" : " → " + stepName(range.toTaskId, process)),
+                ProgressSegment(range.fromTaskId == range.toTaskId ? stepName(range.fromTaskId, process)
+                                    : tasksArrowJoin(stepName(range.fromTaskId, process), stepName(range.toTaskId, process)),
                                 value: Double(range.days), hue: NeonPalette.hue(at: index), id: range.id)
             }
             SegmentedProgressBar(parts, height: 12)
@@ -299,7 +300,7 @@ struct ProcessSettingsView: View {
         let from = stepName(period.fromTaskId, process)
         let to = stepName(period.toTaskId, process)
         Button { editingPeriod = period } label: {
-            ListRow(from == to ? from : "\(from) → \(to)",
+            ListRow(from == to ? from : tasksArrowJoin(from, to),
                     leading: .icon("calendar.badge.clock", tint: .neonOrange),
                     value: period.days == 1 ? L("1 day") : L("%d days", period.days), chevron: true)
                 .rowCard()
@@ -460,10 +461,10 @@ struct ProcessStepSheet: View {
                 NeonTextField(L("Name"), text: $name, symbol: "textformat", isRequired: true)
                 MenuField(L("Section"), selection: $sectionId, options: (process?.sections ?? []).map(\.id),
                           title: { id in process?.sections.first { $0.id == id }?.name ?? id },
-                          noneTitle: L("None"), leadingSymbol: "square.stack.3d.up")
+                          placeholder: L("None"), noneTitle: L("None"), leadingSymbol: "square.stack.3d.up")
                 MenuField(L("Usual owner"), selection: $ownerId, options: (process?.team ?? []).map(\.id),
                           title: { id in process?.team.first { $0.id == id }?.name ?? id },
-                          noneTitle: L("Nobody set"), leadingSymbol: "person")
+                          placeholder: L("Nobody set"), noneTitle: L("Nobody set"), leadingSymbol: "person")
             }
         }
         .neonSheet([.medium, .large])
@@ -536,7 +537,8 @@ struct ProcessTaskTypeSheet: View {
             }
             FormSection(L("Review")) {
                 MenuField(L("Reviewer"), selection: $reviewerId, options: team.map(\.id),
-                          title: { id in team.first { $0.id == id }?.name ?? id }, noneTitle: L("Nobody set"), leadingSymbol: "person.crop.circle.badge.checkmark")
+                          title: { id in team.first { $0.id == id }?.name ?? id },
+                          placeholder: L("Nobody set"), noneTitle: L("Nobody set"), leadingSymbol: "person.crop.circle.badge.checkmark")
                 ToggleRow(L("Accept automatically"), detail: step.mayAutoAccept ? nil : L("Needs acceptance criteria written above first."),
                           symbol: "wand.and.stars", isOn: $autoAccept)
                     .disabled(!step.mayAutoAccept && !autoAccept)

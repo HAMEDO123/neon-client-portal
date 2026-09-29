@@ -56,6 +56,13 @@ struct CellEditorSheet: View {
     private var owner: TaskPerson? { team.first { $0.id == cell.ownerId } }
     private var isBlocked: Bool { !blockedReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
+    /// Nobody set on the cell. Named only when nobody was set to begin with:
+    /// then the owner the board resolved is exactly who "whoever" is.
+    private var whoever: String {
+        guard cell.assigneeId == nil, let owner else { return L("Whoever owns this step") }
+        return L("Whoever owns this step (%@)", owner.name)
+    }
+
     var body: some View {
         SheetScaffold(step.name, subtitle: project.name, symbol: "square.grid.3x3.fill",
                       primaryTitle: L("Save"), onPrimary: { await save() }) {
@@ -81,10 +88,7 @@ struct CellEditorSheet: View {
             FormSection(L("Assignment")) {
                 MenuField(L("Assignee"), selection: $assigneeId, options: team.map(\.id),
                           title: { id in team.first { $0.id == id }?.name ?? id },
-                          // Named only when nobody is set on the cell: then the
-                          // owner the board resolved is exactly who "whoever" is.
-                          noneTitle: cell.assigneeId == nil ? owner.map { L("Whoever owns this step (%@)", $0.name) } ?? L("Whoever owns this step")
-                              : L("Whoever owns this step"))
+                          placeholder: whoever, noneTitle: whoever)
                 OptionalDateField(L("Scheduled for"), date: $scheduledFor)
                 if scheduledFor != nil {
                     OptionalDateField(L("Due time"), date: $dueTime, components: .hourAndMinute, addTitle: L("Add a time"))
@@ -108,7 +112,8 @@ struct CellEditorSheet: View {
             FormSection(L("Blocked")) {
                 NeonTextEditor(L("Reason"), text: $blockedReason, prompt: L("Why this can't move"), minLines: 2, limit: 1000)
                 MenuField(L("Blocked by"), selection: $blockedById, options: team.map(\.id),
-                          title: { id in team.first { $0.id == id }?.name ?? id }, noneTitle: L("Nobody in particular"))
+                          title: { id in team.first { $0.id == id }?.name ?? id },
+                          placeholder: L("Nobody in particular"), noneTitle: L("Nobody in particular"))
                     .disabled(!isBlocked)
                     .opacity(isBlocked ? 1 : 0.4)
                     .animation(NeonMotion.quick, value: isBlocked)
@@ -174,21 +179,16 @@ struct CellEditorSheet: View {
         HStack(alignment: .top, spacing: 10) {
             IconTile("text.bubble.fill", hue: .blue, size: 32)
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(L("Last word from the team"))
-                        .font(.system(.caption, weight: .bold))
-                        .foregroundStyle(Color.neonBlueStrong)
-                    if let when = formattedISODate(cell.lastUpdateAt) {
-                        Text(verbatim: "·").foregroundStyle(Color.neonTextFaint)
-                        Text(when)
-                            .font(.neonMeta)
-                            .foregroundStyle(Color.neonTextTertiary)
-                            .lineLimit(1)
-                    }
-                }
+                Text(L("Last word from the team"))
+                    .font(.system(.caption, weight: .bold))
+                    .foregroundStyle(Color.neonBlueStrong)
                 DirText(note, font: .neonCallout)
                 if let next = cell.nextStep, !next.isEmpty {
                     DirText(L("Next: %@", next), font: .neonSubtitle, color: .neonTextSecondary)
+                }
+                if let when = formattedISODate(cell.lastUpdateAt) {
+                    MetaLabel(when, symbol: "clock")
+                        .padding(.top, 2)
                 }
             }
         }

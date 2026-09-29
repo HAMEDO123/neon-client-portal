@@ -15,18 +15,24 @@ Helpers: `src/lib/mobile/tasks-board.ts`, `tasks-process.ts`, `tasks-week.ts`,
 Everything below is implemented natively unless marked **NOT BUILT**.
 
 ## The board (project × step matrix)
-- Stat tiles: active projects, steps done/counted, in progress, due tomorrow.
-- "Upcoming" panel from the stage periods (task, project, due day).
-- Awaiting-review count with a note pointing at the Reviews screen (owned by
-  the home area's `ReviewsRootView()`).
-- Search projects by name/client.
+- Four KPI cards: active projects, steps done/counted, in progress, due tomorrow.
+- "Where the steps stand": every counted step split by state (bar + key),
+  a ring with the share done, and the marks' key (high priority, blocked,
+  not counted) with their counts — always shown, replacing the old legend toggle.
+- Awaiting-review card (when there is any) opening the Reviews screen (owned
+  by the home area's `ReviewsRootView()`); the header's seal button opens it
+  too, with the count as its badge.
+- "Upcoming" card from the stage periods (task, project, due day — red once
+  late); tapping a row opens that cell's editor.
+- Search projects by name/client; "Hide completed" hides DONE steps.
 - Person filter (chip row, "Everyone" + team), filters which cells count for
   a project card.
-- Legend toggle: TODO / IN_PROGRESS / SUBMITTED / DONE / TOMORROW badges.
-- Mobile layout: a card per project (name, client, done/tomorrow counts, a
+- Mobile layout: a card per project (cover, name, client, a ring with its
+  share done, a bar split by state, done/tomorrow/blocked/high counts, a
   menu with "Start over"), steps grouped by section as chips inside the card
-  — not the web's wide table. A chip shows the state icon, the step name and
-  a flame for HIGH priority; a red outline marks a blocked cell.
+  — not the web's wide table. A chip shows the state icon and colour, the
+  step name and a flame for HIGH priority; a red outline marks a blocked cell;
+  a step not counted in progress is faded.
 - Tapping a chip opens the cell editor sheet.
 - "Start over" (reset project tasks) with a destructive confirmation.
 - Pull to refresh; offline banner with cached-at time; error/retry state;
@@ -53,19 +59,24 @@ Everything below is implemented natively unless marked **NOT BUILT**.
   separate from Save — mirrors `clearTaskEntryDetails` vs `updateTaskEntryDetails`.
 
 ## The week board
-- Week navigator (previous/next), weeks starting Sunday, "This week" tag.
+- Week card: navigator (previous/next, "This week" or "Back to this week"),
+  weeks starting Sunday; a strip of the seven days (today in the brand
+  gradient, a dot where jobs fall; tapping a day scrolls to it); the week's
+  job count and its split by state.
 - Person filter.
-- One section per day of the week with the jobs covering that day; a
-  "Nothing planned" empty line; a per-day "+" to create a job on that day.
-- Job row: title, owner avatar, day count if it spans more than one day,
-  state badge; context menu to set state or delete; tap opens the editor.
+- One card per day of the week with the jobs covering that day; a
+  "Nothing planned" line; a per-day "+" to create a job on that day.
+- Job row: title, owner avatar, day count and span if it runs over more than
+  one day, state badge, flame for HIGH, a mark when it came from a chat task
+  card; context menu to set state or delete; tap opens the editor.
 - Floating "New job" action defaulting to today.
 - Job editor sheet (`TaskDialog` equivalent): title, for (team member),
   starts/ends dates, priority, what to hand in (deliverable), "counts as
   done when" (acceptance), note, and — once a job exists — its own
   TODO/IN_PROGRESS/DONE state buttons and delete-this-job.
 - A job that came from a chat task card shows a "from a chat task card" note.
-- Delete with confirmation (list swipe and inside the editor).
+- Delete with confirmation (the row's context menu and inside the editor —
+  the days are cards on a scroll now, not a `List`, so there is no swipe).
 
 ## Process settings (pushed from Settings, no tab stack)
 - Timed-process summary (total days), shown only when stage periods exist.
@@ -86,6 +97,8 @@ Everything below is implemented natively unless marked **NOT BUILT**.
 ## Team segment (`tasks/people`)
 - Week / Month switch (weeks Sunday–Saturday; month = the payroll month),
   previous / next, "Back to this week"; pull to refresh.
+- "The team" card: everybody's period together — done of given, a ring, the
+  split by state, and the overdue count; nothing given says so, never 0%.
 - A card per active person, in the board's order: avatar, name, role, a big
   animated ring with the percentage done (green with a seal at 100%), or a
   dashed ring and "Nothing given this week" when nothing was given — never 0%.

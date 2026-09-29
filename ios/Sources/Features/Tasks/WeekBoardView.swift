@@ -167,7 +167,7 @@ struct WeekBoardView: View {
 
     private func weekLabel(_ week: WeekBoardResponse) -> String {
         guard let first = week.weekKeys.first, let last = week.weekKeys.last else { return "" }
-        return "\(formattedDayKey(first)) – \(formattedDayKey(last))"
+        return tasksDayRange(first, last)
     }
 
     private func go(to weekKey: String?) {
@@ -253,7 +253,9 @@ struct WeekBoardView: View {
     @ViewBuilder
     private func jobRow(_ job: AssignedJob, week: WeekBoardResponse) -> some View {
         let owner = week.team.first { $0.id == job.employeeId }
-        let span = job.days > 1 ? L("%d days · %@ – %@", job.days, formattedDayKey(job.startKey), formattedDayKey(job.endKey)) : nil
+        let span = job.days > 1
+            ? L("%d days · %@ – %@", job.days, tasksShortDay(job.startKey, today: week.todayKey), tasksShortDay(job.endKey, today: week.todayKey))
+            : nil
         Button {
             Haptic.tap()
             editing = .existing(job)

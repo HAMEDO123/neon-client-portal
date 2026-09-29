@@ -186,8 +186,8 @@ struct TaskBoardView: View {
     private func dueLabel(_ key: String, board: TaskBoardResponse) -> String {
         if key == board.todayKey { return L("Today") }
         if key == board.tomorrowKey { return L("Tomorrow") }
-        if key < board.todayKey { return L("Was due %@", formattedDayKey(key)) }
-        return formattedDayKey(key)
+        if key < board.todayKey { return L("Was due %@", tasksShortDay(key, today: board.todayKey)) }
+        return tasksShortDay(key, today: board.todayKey)
     }
 
     // MARK: - Projects
