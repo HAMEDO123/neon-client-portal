@@ -27,10 +27,16 @@ struct AdminHomeView: View {
                     }
                 } content: { overview in
                     StatGrid {
-                        StatTile(L("Total Projects"), value: Double(overview.stats.total), symbol: "folder.fill", tint: .neonCyanStrong)
-                        StatTile(L("Published"), value: Double(overview.stats.published), symbol: "checkmark.seal.fill", tint: .neonPurpleStrong)
-                        StatTile(L("Pending Approvals"), value: Double(overview.stats.pendingApprovals), symbol: "clock.fill", tint: .neonOrangeStrong)
-                        StatTile(L("Updated This Week"), value: Double(overview.stats.recentlyUpdated), symbol: "chart.line.uptrend.xyaxis", tint: .neonPinkStrong)
+                        let figures: [HomeFigure] = [
+                            HomeFigure(title: L("Total Projects"), value: Double(overview.stats.total), symbol: "folder.fill", tint: .neonCyanStrong),
+                            HomeFigure(title: L("Published"), value: Double(overview.stats.published), symbol: "checkmark.seal.fill", tint: .neonPurpleStrong),
+                            HomeFigure(title: L("Pending Approvals"), value: Double(overview.stats.pendingApprovals), symbol: "clock.fill", tint: .neonOrangeStrong),
+                            HomeFigure(title: L("Updated This Week"), value: Double(overview.stats.recentlyUpdated), symbol: "chart.line.uptrend.xyaxis", tint: .neonPinkStrong),
+                        ]
+                        ForEach(Array(figures.enumerated()), id: \.offset) { index, figure in
+                            HomeFigureTile(figure: figure)
+                                .staggered(index)
+                        }
                     }
                 }
 
@@ -228,7 +234,7 @@ private struct DayBoardSummary: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, NeonSpace.sm)
-                .neonSurface(tile.isAlert ? .tinted(tile.tint) : .glass, radius: NeonRadius.md)
+                .neonSurface(.tinted(tile.value > 0 ? tile.tint : .neonTextFaint), radius: NeonRadius.md)
                 .staggered(index)
             }
         }
@@ -389,7 +395,7 @@ private struct HomeProjectRow: View {
                 .foregroundStyle(Color.neonTextFaint)
         }
         .padding(NeonSpace.sm)
-        .neonSurface(.glass, radius: NeonRadius.lg)
+        .neonSurface(.tinted(accentColor), radius: NeonRadius.lg)
     }
 }
 
@@ -409,6 +415,59 @@ private extension LabelStyle where Self == TrailingIconLabelStyle {
 private extension Font {
     /// A touch smaller than `.neonCaption`, for two stacked figures.
     static var neonCaption2Ish: Font { .system(size: 10) }
+}
+
+// MARK: - Figures
+
+private struct HomeFigure {
+    let title: String
+    let value: Double
+    let symbol: String
+    let tint: Color
+}
+
+/// A brighter, more brand-forward reading of the kit's `StatTile`: a
+/// gradient-filled icon and a wash of the figure's own colour behind the
+/// card, so the four studio numbers read as four distinct, colourful
+/// signals rather than four identical grey boxes.
+private struct HomeFigureTile: View {
+    let figure: HomeFigure
+
+    @State private var shown: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            IconTile(figure.symbol, tint: figure.tint, size: 38, style: .filled)
+            CountingText(value: shown, format: .integer)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.neonInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(figure.title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.neonTextSecondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(NeonSpace.md)
+        .frame(maxWidth: .infinity, minHeight: 132, maxHeight: .infinity, alignment: .topLeading)
+        .neonSurface(.tinted(figure.tint), radius: NeonRadius.lg)
+        .neonContextShape()
+        .onAppear { count(to: figure.value) }
+        .onChange(of: figure.value) { count(to: $0) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(figure.title))
+        .accessibilityValue(Text(NeonFormat.integer(Int(figure.value))))
+    }
+
+    private func count(to target: Double) {
+        if reduceMotion {
+            shown = target
+        } else {
+            withAnimation(NeonMotion.fill) { shown = target }
+        }
+    }
 }
 
 private struct SkeletonStatTile: View {
