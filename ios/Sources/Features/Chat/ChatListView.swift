@@ -75,13 +75,8 @@ struct ChatListView: View {
                             .id("stories")
                     }
 
-                    PillFilterBar(
-                        selection: $filter,
-                        options: ChatListFilter.allCases,
-                        title: { $0.label },
-                        count: { $0 == .unread ? unreadConversations : nil }
-                    )
-                    .neonListRow(top: 6, bottom: 6)
+                    ChatListFilterBar(selection: $filter, unreadCount: unreadConversations)
+                        .neonListRow(top: 6, bottom: 6)
                     .id("filters")
 
                     if filter == .tasks, let tasksCachedAt {

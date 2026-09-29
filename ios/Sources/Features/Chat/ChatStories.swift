@@ -534,7 +534,8 @@ struct ChatStoryViewersSheet: View {
                             CardList(viewers, dividerInset: 66) { viewer in
                                 HStack(spacing: NeonSpace.md) {
                                     ChatAvatar(url: viewer.avatarURL, name: viewer.name, size: 42)
-                                    DirText(viewer.name, font: .neonRowTitle, lineLimit: 1)
+                                    DirText(viewer.name, font: .neonRowTitle, fill: false, lineLimit: 1)
+                                    Spacer(minLength: 8)
                                     Text(chatTimeAgo(viewer.viewedAt))
                                         .font(.neonMeta)
                                         .foregroundStyle(Color.neonTextTertiary)

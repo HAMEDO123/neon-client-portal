@@ -347,7 +347,7 @@ struct ChatConversationCard: View {
                 }
             }
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
         .padding(.leading, NeonSpace.md)
         .padding(.trailing, NeonSpace.md + 2)
         .rowCard(pinned: conversation.pinned, highlighted: unread)
@@ -433,31 +433,19 @@ struct ChatListTaskCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: NeonSpace.md) {
-                IconTile(StateBadge.symbol(for: item.overall) ?? "checklist", hue: hue, size: NeonSize.iconTileLarge)
+        HStack(alignment: .top, spacing: NeonSpace.md) {
+            IconTile(StateBadge.symbol(for: item.overall) ?? "checklist", hue: hue, size: NeonSize.iconTileLarge)
+            VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
-                    DirText(item.title, font: .neonRowTitle, lineLimit: 2)
-                    HStack(spacing: 8) {
-                        HStack(spacing: 4) {
-                            Image(systemName: item.isGroup ? "person.3.fill" : "bubble.left.fill")
-                                .font(.system(.caption2, weight: .semibold))
-                                .foregroundStyle(Color.neonTextTertiary)
-                            DirText(item.conversationTitle, font: .neonCaption, color: .neonTextSecondary, fill: false, lineLimit: 1)
-                        }
-                        if let due = formattedISODate(item.dueAt) {
-                            MetaLabel(L("Due %@", due), symbol: "clock", tint: overdue ? .neonDangerStrong : .neonTextTertiary)
-                                .lineLimit(1)
-                        }
+                    DirText(item.title, font: .neonRowTitle, fill: false, lineLimit: 2)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { whereLabel; dueLabel }
+                        VStack(alignment: .leading, spacing: 3) { whereLabel; dueLabel }
                     }
                 }
-                Spacer(minLength: 4)
-                StateBadge(cardStateLabel(item.overall), tone: taskStateTone(item.overall),
-                           symbol: StateBadge.symbol(for: item.overall), pulsing: item.overall == "IN_PROGRESS")
-            }
-
-            if !item.assignments.isEmpty {
-                FlowRow {
+                FlowRow(spacing: 6) {
+                    StateBadge(cardStateLabel(item.overall), tone: taskStateTone(item.overall),
+                               symbol: StateBadge.symbol(for: item.overall), pulsing: item.overall == "IN_PROGRESS")
                     ForEach(item.assignments) { part in
                         HStack(spacing: 5) {
                             Circle().fill(taskStateTone(part.state).color).frame(width: 7, height: 7)
@@ -471,12 +459,104 @@ struct ChatListTaskCard: View {
                         .accessibilityValue(cardStateLabel(part.state))
                     }
                 }
-                .padding(.leading, NeonSize.iconTileLarge + NeonSpace.md)
             }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.forward")
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(Color.neonTextFaint)
+                .padding(.top, 4)
         }
         .padding(NeonSpace.md + 2)
         .rowCard(highlighted: item.overall == "SUBMITTED")
         .accessibilityElement(children: .combine)
+    }
+
+    private var whereLabel: some View {
+        HStack(spacing: 4) {
+            Image(systemName: item.isGroup ? "person.3.fill" : "bubble.left.fill")
+                .font(.system(.caption2, weight: .semibold))
+                .foregroundStyle(Color.neonTextTertiary)
+            DirText(item.conversationTitle, font: .neonCaption, color: .neonTextSecondary, fill: false, lineLimit: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var dueLabel: some View {
+        if let due = formattedISODate(item.dueAt) {
+            MetaLabel(L("Due %@", due), symbol: "clock", tint: overdue ? .neonDangerStrong : .neonTextTertiary)
+        }
+    }
+}
+
+// MARK: - The filters, on one line where they fit
+
+/// The kit's pill bar, drawn a little tighter first so the five filters sit
+/// on one line as in the mockup; where even that does not fit (a narrow phone,
+/// large text) it is the kit's own bar, which scrolls.
+struct ChatListFilterBar: View {
+    @Binding var selection: ChatListFilter
+    let unreadCount: Int
+
+    @Namespace private var namespace
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            row(padding: 10)
+            row(padding: 6)
+            PillFilterBar(
+                selection: $selection,
+                options: ChatListFilter.allCases,
+                title: { $0.label },
+                count: { $0 == .unread ? unreadCount : nil }
+            )
+        }
+    }
+
+    private func row(padding: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            ForEach(ChatListFilter.allCases, id: \.self) { option in
+                pill(option, padding: padding).frame(maxWidth: .infinity)
+            }
+        }
+        .padding(4)
+        .background(Capsule().fill(Color.white.opacity(0.94)))
+        .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
+        .clipShape(Capsule())
+        .neonShadow(.low)
+    }
+
+    private func pill(_ option: ChatListFilter, padding: CGFloat) -> some View {
+        let selected = option == selection
+        return Button {
+            guard !selected else { return }
+            Haptic.selection()
+            withNeonAnimation(NeonMotion.snappy) { selection = option }
+        } label: {
+            HStack(spacing: 5) {
+                Text(option.label)
+                    .lineLimit(1)
+                    .fixedSize()
+                if option == .unread, unreadCount > 0 {
+                    CountBadge(unreadCount, tone: .danger, size: 18)
+                }
+            }
+            .font(.system(.subheadline, weight: selected ? .semibold : .medium))
+            .foregroundStyle(selected ? Color.white : Color.neonInk.opacity(0.82))
+            .padding(.horizontal, padding)
+            .frame(minHeight: 38)
+            .frame(maxWidth: .infinity)
+            .background {
+                if selected {
+                    Capsule()
+                        .fill(LinearGradient.neonAccent)
+                        .shadow(color: Color.neonAccent.opacity(0.3), radius: 4, x: 0, y: 2)
+                        .matchedGeometryEffect(id: "pill", in: namespace)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableStyle(scale: 0.95))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

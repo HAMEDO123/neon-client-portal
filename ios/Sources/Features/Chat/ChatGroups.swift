@@ -120,11 +120,12 @@ struct ChatPersonRow<Trailing: View>: View {
         HStack(spacing: NeonSpace.md) {
             ChatAvatar(url: person.avatarURL, name: person.name, size: 44, color: person.color, online: online)
             VStack(alignment: .leading, spacing: 2) {
-                DirText(person.name, font: .neonRowTitle, lineLimit: 1)
+                DirText(person.name, font: .neonRowTitle, fill: false, lineLimit: 1)
                 if let role = person.role, !role.isEmpty {
-                    DirText(role, font: .neonSubtitle, color: .neonTextSecondary, lineLimit: 1)
+                    DirText(role, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 1)
                 }
             }
+            Spacer(minLength: 8)
             trailing()
         }
         .padding(.horizontal, NeonSpace.card)
