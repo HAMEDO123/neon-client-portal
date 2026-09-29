@@ -37,6 +37,15 @@ struct ChatRoomView: View {
     @State private var lastTypingSentAt: Date?
     @State private var deleteTarget: ChatMessage?
     @FocusState private var composerFocused: Bool
+    @Environment(\.dismiss) private var dismissRoom
+    // A group the manager made: its info sheet, and the name and picture it
+    // was just given there (the route keeps what the list said).
+    @State private var showGroupInfo = false
+    @State private var groupTitle: String?
+    @State private var groupAvatar: String?
+    private var isCustomGroup: Bool { route.slug.hasPrefix("g-") }
+    private var headerTitle: String { groupTitle ?? route.title }
+    private var headerAvatar: String? { groupAvatar ?? route.avatar }
     // The composer's project tag — chat-room.tsx's own <select>, on both
     // portals: what is sent next is filed under this project, shown on the
     // message beside its time (message.project). It is not cleared after a
@@ -155,15 +164,26 @@ struct ChatRoomView: View {
                 CallButtons(slug: route.slug, title: route.title)
             }
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 8) {
-                    AvatarView(url: resolvedMediaURL(route.avatar), name: route.title, size: 30)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(route.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                        if let subtitle = route.subtitle, !subtitle.isEmpty {
-                            Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.neonInk.opacity(0.5)).lineLimit(1)
-                        }
+                if isCustomGroup {
+                    Button {
+                        Haptic.tap()
+                        showGroupInfo = true
+                    } label: {
+                        roomTitle(hint: L("Group info"))
                     }
+                    .buttonStyle(PressableStyle(scale: 0.96))
+                    .accessibilityHint(L("Group info"))
+                } else {
+                    roomTitle(hint: nil)
                 }
+            }
+        }
+        .sheet(isPresented: $showGroupInfo) {
+            ChatGroupInfoSheet(slug: route.slug) { name, avatar in
+                groupTitle = name
+                groupAvatar = avatar
+            } onDeleted: {
+                dismissRoom()
             }
         }
         .task { await poll() }
@@ -424,6 +444,26 @@ struct ChatRoomView: View {
     }
 
     // MARK: Reading
+
+    /// The header's middle: the conversation's picture and name — for a
+    /// group, a way into its info.
+    private func roomTitle(hint: String?) -> some View {
+        HStack(spacing: 8) {
+            if route.isGroup && headerAvatar == nil {
+                ChatStudioMark(size: 30)
+            } else {
+                AvatarView(url: resolvedMediaURL(headerAvatar), name: headerTitle, size: 30)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                DirText(headerTitle, font: .system(size: 15, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
+                if let hint {
+                    Text(hint).font(.system(size: 11)).foregroundStyle(Color.neonPurpleStrong).lineLimit(1)
+                } else if let subtitle = route.subtitle, !subtitle.isEmpty {
+                    Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.neonInk.opacity(0.5)).lineLimit(1)
+                }
+            }
+        }
+    }
 
     private func poll() async {
         await load()
