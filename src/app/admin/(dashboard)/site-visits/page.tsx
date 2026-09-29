@@ -1,9 +1,10 @@
 import { MapPinned } from "lucide-react";
 import { requireAdmin } from "@/lib/admin-guard";
-import { allSiteVisits } from "@/lib/site-visit-queries";
+import { allSiteVisits, projectsForVisits, siteVisitKeepers } from "@/lib/site-visit-queries";
 import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
-import { STATE_LABEL, STATE_TONE, awaitingApproval, awaitingReport, isUpcoming } from "@/lib/site-visits";
+import { STATE_LABEL, STATE_TONE, awaitingApproval, awaitingReport, isUpcoming, needsDate } from "@/lib/site-visits";
+import { NewSiteVisit } from "@/components/admin/new-site-visit";
 import { VisitDecision } from "@/components/admin/visit-decision";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
@@ -26,12 +27,16 @@ export default async function SiteVisitsPage() {
 
   const timezone = await getTimezone();
   const visits = await allSiteVisits();
+  const keepers = await siteVisitKeepers();
+  const projects = await projectsForVisits();
 
   const waiting = visits.filter((visit) => awaitingApproval(visit));
   const owed = visits.filter((visit) => awaitingReport(visit));
+  const undated = visits.filter((visit) => needsDate(visit));
   const upcoming = visits.filter((visit) => isUpcoming(visit));
   const settled = visits.filter(
-    (visit) => !awaitingApproval(visit) && !awaitingReport(visit) && !isUpcoming(visit)
+    (visit) =>
+      !awaitingApproval(visit) && !awaitingReport(visit) && !needsDate(visit) && !isUpcoming(visit)
   );
 
   return (
@@ -42,6 +47,12 @@ export default async function SiteVisitsPage() {
         filled in for them. A finished visit waits for you: the client is asked on WhatsApp how it went, and their
         reply arrives in the WhatsApp tab.
       </p>
+
+      {/* Either side can start one: you write down that a client needs seeing,
+          and whoever is going picks the day — or you set it yourself. */}
+      <div className="mt-6">
+        <NewSiteVisit keepers={keepers} projects={projects} />
+      </div>
 
       {visits.length === 0 ? (
         <EmptyState
@@ -65,6 +76,12 @@ export default async function SiteVisitsPage() {
             visits={owed}
             timezone={timezone}
             tone="amber"
+          />
+          <Group
+            title="Waiting for a day"
+            hint="Written down, with the day left to whoever is going."
+            visits={undated}
+            timezone={timezone}
           />
           <Group title="Coming up" visits={upcoming} timezone={timezone} />
           <Group title="Done" visits={settled} timezone={timezone} />
@@ -114,7 +131,9 @@ function Group({
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/45">
                   <span className="font-medium text-ink/60">{visit.employee.name}</span>
                   <span>
-                    {formatDayIn(timezone, visit.scheduledAt)} · {formatTimeIn(timezone, visit.scheduledAt)}
+                    {visit.scheduledAt
+                      ? `${formatDayIn(timezone, visit.scheduledAt)} · ${formatTimeIn(timezone, visit.scheduledAt)}`
+                      : "No day set yet"}
                   </span>
                   {visit.location && <span dir="auto">{visit.location}</span>}
                   {visit.project && <span dir="auto">{visit.project.name}</span>}

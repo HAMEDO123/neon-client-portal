@@ -33,11 +33,27 @@ export const STATE_TONE: Record<SiteVisitState, string> = {
 
 export type VisitLike = {
   state: SiteVisitState;
-  scheduledAt: Date | string;
+  /** Null when nobody has set a date yet — see `needsDate`. */
+  scheduledAt: Date | string | null;
 };
 
-function at(value: Date | string): number {
-  return value instanceof Date ? value.getTime() : new Date(value).getTime();
+function at(value: Date | string | null): number | null {
+  if (value == null) return null;
+  const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Nobody has said when yet.
+ *
+ * The manager writes a visit down — this client, this site — and leaves the
+ * when to whoever is going, because they know their own week. A visit like
+ * this is **not** overdue and **not** upcoming: both of those are claims about
+ * a date, and there is no date. Saying it plainly is the point; a blank date
+ * shown as "today" or sorted as though it were long past would invent one.
+ */
+export function needsDate(visit: VisitLike): boolean {
+  return visit.state === "PLANNED" && at(visit.scheduledAt) == null;
 }
 
 /**
@@ -49,12 +65,16 @@ function at(value: Date | string): number {
  * "reports that did not arrive", only reports that did.
  */
 export function awaitingReport(visit: VisitLike, now: number = Date.now()): boolean {
-  return visit.state === "PLANNED" && at(visit.scheduledAt) <= now;
+  const when = at(visit.scheduledAt);
+  // No date is not a date in the past. A visit nobody has scheduled cannot be
+  // late for itself.
+  return visit.state === "PLANNED" && when != null && when <= now;
 }
 
 /** Still ahead: planned, and not yet due. */
 export function isUpcoming(visit: VisitLike, now: number = Date.now()): boolean {
-  return visit.state === "PLANNED" && at(visit.scheduledAt) > now;
+  const when = at(visit.scheduledAt);
+  return visit.state === "PLANNED" && when != null && when > now;
 }
 
 /**
@@ -98,14 +118,29 @@ export function sortForManager<T extends VisitLike>(visits: T[], now: number = D
   // waiting on them, then one nobody has written up at all. Both are work
   // they hold; the rest is a record.
   const rank = (visit: T) =>
-    awaitingApproval(visit) ? 0 : awaitingReport(visit, now) ? 1 : isUpcoming(visit, now) ? 2 : 3;
+    awaitingApproval(visit)
+      ? 0
+      : awaitingReport(visit, now)
+        ? 1
+        : needsDate(visit)
+          ? 2
+          : isUpcoming(visit, now)
+            ? 3
+            : 4;
 
   return [...visits].sort((a, b) => {
     const byRank = rank(a) - rank(b);
     if (byRank !== 0) return byRank;
+
+    // A visit with no date has nothing to sort by, so it keeps the order it
+    // arrived in rather than being placed by a number that does not exist.
+    const first = at(a.scheduledAt);
+    const second = at(b.scheduledAt);
+    if (first == null || second == null) return 0;
+
     // Waiting and unanswered: the oldest has waited longest. Upcoming: the
     // soonest is next. Settled: the most recent is the most interesting.
-    if (rank(a) === 3) return at(b.scheduledAt) - at(a.scheduledAt);
-    return at(a.scheduledAt) - at(b.scheduledAt);
+    if (rank(a) === 4) return second - first;
+    return first - second;
   });
 }

@@ -33,7 +33,8 @@ export type SiteVisitView = {
   title: string;
   location: string | null;
   purpose: string | null;
-  scheduledAt: Date;
+  /** Null when nobody has set a day yet. */
+  scheduledAt: Date | null;
   /** Who the visit is for. A linked project fills these in when they are blank. */
   clientName: string | null;
   clientPhone: string | null;
@@ -90,5 +91,19 @@ export async function projectsForVisits() {
     orderBy: { createdAt: "desc" },
     select: { id: true, name: true, clientName: true },
     take: 200,
+  });
+}
+
+/**
+ * The people who could be given a visit — whoever keeps the diary.
+ *
+ * Handing one to somebody without the permission would put it on a screen
+ * they do not have, which is a visit nobody will ever see.
+ */
+export async function siteVisitKeepers() {
+  return prisma.employee.findMany({
+    where: { active: true, accessRole: "EMPLOYEE", canLogSiteVisits: true },
+    orderBy: [{ order: "asc" }, { name: "asc" }],
+    select: { id: true, name: true },
   });
 }

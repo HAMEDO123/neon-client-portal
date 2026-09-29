@@ -1745,7 +1745,12 @@ model SiteVisit {
   clientPhone String?
   /// What they are going to do there, written before they go.
   purpose   String? @db.Text
-  scheduledAt DateTime
+  /// When it happens. **Null means nobody has set a date yet** — the manager
+  /// can write a visit down and leave the when to whoever is going, which is
+  /// usually the person who knows the site and their own week. A visit with no
+  /// date is not overdue and not upcoming: it is waiting to be scheduled, and
+  /// the screens say so in those words.
+  scheduledAt DateTime?
 
   state      SiteVisitState @default(PLANNED)
   /// What came of it — or, on a visit that did not happen, why not.

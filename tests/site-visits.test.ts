@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { awaitingApproval, awaitingReport, isUpcoming, needsReport, sortForManager } from "../src/lib/site-visits";
+import {
+  awaitingApproval,
+  awaitingReport,
+  isUpcoming,
+  needsDate,
+  needsReport,
+  sortForManager,
+} from "../src/lib/site-visits";
 
 // The one judgement worth pinning: a visit whose time has come and gone with
 // nothing written against it. Everything the manager opens this screen for
@@ -77,6 +84,21 @@ describe("where a site visit stands", () => {
       // one nobody has written up. Then soonest next, then the record.
       ["w", "a", "b", "c", "d", "e", "f"]
     );
+  });
+
+  it("treats a visit with no day as waiting to be scheduled, not as overdue", () => {
+    // The manager writes down that a client needs seeing and leaves the when
+    // to whoever is going. A missing date is not a date in the past: reading
+    // it as one would put a visit nobody has scheduled at the top of the
+    // overdue list, every day, for ever.
+    const undated = { state: "PLANNED" as const, scheduledAt: null };
+
+    assert.equal(needsDate(undated), true);
+    assert.equal(awaitingReport(undated, NOW), false);
+    assert.equal(isUpcoming(undated, NOW), false);
+
+    // And once it is answered for, it is not waiting for a day either.
+    assert.equal(needsDate({ state: "REPORTED" as const, scheduledAt: null }), false);
   });
 
   it("does not reorder the caller's array", () => {

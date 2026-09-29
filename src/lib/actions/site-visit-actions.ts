@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, requireSiteVisitor } from "@/lib/admin-guard";
 import { notifyAdmin } from "@/lib/admin-notifications";
+import { dispatchNotification } from "@/lib/notifications/engine";
 import { needsReport } from "@/lib/site-visits";
 import { sendWhatsApp } from "@/lib/whatsapp";
 import type { SiteVisitState } from "@/generated/prisma/enums";
@@ -86,8 +87,16 @@ function readForm(formData: FormData) {
   // own zone — here, on the server, that is the container's. The studio runs
   // in one country and the server is set to it, so this stays the plain
   // reading rather than pretending to a precision it does not have.
-  const scheduledAt = new Date(when);
-  if (Number.isNaN(scheduledAt.getTime())) throw new Error("Pick the day and time.");
+  //
+  // Empty is allowed and means nobody has picked a day yet: the manager can
+  // write a visit down and leave the when to whoever is going. A date that
+  // was typed and cannot be read is still refused — that is a mistake, not a
+  // decision to leave it open.
+  let scheduledAt: Date | null = null;
+  if (when) {
+    scheduledAt = new Date(when);
+    if (Number.isNaN(scheduledAt.getTime())) throw new Error("That day and time could not be read.");
+  }
 
   const projectId = String(formData.get("projectId") ?? "").trim() || null;
 
@@ -116,7 +125,9 @@ export async function scheduleSiteVisit(formData: FormData) {
   await notifyAdmin({
     type: "TASK_STATUS_CHANGED",
     title: `${actor.name} scheduled a site visit`,
-    message: `${visit.title} — ${visit.scheduledAt.toLocaleString("en-GB")}`,
+    message: visit.scheduledAt
+      ? `${visit.title} — ${visit.scheduledAt.toLocaleString("en-GB")}`
+      : `${visit.title} — no date set yet`,
     url: "/admin/site-visits",
     dedupeKey: `SITE_VISIT:${visit.id}`,
     employeeId: actor.id,
@@ -206,6 +217,50 @@ export async function reportSiteVisit(id: string, state: SiteVisitState, formDat
     // tellings and re-saving the same answer is one.
     dedupeKey: `SITE_VISIT_REPORT:${id}:${state}`,
     employeeId: actor.id,
+  }).catch(() => null);
+
+  refresh();
+}
+
+/**
+ * The manager writing a visit down for somebody else.
+ *
+ * The other half of how visits begin: the studio decides a client needs
+ * seeing, and whoever is going picks the day — they know their own week and
+ * the site. The date is optional here for exactly that reason, and the
+ * manager can still set it when they already know it.
+ *
+ * `requireAdmin`, and the person it is for must actually keep the diary:
+ * a visit handed to somebody with no Site visits view is a visit nobody will
+ * ever see.
+ */
+export async function assignSiteVisit(formData: FormData) {
+  await requireAdmin();
+
+  const employeeId = String(formData.get("employeeId") ?? "").trim();
+  const owner = employeeId
+    ? await prisma.employee.findFirst({
+        where: { id: employeeId, active: true, canLogSiteVisits: true },
+        select: { id: true, name: true },
+      })
+    : null;
+  if (!owner) throw new Error("Choose somebody who keeps the site-visit diary.");
+
+  const input = readForm(formData);
+  const visit = await prisma.siteVisit.create({
+    data: { ...input, employeeId: owner.id },
+    select: { id: true, title: true, scheduledAt: true },
+  });
+
+  await dispatchNotification({
+    employeeId: owner.id,
+    type: "TASK_ASSIGNED",
+    title: "A site visit for you",
+    message: visit.scheduledAt
+      ? `${visit.title} — ${visit.scheduledAt.toLocaleString("en-GB")}`
+      : `${visit.title} — set a day for it when you know.`,
+    url: "/employee/tasks?view=visits",
+    dedupeKey: `SITE_VISIT_ASSIGNED:${visit.id}`,
   }).catch(() => null);
 
   refresh();
