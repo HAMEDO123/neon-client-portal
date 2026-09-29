@@ -283,15 +283,33 @@ describe("one definition of each check, not twenty-five", () => {
     assert.deepEqual(loosened, [], `task-actions.ts is the manager's: ${loosened.join(", ")}`);
   });
 
-  it("keeps the site-visit diary behind its own guard", () => {
+  it("keeps the site-visit diary behind its own guard, and its approval behind the manager's", () => {
     // Every export writes to the studio's record of where it has been, and
     // each one re-reads the row it is about to change — an id in a form is
     // not evidence of whose visit it is.
+    //
+    // The split is the interesting part. Writing the diary is the visitor's:
+    // scheduling, changing, saying what happened. **Agreeing that a visit is
+    // finished is not** — it is the manager's, on the client's own answer, the
+    // same way finished work is approved rather than announced. An approval
+    // that drifted onto the visitor's guard would let somebody sign off their
+    // own visit, which is the one thing this shape exists to prevent.
+    // `assignSiteVisit` is here because it hands a visit to *somebody else* —
+    // the manager saying a client needs seeing. Scheduling one's own is the
+    // visitor's, and the two live in the same file.
+    const MANAGERS = new Set(["assignSiteVisit", "approveSiteVisit", "reopenSiteVisit"]);
+
     const actions = exportedActions(read("site-visit-actions.ts"));
     assert.ok(actions.length > 0, "site-visit-actions.ts has no exports — has it moved?");
 
     for (const action of actions) {
-      assert.ok(action.body.includes(VISITOR), `${action.name} must carry ${VISITOR.trim()}`);
+      const wanted = MANAGERS.has(action.name) ? ADMIN : VISITOR;
+      assert.ok(action.body.includes(wanted), `${action.name} must carry ${wanted.trim()}`);
+    }
+
+    // And both of the manager's are still there to be checked.
+    for (const name of MANAGERS) {
+      assert.ok(actions.some((action) => action.name === name), `${name} has gone`);
     }
   });
 

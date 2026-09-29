@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CalendarDays, Check, MapPin, Plus, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, MapPin, MessageCircle, Plus, Trash2, User, X } from "lucide-react";
 import {
   deleteSiteVisit,
   reportSiteVisit,
@@ -9,7 +9,7 @@ import {
   updateSiteVisit,
 } from "@/lib/actions/site-visit-actions";
 import type { SiteVisitView } from "@/lib/site-visit-queries";
-import { STATE_LABEL, STATE_TONE, awaitingReport } from "@/lib/site-visits";
+import { STATE_LABEL, STATE_TONE, awaitingReport, needsDate } from "@/lib/site-visits";
 import type { SiteVisitState } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +36,9 @@ export function SiteVisits({
   const [pending, start] = useTransition();
 
   const owed = visits.filter((visit) => awaitingReport(visit));
-  const rest = visits.filter((visit) => !awaitingReport(visit));
+  // Written down by the manager with the day left to whoever is going.
+  const undated = visits.filter((visit) => needsDate(visit));
+  const rest = visits.filter((visit) => !awaitingReport(visit) && !needsDate(visit));
 
   return (
     <div className={cn("flex flex-col gap-4", pending && "opacity-95")}>
@@ -66,8 +68,23 @@ export function SiteVisits({
         </section>
       )}
 
+      {undated.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-cyan-strong">Pick a day</h2>
+          {undated.map((visit) => (
+            <VisitCard
+              key={visit.id}
+              visit={visit}
+              owed={false}
+              onEdit={() => setForm({ visit })}
+              onAnswer={(state) => setAnswering({ visit, state })}
+            />
+          ))}
+        </section>
+      )}
+
       <section className="flex flex-col gap-2">
-        {rest.length === 0 && owed.length === 0 ? (
+        {rest.length === 0 && owed.length === 0 && undated.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-ink/12 px-4 py-10 text-center text-sm text-ink/40">
             No site visits written down yet.
           </p>
@@ -145,6 +162,12 @@ function VisitCard({
                 {visit.location}
               </span>
             )}
+            {(visit.clientName || visit.project?.clientName) && (
+              <span dir="auto" className="inline-flex items-center gap-1">
+                <User size={12} strokeWidth={1.75} />
+                {visit.clientName ?? visit.project?.clientName}
+              </span>
+            )}
             {visit.project && <span dir="auto">{visit.project.name}</span>}
           </span>
         </span>
@@ -162,20 +185,39 @@ function VisitCard({
       {visit.report && (
         <p dir="auto" className="mt-2 rounded-xl bg-ink/[0.04] px-3 py-2 text-xs text-ink/70">
           <span className="font-semibold text-ink/45">
-            {visit.state === "VISITED" ? "What came of it: " : "Why not: "}
+            {visit.state === "MISSED" ? "Why not: " : "What came of it: "}
           </span>
           <span className="whitespace-pre-wrap">{visit.report}</span>
         </p>
       )}
 
-      {planned && (
+      {/* What became of the review request. Said either way: a client nobody
+          asked must not look like one who has not answered yet. */}
+      {visit.reviewNote && (
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] text-ink/45">
+          <MessageCircle size={12} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+          <span dir="auto">{visit.reviewNote}</span>
+        </p>
+      )}
+
+      {planned && needsDate(visit) && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="mt-3 w-full rounded-xl border border-cyan-strong/40 bg-cyan/5 px-3 py-2 text-xs font-semibold text-cyan-strong"
+        >
+          Set the day and time
+        </button>
+      )}
+
+      {planned && !needsDate(visit) && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => onAnswer("VISITED")}
+            onClick={() => onAnswer("REPORTED")}
             className="flex-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
           >
-            I went
+            Visit ended
           </button>
           <button
             type="button"
@@ -243,9 +285,12 @@ function VisitDialog({
           <input
             type="datetime-local"
             name="scheduledAt"
-            defaultValue={localValue(visit?.scheduledAt)}
+            defaultValue={localValue(visit ? visit.scheduledAt : undefined)}
             className={INPUT}
           />
+          <span className="mt-1 block text-[11px] text-ink/40">
+            Leave it empty if you do not know yet — you can set it later.
+          </span>
         </Field>
 
         <Field label="Where">
@@ -254,6 +299,29 @@ function VisitDialog({
             defaultValue={visit?.location ?? ""}
             dir="auto"
             placeholder="Abdoun, behind the bakery"
+            className={INPUT}
+          />
+        </Field>
+
+        <Field label="Client">
+          <input
+            name="clientName"
+            defaultValue={visit?.clientName ?? ""}
+            dir="auto"
+            placeholder="Ahmad Al-Masri"
+            className={INPUT}
+          />
+        </Field>
+
+        {/* The number the review is asked of when the visit ends. A linked
+            project fills it in when this is left blank. */}
+        <Field label="Client's WhatsApp number">
+          <input
+            name="clientPhone"
+            type="tel"
+            inputMode="tel"
+            defaultValue={visit?.clientPhone ?? ""}
+            placeholder="962 7 9999 9999"
             className={INPUT}
           />
         </Field>
@@ -325,10 +393,10 @@ function AnswerDialog({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const went = state === "VISITED";
+  const went = state === "REPORTED";
 
   return (
-    <Sheet title={went ? "What came of it?" : "Why did it not happen?"} onClose={onClose}>
+    <Sheet title={went ? "What came of the visit?" : "Why did it not happen?"} onClose={onClose}>
       <p dir="auto" className="mb-3 text-xs text-ink/45">
         {visit.title} · {when(visit.scheduledAt)}
       </p>
@@ -361,6 +429,12 @@ function AnswerDialog({
 
         {error && <p className="mt-2 text-xs font-medium text-pink-strong">{error}</p>}
 
+        {went && (
+          <p className="mt-3 text-[11px] text-ink/45">
+            The client is asked on WhatsApp how the visit went, and the manager sees it here to approve.
+          </p>
+        )}
+
         <button
           type="submit"
           disabled={pending}
@@ -370,7 +444,7 @@ function AnswerDialog({
           )}
         >
           {went ? <Check size={16} strokeWidth={2.5} /> : <X size={16} strokeWidth={2.5} />}
-          {went ? "Mark as visited" : "Mark as not visited"}
+          {went ? "End the visit" : "Mark as not visited"}
         </button>
       </form>
     </Sheet>
@@ -421,8 +495,15 @@ function Sheet({
   );
 }
 
-/** The value a datetime-local input wants: local wall clock, no zone. */
-function localValue(at: Date | undefined): string {
+/**
+ * The value a datetime-local input wants: local wall clock, no zone.
+ *
+ * Empty for a visit with no day yet — the box has to look unanswered, because
+ * it is. Pre-filling it with now would turn "nobody has decided" into a
+ * decision the moment somebody opens the form.
+ */
+function localValue(at: Date | null | undefined): string {
+  if (at === null) return "";
   const when = at ?? new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(
@@ -430,7 +511,15 @@ function localValue(at: Date | undefined): string {
   )}`;
 }
 
-function when(at: Date): string {
+/**
+ * When it is — or that nobody has said.
+ *
+ * Said in words rather than left blank: an empty slot where a date belongs
+ * reads as a date that failed to load, and this one is a real state somebody
+ * has to act on.
+ */
+function when(at: Date | null): string {
+  if (!at) return "No day set yet";
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",

@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { awaitingReport, isUpcoming, needsReport, sortForManager } from "../src/lib/site-visits";
+import {
+  awaitingApproval,
+  awaitingReport,
+  isUpcoming,
+  needsDate,
+  needsReport,
+  sortForManager,
+} from "../src/lib/site-visits";
 
 // The one judgement worth pinning: a visit whose time has come and gone with
 // nothing written against it. Everything the manager opens this screen for
@@ -32,11 +39,28 @@ describe("where a site visit stands", () => {
   });
 
   it("asks for words with an answer that claims something happened", () => {
-    assert.equal(needsReport("VISITED"), true);
+    assert.equal(needsReport("REPORTED"), true);
     assert.equal(needsReport("MISSED"), true);
     // Calling a visit off before it happens says all there is to say.
     assert.equal(needsReport("CANCELLED"), false);
     assert.equal(needsReport("PLANNED"), false);
+    // Nobody writes VISITED: it is what the manager's approval turns a
+    // reported visit into, and the words were written a step earlier.
+    assert.equal(needsReport("VISITED"), false);
+  });
+
+  it("holds a finished visit for the manager rather than calling it done", () => {
+    // The studio's rule: whoever went says so, and the manager decides — on
+    // the client's own answer, which is asked for at that moment.
+    const reported = { state: "REPORTED" as const, scheduledAt: hoursFromNow(-2) };
+
+    assert.equal(awaitingApproval(reported), true);
+    // And it is not counted as still owing a write-up: it has one.
+    assert.equal(awaitingReport(reported, NOW), false);
+
+    for (const state of ["PLANNED", "VISITED", "MISSED", "CANCELLED"] as const) {
+      assert.equal(awaitingApproval({ state, scheduledAt: hoursFromNow(-2) }), false, state);
+    }
   });
 
   it("puts the unanswered first, then what is next, then the settled", () => {
@@ -47,13 +71,34 @@ describe("where a site visit stands", () => {
     const wentYesterday = { id: "e", state: "VISITED" as const, scheduledAt: hoursFromNow(-24) };
     const wentLastWeek = { id: "f", state: "VISITED" as const, scheduledAt: hoursFromNow(-168) };
 
-    const order = sortForManager([wentLastWeek, later, overdueRecent, wentYesterday, soon, overdueOld], NOW);
+    const waiting = { id: "w", state: "REPORTED" as const, scheduledAt: hoursFromNow(-5) };
+
+    const order = sortForManager(
+      [wentLastWeek, later, overdueRecent, wentYesterday, soon, overdueOld, waiting],
+      NOW
+    );
 
     assert.deepEqual(
       order.map((visit) => visit.id),
-      // Most overdue first; soonest next; settled newest first.
-      ["a", "b", "c", "d", "e", "f"]
+      // What the manager has to answer leads — a visit waiting on them, then
+      // one nobody has written up. Then soonest next, then the record.
+      ["w", "a", "b", "c", "d", "e", "f"]
     );
+  });
+
+  it("treats a visit with no day as waiting to be scheduled, not as overdue", () => {
+    // The manager writes down that a client needs seeing and leaves the when
+    // to whoever is going. A missing date is not a date in the past: reading
+    // it as one would put a visit nobody has scheduled at the top of the
+    // overdue list, every day, for ever.
+    const undated = { state: "PLANNED" as const, scheduledAt: null };
+
+    assert.equal(needsDate(undated), true);
+    assert.equal(awaitingReport(undated, NOW), false);
+    assert.equal(isUpcoming(undated, NOW), false);
+
+    // And once it is answered for, it is not waiting for a day either.
+    assert.equal(needsDate({ state: "REPORTED" as const, scheduledAt: null }), false);
   });
 
   it("does not reorder the caller's array", () => {

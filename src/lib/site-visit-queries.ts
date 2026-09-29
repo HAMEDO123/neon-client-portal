@@ -15,11 +15,16 @@ const visitSelect = {
   location: true,
   purpose: true,
   scheduledAt: true,
+  clientName: true,
+  clientPhone: true,
   state: true,
   report: true,
   reportedAt: true,
+  approvedAt: true,
+  reviewSentAt: true,
+  reviewNote: true,
   employee: { select: { id: true, name: true, color: true } },
-  project: { select: { id: true, name: true, clientName: true } },
+  project: { select: { id: true, name: true, clientName: true, clientPhone: true } },
 } as const;
 
 export type SiteVisitView = {
@@ -28,12 +33,21 @@ export type SiteVisitView = {
   title: string;
   location: string | null;
   purpose: string | null;
-  scheduledAt: Date;
+  /** Null when nobody has set a day yet. */
+  scheduledAt: Date | null;
+  /** Who the visit is for. A linked project fills these in when they are blank. */
+  clientName: string | null;
+  clientPhone: string | null;
   state: SiteVisitState;
   report: string | null;
   reportedAt: Date | null;
+  /** When the manager agreed it was finished. */
+  approvedAt: Date | null;
+  /** When the client was asked how it went, and what came of the asking. */
+  reviewSentAt: Date | null;
+  reviewNote: string | null;
   employee: { id: string; name: string; color: string };
-  project: { id: string; name: string; clientName: string | null } | null;
+  project: { id: string; name: string; clientName: string | null; clientPhone: string | null } | null;
 };
 
 /**
@@ -77,5 +91,19 @@ export async function projectsForVisits() {
     orderBy: { createdAt: "desc" },
     select: { id: true, name: true, clientName: true },
     take: 200,
+  });
+}
+
+/**
+ * The people who could be given a visit — whoever keeps the diary.
+ *
+ * Handing one to somebody without the permission would put it on a screen
+ * they do not have, which is a visit nobody will ever see.
+ */
+export async function siteVisitKeepers() {
+  return prisma.employee.findMany({
+    where: { active: true, accessRole: "EMPLOYEE", canLogSiteVisits: true },
+    orderBy: [{ order: "asc" }, { name: "asc" }],
+    select: { id: true, name: true },
   });
 }
