@@ -123,6 +123,9 @@ export const reads: ReadRegistry = {
         updatedAt: p.updatedAt,
         approvalsCount: p._count.approvals,
         commentsCount: p._count.comments,
+        // The manager's own figure for how far along it is — shown on the
+        // app's project cards. Already on the row getProjects() returns.
+        completionPercent: p.completionPercent,
       })),
     };
   }),
