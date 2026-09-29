@@ -26,6 +26,10 @@ struct ProjectListView: View {
             // L() has no English table, localizedEnum() humanizes the value.
             self == .all ? L("All") : localizedEnum("publish", rawValue)
         }
+
+        var symbol: String {
+            self == .all ? "square.grid.2x2" : ProjectPublishStyle.symbol(rawValue)
+        }
     }
 
     var body: some View {
@@ -120,7 +124,19 @@ struct ProjectListView: View {
 
         VStack(alignment: .leading, spacing: NeonSpace.stack) {
             SearchField(text: $query, prompt: L("Search projects"))
-            PillFilterBar(selection: $filter, options: PublishFilter.allCases, title: { $0.label })
+            // Separate chips rather than the pill bar: "Published" and
+            // "Archived" do not fit a quarter of a phone's width in English.
+            FilterChips(
+                selection: $filter,
+                options: PublishFilter.allCases,
+                inset: NeonSpace.gutter,
+                title: { $0.label },
+                symbol: { $0.symbol },
+                count: { option in
+                    option == .all ? data.projects.count : data.projects.filter { $0.publishState == option.rawValue }.count
+                }
+            )
+            .padding(.horizontal, -NeonSpace.gutter)
             if activeExtraFilters > 0 {
                 activeFilterChips
                     .transition(.neonRise)
@@ -198,7 +214,7 @@ struct ProjectListView: View {
         let segments = pipelineSegments(projects)
         SectionCard(
             L("Project Pipeline"),
-            subtitle: L("Where every project stands — tap one to filter"),
+            subtitle: L("Where every project stands"),
             symbol: "square.stack.3d.up.fill",
             hue: .blue
         ) {
@@ -237,7 +253,7 @@ struct ProjectListView: View {
                 .accessibilityHint(Text(L("Removes this filter")))
             }
             if let stageFilter {
-                Chip(localizedEnum("stage", stageFilter), symbol: "xmark.circle.fill", isSelected: true) {
+                Chip(projectStageLabel(stageFilter), symbol: "xmark.circle.fill", isSelected: true) {
                     withNeonAnimation(NeonMotion.snappy) { self.stageFilter = nil }
                 }
                 .accessibilityHint(Text(L("Removes this filter")))
@@ -429,36 +445,77 @@ private struct ProjectCoverPhoto: View {
     let showsStage: Bool
 
     var body: some View {
-        RemoteImage(url: project.resolvedCoverURL, contentMode: .fill, placeholderSymbol: "photo.on.rectangle.angled")
-            .frame(height: height)
-            .frame(maxWidth: .infinity)
-            .overlay {
-                // A scrim only where the badges sit, so the photo stays bright.
-                LinearGradient(colors: [.black.opacity(0.22), .clear, .clear, .black.opacity(showsStage ? 0.28 : 0)], startPoint: .top, endPoint: .bottom)
+        let hasCover = project.resolvedCoverURL != nil
+        Group {
+            if hasCover {
+                RemoteImage(url: project.resolvedCoverURL, contentMode: .fill, placeholderSymbol: "photo.on.rectangle.angled")
+                    .overlay {
+                        // A scrim only where the badges sit, so the photo stays bright.
+                        LinearGradient(colors: [.black.opacity(0.22), .clear, .clear, .black.opacity(showsStage ? 0.28 : 0)], startPoint: .top, endPoint: .bottom)
+                    }
+            } else {
+                ProjectCoverFallback(name: project.name, compact: !showsStage)
             }
-            .overlay(alignment: .topLeading) {
-                ProjectPublishPill(state: project.publishState, onPhoto: true)
+        }
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .topLeading) {
+            ProjectPublishPill(state: project.publishState, onPhoto: true)
+                .padding(10)
+        }
+        .overlay(alignment: .topTrailing) {
+            HStack(spacing: 4) {
+                if project.approvalsCount > 0 {
+                    ProjectPhotoBadge(text: NeonFormat.integer(project.approvalsCount), symbol: "checkmark.seal.fill")
+                        .accessibilityLabel(Text(L("Approvals: %d", project.approvalsCount)))
+                }
+                if project.commentsCount > 0 {
+                    ProjectPhotoBadge(text: NeonFormat.integer(project.commentsCount), symbol: "bubble.left.fill")
+                        .accessibilityLabel(Text(L("Comments: %d", project.commentsCount)))
+                }
+            }
+            .padding(10)
+        }
+        .overlay(alignment: .bottomLeading) {
+            if showsStage {
+                ProjectPhotoBadge(text: projectStageLabel(project.currentStage), symbol: "flag.fill")
                     .padding(10)
             }
-            .overlay(alignment: .topTrailing) {
-                HStack(spacing: 4) {
-                    if project.approvalsCount > 0 {
-                        ProjectPhotoBadge(text: NeonFormat.integer(project.approvalsCount), symbol: "checkmark.seal.fill")
-                            .accessibilityLabel(Text(L("Approvals: %d", project.approvalsCount)))
-                    }
-                    if project.commentsCount > 0 {
-                        ProjectPhotoBadge(text: NeonFormat.integer(project.commentsCount), symbol: "bubble.left.fill")
-                            .accessibilityLabel(Text(L("Comments: %d", project.commentsCount)))
-                    }
+        }
+    }
+}
+
+/// A project with no cover yet: its own pastel (the same one wherever its
+/// name appears) and a quiet note that the cover is missing.
+private struct ProjectCoverFallback: View {
+    let name: String
+    let compact: Bool
+
+    var body: some View {
+        let hue = NeonPalette.hue(for: name)
+        ZStack {
+            LinearGradient(colors: [hue.wash, hue.pastel], startPoint: .topLeading, endPoint: .bottomTrailing)
+                // A glow toward the trailing top, drawn over the gradient so it
+                // never sizes the card.
+                .overlay(alignment: .topTrailing) {
+                    Circle()
+                        .fill(hue.color.opacity(0.16))
+                        .frame(width: 180, height: 180)
+                        .blur(radius: 40)
+                        .offset(x: 60, y: -70)
+                        .flipsForRightToLeftLayoutDirection(true)
                 }
-                .padding(10)
-            }
-            .overlay(alignment: .bottomLeading) {
-                if showsStage {
-                    ProjectPhotoBadge(text: localizedEnum("stage", project.currentStage), symbol: "flag.fill")
-                        .padding(10)
+            VStack(spacing: 6) {
+                IconTile("photo.on.rectangle.angled", hue: hue, size: compact ? 36 : 46, style: .filled)
+                if !compact {
+                    Text(L("No cover photo yet"))
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(hue.deep.opacity(0.8))
                 }
             }
+        }
+        .clipped()
+        .accessibilityHidden(true)
     }
 }
 

@@ -90,6 +90,13 @@ enum ProjectPublishStyle {
     }
 }
 
+/// A journey stage in the studio's words. English has no table, and
+/// `localizedEnum` would humanize "BOQ" into "Boq".
+func projectStageLabel(_ raw: String) -> String {
+    let label = localizedEnum("stage", raw)
+    return raw == "BOQ" && label == "Boq" ? L("BOQ") : label
+}
+
 // MARK: - On a photo
 
 /// A small frosted label laid over a photo: "Cover", "Before/After", a

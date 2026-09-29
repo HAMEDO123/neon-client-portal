@@ -10,19 +10,19 @@ struct ProjectOverviewContent: View {
 
     @Environment(\.openURL) private var openURL
 
+    // Five cards, not one stack of them: they become rows of the page's own
+    // lazy stack, so each can be scrolled to (`-neonScroll client`).
     var body: some View {
-        VStack(alignment: .leading, spacing: NeonSpace.stack) {
-            progressCard
-                .id("progress")
-            figures
-                .id("figures")
-            clientCard
-                .id("client")
-            detailsCard
-                .id("details")
-            visibilityCard
-                .id("visibility")
-        }
+        progressCard
+            .id("progress")
+        figures
+            .id("figures")
+        clientCard
+            .id("client")
+        detailsCard
+            .id("details")
+        visibilityCard
+            .id("visibility")
     }
 
     // MARK: - Where it stands
@@ -34,7 +34,7 @@ struct ProjectOverviewContent: View {
     private var progressCard: some View {
         SectionCard(
             L("Progress"),
-            subtitle: L("Stage: %@", localizedEnum("stage", detail.currentStage)),
+            subtitle: L("Stage: %@", projectStageLabel(detail.currentStage)),
             symbol: "chart.pie.fill",
             hue: .blue
         ) {
@@ -51,7 +51,7 @@ struct ProjectOverviewContent: View {
                 }
                 Spacer(minLength: 0)
             }
-            StageTrack(stages: projectStages.map { localizedEnum("stage", $0) }, current: stageIndex, tint: .neonBlue)
+            StageTrack(stages: projectStages.map { projectStageLabel($0) }, current: stageIndex, tint: .neonBlue)
                 .padding(.horizontal, -NeonSpace.xs)
         }
     }
@@ -87,9 +87,9 @@ struct ProjectOverviewContent: View {
                 AvatarView(url: nil, name: detail.clientName.isEmpty ? "?" : detail.clientName, size: 46, style: .solid)
                 VStack(alignment: .leading, spacing: 2) {
                     DirText(detail.clientName.isEmpty ? L("No client name yet") : detail.clientName, font: .neonRowTitle, fill: false, lineLimit: 2)
-                    Text(L("Client Name"))
-                        .font(.neonSubtitle)
-                        .foregroundStyle(Color.neonTextSecondary)
+                    if let type = nonEmpty(detail.projectType) {
+                        DirText(type, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 1)
+                    }
                 }
                 Spacer(minLength: 4)
                 if let phone = nonEmpty(detail.clientPhone), let url = URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })") {

@@ -180,7 +180,7 @@ struct ProjectGalleryView: View {
                                 .accessibilityLabel(Text(L("Cover")))
                         }
                         if image.isBeforeAfter {
-                            ProjectPhotoBadge(text: large ? L("Before/After") : "", symbol: "square.split.2x1.fill")
+                            ProjectPhotoBadge(text: L("Before/After"), symbol: large ? "square.split.2x1.fill" : nil)
                                 .accessibilityLabel(Text(L("Before/After")))
                         }
                     }

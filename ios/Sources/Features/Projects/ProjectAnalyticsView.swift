@@ -20,8 +20,8 @@ struct ProjectAnalyticsView: View {
                 ErrorState(message: errorMessage) { await load() }
             } else {
                 VStack(spacing: NeonSpace.stack) {
-                    StatGrid {
-                        ForEach(0..<4, id: \.self) { _ in SkeletonKPICard() }
+                    StatGrid(columns: 3) {
+                        ForEach(0..<6, id: \.self) { _ in SkeletonKPICard(compact: true) }
                     }
                     SkeletonCard(lines: 4)
                 }
@@ -35,20 +35,25 @@ struct ProjectAnalyticsView: View {
         VStack(alignment: .leading, spacing: NeonSpace.stack) {
             if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
-            StatGrid {
-                KPICard(L("Project Opens"), value: Double(analytics.views), symbol: "eye.fill", hue: .blue)
-                // The client page does not log render views yet (README, Known
-                // issues), so a zero here is "not recorded", never "not looked at".
-                KPICard(
-                    L("Renders Viewed"), value: Double(analytics.renderViews), symbol: "photo.fill", hue: .purple,
-                    caption: analytics.renderViews == 0 ? L("Not recorded by the client page yet") : nil
-                )
-                KPICard(L("Downloads"), value: Double(analytics.downloads), symbol: "arrow.down.circle.fill", hue: .green)
-                KPICard(L("Approval Responses"), value: Double(analytics.approvals), symbol: "checkmark.seal.fill", hue: .orange)
-                KPICard(L("Comments"), value: Double(analytics.comments), symbol: "bubble.left.fill", hue: .pink)
-                KPICard(L("All Activity"), value: Double(analytics.totalEvents), symbol: "waveform.path.ecg", hue: .indigo)
+            StatGrid(columns: 3) {
+                KPICard(L("Project Opens"), value: Double(analytics.views), symbol: "eye.fill", hue: .blue, density: .compact)
+                KPICard(L("Renders Viewed"), value: Double(analytics.renderViews), symbol: "photo.fill", hue: .purple, density: .compact)
+                KPICard(L("Downloads"), value: Double(analytics.downloads), symbol: "arrow.down.circle.fill", hue: .green, density: .compact)
+                KPICard(L("Approval Responses"), value: Double(analytics.approvals), symbol: "checkmark.seal.fill", hue: .orange, density: .compact)
+                KPICard(L("Comments"), value: Double(analytics.comments), symbol: "bubble.left.fill", hue: .pink, density: .compact)
+                KPICard(L("All Activity"), value: Double(analytics.totalEvents), symbol: "waveform.path.ecg", hue: .indigo, density: .compact)
             }
             .id("figures")
+
+            // The client page does not log render views yet (README, Known
+            // issues), so a zero there is "not recorded", never "not looked at".
+            if analytics.renderViews == 0 {
+                Label(L("The client page doesn't record render views yet, so that figure says nothing about whether renders were looked at."), systemImage: "info.circle")
+                    .font(.neonSubtitle)
+                    .foregroundStyle(Color.neonTextTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
+            }
 
             if analytics.totalEvents == 0 {
                 EmptyState(
@@ -62,17 +67,16 @@ struct ProjectAnalyticsView: View {
                 if !analytics.byType.isEmpty {
                     SectionCard(
                         L("Activity Breakdown"),
-                        subtitle: L("Everything the client did, by kind"),
-                        symbol: "chart.pie.fill",
+                        subtitle: L("Every event logged on the client's link, by kind"),
+                        symbol: "chart.bar.fill",
                         hue: .purple
                     ) {
-                        NeonDonutChart(
-                            breakdown(analytics),
-                            size: 132,
-                            lineWidth: 20,
-                            centerValue: NeonFormat.integer(analytics.totalEvents),
-                            centerTitle: L("events")
-                        )
+                        VStack(spacing: NeonSpace.md) {
+                            ForEach(Array(sortedTypes(analytics).enumerated()), id: \.element.type) { index, entry in
+                                breakdownRow(type: entry.type, count: entry.count.type, total: analytics.totalEvents)
+                                    .staggered(index)
+                            }
+                        }
                     }
                     .id("breakdown")
                 }
@@ -109,11 +113,40 @@ struct ProjectAnalyticsView: View {
         }
     }
 
-    /// Largest first; the chart gives each slice the next colour of the palette.
-    private func breakdown(_ analytics: ProjectAnalytics) -> [ChartPoint] {
-        analytics.byType
-            .sorted { $0.count.type > $1.count.type }
-            .map { ChartPoint(projectActivityLabel($0.type), Double($0.count.type), id: $0.type) }
+    /// Largest first.
+    private func sortedTypes(_ analytics: ProjectAnalytics) -> [ProjectActivityCount] {
+        analytics.byType.sorted { $0.count.type > $1.count.type }
+    }
+
+    /// One kind of event: what it was, how many, and its share as a bar —
+    /// rows rather than a donut, because the website's names for these are
+    /// whole sentences a chart's key would cut short.
+    private func breakdownRow(type: String, count: Int, total: Int) -> some View {
+        let hue = ProjectActivityStyle.hue(type)
+        let share = Double(count) / Double(max(total, 1))
+        return HStack(alignment: .center, spacing: NeonSpace.md) {
+            IconTile(ProjectActivityStyle.symbol(type), hue: hue, size: 34)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(projectActivityLabel(type))
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(Color.neonInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 6)
+                    Text(NeonFormat.integer(count))
+                        .font(.system(.subheadline, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.neonInk)
+                    Text(NeonFormat.percent(share * 100))
+                        .font(.system(.caption, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.neonTextTertiary)
+                        .frame(minWidth: 34, alignment: .trailing)
+                }
+                ProgressBar(progress: share, tint: hue.color, height: 6)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func load() async {

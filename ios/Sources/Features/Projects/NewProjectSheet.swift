@@ -25,7 +25,7 @@ struct NewProjectSheet: View {
     var body: some View {
         SheetScaffold(
             L("New Project"),
-            subtitle: L("Start with the essentials — renders, drawings, BOQ and pricing come right after."),
+            subtitle: L("Renders, drawings and pricing come next"),
             symbol: "folder.badge.plus",
             primaryTitle: L("Create Project"),
             isPrimaryEnabled: isValid

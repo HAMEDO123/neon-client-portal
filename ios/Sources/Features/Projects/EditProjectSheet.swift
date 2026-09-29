@@ -100,7 +100,7 @@ struct EditProjectSheet: View {
                 )
                 MenuField(
                     L("Journey Stage"), selection: $currentStage, options: ProjectConstants.projectStages,
-                    title: { localizedEnum("stage", $0) }
+                    title: { projectStageLabel($0) }
                 )
                 NumberField(L("Completion %"), value: $completionPercent, unit: "%", decimals: 0)
                 ProgressBar(progress: min(max(completionPercent ?? 0, 0), 100) / 100, height: 8)

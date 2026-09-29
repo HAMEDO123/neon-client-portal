@@ -192,7 +192,6 @@
 "Show as grid" = "عرض كشبكة";
 "Show as list" = "عرض كقائمة";
 "Project Pipeline" = "مسار المشاريع";
-"Where every project stands — tap one to filter" = "وين واصل كل مشروع — اضغط على وحدة لتفلتر";
 "Removes this filter" = "بيشيل هالفلتر";
 "All Projects" = "كل المشاريع";
 "Newest update first" = "الأحدث تحديثاً أولاً";
@@ -256,7 +255,7 @@
 /* Redesign: uploading */
 "From the library" = "من المكتبة";
 "Take a photo" = "التقاط صورة";
-"Pick up to 20 at a time. Each one is sent on its own, so a slow connection loses one photo at most, never the batch." = "اختار لحد 20 صورة بالمرة. كل وحدة بتنبعث لحالها، فالنت الضعيف بيضيّع صورة وحدة بالأكثر، مش الدفعة كلها.";
+"Pick up to 20 at a time. Each one goes up on its own, and a retry sends only the ones that didn't." = "اختار لحد 20 صورة بالمرة. كل وحدة بتنرفع لحالها، وإعادة المحاولة بترفع بس اللي ما انرفعت.";
 "Shown under the photo on the client's page." = "بيظهر تحت الصورة بصفحة العميل.";
 "%d of %d uploaded" = "انرفع %d من %d";
 "Upload the rest" = "رفع الباقي";
@@ -285,3 +284,8 @@
 "events" = "حدث";
 "Newest first" = "الأحدث أولاً";
 "Nothing recent to show." = "ما في شي حديث.";
+"Where every project stands" = "وين واصل كل مشروع";
+"No cover photo yet" = "ما في صورة غلاف بعد";
+"Renders, drawings and pricing come next" = "الريندر والمخططات والتسعير بتيجي بعدين";
+"The client page doesn't record render views yet, so that figure says nothing about whether renders were looked at." = "صفحة العميل ما بتسجّل مشاهدات الريندر لسا، فهالرقم ما بيقول إذا انشافت الصور أو لا.";
+"Every event logged on the client's link, by kind" = "كل حدث انسجّل على رابط العميل، حسب النوع";

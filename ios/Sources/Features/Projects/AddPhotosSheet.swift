@@ -158,7 +158,7 @@ struct AddPhotosSheet: View {
             .disabled(isUploading)
 
             if photos.isEmpty {
-                Text(L("Pick up to 20 at a time. Each one is sent on its own, so a slow connection loses one photo at most, never the batch."))
+                Text(L("Pick up to 20 at a time. Each one goes up on its own, and a retry sends only the ones that didn't."))
                     .font(.neonSubtitle)
                     .foregroundStyle(Color.neonTextTertiary)
                     .fixedSize(horizontal: false, vertical: true)

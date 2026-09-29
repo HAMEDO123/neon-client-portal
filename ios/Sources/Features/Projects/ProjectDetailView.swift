@@ -185,7 +185,6 @@ struct ProjectDetailView: View {
         .id("sections")
 
         sectionContent(detail)
-            .id(section)
             .transition(.neonRise)
     }
 

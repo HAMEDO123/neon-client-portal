@@ -45,7 +45,7 @@ struct ProjectFilterSheet: View {
                     }
                     ForEach(Array(ProjectConstants.projectStages.enumerated()), id: \.element) { index, stage in
                         ProjectFilterChoice(
-                            title: localizedEnum("stage", stage),
+                            title: projectStageLabel(stage),
                             hue: NeonPalette.hue(at: index),
                             count: projects.isEmpty ? nil : projects.filter { $0.currentStage == stage }.count,
                             isSelected: stageFilter == stage
