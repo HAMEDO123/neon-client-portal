@@ -100,15 +100,15 @@ jobs:
           mkdir -p screenshots
           xcrun simctl install "$DEVICE_ID" "$APP"
 
-          xcrun simctl launch "$DEVICE_ID" com.neon.admin
+          xcrun simctl launch "$DEVICE_ID" com.neonjo.staff
           sleep 6
           xcrun simctl io "$DEVICE_ID" screenshot screenshots/login-screen.png
 
           # -uiTestMode is a Debug-only flag (see APIClient.swift / Models.swift)
           # that injects fixture data instead of a real login, so the Dashboard
           # can be screenshotted without any production credentials in CI.
-          xcrun simctl terminate "$DEVICE_ID" com.neon.admin || true
-          xcrun simctl launch "$DEVICE_ID" com.neon.admin -uiTestMode
+          xcrun simctl terminate "$DEVICE_ID" com.neonjo.staff || true
+          xcrun simctl launch "$DEVICE_ID" com.neonjo.staff -uiTestMode
           sleep 6
           xcrun simctl io "$DEVICE_ID" screenshot screenshots/dashboard-preview.png
 
