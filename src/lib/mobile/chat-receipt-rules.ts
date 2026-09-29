@@ -1,4 +1,4 @@
-import { isReadBy } from "@/lib/presence";
+import { ONLINE_WINDOW_MS, isReadBy } from "@/lib/presence";
 import type { Conversation } from "@/lib/chat-conversations";
 
 // The phone's WhatsApp ticks: one grey tick when a message is saved, two grey
@@ -7,11 +7,16 @@ import type { Conversation } from "@/lib/chat-conversations";
 // so the rule the app draws from is pinned by tests.
 //
 // Built only from what the platform already records, and never a guess:
-// "reached" means the person's app or web page was open at or after the
-// moment the message was saved (their ChatPresence heartbeat, which is how the
-// message could have got to them at all), and "read" means their ChatRead
-// marker for this conversation is at or after it. A read implies it reached
-// them, since opening a conversation is being here.
+// "reached" means the person's app or web page was connected at the moment
+// the message was saved or after it — by the platform's own meaning of
+// connected, the window that draws their green dot (lib/presence.ts): their
+// last heartbeat is after the message, or close enough before it that they
+// counted as online when it was sent. "Read" means their ChatRead marker for
+// this conversation is at or after it. A read implies it reached them, since
+// opening a conversation is being here.
+//
+// Both only ever move forward (a heartbeat and a read marker are only ever
+// replaced by later ones), so a message's ticks never go back.
 //
 // In the team and in a group the ticks turn only when EVERYBODY else has got
 // there. The web deliberately draws no read tick in the team, because one pair
@@ -32,6 +37,8 @@ export type ReceiptMember = {
   readAt: string | null;
   /** Their last heartbeat anywhere on the platform, or null when never seen. */
   seenAt: string | null;
+  /** Here right now, by the green dot's own window — what the app's header says. */
+  online: boolean;
 };
 
 /** Who can be in each kind of conversation, as the database says. */
@@ -71,10 +78,16 @@ export function othersIn(memberKeys: readonly string[], viewerKey: string) {
   return memberKeys.filter((key) => key !== viewerKey);
 }
 
+/**
+ * Connected when the message was saved, or since. A beat comes only every 30
+ * seconds, so "a beat after it" alone would keep a message to somebody sitting
+ * in front of the app on one tick for up to half a minute; the online window
+ * is exactly how long after a beat the platform still calls them here.
+ */
 function reached(createdAt: Date | string, member: Pick<ReceiptMember, "readAt" | "seenAt">) {
   const at = new Date(createdAt).getTime();
   if (member.readAt && new Date(member.readAt).getTime() >= at) return true;
-  return member.seenAt ? new Date(member.seenAt).getTime() >= at : false;
+  return member.seenAt ? new Date(member.seenAt).getTime() >= at - ONLINE_WINDOW_MS : false;
 }
 
 /**

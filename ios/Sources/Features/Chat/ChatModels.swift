@@ -340,13 +340,42 @@ struct ChatReactionSnapshot: Decodable, Equatable {
     }
 }
 
-/// Who is writing, and how far each person has read — the stream's `people` event.
+/// Who is writing, and how far each person has read — the stream's `people`
+/// event, and `chat/receipts` answers the same shape. `members` is everybody
+/// else in the conversation with their read marker and their last heartbeat,
+/// which is what the ticks on my own messages are drawn from
+/// (lib/mobile/chat-receipt-rules.ts); a server from before it existed sends
+/// none, and the snapshot still reads.
 struct ChatPeopleSnapshot: Decodable, Equatable {
     var typing: [Typing] = []
     var reads: [ReadMark] = []
+    var members: [Member] = []
 
     struct Typing: Decodable, Equatable { let memberKey: String; let name: String }
     struct ReadMark: Decodable, Equatable { let key: String; let at: String }
+    /// Somebody else in the conversation. `readAt` is nil when they have never
+    /// opened it, `seenAt` when the platform has never seen them — not knowing
+    /// is never read as "has not".
+    struct Member: Decodable, Equatable, Identifiable {
+        let key: String
+        let name: String
+        let readAt: String?
+        let seenAt: String?
+        /// Here right now, by the green dot's window, as the server judged it.
+        let online: Bool?
+        var id: String { key }
+    }
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey { case typing, reads, members }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        typing = (try? container.decodeIfPresent([Typing].self, forKey: .typing)) ?? []
+        reads = (try? container.decodeIfPresent([ReadMark].self, forKey: .reads)) ?? []
+        members = (try? container.decodeIfPresent([Member].self, forKey: .members)) ?? []
+    }
 }
 
 /// The Tasks tab: every card this person can see, with the conversation it lives in.

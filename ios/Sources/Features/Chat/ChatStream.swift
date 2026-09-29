@@ -20,7 +20,13 @@ enum ChatStreamEvent {
     case messages([ChatMessage])
     case reactions(ChatReactionSnapshot)
     case people(ChatPeopleSnapshot)
+    /// The connection is open: from now until `.disconnected`, what the
+    /// stream carries is live and a screen may lean on it.
     case connected
+    /// The connection ended (a blip, a proxy, the four-minute lifetime); it
+    /// reconnects by itself, and until it does the screen's poll is the only
+    /// news.
+    case disconnected
 }
 
 enum ChatStream {
@@ -33,25 +39,29 @@ enum ChatStream {
     /// for each one read. Reconnects with a short backoff on its own, resuming
     /// from the last message it saw so nothing is repeated or skipped — the
     /// caller only needs to run this inside a `.task` and cancel it on
-    /// disappear.
-    static func listen(conversation: String, token: String, onEvent: @escaping (ChatStreamEvent) -> Void) async {
-        var since = Date()
+    /// disappear. `since` is the newest message the screen already holds, by
+    /// the server's own clock; without one it starts from now.
+    static func listen(conversation: String, token: String, since start: Date? = nil, onEvent: @escaping (ChatStreamEvent) -> Void) async {
+        var since = start ?? Date()
         var backoff: UInt64 = 1
         while !Task.isCancelled {
             let connectedAt = Date()
-            let sawMessage = await open(conversation: conversation, since: since, token: token) { event in
+            let reached = await open(conversation: conversation, since: since, token: token) { event in
                 if case .messages(let batch) = event, let last = batch.last, let at = parseISODate(last.createdAt) {
                     since = at
                 }
                 onEvent(event)
             }
             if Task.isCancelled { break }
+            onEvent(.disconnected)
             // A connection that stayed up a while failing is a network blip,
             // not a broken stream — try again quickly. One that never opened
             // (a proxy that refuses it outright) backs off so a hostile
             // network is not hammered every second.
+            // (It read `stayedUp || !reached`, which reset the backoff for
+            // exactly the connection that never opened.)
             let stayedUp = Date().timeIntervalSince(connectedAt) > 5
-            backoff = stayedUp || !sawMessage ? 1 : min(backoff * 2, 30)
+            backoff = stayedUp && reached ? 1 : min(backoff * 2, 30)
             try? await Task.sleep(nanoseconds: backoff * 1_000_000_000)
         }
     }

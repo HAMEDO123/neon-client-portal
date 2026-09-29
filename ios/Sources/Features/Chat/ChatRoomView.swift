@@ -1,26 +1,31 @@
 import PhotosUI
 import SwiftUI
 
-/// One conversation. Live updates come from the stream (ChatStream.listen) —
-/// a new message the instant somebody sends one, who is typing, and who has
-/// read how far — with a background poll of `/chat/messages` underneath as
-/// the fallback and the source every task and meeting card's own state
-/// refreshes from, since that read already re-draws each card fresh every
-/// time.
+/// One conversation, as a messaging app draws it. Its state — messages from
+/// the live stream and the poll merged into one list, what this phone is still
+/// sending, who is writing, how far everybody has read — is
+/// ChatConversationStore's; this is the screen:
+///
+/// - my own messages carry WhatsApp's ticks (ChatReceipts.swift);
+/// - photos are drawn without a bubble, four or more in a row as a grid
+///   (ChatPhotos.swift, ChatMessageRow.swift);
+/// - "typing…" is a bubble at the foot of the conversation and a line under
+///   the name in the header (ChatTyping.swift);
+/// - a new message scrolls into view only when I am already at the bottom —
+///   otherwise a pill says how many arrived — and my own always does.
 struct ChatRoomView: View {
     let route: ChatRoute
 
     @EnvironmentObject var api: APIClient
+    @StateObject private var store: ChatConversationStore
     @StateObject private var recorder = ChatVoiceRecorder()
+    @StateObject private var scroll = ChatScrollTracker()
     @ObservedObject private var voicePlayer = ChatVoicePlayer.shared
+    @Environment(\.scenePhase) private var scenePhase
 
-    @State private var messages: [ChatMessage]?
-    @State private var cachedAt: Date?
-    @State private var errorMessage: String?
     @State private var draft = ""
-    @State private var sending = false
     @State private var sendError: String?
-    @State private var photoItem: PhotosPickerItem?
+    @State private var photoItems: [PhotosPickerItem] = []
     @State private var showPhotos = false
     @State private var showCamera = false
     @State private var showFiles = false
@@ -29,13 +34,15 @@ struct ChatRoomView: View {
     @State private var showTaskCompose = false
     @State private var showMeetingCompose = false
     @State private var showAssistant = false
-    @State private var reactions = ChatReactionSnapshot()
-    @State private var people = ChatPeopleSnapshot()
     @State private var searching = false
     @State private var searchQuery = ""
     @State private var scrollTarget: String?
-    @State private var lastTypingSentAt: Date?
     @State private var deleteTarget: ChatMessage?
+    /// Messages from somebody else that arrived while I was scrolled up.
+    @State private var unseen = 0
+    @State private var arrivalsCounted = 0
+    @State private var outgoingCounted = 0
+    @State private var didFirstScroll = false
     @FocusState private var composerFocused: Bool
     @Environment(\.dismiss) private var dismissRoom
     // A group the manager made: its info sheet, and the name and picture it
@@ -55,96 +62,24 @@ struct ChatRoomView: View {
     @State private var taggedProjectId: String?
     private var taggedProject: ChatMessage.ProjectTag? { taggableProjects.first { $0.id == taggedProjectId } }
 
+    init(route: ChatRoute) {
+        self.route = route
+        _store = StateObject(wrappedValue: ChatConversationStore(slug: route.slug, isGroup: route.isGroup))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if let cachedAt { OfflineBanner(savedAt: cachedAt).padding(.horizontal, 12).padding(.top, 6) }
+            if let cachedAt = store.cachedAt { OfflineBanner(savedAt: cachedAt).padding(.horizontal, 12).padding(.top, 6) }
             if searching {
                 SearchField(text: $searchQuery, prompt: L("Search this chat")).padding(.horizontal, 12).padding(.top, 8)
             }
             ChatPinnedStrip(
-                pinned: reactions.pinned,
+                pinned: store.reactions.pinned,
                 onOpen: { scrollTarget = $0 },
                 onUnpin: { id in Task { try? await api.setChatPinned(messageId: id, pin: false) } }
             )
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 6) {
-                        if let messages {
-                            let shown = displayed(messages)
-                            if shown.isEmpty {
-                                EmptyState(
-                                    symbol: searching ? "magnifyingglass" : "bubble.left",
-                                    title: searching ? L("No matches") : L("No messages yet"),
-                                    detail: searching ? nil : L("Say hello.")
-                                )
-                            }
-                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, message in
-                                if !searching, startsNewDay(at: index, in: shown) {
-                                    DaySeparator(iso: message.createdAt)
-                                }
-                                MessageView(
-                                    message: message,
-                                    mine: message.isMine(api.identity),
-                                    showAuthor: route.isGroup && showsAuthor(at: index, in: shown),
-                                    viewerIdentity: api.identity,
-                                    tallies: chatTally(reactions.reactions, messageId: message.id, myKey: memberKey),
-                                    isPinned: reactions.pinned.contains { $0.id == message.id },
-                                    isRead: isRead(message),
-                                    callSlug: route.slug,
-                                    openImage: { url in
-                                        viewer = ImageViewerPayload(items: [ImageViewerItem(id: message.id, url: url, caption: message.body)], startIndex: 0)
-                                    },
-                                    sendProof: { assignment, card in
-                                        proofFor = ProofTarget(id: assignment.id, title: card.title, detail: card.description)
-                                    },
-                                    onReact: { emoji in Task { try? await api.toggleChatReaction(messageId: message.id, emoji: emoji) } },
-                                    onPin: { pin in Task { try? await api.setChatPinned(messageId: message.id, pin: pin) } },
-                                    onDelete: canDelete(message) ? { deleteTarget = message } : nil,
-                                    onCardChanged: { Task { await load() } }
-                                )
-                                .id(message.id)
-                            }
-                        } else if let errorMessage {
-                            ErrorState(message: errorMessage) { await load() }
-                        } else {
-                            ProgressView().padding(.top, 60)
-                        }
-                        Color.clear.frame(height: 4).id("bottom")
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .onChange(of: messages?.last?.id) { _ in
-                    guard scrollTarget == nil else { return }
-                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
-                .onChange(of: composerFocused) { focused in
-                    if focused {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
-                        }
-                    }
-                }
-                .onChange(of: scrollTarget) { target in
-                    guard let target else { return }
-                    withAnimation { proxy.scrollTo(target, anchor: .center) }
-                    scrollTarget = nil
-                }
-                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
-            }
-
-            if let name = typingName {
-                HStack(spacing: 6) {
-                    ProgressView().scaleEffect(0.6)
-                    Text(L("%@ is typing…", name)).font(.system(size: 12)).foregroundStyle(Color.neonInk.opacity(0.5))
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 2)
-                .transition(.opacity)
-            }
+            conversation
 
             composer
         }
@@ -186,45 +121,43 @@ struct ChatRoomView: View {
                 dismissRoom()
             }
         }
-        .task { await poll() }
-        .task { await listenLive() }
+        .task { await store.run(api: api) }
         .task { taggableProjects = (try? await api.fetchChatProjects()) ?? [] }
-        .fullScreenCover(item: $viewer) { ImageViewerView(payload: $0) }
+        .onChange(of: scenePhase) { phase in
+            store.isActive = phase == .active
+            if phase == .active { Task { await store.load() } }
+        }
+        .onChange(of: draft) { value in store.draftChanged(value) }
+        .fullScreenCover(item: $viewer) { ImageViewerView(payload: $0).neonLanguage() }
         .sheet(item: $proofFor) { target in
             ProofSheet(targetId: target.id, title: target.title, subtitle: target.detail) {
-                Task { await load() }
+                Task { await store.load() }
             }
         }
         .sheet(isPresented: $showTaskCompose) {
-            ChatTaskComposeSheet(conversationSlug: route.slug) { Task { await load() } }
+            ChatTaskComposeSheet(conversationSlug: route.slug) { Task { await store.load() } }
         }
         .sheet(isPresented: $showMeetingCompose) {
-            ChatMeetingComposeSheet(conversationSlug: route.slug) { Task { await load() } }
+            ChatMeetingComposeSheet(conversationSlug: route.slug) { Task { await store.load() } }
         }
         .sheet(isPresented: $showAssistant) { ChatAssistantSheet() }
         .confirmationDialog(L("Delete this message?"), isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
             Button(L("Delete"), role: .destructive) {
-                if let target = deleteTarget { Task { await delete(target) } }
+                if let target = deleteTarget { Task { await store.delete(target) } }
                 deleteTarget = nil
             }
             Button(L("Cancel"), role: .cancel) { deleteTarget = nil }
         }
-        .photosPicker(isPresented: $showPhotos, selection: $photoItem, matching: .images)
-        .onChange(of: photoItem) { item in
-            guard let item else { return }
-            photoItem = nil
-            Task {
-                guard let file = await UploadMaker.photo(item) else {
-                    sendError = L("That photo could not be read.")
-                    return
-                }
-                await send(file: file)
-            }
+        .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 10, matching: .images)
+        .onChange(of: photoItems) { items in
+            guard !items.isEmpty else { return }
+            photoItems = []
+            Task { await sendPhotos(items) }
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker { image in
                 guard let file = UploadMaker.photo(image) else { return }
-                Task { await send(file: file) }
+                send(file: file)
             }
             .ignoresSafeArea()
         }
@@ -234,13 +167,288 @@ struct ChatRoomView: View {
                 sendError = L("That file could not be read.")
                 return
             }
-            Task { await send(file: file) }
+            send(file: file)
         }
         .alert(L("Microphone access is off"), isPresented: $recorder.permissionDenied) {
             Button(L("OK"), role: .cancel) {}
         } message: {
             Text(L("Turn it on in Settings to send a voice message."))
         }
+    }
+
+    // MARK: The conversation
+
+    private var conversation: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    LazyVStack(spacing: 5) {
+                        if let messages = store.messages {
+                            let shown = displayed(messages)
+                            if shown.isEmpty && store.pending.isEmpty {
+                                EmptyState(
+                                    symbol: searching ? "magnifyingglass" : "bubble.left",
+                                    title: searching ? L("No matches") : L("No messages yet"),
+                                    detail: searching ? nil : L("Say hello.")
+                                )
+                            }
+                            ForEach(rows(shown)) { row in
+                                rowView(row, proxy: proxy)
+                                    .id(row.id)
+                            }
+                            if !searching, !store.typing.isEmpty {
+                                ChatTypingBubble(typers: store.typing, isGroup: route.isGroup)
+                                    .padding(.top, 4)
+                                    .padding(.trailing, 44)
+                                    .transition(.neonRise)
+                            }
+                        } else if let errorMessage = store.errorMessage {
+                            ErrorState(message: errorMessage) { await store.load() }
+                        } else {
+                            ProgressView().padding(.top, 60)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                    Color.clear.frame(height: 10).id("bottom")
+                }
+                .animation(NeonMotion.resolved(NeonMotion.quick), value: store.typing.isEmpty)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: ChatScrollBottomKey.self, value: geo.frame(in: .named("chatScroll")).maxY)
+                    }
+                )
+            }
+            .coordinateSpace(name: "chatScroll")
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: ChatViewportKey.self, value: geo.size.height)
+                }
+            )
+            .onPreferenceChange(ChatViewportKey.self) { scroll.setViewport($0) }
+            .onPreferenceChange(ChatScrollBottomKey.self) { scroll.setContentBottom($0) }
+            .scrollDismissesKeyboard(.interactively)
+            .overlay(alignment: .bottom) { jumpControl(proxy) }
+            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+            .onChange(of: store.messages?.last?.id) { _ in
+                guard !searching else { return }
+                if !didFirstScroll {
+                    didFirstScroll = true
+                    pinToBottom(proxy, animated: false)
+                    return
+                }
+                // Somebody else's comes into view only when I was already
+                // reading the newest; otherwise the pill counts it. (What I
+                // send scrolls into view the moment I send it, below.)
+                if scroll.nearBottom { pinToBottom(proxy, animated: true) }
+            }
+            .onChange(of: store.arrivedFromOthers) { count in
+                let arrived = count - arrivalsCounted
+                arrivalsCounted = count
+                if arrived > 0, !scroll.nearBottom { unseen += arrived }
+            }
+            .onChange(of: store.outgoing.count) { count in
+                // Something of mine was just written: always into view. A send
+                // finishing (the count going down) leaves the reader where they are.
+                if count > outgoingCounted, !searching { pinToBottom(proxy, animated: true) }
+                outgoingCounted = count
+            }
+            .onChange(of: store.typing.isEmpty) { empty in
+                if !empty, scroll.nearBottom, !searching { pinToBottom(proxy, animated: true) }
+            }
+            .onChange(of: scroll.nearBottom) { near in
+                if near { unseen = 0 }
+            }
+            .onChange(of: composerFocused) { focused in
+                guard focused, scroll.nearBottom else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+            }
+            .onChange(of: scrollTarget) { target in
+                guard let target else { return }
+                let rowId = rows(displayed(store.messages ?? [])).first { $0.messageIds.contains(target) }?.id ?? target
+                withAnimation { proxy.scrollTo(rowId, anchor: .center) }
+                scrollTarget = nil
+            }
+        }
+    }
+
+    /// Scrolls to the newest, and once more a moment later: a lazy list
+    /// guesses the height of rows it has not drawn yet, so the first jump can
+    /// land a little short.
+    private func pinToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
+        let go = {
+            if animated {
+                withAnimation(NeonMotion.resolved(.easeOut(duration: 0.22))) { proxy.scrollTo("bottom", anchor: .bottom) }
+            } else {
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
+        }
+        DispatchQueue.main.async(execute: go)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { proxy.scrollTo("bottom", anchor: .bottom) }
+        unseen = 0
+    }
+
+    /// Scrolled up: a round button back to the newest — or, when something
+    /// arrived meanwhile, a pill saying how much.
+    @ViewBuilder
+    private func jumpControl(_ proxy: ScrollViewProxy) -> some View {
+        if !scroll.nearBottom, store.messages != nil {
+            Group {
+                if unseen > 0 {
+                    Button {
+                        Haptic.tap()
+                        pinToBottom(proxy, animated: true)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down").font(.system(size: 12, weight: .bold))
+                            Text(unseen == 1 ? L("1 new message") : L("%d new messages", unseen))
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.neonPurpleStrong, in: Capsule())
+                        .neonShadow(.floating)
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Button {
+                        Haptic.tap()
+                        pinToBottom(proxy, animated: true)
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.neonInk.opacity(0.7))
+                            .frame(width: 38, height: 38)
+                            .background(Color.white, in: Circle())
+                            .overlay(Circle().strokeBorder(Color.neonInk.opacity(0.08)))
+                            .neonShadow(.low)
+                    }
+                    .accessibilityLabel(L("Newest messages"))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, 14)
+                }
+            }
+            .buttonStyle(PressableStyle(scale: 0.94))
+            .padding(.bottom, 10)
+            .transition(.neonPop)
+        }
+    }
+
+    private func rows(_ shown: [ChatMessage]) -> [ChatRowItem] {
+        let pinned = Set(store.reactions.pinned.map(\.id))
+        let reacted = Set(store.reactions.reactions.map(\.messageId))
+        return chatRows(
+            messages: shown,
+            pending: searching ? [] : store.pending,
+            searching: searching,
+            isGroup: route.isGroup,
+            identity: api.identity
+        ) { message in
+            message.isPicture && message.attachmentURL != nil && (message.body ?? "").isEmpty && message.project == nil
+                && message.managerOnly != true && !pinned.contains(message.id) && !reacted.contains(message.id)
+        }
+    }
+
+    @ViewBuilder
+    private func rowView(_ row: ChatRowItem, proxy: ScrollViewProxy) -> some View {
+        switch row {
+        case .day(_, let iso):
+            ChatDaySeparator(iso: iso)
+        case .message(let message, let showAuthor, let firstInRun):
+            let mine = message.isMine(api.identity)
+            ChatMessageRow(
+                message: message,
+                mine: mine,
+                showAuthor: showAuthor,
+                tail: firstInRun,
+                delivery: mine ? delivery(of: message) : nil,
+                viewerIdentity: api.identity,
+                tallies: chatTally(store.reactions.reactions, messageId: message.id, myKey: store.myKey),
+                isPinned: store.reactions.pinned.contains { $0.id == message.id },
+                callSlug: route.slug,
+                openImage: { openPhoto(message) },
+                sendProof: { assignment, card in
+                    proofFor = ProofTarget(id: assignment.id, title: card.title, detail: card.description)
+                },
+                onReact: { emoji in react(message, emoji) },
+                onPin: { pin in Task { try? await api.setChatPinned(messageId: message.id, pin: pin) } },
+                onDelete: canDelete(message) ? { deleteTarget = message } : nil,
+                onCardChanged: { Task { await store.load() } },
+                onMediaResize: { keepBottom(proxy) }
+            )
+        case .album(let photos, let showAuthor):
+            let mine = photos.first?.isMine(api.identity) == true
+            ChatAlbumRow(
+                photos: photos,
+                mine: mine,
+                showAuthor: showAuthor,
+                delivery: mine ? photos.last.map { delivery(of: $0) } : nil,
+                open: { openPhoto($0) },
+                onReact: { message, emoji in react(message, emoji) },
+                onPin: { message in Task { try? await api.setChatPinned(messageId: message.id, pin: true) } },
+                canDelete: { canDelete($0) },
+                onDelete: { deleteTarget = $0 }
+            )
+        case .outgoing(let item, let firstInRun):
+            ChatMessageRow(
+                message: item.message,
+                mine: true,
+                showAuthor: false,
+                tail: firstInRun,
+                delivery: item.delivery,
+                viewerIdentity: api.identity,
+                tallies: [],
+                isPinned: false,
+                callSlug: route.slug,
+                outgoing: item,
+                openImage: {},
+                sendProof: { _, _ in },
+                onReact: { _ in },
+                onPin: { _ in },
+                onDelete: nil,
+                onCardChanged: {},
+                onRetry: {
+                    Haptic.tap()
+                    store.retry(item.id)
+                },
+                onDiscard: { withNeonAnimation(NeonMotion.quick) { store.discard(item.id) } },
+                onMediaResize: { keepBottom(proxy) }
+            )
+            .transition(.neonRise)
+        }
+    }
+
+    /// A photo is about to change height as it arrives: stay at the bottom if
+    /// that is where the reader was.
+    private func keepBottom(_ proxy: ScrollViewProxy) {
+        guard scroll.nearBottom, !searching else { return }
+        DispatchQueue.main.async { proxy.scrollTo("bottom", anchor: .bottom) }
+    }
+
+    /// The ticks on one of my messages. The manager's exchanges with the
+    /// assistant are theirs alone, so nobody else is there to reach.
+    private func delivery(of message: ChatMessage) -> ChatDelivery {
+        if message.managerOnly == true { return .sent }
+        return store.receipts.delivery(of: parseISODate(message.createdAt))
+    }
+
+    private func react(_ message: ChatMessage, _ emoji: String) {
+        Task { try? await api.toggleChatReaction(messageId: message.id, emoji: emoji) }
+    }
+
+    /// The full-screen viewer, able to swipe through every photo in the
+    /// conversation, opened on this one.
+    private func openPhoto(_ message: ChatMessage) {
+        let photos = (store.messages ?? []).filter { $0.isPicture && $0.attachmentURL != nil }
+        guard !photos.isEmpty else { return }
+        Haptic.tap()
+        viewer = ImageViewerPayload(
+            items: photos.map { ImageViewerItem(id: $0.id, url: $0.attachmentURL, caption: $0.body) },
+            startIndex: photos.firstIndex { $0.id == message.id } ?? 0
+        )
     }
 
     // MARK: Composer
@@ -271,11 +479,11 @@ struct ChatRoomView: View {
             if recorder.isRecording {
                 recordingRow
             } else {
-                if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if draftIsEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(chatQuickReplies, id: \.text) { reply in
-                                Button { Task { await sendQuick(reply.text) } } label: {
+                                Button { sendQuick(reply.text) } label: {
                                     // The text carries its own emoji, as the website sends it.
                                     Text(verbatim: reply.text)
                                         .font(.system(size: 12, weight: .medium))
@@ -286,6 +494,7 @@ struct ChatRoomView: View {
                                         .overlay(Capsule().strokeBorder(Color.neonInk.opacity(0.08)))
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(isOffline)
                             }
                         }
                         .padding(.horizontal, 12)
@@ -329,7 +538,7 @@ struct ChatRoomView: View {
                             .foregroundStyle(Color.neonInk.opacity(0.55))
                             .frame(height: 38)
                     }
-                    .disabled(sending || cachedAt != nil)
+                    .disabled(isOffline)
 
                     TextField(L("Message"), text: $draft, axis: .vertical)
                         .lineLimit(1...5)
@@ -339,29 +548,24 @@ struct ChatRoomView: View {
                         .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.neonInk.opacity(0.1)))
                         .environment(\.layoutDirection, naturalDirection(draft) ?? AppLanguage.current.layoutDirection)
-                        .onChange(of: draft) { _ in noteTyping() }
 
                     Button {
-                        if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if draftIsEmpty {
                             Haptic.tap()
                             recorder.start()
                         } else {
-                            Task { await sendText() }
+                            sendText()
                         }
                     } label: {
-                        ZStack {
-                            if sending {
-                                ProgressView().tint(.white)
-                            } else {
-                                Image(systemName: draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mic.fill" : "arrow.up")
-                                    .font(.system(size: 16, weight: .bold))
-                            }
-                        }
-                        .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
-                        .background(Color.neonPurpleStrong, in: Circle())
+                        Image(systemName: draftIsEmpty ? "mic.fill" : "arrow.up")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 38, height: 38)
+                            .background(Color.neonPurpleStrong, in: Circle())
+                            .contentTransition(.opacity)
                     }
-                    .disabled(sending || cachedAt != nil)
+                    .accessibilityLabel(draftIsEmpty ? L("Voice message") : L("Send"))
+                    .disabled(isOffline)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -369,6 +573,9 @@ struct ChatRoomView: View {
         }
         .background(.ultraThinMaterial)
     }
+
+    private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var isOffline: Bool { store.cachedAt != nil }
 
     private var recordingRow: some View {
         HStack(spacing: 12) {
@@ -381,7 +588,7 @@ struct ChatRoomView: View {
             } label: { Image(systemName: "trash").foregroundStyle(.red) }
             Button {
                 guard let taken = recorder.stopAndTake() else { Haptic.warning(); return }
-                Task { await sendVoice(url: taken.url, seconds: taken.seconds) }
+                sendVoice(url: taken.url, seconds: taken.seconds)
             } label: {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .bold))
@@ -399,32 +606,6 @@ struct ChatRoomView: View {
         return String(format: "%d:%02d", whole / 60, whole % 60)
     }
 
-    /// The viewer's own key on this card and conversation — "admin" for the
-    /// manager, the employee id otherwise. The same key ChatRead, presence and
-    /// meeting attendees use.
-    private var memberKey: String {
-        guard let identity = api.identity else { return "" }
-        return identity.side == .admin ? "admin" : (identity.id ?? "")
-    }
-
-    private var typingName: String? {
-        people.typing.first { $0.memberKey != memberKey }?.name
-    }
-
-    /// The other person's key in a private chat, for a read tick — nil in the
-    /// group, where one pair of ticks cannot honestly mean "everybody".
-    private var otherKey: String? {
-        guard !route.isGroup, let identity = api.identity else { return nil }
-        if identity.side == .admin { return route.slug }
-        return route.slug == "manager" ? "admin" : route.slug
-    }
-
-    private func isRead(_ message: ChatMessage) -> Bool {
-        guard message.isMine(api.identity), let otherKey, let createdAt = parseISODate(message.createdAt) else { return false }
-        guard let mark = people.reads.first(where: { $0.key == otherKey }), let at = parseISODate(mark.at) else { return false }
-        return at >= createdAt
-    }
-
     private func canDelete(_ message: ChatMessage) -> Bool {
         guard let identity = api.identity else { return false }
         if identity.side == .admin { return true }
@@ -436,423 +617,145 @@ struct ChatRoomView: View {
         return list.filter { matchesSearch(searchQuery, $0.body, $0.authorName) }
     }
 
-    private func noteTyping() {
-        let now = Date()
-        if let last = lastTypingSentAt, now.timeIntervalSince(last) < 3 { return }
-        lastTypingSentAt = now
-        Task { await api.sendChatTyping(conversation: draft.isEmpty ? nil : route.slug) }
-    }
+    // MARK: Header
 
-    // MARK: Reading
-
-    /// The header's middle: the conversation's picture and name — for a
-    /// group, a way into its info.
+    /// The header's middle: the conversation's picture and name, and under
+    /// it who is typing, or that the other person is here — for a group, a
+    /// way into its info.
     private func roomTitle(hint: String?) -> some View {
         HStack(spacing: 8) {
             if route.isGroup && headerAvatar == nil {
                 ChatStudioMark(size: 30)
             } else {
-                AvatarView(url: resolvedMediaURL(headerAvatar), name: headerTitle, size: 30)
+                AvatarView(url: resolvedMediaURL(headerAvatar), name: headerTitle, size: 30, online: otherIsHere)
             }
             VStack(alignment: .leading, spacing: 0) {
                 DirText(headerTitle, font: .system(size: 15, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
-                if let hint {
-                    Text(hint).font(.system(size: 11)).foregroundStyle(Color.neonPurpleStrong).lineLimit(1)
-                } else if let subtitle = route.subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.neonInk.opacity(0.5)).lineLimit(1)
+                Group {
+                    if let typing = chatTypingLine(store.typing, isGroup: route.isGroup) {
+                        Text(verbatim: typing)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.neonSuccessStrong)
+                    } else if let hint {
+                        Text(hint).font(.system(size: 11)).foregroundStyle(Color.neonPurpleStrong)
+                    } else if otherIsHere {
+                        Text(L("online now")).font(.system(size: 11)).foregroundStyle(Color.neonSuccessStrong)
+                    } else if let subtitle = route.subtitle, !subtitle.isEmpty {
+                        Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.neonInk.opacity(0.5))
+                    }
                 }
+                .lineLimit(1)
+                .transition(.opacity)
             }
+            .animation(NeonMotion.resolved(NeonMotion.quick), value: store.typing)
         }
     }
 
-    private func poll() async {
-        await load()
-        await markRead()
-        while !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 4 * 1_000_000_000)
-            if Task.isCancelled { break }
-            let before = messages?.last?.id
-            await load()
-            if messages?.last?.id != before { await markRead() }
-        }
-    }
-
-    private func listenLive() async {
-        guard let token = api.token else { return }
-        await ChatStream.listen(conversation: route.slug, token: token) { event in
-            Task { @MainActor in
-                switch event {
-                case .messages(let batch):
-                    for message in batch { append(message) }
-                    if !batch.isEmpty { await markRead() }
-                case .reactions(let snapshot):
-                    reactions = snapshot
-                case .people(let snapshot):
-                    people = snapshot
-                case .connected:
-                    break
-                }
-            }
-        }
-    }
-
-    private func load() async {
-        do {
-            let loaded = try await api.fetchMessages(conversation: route.slug)
-            if loaded.value != messages { messages = loaded.value }
-            cachedAt = loaded.cachedAt
-            errorMessage = nil
-        } catch {
-            if messages == nil { errorMessage = error.localizedDescription }
-        }
-        if let snapshot = try? await api.fetchChatReactions(conversation: route.slug) { reactions = snapshot }
-    }
-
-    private func markRead() async {
-        guard cachedAt == nil, messages != nil else { return }
-        try? await api.markConversationRead(route.slug)
+    /// In a private chat, whether the other person has the app or the website
+    /// open right now — the same 75-second window lib/presence.ts uses.
+    private var otherIsHere: Bool {
+        guard !route.isGroup, let other = store.people.members.first else { return false }
+        if let online = other.online { return online }
+        guard let seen = parseISODate(other.seenAt) else { return false }
+        return Date().timeIntervalSince(seen) < ChatReceiptBoard.onlineWindow
     }
 
     // MARK: Sending
 
-    private func sendText() async {
+    private func sendText() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        sending = true
         sendError = nil
-        defer { sending = false }
-        do {
-            let message = try await api.sendMessage(conversation: route.slug, text: text, projectId: taggedProjectId)
-            draft = ""
-            append(message)
-            Haptic.tap()
-            await api.sendChatTyping(conversation: nil)
-        } catch APIError.unauthorized {
-        } catch {
-            sendError = error.localizedDescription
-            Haptic.error()
-        }
-    }
-
-    private func sendQuick(_ text: String) async {
+        draft = ""
+        store.sendText(text, project: taggedProject)
         Haptic.tap()
-        do {
-            let message = try await api.sendMessage(conversation: route.slug, text: text)
-            append(message)
-        } catch {
-            Toast.error(error)
-        }
     }
 
-    private func send(file: UploadFile) async {
-        sending = true
-        sendError = nil
-        defer { sending = false }
+    private func sendQuick(_ text: String) {
+        Haptic.tap()
+        store.sendText(text, project: nil)
+    }
+
+    /// A photo or a file, with what is in the box as its caption.
+    private func send(file: UploadFile) {
         let caption = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        do {
-            let message = try await api.sendAttachment(conversation: route.slug, text: caption, file: file, projectId: taggedProjectId)
-            draft = ""
-            append(message)
-            Haptic.success()
-        } catch APIError.unauthorized {
-        } catch {
-            sendError = error.localizedDescription
+        sendError = nil
+        draft = ""
+        store.sendFile(file, caption: caption, project: taggedProject)
+    }
+
+    /// Several photos at once go up one after another, in the order they were
+    /// picked; a caption in the box goes with the last of them.
+    private func sendPhotos(_ items: [PhotosPickerItem]) async {
+        var files: [UploadFile] = []
+        for item in items {
+            if let file = await UploadMaker.photo(item) { files.append(file) }
+        }
+        guard !files.isEmpty else {
+            sendError = L("That photo could not be read.")
+            return
+        }
+        if files.count < items.count { sendError = L("That photo could not be read.") }
+        let caption = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft = ""
+        for (index, file) in files.enumerated() {
+            store.sendFile(file, caption: index == files.count - 1 ? caption : "", project: taggedProject)
+        }
+    }
+
+    private func sendVoice(url: URL, seconds: Int) {
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard let data = try? Data(contentsOf: url) else {
+            sendError = L("That recording could not be read.")
             Haptic.error()
+            return
         }
-    }
-
-    private func sendVoice(url: URL, seconds: Int) async {
-        sending = true
-        defer { sending = false }
-        do {
-            let data = try Data(contentsOf: url)
-            let file = UploadFile(field: "voice", filename: "voice.m4a", mimeType: "audio/mp4", data: data)
-            let message = try await api.sendVoice(conversation: route.slug, file: file, durationSeconds: seconds, projectId: taggedProjectId)
-            append(message)
-            Haptic.success()
-        } catch {
-            sendError = error.localizedDescription
-            Haptic.error()
-        }
-        try? FileManager.default.removeItem(at: url)
-    }
-
-    private func delete(_ message: ChatMessage) async {
-        do {
-            try await api.perform("chat/messages/delete", args: [message.id])
-            messages?.removeAll { $0.id == message.id }
-            Haptic.tap()
-        } catch {
-            Toast.error(error)
-        }
-    }
-
-    private func append(_ message: ChatMessage) {
-        var list = messages ?? []
-        if let index = list.firstIndex(where: { $0.id == message.id }) {
-            list[index] = message
-        } else {
-            list.append(message)
-        }
-        messages = list
-    }
-
-    // MARK: Layout helpers
-
-    private func startsNewDay(at index: Int, in list: [ChatMessage]) -> Bool {
-        guard let date = parseISODate(list[index].createdAt) else { return false }
-        guard index > 0, let previous = parseISODate(list[index - 1].createdAt) else { return true }
-        return !Calendar.current.isDate(date, inSameDayAs: previous)
-    }
-
-    private func showsAuthor(at index: Int, in list: [ChatMessage]) -> Bool {
-        guard index > 0 else { return true }
-        let previous = list[index - 1]
-        let current = list[index]
-        return previous.authorType != current.authorType || previous.authorId != current.authorId || previous.kind == "CALL"
+        let file = UploadFile(field: "voice", filename: "voice.m4a", mimeType: "audio/mp4", data: data)
+        store.sendVoice(file, seconds: seconds, project: taggedProject)
+        Haptic.success()
     }
 }
 
+// MARK: - Where the reader is
 
-private struct DaySeparator: View {
-    let iso: String
+/// Whether the conversation is scrolled to (or near) its newest message —
+/// which decides whether a new one scrolls into view or waits behind a pill.
+/// Published only when it flips, so scrolling does not redraw the screen on
+/// every frame.
+@MainActor
+final class ChatScrollTracker: ObservableObject {
+    @Published private(set) var nearBottom = true
+    private var viewport: CGFloat = 0
+    private var contentBottom: CGFloat = 0
 
-    var body: some View {
-        Text(label)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Color.neonInk.opacity(0.5))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Color.neonInk.opacity(0.06), in: Capsule())
-            .padding(.vertical, 8)
+    /// How far above the bottom still counts as reading the newest.
+    private let slack: CGFloat = 140
+
+    func setViewport(_ height: CGFloat) {
+        viewport = height
+        update()
     }
 
-    private var label: String {
-        guard let date = parseISODate(iso) else { return "" }
-        if Calendar.current.isDateInToday(date) { return L("Today") }
-        if Calendar.current.isDateInYesterday(date) { return L("Yesterday") }
-        return date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, locale: AppLanguage.current.locale))
+    func setContentBottom(_ maxY: CGFloat) {
+        contentBottom = maxY
+        update()
+    }
+
+    private func update() {
+        guard viewport > 0 else { return }
+        let near = contentBottom - viewport < slack
+        if near != nearBottom { nearBottom = near }
     }
 }
 
-// MARK: - One message
+private struct ChatScrollBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
 
-private struct MessageView: View {
-    let message: ChatMessage
-    let mine: Bool
-    let showAuthor: Bool
-    let viewerIdentity: Identity?
-    let tallies: [ChatReactionTally]
-    let isPinned: Bool
-    let isRead: Bool
-    let callSlug: String
-    let openImage: (URL) -> Void
-    let sendProof: (TaskCard.Assignment, TaskCard) -> Void
-    let onReact: (String) -> Void
-    let onPin: (Bool) -> Void
-    let onDelete: (() -> Void)?
-    let onCardChanged: () -> Void
-
-    @Environment(\.openURL) private var openURL
-    @ObservedObject private var voicePlayer = ChatVoicePlayer.shared
-
-    var body: some View {
-        switch message.kind {
-        case "CALL":
-            callLine
-        case "TASK":
-            if let card = message.task {
-                aligned {
-                    TaskCardView(card: card, message: message, viewer: viewerIdentity, sendProof: sendProof, onChanged: onCardChanged)
-                        .contextMenu { pinMenu }
-                }
-            } else {
-                aligned { bubble }
-            }
-        case "MEETING":
-            if let meeting = message.meeting {
-                aligned {
-                    MeetingCardView(meeting: meeting, callSlug: callSlug, callTitle: message.body ?? "", viewer: viewerIdentity, onChanged: onCardChanged)
-                        .contextMenu { pinMenu }
-                }
-            } else {
-                aligned { bubble }
-            }
-        default:
-            aligned {
-                bubble
-                    .contextMenu {
-                        ForEach(chatReactionSet, id: \.self) { emoji in
-                            Button { onReact(emoji) } label: { Text(emoji) }
-                        }
-                        pinMenu
-                        if let onDelete {
-                            Button(role: .destructive, action: onDelete) { Label(L("Delete"), systemImage: "trash") }
-                        }
-                    }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var pinMenu: some View {
-        Button { onPin(!isPinned) } label: {
-            Label(isPinned ? L("Unpin") : L("Pin"), systemImage: isPinned ? "pin.slash" : "pin")
-        }
-    }
-
-    /// Mine on the trailing side, everybody else's on the leading side — which
-    /// flips with the app's language, as a chat on either kind of phone does.
-    private func aligned<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
-            if showAuthor && !mine, let name = message.authorName {
-                Text(name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.neonPurpleStrong)
-                    .padding(.horizontal, 6)
-            }
-            content()
-            ChatReactionRow(tallies: tallies, onToggle: onReact)
-                .padding(.horizontal, 6)
-            HStack(spacing: 4) {
-                if isPinned { Image(systemName: "pin.fill").font(.system(size: 9)) }
-                if message.managerOnly == true {
-                    Image(systemName: "eye.slash")
-                    Text(L("Only you"))
-                }
-                if let time = parseISODate(message.createdAt) {
-                    Text(time.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.current.locale)))
-                }
-                if mine && isRead {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 9)).foregroundStyle(Color.neonPurpleStrong)
-                } else if mine {
-                    Image(systemName: "checkmark").font(.system(size: 9))
-                }
-            }
-            .font(.system(size: 10))
-            .foregroundStyle(Color.neonInk.opacity(0.4))
-            .padding(.horizontal, 6)
-        }
-        .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
-        .padding(mine ? .leading : .trailing, 44)
-    }
-
-    @ViewBuilder
-    private var bubble: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let project = message.project {
-                Label(project.name, systemImage: "folder")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(mine ? Color.white.opacity(0.8) : Color.neonCyanStrong)
-            }
-
-            switch message.isPicture ? "IMAGE" : message.kind {
-            case "IMAGE":
-                if let url = message.attachmentURL {
-                    Button { openImage(url) } label: {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFill()
-                            } else if phase.error != nil {
-                                VStack(spacing: 6) {
-                                    Image(systemName: "photo").font(.system(size: 26))
-                                    if let name = message.attachmentName {
-                                        Text(verbatim: name).font(.system(size: 11)).lineLimit(2)
-                                    }
-                                    Text(L("Couldn't load the picture")).font(.system(size: 11, weight: .medium))
-                                }
-                                .foregroundStyle(mine ? Color.white.opacity(0.75) : Color.neonInk.opacity(0.4))
-                                .padding(12)
-                            } else {
-                                ProgressView()
-                            }
-                        }
-                        .frame(width: 220, height: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                }
-            case "VOICE":
-                if let url = message.attachmentURL {
-                    voiceBubble(url: url)
-                }
-            case "FILE":
-                if let url = message.attachmentURL {
-                    Button { openURL(url) } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "doc.fill").font(.system(size: 26))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(verbatim: message.attachmentName ?? L("File"))
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                Text(fileDetail)
-                                    .font(.system(size: 11))
-                                    .opacity(0.7)
-                            }
-                        }
-                        .foregroundStyle(mine ? Color.white : Color.neonInk)
-                    }
-                    .buttonStyle(.plain)
-                }
-            default:
-                EmptyView()
-            }
-
-            if let body = message.body, !body.isEmpty {
-                DirText(body, font: .system(size: 16), color: mine ? .white : .neonInk, fill: false)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(
-            mine ? AnyShapeStyle(Color.neonPurpleStrong) : AnyShapeStyle(Color.white),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(mine ? Color.clear : Color.neonInk.opacity(0.07))
-        )
-    }
-
-    private func voiceBubble(url: URL) -> some View {
-        let playing = voicePlayer.playingURL == url
-        return Button { voicePlayer.toggle(url: url) } label: {
-            HStack(spacing: 10) {
-                Image(systemName: playing ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 30))
-                VStack(alignment: .leading, spacing: 4) {
-                    ProgressBar(progress: playing ? voicePlayer.progress : 0, tint: mine ? .white : .neonPurpleStrong, height: 4)
-                        .frame(width: 120)
-                    Text(message.durationSeconds.map { String(format: "0:%02d", Int($0)) } ?? L("Voice message"))
-                        .font(.system(size: 11))
-                }
-            }
-            .foregroundStyle(mine ? Color.white : Color.neonInk)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var fileDetail: String {
-        var parts: [String] = []
-        if let type = message.attachmentType { parts.append(type.uppercased()) }
-        if let size = message.attachmentSize { parts.append(byteCount(size)) }
-        parts.append(L("Tap to open"))
-        return parts.joined(separator: " · ")
-    }
-
-    private var callLine: some View {
-        HStack(spacing: 6) {
-            Image(systemName: message.call?.kind == "VIDEO" ? "video.fill" : "phone.fill")
-            Text(verbatim: [message.body ?? L("Call"), message.authorName].compactMap { $0 }.joined(separator: " · "))
-        }
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(message.call?.endReason == "missed" ? Color.red.opacity(0.8) : Color.neonInk.opacity(0.5))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.neonInk.opacity(0.05), in: Capsule())
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
-    }
+private struct ChatViewportKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 // MARK: - Cards
@@ -863,7 +766,7 @@ private struct MessageView: View {
 /// it back right here, exactly where the web review queue's buttons lead —
 /// "Done" stays the manager's word either way — and everybody on the card can
 /// talk about it in the thread underneath.
-private struct TaskCardView: View {
+struct ChatTaskCardView: View {
     let card: TaskCard
     let message: ChatMessage
     let viewer: Identity?
@@ -1054,7 +957,7 @@ private struct TaskCardView: View {
 /// its attendees. Whoever was asked answers ACCEPTED or DECLINED right here;
 /// the manager can call it off; Join opens ten minutes before the start,
 /// through the same call buttons the conversation's header carries.
-private struct MeetingCardView: View {
+struct ChatMeetingCardView: View {
     let meeting: MeetingCard
     let callSlug: String
     let callTitle: String

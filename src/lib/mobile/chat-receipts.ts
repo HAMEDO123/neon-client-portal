@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { groupEmployees } from "@/lib/chat-group-store";
 import { memberKeyFor, presenceFor, readMarksFor, typingIn } from "@/lib/presence-store";
+import { isOnline } from "@/lib/presence";
 import type { ChatViewer, Conversation } from "@/lib/chat-conversations";
 import { conversationMemberKeys, othersIn, type ReceiptMember } from "@/lib/mobile/chat-receipt-rules";
 
@@ -61,11 +62,13 @@ export async function receiptMembers(
   const seen = await presenceFor(others);
   const readOf = new Map(reads.map((mark) => [mark.readerKey, mark.lastReadAt]));
   const nameOf = new Map(roster.map((entry) => [entry.key, entry.name]));
+  const now = Date.now();
   return others.map((key) => ({
     key,
     name: nameOf.get(key) ?? "",
     readAt: readOf.get(key)?.toISOString() ?? null,
     seenAt: seen.get(key)?.toISOString() ?? null,
+    online: isOnline(seen.get(key), now),
   }));
 }
 
@@ -89,7 +92,7 @@ export async function peopleSnapshot(viewer: ChatViewer, roster: readonly Roster
       .map((mark) => `${mark.readerKey}:${mark.lastReadAt.getTime()}`)
       .sort()
       .join(","),
-    members.map((member) => `${member.key}:${member.seenAt ?? ""}`).join(","),
+    members.map((member) => `${member.key}:${member.seenAt ?? ""}:${member.online ? 1 : 0}`).join(","),
   ].join("|");
   return {
     signature,
