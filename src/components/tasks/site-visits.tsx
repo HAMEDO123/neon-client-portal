@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CalendarDays, Check, MapPin, Plus, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, MapPin, MessageCircle, Plus, Trash2, User, X } from "lucide-react";
 import {
   deleteSiteVisit,
   reportSiteVisit,
@@ -145,6 +145,12 @@ function VisitCard({
                 {visit.location}
               </span>
             )}
+            {(visit.clientName || visit.project?.clientName) && (
+              <span dir="auto" className="inline-flex items-center gap-1">
+                <User size={12} strokeWidth={1.75} />
+                {visit.clientName ?? visit.project?.clientName}
+              </span>
+            )}
             {visit.project && <span dir="auto">{visit.project.name}</span>}
           </span>
         </span>
@@ -162,9 +168,18 @@ function VisitCard({
       {visit.report && (
         <p dir="auto" className="mt-2 rounded-xl bg-ink/[0.04] px-3 py-2 text-xs text-ink/70">
           <span className="font-semibold text-ink/45">
-            {visit.state === "VISITED" ? "What came of it: " : "Why not: "}
+            {visit.state === "MISSED" ? "Why not: " : "What came of it: "}
           </span>
           <span className="whitespace-pre-wrap">{visit.report}</span>
+        </p>
+      )}
+
+      {/* What became of the review request. Said either way: a client nobody
+          asked must not look like one who has not answered yet. */}
+      {visit.reviewNote && (
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] text-ink/45">
+          <MessageCircle size={12} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+          <span dir="auto">{visit.reviewNote}</span>
         </p>
       )}
 
@@ -172,10 +187,10 @@ function VisitCard({
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => onAnswer("VISITED")}
+            onClick={() => onAnswer("REPORTED")}
             className="flex-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
           >
-            I went
+            Visit ended
           </button>
           <button
             type="button"
@@ -258,6 +273,29 @@ function VisitDialog({
           />
         </Field>
 
+        <Field label="Client">
+          <input
+            name="clientName"
+            defaultValue={visit?.clientName ?? ""}
+            dir="auto"
+            placeholder="Ahmad Al-Masri"
+            className={INPUT}
+          />
+        </Field>
+
+        {/* The number the review is asked of when the visit ends. A linked
+            project fills it in when this is left blank. */}
+        <Field label="Client's WhatsApp number">
+          <input
+            name="clientPhone"
+            type="tel"
+            inputMode="tel"
+            defaultValue={visit?.clientPhone ?? ""}
+            placeholder="962 7 9999 9999"
+            className={INPUT}
+          />
+        </Field>
+
         <Field label="Project (if it has one)">
           <select name="projectId" defaultValue={visit?.project?.id ?? ""} className={INPUT}>
             <option value="">Not tied to a project</option>
@@ -325,10 +363,10 @@ function AnswerDialog({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const went = state === "VISITED";
+  const went = state === "REPORTED";
 
   return (
-    <Sheet title={went ? "What came of it?" : "Why did it not happen?"} onClose={onClose}>
+    <Sheet title={went ? "What came of the visit?" : "Why did it not happen?"} onClose={onClose}>
       <p dir="auto" className="mb-3 text-xs text-ink/45">
         {visit.title} · {when(visit.scheduledAt)}
       </p>
@@ -361,6 +399,12 @@ function AnswerDialog({
 
         {error && <p className="mt-2 text-xs font-medium text-pink-strong">{error}</p>}
 
+        {went && (
+          <p className="mt-3 text-[11px] text-ink/45">
+            The client is asked on WhatsApp how the visit went, and the manager sees it here to approve.
+          </p>
+        )}
+
         <button
           type="submit"
           disabled={pending}
@@ -370,7 +414,7 @@ function AnswerDialog({
           )}
         >
           {went ? <Check size={16} strokeWidth={2.5} /> : <X size={16} strokeWidth={2.5} />}
-          {went ? "Mark as visited" : "Mark as not visited"}
+          {went ? "End the visit" : "Mark as not visited"}
         </button>
       </form>
     </Sheet>

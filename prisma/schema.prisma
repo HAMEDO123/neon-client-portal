@@ -1702,6 +1702,10 @@ model CallSignal {
 /// — nothing here infers that a visit took place.
 enum SiteVisitState {
   PLANNED
+  /// The person who went says it is finished and has written it up. A claim,
+  /// not a conclusion — the manager confirms it, the same way finished work is
+  /// approved rather than announced.
+  REPORTED
   VISITED
   MISSED
   CANCELLED
@@ -1731,6 +1735,14 @@ model SiteVisit {
   title     String
   /// Where it is, in the words somebody would give a driver.
   location  String?
+  /// Who the visit is for, and the number the review is asked of.
+  ///
+  /// Kept on the visit rather than only on the project, because the first
+  /// visit to a site usually happens before there is a project to hang it on
+  /// — which is exactly when nobody can remember afterwards who it was for.
+  /// A linked project fills these in when they are blank.
+  clientName  String?
+  clientPhone String?
   /// What they are going to do there, written before they go.
   purpose   String? @db.Text
   scheduledAt DateTime
@@ -1739,6 +1751,15 @@ model SiteVisit {
   /// What came of it — or, on a visit that did not happen, why not.
   report     String?   @db.Text
   reportedAt DateTime?
+  /// When the manager agreed the visit is finished. Null until they do.
+  approvedAt DateTime?
+
+  /// When the client was asked, on WhatsApp, how the visit went.
+  reviewSentAt DateTime?
+  /// What happened when it was asked: the number it went to, or why it did
+  /// not go. Written either way — a review nobody asked for must not look the
+  /// same as one nobody answered.
+  reviewNote   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt

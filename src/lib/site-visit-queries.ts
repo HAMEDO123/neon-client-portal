@@ -15,11 +15,16 @@ const visitSelect = {
   location: true,
   purpose: true,
   scheduledAt: true,
+  clientName: true,
+  clientPhone: true,
   state: true,
   report: true,
   reportedAt: true,
+  approvedAt: true,
+  reviewSentAt: true,
+  reviewNote: true,
   employee: { select: { id: true, name: true, color: true } },
-  project: { select: { id: true, name: true, clientName: true } },
+  project: { select: { id: true, name: true, clientName: true, clientPhone: true } },
 } as const;
 
 export type SiteVisitView = {
@@ -29,11 +34,19 @@ export type SiteVisitView = {
   location: string | null;
   purpose: string | null;
   scheduledAt: Date;
+  /** Who the visit is for. A linked project fills these in when they are blank. */
+  clientName: string | null;
+  clientPhone: string | null;
   state: SiteVisitState;
   report: string | null;
   reportedAt: Date | null;
+  /** When the manager agreed it was finished. */
+  approvedAt: Date | null;
+  /** When the client was asked how it went, and what came of the asking. */
+  reviewSentAt: Date | null;
+  reviewNote: string | null;
   employee: { id: string; name: string; color: string };
-  project: { id: string; name: string; clientName: string | null } | null;
+  project: { id: string; name: string; clientName: string | null; clientPhone: string | null } | null;
 };
 
 /**

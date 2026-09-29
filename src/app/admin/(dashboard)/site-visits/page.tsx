@@ -3,7 +3,8 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { allSiteVisits } from "@/lib/site-visit-queries";
 import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
-import { STATE_LABEL, STATE_TONE, awaitingReport, isUpcoming } from "@/lib/site-visits";
+import { STATE_LABEL, STATE_TONE, awaitingApproval, awaitingReport, isUpcoming } from "@/lib/site-visits";
+import { VisitDecision } from "@/components/admin/visit-decision";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -26,16 +27,20 @@ export default async function SiteVisitsPage() {
   const timezone = await getTimezone();
   const visits = await allSiteVisits();
 
+  const waiting = visits.filter((visit) => awaitingApproval(visit));
   const owed = visits.filter((visit) => awaitingReport(visit));
   const upcoming = visits.filter((visit) => isUpcoming(visit));
-  const settled = visits.filter((visit) => !awaitingReport(visit) && !isUpcoming(visit));
+  const settled = visits.filter(
+    (visit) => !awaitingApproval(visit) && !awaitingReport(visit) && !isUpcoming(visit)
+  );
 
   return (
     <div>
       <h1 className="text-2xl font-semibold text-ink">Site visits</h1>
       <p className="mt-1 text-sm text-ink/50">
         What the team scheduled, whether they went, and what came of it. Written by whoever went — nothing here is
-        filled in for them.
+        filled in for them. A finished visit waits for you: the client is asked on WhatsApp how it went, and their
+        reply arrives in the WhatsApp tab.
       </p>
 
       {visits.length === 0 ? (
@@ -47,6 +52,13 @@ export default async function SiteVisitsPage() {
         />
       ) : (
         <div className="mt-6 flex flex-col gap-6">
+          <Group
+            title="Waiting for you"
+            hint="Finished, written up, and the client has been asked how it went. Approve it when their answer satisfies you, or send it back."
+            visits={waiting}
+            timezone={timezone}
+            tone="amber"
+          />
           <Group
             title="Not written up yet"
             hint="The time has passed and nobody has said what happened. That is all it means — it is not a record of anybody missing a visit."
@@ -128,11 +140,23 @@ function Group({
             {visit.report && (
               <p dir="auto" className="mt-3 whitespace-pre-wrap rounded-xl bg-ink/[0.04] px-3 py-2.5 text-sm text-ink/75">
                 <span className="font-semibold text-ink/40">
-                  {visit.state === "VISITED" ? "What came of it: " : "Why not: "}
+                  {visit.state === "MISSED" ? "Why not: " : "What came of it: "}
                 </span>
                 {visit.report}
               </p>
             )}
+
+            {/* Whether the client was actually asked. Said either way, because
+                "no reply yet" and "nobody asked them" are different facts and
+                only one of them is the client's doing. */}
+            {visit.reviewNote && (
+              <p className="mt-2 text-xs text-ink/45">
+                <span className="font-semibold text-ink/35">Review: </span>
+                {visit.reviewNote}
+              </p>
+            )}
+
+            {awaitingApproval(visit) && <VisitDecision id={visit.id} />}
           </li>
         ))}
       </ul>
