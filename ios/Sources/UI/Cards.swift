@@ -37,44 +37,63 @@ struct NeonCard<Content: View>: View {
 }
 
 enum IconTileStyle {
-    /// A wash of the tint behind a glyph in the tint. Pass a strong colour.
+    /// A pastel tile with the glyph in the hue's deep colour — the mockups' tile.
     case soft
-    /// The tint as a gradient fill, with a white glyph and a glow.
+    /// The hue as a gradient fill, with a white glyph and a glow.
     case filled
-    /// White glass, glyph in the tint.
+    /// White, glyph in the hue.
     case glass
 }
 
-/// A rounded square holding a symbol — the leading mark of rows and tiles.
+/// A rounded square holding a symbol — the leading mark of rows, cards and
+/// KPI tiles. Give it a hue (`hue: .blue`); a kit colour (`tint: .neonCyanStrong`)
+/// is read as its hue, so older call sites get the same pastel tile.
 struct IconTile: View {
     let symbol: String
     var tint: Color
     var size: CGFloat
     var style: IconTileStyle
+    private var hue: NeonHue?
 
     init(_ symbol: String, tint: Color = .neonPurpleStrong, size: CGFloat = NeonSize.iconTile, style: IconTileStyle = .soft) {
         self.symbol = symbol
         self.tint = tint
         self.size = size
         self.style = style
+        self.hue = NeonHue(tint)
+    }
+
+    init(_ symbol: String, hue: NeonHue, size: CGFloat = NeonSize.iconTile, style: IconTileStyle = .soft) {
+        self.symbol = symbol
+        self.tint = hue.deep
+        self.size = size
+        self.style = style
+        self.hue = hue
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: NeonRadius.tile(size), style: .continuous)
         Image(systemName: symbol)
-            .font(.system(size: size * 0.44, weight: .semibold))
-            .foregroundStyle(style == .filled ? Color.white : tint)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .foregroundStyle(style == .filled ? Color.white : (hue?.deep ?? tint))
             .frame(width: size, height: size)
             .background {
                 switch style {
                 case .soft:
-                    shape.fill(tint.opacity(0.13))
+                    if let hue {
+                        shape.fill(LinearGradient(colors: [hue.wash, hue.pastel], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .overlay(shape.strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
+                    } else {
+                        shape.fill(tint.opacity(0.13))
+                    }
                 case .filled:
-                    shape.fill(LinearGradient.neonTint(tint))
-                        .shadow(color: tint.opacity(0.35), radius: size * 0.22, x: 0, y: size * 0.1)
+                    shape.fill(hue?.fill ?? LinearGradient.neonTint(tint))
+                        .overlay(shape.strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+                        .shadow(color: (hue?.color ?? tint).opacity(0.32), radius: size * 0.2, x: 0, y: size * 0.1)
                 case .glass:
-                    shape.fill(LinearGradient.neonGlassStrong)
-                        .overlay(shape.strokeBorder(LinearGradient.neonGlassEdge, lineWidth: 1))
+                    shape.fill(Color.white)
+                        .overlay(shape.strokeBorder(Color.neonLine, lineWidth: 1))
+                        .neonShadow(.low)
                 }
             }
             .accessibilityHidden(true)
@@ -83,12 +102,42 @@ struct IconTile: View {
 
 // MARK: - Rows
 
-/// What sits at the leading edge of a `ListRow`.
+/// What sits at the leading edge of a `ListRow` or a `ListCardRow`.
 enum RowLeading {
     case plain
     case icon(_ symbol: String, tint: Color = .neonPurpleStrong)
     case avatar(url: URL?, name: String, online: Bool = false)
     case thumbnail(url: URL?)
+    /// A picture already in hand: a photo just taken, a render on disk.
+    case image(Image)
+}
+
+/// A `RowLeading` drawn at a size.
+struct RowLeadingView: View {
+    let leading: RowLeading
+    var size: CGFloat = 42
+    var avatarStyle: AvatarStyle = .soft
+
+    var body: some View {
+        switch leading {
+        case .plain:
+            EmptyView()
+        case .icon(let symbol, let tint):
+            IconTile(symbol, tint: tint, size: size - 2)
+        case .avatar(let url, let name, let online):
+            AvatarView(url: url, name: name, size: size, online: online, style: avatarStyle)
+        case .thumbnail(let url):
+            RemoteImage(url: url)
+                .frame(width: size + 4, height: size + 4)
+                .clipShape(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
+        case .image(let image):
+            image
+                .resizable()
+                .scaledToFill()
+                .frame(width: size + 4, height: size + 4)
+                .clipShape(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
+        }
+    }
 }
 
 /// The kit's list row: a leading mark, a title and subtitle in their own
@@ -133,15 +182,15 @@ struct ListRow<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            leadingView
+            RowLeadingView(leading: leading)
             VStack(alignment: .leading, spacing: 3) {
-                DirText(title, font: .system(size: 15.5, weight: .semibold), color: .neonInk, fill: false, lineLimit: titleLines)
+                DirText(title, font: .system(.callout, weight: .semibold), color: .neonInk, fill: false, lineLimit: titleLines)
                 if let subtitle, !subtitle.isEmpty {
-                    DirText(subtitle, font: .system(size: 13), color: .neonTextSecondary, fill: false, lineLimit: 2)
+                    DirText(subtitle, font: .system(.footnote), color: .neonTextSecondary, fill: false, lineLimit: 2)
                 }
                 if let meta, !meta.isEmpty {
                     Text(meta)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(.caption, weight: .medium))
                         .foregroundStyle(Color.neonTextTertiary)
                         .lineLimit(1)
                 }
@@ -152,9 +201,9 @@ struct ListRow<Trailing: View>: View {
                 VStack(alignment: .trailing, spacing: 5) {
                     if let value {
                         Text(value)
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.system(.subheadline, weight: .semibold))
                             .monospacedDigit()
-                            .foregroundStyle(Color.neonInk.opacity(0.8))
+                            .foregroundStyle(Color.neonInk.opacity(0.82))
                             .lineLimit(1)
                     }
                     if let badge {
@@ -166,7 +215,7 @@ struct ListRow<Trailing: View>: View {
             trailing
             if chevron {
                 Image(systemName: "chevron.forward")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(Color.neonTextFaint)
             }
         }
@@ -175,22 +224,6 @@ struct ListRow<Trailing: View>: View {
         .contentShape(Rectangle())
         // One spoken element, unless the trailing side holds its own control.
         .accessibilityElement(children: Trailing.self == EmptyView.self ? .combine : .contain)
-    }
-
-    @ViewBuilder
-    private var leadingView: some View {
-        switch leading {
-        case .plain:
-            EmptyView()
-        case .icon(let symbol, let tint):
-            IconTile(symbol, tint: tint)
-        case .avatar(let url, let name, let online):
-            AvatarView(url: url, name: name, size: 42, online: online)
-        case .thumbnail(let url):
-            RemoteImage(url: url)
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
     }
 }
 
@@ -296,26 +329,30 @@ struct MetaLabel: View {
     }
 }
 
-/// A small count in a capsule, for headers and tabs. Nothing at zero.
+/// A small count in a capsule — red by default, as unread counts are in the
+/// mockups — for tabs, filters and rows. Nothing at zero.
 struct CountBadge: View {
     let count: Int
     var tone: BadgeTone
+    var size: CGFloat
 
-    init(_ count: Int, tone: BadgeTone = .pink) {
+    init(_ count: Int, tone: BadgeTone = .danger, size: CGFloat = 20) {
         self.count = count
         self.tone = tone
+        self.size = size
     }
 
     var body: some View {
         if count > 0 {
             Text(count > 99 ? "99+" : NeonFormat.integer(count))
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(size: size * 0.58, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(tone == .neutral ? Color.neonInk.opacity(0.7) : .white)
-                .padding(.horizontal, 6)
-                .frame(minWidth: 20, minHeight: 20)
+                .padding(.horizontal, size * 0.3)
+                .frame(minWidth: size, minHeight: size)
                 .background(Capsule().fill(tone == .neutral ? Color.neonInk.opacity(0.08) : tone.color))
                 .transition(.neonPop)
+                .accessibilityLabel(Text(NeonFormat.integer(count)))
         }
     }
 }
@@ -341,7 +378,7 @@ struct SectionHeader<Trailing: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(title)
-                        .font(.system(size: 19, weight: .bold, design: .rounded))
+                        .font(.system(.title3, weight: .bold))
                         .foregroundStyle(Color.neonInk)
                     if let count {
                         CountBadge(count, tone: .neutral)
@@ -349,8 +386,8 @@ struct SectionHeader<Trailing: View>: View {
                 }
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.neonTextTertiary)
+                        .font(.neonSubtitle)
+                        .foregroundStyle(Color.neonTextSecondary)
                 }
             }
             Spacer(minLength: 8)
@@ -363,23 +400,157 @@ struct SectionHeader<Trailing: View>: View {
 }
 
 extension SectionHeader where Trailing == AnyView {
-    /// With a text button on the trailing side ("See all", "Add").
+    /// With a "View All ›" capsule on the trailing side.
     init(_ title: String, subtitle: String? = nil, count: Int? = nil, actionTitle: String, action: @escaping () -> Void) {
         self.init(title, subtitle: subtitle, count: count) {
-            AnyView(
-                Button {
-                    Haptic.tap()
-                    action()
-                } label: {
-                    Text(actionTitle)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.neonPurpleStrong)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Color.neonPurple.opacity(0.1)))
+            AnyView(ViewAllButton(actionTitle, action: action))
+        }
+    }
+}
+
+// MARK: - Section cards
+
+/// The pale capsule link at the head of a card: "View All ›", "Edit".
+struct ViewAllButton: View {
+    let title: String
+    var hue: NeonHue
+    var chevron: Bool
+    let action: () -> Void
+
+    init(_ title: String = L("View All"), hue: NeonHue = .blue, chevron: Bool = true, action: @escaping () -> Void) {
+        self.title = title
+        self.hue = hue
+        self.chevron = chevron
+        self.action = action
+    }
+
+    var body: some View {
+        Button {
+            Haptic.tap()
+            action()
+        } label: {
+            HStack(spacing: 5) {
+                Text(title)
+                    .lineLimit(1)
+                if chevron {
+                    Image(systemName: "chevron.forward")
+                        .font(.system(.caption, weight: .bold))
                 }
-                .buttonStyle(.pressable)
-            )
+            }
+            .font(.system(.footnote, weight: .semibold))
+            .foregroundStyle(hue == .blue ? Color.neonBlueStrong : hue.deep)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 30)
+            .background(Capsule().fill(hue.wash))
+            .overlay(Capsule().strokeBorder(hue.color.opacity(0.08), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.pressable)
+        .fixedSize()
+    }
+}
+
+/// A white card that carries its own heading — an icon tile, a title, a grey
+/// line under it and, on the trailing side, "View All" or any control — and
+/// then its content. The mockups' unit for every block of a page.
+///
+///     SectionCard(L("Project Progress"), subtitle: L("Live status of all projects"),
+///                 symbol: "square.stack.3d.up.fill", hue: .blue, action: { showAll() }) {
+///         SegmentedProgress(segments)
+///     }
+struct SectionCard<Content: View, Trailing: View>: View {
+    let title: String
+    var subtitle: String?
+    var symbol: String?
+    var hue: NeonHue
+    var tileStyle: IconTileStyle
+    var spacing: CGFloat
+    let content: Content
+    let trailing: Trailing
+
+    init(
+        _ title: String,
+        subtitle: String? = nil,
+        symbol: String? = nil,
+        hue: NeonHue = .blue,
+        tileStyle: IconTileStyle = .soft,
+        spacing: CGFloat = 14,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.symbol = symbol
+        self.hue = hue
+        self.tileStyle = tileStyle
+        self.spacing = spacing
+        self.content = content()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            HStack(alignment: .center, spacing: 12) {
+                if let symbol {
+                    IconTile(symbol, hue: hue, size: subtitle == nil ? 32 : NeonSize.iconTileLarge, style: tileStyle)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.neonCardTitle)
+                        .foregroundStyle(Color.neonInk)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.neonSubtitle)
+                            .foregroundStyle(Color.neonTextSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                trailing
+            }
+            content
+        }
+        .padding(NeonSpace.card)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+        .neonContextShape(radius: NeonRadius.lg)
+    }
+}
+
+extension SectionCard where Trailing == EmptyView {
+    init(
+        _ title: String,
+        subtitle: String? = nil,
+        symbol: String? = nil,
+        hue: NeonHue = .blue,
+        tileStyle: IconTileStyle = .soft,
+        spacing: CGFloat = 14,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(title, subtitle: subtitle, symbol: symbol, hue: hue, tileStyle: tileStyle, spacing: spacing, content: content) { EmptyView() }
+    }
+}
+
+extension SectionCard where Trailing == ViewAllButton {
+    /// With the "View All ›" capsule (or `actionTitle`) on the trailing side.
+    init(
+        _ title: String,
+        subtitle: String? = nil,
+        symbol: String? = nil,
+        hue: NeonHue = .blue,
+        tileStyle: IconTileStyle = .soft,
+        spacing: CGFloat = 14,
+        actionTitle: String = L("View All"),
+        action: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(title, subtitle: subtitle, symbol: symbol, hue: hue, tileStyle: tileStyle, spacing: spacing, content: content) {
+            ViewAllButton(actionTitle, action: action)
         }
     }
 }

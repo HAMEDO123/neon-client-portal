@@ -88,13 +88,13 @@ struct ErrorState: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            IconTile("exclamationmark.triangle.fill", tint: .neonOrangeStrong, size: 56)
+            IconTile("exclamationmark.triangle.fill", hue: .orange, size: 60)
             VStack(spacing: 6) {
                 Text(L("Couldn't load this"))
-                    .font(.neonHeadline)
+                    .font(.neonCardTitle)
                     .foregroundStyle(Color.neonInk)
                 Text(message)
-                    .font(.neonSubheadline)
+                    .font(.neonLabel)
                     .foregroundStyle(Color.neonTextSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -105,56 +105,58 @@ struct ErrorState: View {
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
+        .padding(.vertical, 32)
         .padding(.horizontal, 24)
         .neonAppear()
     }
 }
 
-/// Nothing to show — said plainly, with the symbol breathing so the screen
-/// doesn't read as frozen. An optional action offers the obvious next step.
+/// Nothing to show — said plainly, on a pastel tile whose symbol breathes so
+/// the screen doesn't read as frozen. An optional action offers the obvious
+/// next step. `card: true` sets it on a white card of its own, for a page
+/// whose other blocks are cards.
 struct EmptyState: View {
     let symbol: String
     let title: String
     var detail: String?
     var actionTitle: String?
     var action: (() -> Void)?
+    var hue: NeonHue = .indigo
+    var card = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient.neonAmbient)
-                    .frame(width: 72, height: 72)
-                Circle()
-                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
-                    .frame(width: 72, height: 72)
-                Image(systemName: symbol)
-                    .font(.system(size: 28, weight: .regular))
-                    .foregroundStyle(Color.neonPurpleStrong.opacity(0.7))
-                    .neonFloat()
-            }
-            .padding(.bottom, 4)
+        let stack = VStack(spacing: 10) {
+            IconTile(symbol, hue: hue, size: 64)
+                .neonFloat()
+                .padding(.bottom, 6)
             Text(title)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.neonInk.opacity(0.75))
+                .font(.neonCardTitle)
+                .foregroundStyle(Color.neonInk)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             if let detail {
                 Text(detail)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.neonTextTertiary)
+                    .font(.neonLabel)
+                    .foregroundStyle(Color.neonTextSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let actionTitle, let action {
-                NeonButton(actionTitle, kind: .tinted(.neonPurpleStrong), size: .medium) { action() }
-                    .padding(.top, 6)
+                NeonButton(actionTitle, kind: .tinted(hue.deep), size: .medium) { action() }
+                    .padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
+        .padding(.vertical, card ? 28 : 36)
         .padding(.horizontal, 24)
+
+        Group {
+            if card {
+                stack.neonSurface(.glass, radius: NeonRadius.lg)
+            } else {
+                stack
+            }
+        }
         .neonAppear()
     }
 }
@@ -175,32 +177,96 @@ struct SectionLabel: View {
     }
 }
 
-/// The standard loading placeholder: rows shaped like `ListRow`s, shimmering.
+/// The standard loading placeholder: row cards shaped like `ListCardRow`s,
+/// shimmering.
 struct SkeletonRows: View {
     var count = 4
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: NeonSpace.sm) {
             ForEach(0..<count, id: \.self) { index in
                 HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    Circle()
                         .fill(Color.neonInk.opacity(0.07))
-                        .frame(width: 40, height: 40)
-                    VStack(alignment: .leading, spacing: 8) {
-                        SkeletonBlock(width: index.isMultiple(of: 2) ? 170 : 130, height: 12)
-                        SkeletonBlock(width: index.isMultiple(of: 2) ? 110 : 150, height: 10)
+                        .frame(width: 46, height: 46)
+                    VStack(alignment: .leading, spacing: 9) {
+                        SkeletonBlock(width: index.isMultiple(of: 2) ? 150 : 115, height: 13)
+                        SkeletonBlock(width: index.isMultiple(of: 2) ? 200 : 165, height: 10)
                     }
                     Spacer(minLength: 0)
-                    SkeletonBlock(width: 44, height: 18, radius: 9)
+                    SkeletonBlock(width: 42, height: 10)
                 }
                 .padding(.horizontal, 14)
-                .frame(height: 72)
-                .neonSurface(.glass, radius: 16)
+                .frame(height: 74)
+                .neonSurface(.glass, radius: NeonRadius.lg)
             }
         }
         .shimmer()
         .accessibilityLabel(L("Loading"))
     }
+}
+
+/// A `SectionCard` still loading: its heading and a few lines.
+struct SkeletonCard: View {
+    var lines = 3
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                SkeletonBlock(width: NeonSize.iconTileLarge, height: NeonSize.iconTileLarge, radius: NeonRadius.tile(NeonSize.iconTileLarge))
+                VStack(alignment: .leading, spacing: 8) {
+                    SkeletonBlock(width: 140, height: 14)
+                    SkeletonBlock(width: 190, height: 10)
+                }
+                Spacer(minLength: 0)
+                SkeletonBlock(width: 78, height: 30, radius: 15)
+            }
+            ForEach(0..<max(lines, 0), id: \.self) { index in
+                SkeletonBlock(width: nil, height: 12)
+                    .padding(.trailing, CGFloat(index % 3) * 40)
+            }
+        }
+        .padding(NeonSpace.card)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+        .shimmer()
+        .accessibilityLabel(L("Loading"))
+    }
+}
+
+/// A `KPICard` still loading.
+struct SkeletonKPICard: View {
+    var compact = false
+
+    var body: some View {
+        let tile: CGFloat = compact ? 32 : NeonSize.iconTileLarge
+        VStack(alignment: .leading, spacing: compact ? 10 : 12) {
+            SkeletonBlock(width: tile, height: tile, radius: NeonRadius.tile(tile))
+            SkeletonBlock(width: compact ? 26 : 44, height: compact ? 22 : 28, radius: 8)
+            SkeletonBlock(width: compact ? 56 : 104, height: 11)
+            SkeletonBlock(width: compact ? 44 : 84, height: 9)
+            Spacer(minLength: 0)
+            HStack(alignment: .bottom, spacing: 4) {
+                ForEach(0..<6, id: \.self) { index in
+                    SkeletonBlock(width: nil, height: CGFloat(8 + index * 4), radius: 3)
+                        .frame(maxWidth: compact ? 8 : 12)
+                }
+            }
+        }
+        .padding(compact ? 12 : NeonSpace.card)
+        .frame(maxWidth: .infinity, minHeight: compact ? 150 : 170, alignment: .topLeading)
+        .neonSurface(.glass, radius: compact ? NeonRadius.md + 2 : NeonRadius.lg)
+        .shimmer()
+        .accessibilityLabel(L("Loading"))
+    }
+}
+
+/// How an avatar without a photo is drawn.
+enum AvatarStyle {
+    /// Initials in the person's colour on a pastel disc — quiet, for dense lists.
+    case soft
+    /// White initials on the person's colour, solid — the chat list's avatars.
+    case solid
 }
 
 /// Somebody's picture, or their initials on a colour that is theirs.
@@ -212,18 +278,20 @@ struct AvatarView: View {
     var ring = false
     /// A green dot: here right now.
     var online = false
+    var style: AvatarStyle = .soft
 
     var body: some View {
-        let accent = NeonPalette.color(for: name)
+        let hue = NeonPalette.hue(for: name)
         ZStack {
-            LinearGradient(
-                colors: [accent.opacity(0.20), accent.opacity(0.10)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            switch style {
+            case .soft:
+                LinearGradient(colors: [hue.wash, hue.pastel], startPoint: .topLeading, endPoint: .bottomTrailing)
+            case .solid:
+                LinearGradient(colors: [hue.color, hue.deep], startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
             Text(Self.initials(name, size: size))
-                .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
-                .foregroundStyle(accent)
+                .font(.system(size: size * 0.4, weight: .bold))
+                .foregroundStyle(style == .solid ? Color.white : hue.deep)
             if let url {
                 PipelineImage(url: url, points: size)
             }
@@ -235,10 +303,7 @@ struct AvatarView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if online {
-                Circle()
-                    .fill(Color.neonSuccess)
-                    .frame(width: size * 0.28, height: size * 0.28)
-                    .overlay(Circle().strokeBorder(Color.white, lineWidth: max(1.5, size * 0.05)))
+                OnlineDot(size: max(10, size * 0.27))
                     .offset(x: size * 0.02, y: size * 0.02)
             }
         }

@@ -350,7 +350,7 @@ struct SheetHeader: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(Color.neonInk)
                     .lineLimit(2)
                 if let subtitle {

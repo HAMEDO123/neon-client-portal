@@ -20,17 +20,26 @@ enum NeonSpace {
     static let gutter: CGFloat = 16
     /// Between the blocks of a screen.
     static let section: CGFloat = 22
+    /// Between cards stacked on a page, and between tiles in a grid.
+    static let stack: CGFloat = 12
+    /// Inside a card, from its edge to its content.
+    static let card: CGFloat = 16
 }
 
 enum NeonRadius {
     static let xs: CGFloat = 8
     static let sm: CGFloat = 12
+    /// Small tiles inside a card: quick actions, thumbnails, fields.
     static let md: CGFloat = 16
     /// Cards.
-    static let lg: CGFloat = 20
-    static let xl: CGFloat = 24
-    /// Heroes and sheets.
+    static let lg: CGFloat = 22
+    /// Heroes, the tab bar.
+    static let xl: CGFloat = 26
+    /// Sheets.
     static let xxl: CGFloat = 30
+
+    /// An icon tile's corner: a share of its size, so every tile has the same shape.
+    static func tile(_ size: CGFloat) -> CGFloat { (size * 0.3).rounded() }
 }
 
 enum NeonSize {
@@ -39,18 +48,23 @@ enum NeonSize {
     /// Text fields, pickers.
     static let field: CGFloat = 50
     static let iconTile: CGFloat = 38
+    /// The tile at the head of a card and on a KPI card.
+    static let iconTileLarge: CGFloat = 40
     static let avatar: CGFloat = 44
+    /// The round white buttons in a screen's header.
+    static let circleButton: CGFloat = 44
+    static let fab: CGFloat = 58
 }
 
 // MARK: - Type
 
-// Rounded display faces for headings and numbers, the system text face for
-// reading. Built on text styles, so Dynamic Type scales all of it.
+// SF Pro throughout, bold for headings and figures, as in the owner's
+// mockups. Built on text styles, so Dynamic Type scales all of it.
 extension Font {
-    static let neonLargeTitle = Font.system(.largeTitle, design: .rounded, weight: .bold)
-    static let neonTitle = Font.system(.title, design: .rounded, weight: .bold)
-    static let neonTitle2 = Font.system(.title2, design: .rounded, weight: .bold)
-    static let neonTitle3 = Font.system(.title3, design: .rounded, weight: .semibold)
+    static let neonLargeTitle = Font.system(.largeTitle, weight: .bold)
+    static let neonTitle = Font.system(.title, weight: .bold)
+    static let neonTitle2 = Font.system(.title2, weight: .bold)
+    static let neonTitle3 = Font.system(.title3, weight: .semibold)
     static let neonHeadline = Font.system(.headline)
     static let neonBody = Font.system(.body)
     static let neonCallout = Font.system(.callout)
@@ -60,8 +74,23 @@ extension Font {
     /// Uppercase labels above sections — pair with `.tracking(0.6)`.
     static let neonOverline = Font.system(.caption2, weight: .semibold)
     /// Big figures: stat tiles, totals.
-    static let neonNumber = Font.system(.title, design: .rounded, weight: .bold).monospacedDigit()
-    static let neonNumberSmall = Font.system(.title3, design: .rounded, weight: .bold).monospacedDigit()
+    static let neonNumber = Font.system(.title, weight: .bold).monospacedDigit()
+    static let neonNumberSmall = Font.system(.title3, weight: .bold).monospacedDigit()
+
+    /// A hero's name line ("Hamed").
+    static let neonDisplay = Font.system(.title, weight: .heavy)
+    /// A KPI card's figure.
+    static let neonKPI = Font.system(.largeTitle, weight: .heavy).monospacedDigit()
+    /// The title at the head of a card ("Project Progress").
+    static let neonCardTitle = Font.system(.headline, weight: .bold)
+    /// A list row's title ("Sally").
+    static let neonRowTitle = Font.system(.body, weight: .semibold)
+    /// A label under a figure ("Reviews waiting"), a list row's second line.
+    static let neonLabel = Font.system(.subheadline)
+    /// The grey line under a card's title, a legend's labels.
+    static let neonSubtitle = Font.system(.footnote)
+    /// Times, counts, "this month".
+    static let neonMeta = Font.system(.footnote)
 }
 
 // MARK: - Elevation
@@ -72,12 +101,13 @@ enum NeonElevation {
 
     fileprivate var shadow: (color: Color, radius: CGFloat, y: CGFloat) {
         switch self {
+        // A cool navy, never black: the mockups' shadows read as a soft blue haze.
         case .none: return (.clear, 0, 0)
-        case .low: return (.neonInk.opacity(0.06), 6, 2)
-        case .card: return (.neonInk.opacity(0.08), 16, 8)
-        case .raised: return (.neonInk.opacity(0.12), 24, 12)
-        case .floating: return (.neonInk.opacity(0.18), 30, 16)
-        case .glow(let color): return (color.opacity(0.38), 18, 8)
+        case .low: return (.neonShadowTint.opacity(0.07), 8, 3)
+        case .card: return (.neonShadowTint.opacity(0.08), 18, 8)
+        case .raised: return (.neonShadowTint.opacity(0.12), 26, 12)
+        case .floating: return (.neonShadowTint.opacity(0.16), 30, 14)
+        case .glow(let color): return (color.opacity(0.36), 16, 8)
         }
     }
 }

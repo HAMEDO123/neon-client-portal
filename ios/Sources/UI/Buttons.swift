@@ -3,9 +3,9 @@ import SwiftUI
 // MARK: - Buttons
 
 enum NeonButtonKind {
-    /// Ink, white text — the default call to action, as on the web.
+    /// Solid indigo blue, white text — the default call to action.
     case primary
-    /// The brand gradient — the one hero action on a screen.
+    /// The brand gradient (sky → violet) — the one hero action on a screen.
     case brand
     /// White glass with a hairline — the second choice beside a primary.
     case secondary
@@ -32,7 +32,7 @@ enum NeonButtonSize {
         switch self {
         case .small: return .system(size: 13, weight: .semibold)
         case .medium: return .system(size: 15, weight: .semibold)
-        case .large: return .system(size: 16, weight: .semibold, design: .rounded)
+        case .large: return .system(size: 16, weight: .semibold)
         }
     }
 
@@ -48,7 +48,7 @@ enum NeonButtonSize {
         switch self {
         case .small: return 17
         case .medium: return 22
-        case .large: return 16
+        case .large: return 18
         }
     }
 }
@@ -102,16 +102,16 @@ struct NeonButtonStyle: ButtonStyle {
     private func background(_ shape: RoundedRectangle, pressed: Bool) -> some View {
         switch kind {
         case .primary:
-            shape.fill(LinearGradient.neonInkHero)
-                .shadow(color: .neonInk.opacity(isEnabled ? 0.22 : 0), radius: pressed ? 4 : 10, x: 0, y: pressed ? 2 : 6)
+            shape.fill(LinearGradient.neonAccent)
+                .shadow(color: .neonIndigo.opacity(isEnabled ? 0.3 : 0), radius: pressed ? 4 : 12, x: 0, y: pressed ? 2 : 6)
         case .brand:
-            shape.fill(LinearGradient(colors: [.neonCyanStrong, .neonPurple, .neonPink], startPoint: .leading, endPoint: .trailing))
-                .shadow(color: .neonPurple.opacity(isEnabled ? 0.38 : 0), radius: pressed ? 6 : 14, x: 0, y: pressed ? 3 : 8)
+            shape.fill(LinearGradient(colors: [Color(hex: 0x3AA3F5), .neonIndigo, .neonPurple], startPoint: .leading, endPoint: .trailing))
+                .shadow(color: .neonIndigo.opacity(isEnabled ? 0.34 : 0), radius: pressed ? 6 : 14, x: 0, y: pressed ? 3 : 8)
         case .secondary:
-            shape.fill(Color.white.opacity(pressed ? 0.7 : 0.88))
-                .shadow(color: .neonInk.opacity(0.06), radius: 8, x: 0, y: 3)
+            shape.fill(Color.white.opacity(pressed ? 0.75 : 0.96))
+                .neonShadow(.low)
         case .tinted(let color):
-            shape.fill(color.opacity(pressed ? 0.18 : 0.11))
+            shape.fill(NeonHue(color).map { pressed ? $0.pastel : $0.wash } ?? color.opacity(pressed ? 0.18 : 0.11))
         case .destructive:
             shape.fill(LinearGradient(colors: [.neonDanger, .neonDangerStrong], startPoint: .top, endPoint: .bottom))
                 .shadow(color: .neonDanger.opacity(isEnabled ? 0.3 : 0), radius: pressed ? 4 : 10, x: 0, y: pressed ? 2 : 6)
@@ -124,11 +124,11 @@ struct NeonButtonStyle: ButtonStyle {
     private func border(_ shape: RoundedRectangle) -> some View {
         switch kind {
         case .secondary:
-            shape.strokeBorder(Color.neonLineStrong, lineWidth: 1)
+            shape.strokeBorder(Color.neonLine, lineWidth: 1)
         case .primary, .brand, .destructive:
-            shape.strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+            shape.strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
         case .tinted(let color):
-            shape.strokeBorder(color.opacity(0.18), lineWidth: 1)
+            shape.strokeBorder(color.opacity(0.14), lineWidth: 1)
         case .ghost:
             EmptyView()
         }
@@ -256,7 +256,8 @@ struct NeonButton: View {
 // MARK: - Icon buttons
 
 enum IconButtonLook {
-    /// A white glass disc — toolbars and overlays.
+    /// A white disc with a soft shadow — the header's round buttons. With a
+    /// white glyph (on a photo or a call) it is a dark frosted disc instead.
     case glass
     /// Solid tint, white glyph — the one action in a header.
     case filled
@@ -266,7 +267,81 @@ enum IconButtonLook {
     case plain
 }
 
-/// A round button holding one symbol. Always give it a spoken `label`.
+/// What an `IconButton` looks like, for the label of a `Menu`, a
+/// `NavigationLink` or a `ShareLink`:
+///
+///     Menu { … } label: { IconButtonLabel("ellipsis") }
+struct IconButtonLabel: View {
+    let symbol: String
+    var look: IconButtonLook
+    var tint: Color
+    var size: CGFloat
+    var badge: Int?
+    var dot: Bool
+
+    init(_ symbol: String, look: IconButtonLook = .glass, tint: Color = .neonInk, size: CGFloat = NeonSize.circleButton, badge: Int? = nil, dot: Bool = false) {
+        self.symbol = symbol
+        self.look = look
+        self.tint = tint
+        self.size = size
+        self.badge = badge
+        self.dot = dot
+    }
+
+    private var onDark: Bool { tint == .white }
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.42, weight: look == .glass && !onDark ? .medium : .semibold))
+            .foregroundStyle(look == .filled ? Color.white : tint)
+            .frame(width: size, height: size)
+            .background { disc }
+            .overlay(alignment: .topTrailing) {
+                if let badge, badge > 0 {
+                    CountBadge(badge)
+                        .scaleEffect(0.85)
+                        .offset(x: 6, y: -6)
+                } else if dot {
+                    Circle()
+                        .fill(Color.neonDanger)
+                        .frame(width: size * 0.24, height: size * 0.24)
+                        .overlay(Circle().strokeBorder(Color.white, lineWidth: max(1.5, size * 0.045)))
+                        .offset(x: -size * 0.1, y: size * 0.08)
+                        .transition(.neonPop)
+                }
+            }
+            .contentShape(Circle())
+    }
+
+    @ViewBuilder
+    private var disc: some View {
+        switch look {
+        case .glass:
+            if onDark {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(Circle().fill(Color.black.opacity(0.18)))
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+            } else {
+                Circle()
+                    .fill(Color.white.opacity(0.96))
+                    .overlay(Circle().strokeBorder(Color.white, lineWidth: 1))
+                    .shadow(color: .neonShadowTint.opacity(0.1), radius: 10, x: 0, y: 4)
+            }
+        case .filled:
+            Circle()
+                .fill(NeonHue(tint)?.fill ?? LinearGradient.neonTint(tint))
+                .shadow(color: tint.opacity(0.32), radius: 8, x: 0, y: 4)
+        case .tinted:
+            Circle().fill(NeonHue(tint)?.wash ?? tint.opacity(0.12))
+        case .plain:
+            Color.clear
+        }
+    }
+}
+
+/// A round button holding one symbol — search, the bell (with `dot: true`
+/// for something new), more. Always give it a spoken `label`.
 struct IconButton: View {
     let symbol: String
     let label: String
@@ -274,6 +349,7 @@ struct IconButton: View {
     var tint: Color
     var size: CGFloat
     var badge: Int?
+    var dot: Bool
     let action: () -> Void
 
     init(
@@ -283,6 +359,7 @@ struct IconButton: View {
         tint: Color = .neonInk,
         size: CGFloat = 40,
         badge: Int? = nil,
+        dot: Bool = false,
         action: @escaping () -> Void
     ) {
         self.symbol = symbol
@@ -291,6 +368,7 @@ struct IconButton: View {
         self.tint = tint
         self.size = size
         self.badge = badge
+        self.dot = dot
         self.action = action
     }
 
@@ -299,41 +377,11 @@ struct IconButton: View {
             Haptic.tap()
             action()
         } label: {
-            Image(systemName: symbol)
-                .font(.system(size: size * 0.4, weight: .semibold))
-                .foregroundStyle(look == .filled ? Color.white : tint)
-                .frame(width: size, height: size)
-                .background { disc }
-                .overlay(alignment: .topTrailing) {
-                    if let badge, badge > 0 {
-                        CountBadge(badge)
-                            .scaleEffect(0.85)
-                            .offset(x: 6, y: -6)
-                    }
-                }
-                .contentShape(Circle())
+            IconButtonLabel(symbol, look: look, tint: tint, size: size, badge: badge, dot: dot)
         }
         .buttonStyle(PressableStyle(scale: 0.88))
         .accessibilityLabel(Text(label))
-    }
-
-    @ViewBuilder
-    private var disc: some View {
-        switch look {
-        case .glass:
-            Circle()
-                .fill(LinearGradient.neonGlassStrong)
-                .overlay(Circle().strokeBorder(LinearGradient.neonGlassEdge, lineWidth: 1))
-                .shadow(color: .neonInk.opacity(0.08), radius: 8, x: 0, y: 3)
-        case .filled:
-            Circle()
-                .fill(LinearGradient.neonTint(tint))
-                .shadow(color: tint.opacity(0.35), radius: 8, x: 0, y: 4)
-        case .tinted:
-            Circle().fill(tint.opacity(0.12))
-        case .plain:
-            Color.clear
-        }
+        .accessibilityValue(dot ? Text(L("New")) : Text(""))
     }
 }
 
@@ -364,20 +412,20 @@ struct FloatingActionButton: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: symbol)
-                    .font(.system(size: 21, weight: .bold))
+                    .font(.system(size: 22, weight: .semibold))
                     .rotationEffect(.degrees(appeared || reduceMotion ? 0 : -90))
                 if let title {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(.system(size: 16, weight: .semibold))
                         .lineLimit(1)
                 }
             }
             .foregroundStyle(.white)
             .padding(.horizontal, title == nil ? 0 : 22)
-            .frame(width: title == nil ? 58 : nil, height: 58)
-            .background(Capsule().fill(LinearGradient.neonBrand))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.28), lineWidth: 1))
-            .shadow(color: .neonPurple.opacity(0.42), radius: 18, x: 0, y: 10)
+            .frame(width: title == nil ? NeonSize.fab : nil, height: NeonSize.fab)
+            .background(Capsule().fill(LinearGradient.neonAction))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
+            .shadow(color: .neonIndigo.opacity(0.4), radius: 16, x: 0, y: 9)
             .contentShape(Capsule())
         }
         .buttonStyle(PressableStyle(scale: 0.9))
@@ -408,5 +456,106 @@ extension View {
             }
         }
         .animation(NeonMotion.bouncy, value: isVisible)
+    }
+}
+
+// MARK: - Quick actions
+
+/// One shortcut: a coloured icon on a pastel tile, its name under it.
+struct QuickAction: Identifiable {
+    let id: String
+    let title: String
+    let symbol: String
+    var hue: NeonHue
+    var badge: Int?
+    let action: () -> Void
+
+    init(_ title: String, symbol: String, hue: NeonHue, id: String? = nil, badge: Int? = nil, action: @escaping () -> Void) {
+        self.id = id ?? title
+        self.title = title
+        self.symbol = symbol
+        self.hue = hue
+        self.badge = badge
+        self.action = action
+    }
+}
+
+/// A quick action's tile: the hue's wash, a filled icon tile, the label.
+struct QuickActionTile: View {
+    let item: QuickAction
+    var compact: Bool
+
+    init(_ item: QuickAction, compact: Bool = false) {
+        self.item = item
+        self.compact = compact
+    }
+
+    var body: some View {
+        Button {
+            Haptic.tap()
+            item.action()
+        } label: {
+            VStack(spacing: compact ? 7 : 9) {
+                IconTile(item.symbol, hue: item.hue, size: compact ? 36 : 42, style: .filled)
+                    .overlay(alignment: .topTrailing) {
+                        if let badge = item.badge, badge > 0 {
+                            CountBadge(badge, size: 18).offset(x: 7, y: -7)
+                        }
+                    }
+                Text(item.title)
+                    .font(.system(compact ? .caption : .footnote, weight: .semibold))
+                    .foregroundStyle(Color.neonInk.opacity(0.88))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, compact ? 10 : 14)
+            .frame(maxWidth: .infinity, minHeight: compact ? 88 : 104)
+            .background {
+                let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
+                shape.fill(LinearGradient(colors: [item.hue.wash.opacity(0.7), item.hue.wash], startPoint: .top, endPoint: .bottom))
+                    .overlay(shape.strokeBorder(item.hue.color.opacity(0.08), lineWidth: 1))
+            }
+            .contentShape(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(Text(item.title))
+    }
+}
+
+/// Quick actions as a grid (three to a row by default), or as one row that
+/// scrolls sideways (`columns: nil`), as on the mockup's Home. A row inside a
+/// card bleeds to its edges: `QuickActionGrid(actions, columns: nil,
+/// inset: NeonSpace.card).padding(.horizontal, -NeonSpace.card)`.
+struct QuickActionGrid: View {
+    let actions: [QuickAction]
+    var columns: Int?
+    var inset: CGFloat
+
+    init(_ actions: [QuickAction], columns: Int? = 3, inset: CGFloat = 0) {
+        self.actions = actions
+        self.columns = columns
+        self.inset = inset
+    }
+
+    var body: some View {
+        if let columns {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: NeonSpace.sm, alignment: .top), count: max(1, columns)),
+                spacing: NeonSpace.sm
+            ) {
+                ForEach(actions) { QuickActionTile($0, compact: columns > 3) }
+            }
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: NeonSpace.sm) {
+                    ForEach(actions) { QuickActionTile($0, compact: true).frame(width: 82) }
+                }
+                .padding(.horizontal, inset)
+                .padding(.vertical, 2)
+            }
+        }
     }
 }

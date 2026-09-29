@@ -7,6 +7,13 @@
 "Nothing matches “%@”" = "لا شيء يطابق «%@»";
 "Account" = "الحساب";
 
+/* Dashboard pieces */
+"View All" = "عرض الكل";
+"No change" = "بلا تغيير";
+"New" = "جديد";
+"Online now" = "متصل الآن";
+"See more" = "عرض المزيد";
+
 /* Controls */
 "Search" = "بحث";
 "Clear" = "مسح";

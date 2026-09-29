@@ -410,7 +410,7 @@ struct NumberField: View {
                         .frame(width: 20)
                 }
                 TextField("", text: $draft, prompt: Text(prompt ?? "0").foregroundColor(Color.neonTextFaint))
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 17, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(Color.neonInk)
                     .keyboardType(decimals > 0 ? .decimalPad : .numberPad)

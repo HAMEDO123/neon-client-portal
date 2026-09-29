@@ -88,12 +88,12 @@ struct NeonBarChart: View {
                         y: .value("Value", point.value * grown),
                         width: .ratio(0.62)
                     )
-                    .foregroundStyle(LinearGradient(colors: [color, color.opacity(0.55)], startPoint: .top, endPoint: .bottom))
+                    .foregroundStyle(LinearGradient(colors: [color.opacity(0.6), color], startPoint: .top, endPoint: .bottom))
                     .cornerRadius(6)
                     .annotation(position: .top, alignment: .center, spacing: 4) {
                         if showsValues && points.count <= 12 {
                             Text(format.axis(point.value))
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(Color.neonTextSecondary)
                                 .opacity(grown > 0.95 ? 1 : 0)
                         }
@@ -234,7 +234,7 @@ struct NeonLineChart: View {
                         .foregroundStyle(line.color)
                         .annotation(position: .top, spacing: 6) {
                             Text(format.axis(last.value))
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(line.color)
                                 .opacity(grown > 0.95 ? 1 : 0)
                         }
@@ -346,7 +346,7 @@ struct NeonDonutChart: View {
                             DirText(slice.label, font: .system(size: 13, weight: .medium), color: .neonTextSecondary, fill: false, lineLimit: 1)
                             Spacer(minLength: 6)
                             Text(format.string(slice.value))
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(.system(size: 13, weight: .semibold))
                                 .monospacedDigit()
                                 .foregroundStyle(Color.neonInk)
                             if total > 0 {
@@ -380,7 +380,7 @@ struct NeonDonutChart: View {
             }
             VStack(spacing: 1) {
                 Text(centerValue ?? format.string(total))
-                    .font(.system(size: size * 0.17, weight: .bold, design: .rounded))
+                    .font(.system(size: size * 0.17, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(Color.neonInk)
                     .minimumScaleFactor(0.5)
@@ -430,25 +430,25 @@ struct ChartCard<Content: View>: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.neonCardTitle)
                         .foregroundStyle(Color.neonInk)
                     if let subtitle {
                         Text(subtitle)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.neonTextTertiary)
+                            .font(.neonSubtitle)
+                            .foregroundStyle(Color.neonTextSecondary)
                     }
                 }
                 Spacer(minLength: 8)
                 if let value {
                     Text(value)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(.neonTitle2)
                         .monospacedDigit()
                         .foregroundStyle(Color.neonInk)
                 }
             }
             content
         }
-        .padding(16)
+        .padding(NeonSpace.card)
         .frame(maxWidth: .infinity, alignment: .leading)
         .neonSurface(.glass, radius: NeonRadius.lg)
     }

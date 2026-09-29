@@ -75,7 +75,7 @@ struct HeroHeader<Accessory: View>: View {
                         .tracking(0.8)
                         .foregroundStyle(.white.opacity(0.8))
                 }
-                DirText(title, font: .system(size: 27, weight: .bold, design: .rounded), color: .white)
+                DirText(title, font: .system(size: 27, weight: .bold), color: .white)
                 if let subtitle {
                     DirText(subtitle, font: .system(size: 14, weight: .medium), color: .white.opacity(0.85))
                 }
@@ -104,7 +104,7 @@ struct HeroHeader<Accessory: View>: View {
                     .tracking(0.8)
                     .foregroundStyle(tint)
             }
-            DirText(title, font: .system(size: 27, weight: .bold, design: .rounded))
+            DirText(title, font: .system(size: 27, weight: .bold))
             if let subtitle {
                 DirText(subtitle, font: .system(size: 14, weight: .medium), color: .neonTextSecondary)
             }
@@ -147,6 +147,198 @@ extension HeroHeader where Accessory == EmptyView {
 private struct HeroOffsetKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+// MARK: - Hero card
+
+/// The picture behind a `HeroCard`.
+enum HeroPhoto {
+    case none
+    /// A picture from the server, through `RemoteImage`.
+    case url(URL?)
+    /// A picture already in hand.
+    case image(Image)
+}
+
+/// The vivid card at the top of Home: the brand gradient (sky blue into
+/// violet) with a photo melting into it from the trailing side, a greeting
+/// line with a symbol, a big name, a date, a line of text, an accessory at
+/// the top trailing corner (the weather) and a round chevron at the bottom
+/// trailing corner. Text sits on the gradient, never on the photo.
+///
+///     HeroCard(L("Hamed"), eyebrow: L("Good evening,"), eyebrowSymbol: "sun.max.fill",
+///              subtitle: dateLine, footnote: L("An overview of every client project delivery."),
+///              photo: .url(latestRender), action: { openProjects() }) {
+///         WeatherBadge(…)
+///     }
+struct HeroCard<Accessory: View>: View {
+    let title: String
+    var eyebrow: String?
+    var eyebrowSymbol: String?
+    var subtitle: String?
+    var footnote: String?
+    var photo: HeroPhoto
+    var minHeight: CGFloat
+    var actionLabel: String
+    var action: (() -> Void)?
+    let accessory: Accessory
+
+    init(
+        _ title: String,
+        eyebrow: String? = nil,
+        eyebrowSymbol: String? = nil,
+        subtitle: String? = nil,
+        footnote: String? = nil,
+        photo: HeroPhoto = .none,
+        minHeight: CGFloat = 164,
+        actionLabel: String = L("See more"),
+        action: (() -> Void)? = nil,
+        @ViewBuilder accessory: () -> Accessory
+    ) {
+        self.title = title
+        self.eyebrow = eyebrow
+        self.eyebrowSymbol = eyebrowSymbol
+        self.subtitle = subtitle
+        self.footnote = footnote
+        self.photo = photo
+        self.minHeight = minHeight
+        self.actionLabel = actionLabel
+        self.action = action
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: NeonRadius.xl, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let eyebrow {
+                        HStack(spacing: 8) {
+                            if let eyebrowSymbol {
+                                Image(systemName: eyebrowSymbol)
+                                    .symbolRenderingMode(.multicolor)
+                                    .font(.system(.headline, weight: .semibold))
+                            }
+                            Text(eyebrow)
+                                .font(.system(.headline, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.95))
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.85)
+                        }
+                    }
+                    DirText(title, font: .neonDisplay, color: .white, fill: false, lineLimit: 1)
+                        .minimumScaleFactor(0.7)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(.subheadline, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
+                            .padding(.top, 2)
+                    }
+                }
+                Spacer(minLength: 8)
+                accessory
+            }
+            Spacer(minLength: 14)
+            HStack(alignment: .bottom, spacing: 12) {
+                if let footnote {
+                    Text(footnote)
+                        .font(.system(.footnote, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if let action {
+                    Button {
+                        Haptic.tap()
+                        action()
+                    } label: {
+                        Image(systemName: "chevron.forward")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color.neonIndigo)
+                            .frame(width: 38, height: 38)
+                            .background(Circle().fill(Color.white))
+                            .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 4)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.88))
+                    .accessibilityLabel(Text(actionLabel))
+                }
+            }
+        }
+        .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 2)
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .background { backdrop }
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Color.white.opacity(0.28), lineWidth: 1))
+        .shadow(color: .neonIndigo.opacity(0.28), radius: 20, x: 0, y: 10)
+        .neonContextShape(radius: NeonRadius.xl)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .neonAppear()
+    }
+
+    private var backdrop: some View {
+        ZStack {
+            LinearGradient.neonBrand
+            photoLayer
+                .mask(
+                    // Clear under the text, the photo's own colours on the far side.
+                    LinearGradient(
+                        stops: [.init(color: .clear, location: 0.3), .init(color: .black.opacity(0.7), location: 0.62), .init(color: .black, location: 0.9)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .flipsForRightToLeftLayoutDirection(true)
+                )
+            // Keeps the gradient's hue over the photo's near half, so it reads as one card.
+            LinearGradient(
+                colors: [Color(hex: 0x3AA3F5).opacity(0.7), Color(hex: 0x6B5CF5).opacity(0.38), Color(hex: 0x6B5CF5).opacity(0.1)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .flipsForRightToLeftLayoutDirection(true)
+        }
+    }
+
+    @ViewBuilder
+    private var photoLayer: some View {
+        switch photo {
+        case .none:
+            // No photo: two soft lights, so the card still has depth.
+            ZStack {
+                Circle().fill(Color.white.opacity(0.22)).frame(width: 220).blur(radius: 50).offset(x: 110, y: -60)
+                Circle().fill(Color.neonPink.opacity(0.35)).frame(width: 180).blur(radius: 60).offset(x: 140, y: 80)
+            }
+        case .url(let url):
+            RemoteImage(url: url, placeholderSymbol: "building.2")
+        case .image(let image):
+            GeometryReader { proxy in
+                image.resizable().scaledToFill().frame(width: proxy.size.width, height: proxy.size.height).clipped()
+            }
+        }
+    }
+}
+
+extension HeroCard where Accessory == EmptyView {
+    init(
+        _ title: String,
+        eyebrow: String? = nil,
+        eyebrowSymbol: String? = nil,
+        subtitle: String? = nil,
+        footnote: String? = nil,
+        photo: HeroPhoto = .none,
+        minHeight: CGFloat = 164,
+        actionLabel: String = L("See more"),
+        action: (() -> Void)? = nil
+    ) {
+        self.init(
+            title, eyebrow: eyebrow, eyebrowSymbol: eyebrowSymbol, subtitle: subtitle, footnote: footnote,
+            photo: photo, minHeight: minHeight, actionLabel: actionLabel, action: action
+        ) { EmptyView() }
+    }
 }
 
 // MARK: - The brand

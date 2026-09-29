@@ -11,33 +11,27 @@ struct StatusNote: View {
     var detail: String?
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: NeonRadius.md + 2, style: .continuous)
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(tone.foreground)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(Color.white.opacity(0.7)))
+            IconTile(symbol, hue: tone.hue, size: 34, style: .glass)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(Color.neonInk)
                     .fixedSize(horizontal: false, vertical: true)
                 if let detail {
                     Text(detail)
-                        .font(.system(size: 13))
+                        .font(.neonSubtitle)
                         .foregroundStyle(Color.neonTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.top, 5)
+            .padding(.top, 2)
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(tone.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(tone.foreground.opacity(0.14), lineWidth: 1)
-        )
+        .background(shape.fill(tone.hue.wash))
+        .overlay(shape.strokeBorder(tone.hue.color.opacity(0.18), lineWidth: 1))
         .accessibilityElement(children: .combine)
     }
 }
@@ -164,6 +158,272 @@ struct NeonScroll<Content: View>: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .neonAmbientBackground()
+    }
+}
+
+/// The top of a tab's page, in place of a navigation bar: the studio's logo
+/// or a picture and a big title on the leading side, round white buttons on
+/// the trailing side. Put it first in the `NeonScroll` and hide the bar
+/// (`.toolbar(.hidden, for: .navigationBar)`), so it scrolls with the page.
+///
+///     ScreenHeader(L("Chat"), leading: { ChatStudioMark(size: 40) }) {
+///         IconButton("magnifyingglass", label: L("Search"), size: NeonSize.circleButton) { … }
+///         IconButton("bell", label: L("Alerts"), size: NeonSize.circleButton, dot: unread > 0) { … }
+///     }
+///     ScreenHeader.brand { … }            // the NEON logo instead of a title
+struct ScreenHeader<Leading: View, Trailing: View>: View {
+    let title: String?
+    var subtitle: String?
+    let leading: Leading
+    let trailing: Trailing
+
+    init(
+        _ title: String? = nil,
+        subtitle: String? = nil,
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            leading
+            if let title {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .font(.neonTitle)
+                        .foregroundStyle(Color.neonInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.neonSubtitle)
+                            .foregroundStyle(Color.neonTextSecondary)
+                            .lineLimit(1)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+            }
+            Spacer(minLength: 8)
+            HStack(spacing: 10) {
+                trailing
+            }
+        }
+        .frame(minHeight: NeonSize.circleButton + 4)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+}
+
+extension ScreenHeader where Leading == EmptyView {
+    init(_ title: String, subtitle: String? = nil, @ViewBuilder trailing: () -> Trailing) {
+        self.init(title, subtitle: subtitle, leading: { EmptyView() }, trailing: trailing)
+    }
+}
+
+extension ScreenHeader where Leading == NeonLogo {
+    /// The NEON logo on the leading side, as on Home.
+    static func brand(@ViewBuilder trailing: () -> Trailing) -> ScreenHeader<NeonLogo, Trailing> {
+        ScreenHeader(nil, leading: { NeonLogo() }, trailing: trailing)
+    }
+}
+
+/// The studio's logo for a header: a gradient "N" and the word NEON in ink.
+struct NeonLogo: View {
+    var size: CGFloat = 26
+
+    var body: some View {
+        HStack(spacing: size * 0.32) {
+            Text(verbatim: "N")
+                .font(.system(size: size * 1.35, weight: .black))
+                .foregroundStyle(LinearGradient(
+                    colors: [Color(hex: 0xEC4899), Color(hex: 0x8B5CF6), Color(hex: 0x3B82F6)],
+                    startPoint: .bottomLeading,
+                    endPoint: .topTrailing
+                ))
+            Text(verbatim: "NEON")
+                .font(.system(size: size, weight: .heavy))
+                .tracking(size * 0.04)
+                .foregroundStyle(Color.neonInk)
+        }
+        .environment(\.layoutDirection, .leftToRight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "NEON"))
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+// MARK: - Row cards
+
+extension View {
+    /// Sets a row on a white card of its own — the chat list's look — with a
+    /// thin accent bar on the leading edge when `pinned`. `highlighted` (an
+    /// unread row) brightens it a touch.
+    func rowCard(pinned: Bool = false, highlighted: Bool = false, radius: CGFloat = NeonRadius.lg) -> some View {
+        modifier(RowCardStyle(pinned: pinned, highlighted: highlighted, radius: radius))
+    }
+}
+
+struct RowCardStyle: ViewModifier {
+    var pinned: Bool
+    var highlighted: Bool
+    var radius: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(shape.fill(Color.white.opacity(highlighted ? 1 : 0.92)))
+            .overlay(shape.strokeBorder(LinearGradient.neonGlassEdge, lineWidth: 1))
+            .overlay(alignment: .leading) {
+                if pinned {
+                    Capsule()
+                        .fill(LinearGradient.neonAccent)
+                        .frame(width: 4)
+                        .padding(.vertical, 18)
+                        .offset(x: -1)
+                        .transition(.opacity)
+                }
+            }
+            .neonShadow(.low)
+            .contentShape(shape)
+            .neonContextShape(radius: radius)
+    }
+}
+
+/// A list row on its own white card — a conversation, a client, a project:
+/// a big leading picture, the title in bold with an optional mark after it,
+/// a grey line under it; the time and a chevron on the trailing side, and
+/// under them a red count or a muted bell. `pinned` adds the accent bar.
+///
+///     ListCardRow(chat.title, subtitle: chat.preview,
+///                 leading: .avatar(url: chat.avatarURL, name: chat.title, online: chat.online),
+///                 time: "9:16 PM", count: chat.unread, pinned: chat.pinned, muted: chat.muted)
+struct ListCardRow<Leading: View>: View {
+    let title: String
+    var subtitle: String?
+    var titleSymbol: String?
+    var time: String?
+    var count: Int
+    var muted: Bool
+    var pinned: Bool
+    var badge: String?
+    var badgeTone: BadgeTone
+    var chevron: Bool
+    let leading: Leading
+
+    init(
+        _ title: String,
+        subtitle: String? = nil,
+        titleSymbol: String? = nil,
+        time: String? = nil,
+        count: Int = 0,
+        pinned: Bool = false,
+        muted: Bool = false,
+        badge: String? = nil,
+        badgeTone: BadgeTone = .neutral,
+        chevron: Bool = true,
+        @ViewBuilder leading: () -> Leading
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.titleSymbol = titleSymbol
+        self.time = time
+        self.count = count
+        self.muted = muted
+        self.pinned = pinned
+        self.badge = badge
+        self.badgeTone = badgeTone
+        self.chevron = chevron
+        self.leading = leading()
+    }
+
+    var body: some View {
+        let unread = count > 0
+        HStack(spacing: 14) {
+            leading
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    DirText(title, font: .system(.body, weight: .bold), fill: false, lineLimit: 1)
+                        .layoutPriority(1)
+                    if let titleSymbol {
+                        Image(systemName: titleSymbol)
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(Color.neonTextTertiary)
+                    }
+                    Spacer(minLength: 6)
+                    if let time {
+                        Text(time)
+                            .font(.system(.footnote))
+                            .foregroundStyle(Color.neonTextTertiary)
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
+                    if chevron {
+                        Image(systemName: "chevron.forward")
+                            .font(.system(.caption, weight: .semibold))
+                            .foregroundStyle(Color.neonTextFaint)
+                    }
+                }
+                HStack(spacing: 8) {
+                    if let subtitle {
+                        DirText(
+                            subtitle,
+                            font: .system(.subheadline, weight: unread ? .medium : .regular),
+                            color: unread ? Color.neonInk.opacity(0.8) : Color.neonTextSecondary,
+                            fill: false,
+                            lineLimit: 1
+                        )
+                    }
+                    Spacer(minLength: 0)
+                    if let badge {
+                        BadgeView(text: badge, tone: badgeTone)
+                    }
+                    if muted {
+                        Image(systemName: "bell.slash")
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(Color.neonTextTertiary)
+                            .accessibilityLabel(L("Muted"))
+                    }
+                    if unread {
+                        CountBadge(count, tone: muted ? .neutral : .danger, size: 22)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 11)
+        .padding(.horizontal, 14)
+        .rowCard(pinned: pinned, highlighted: unread)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(pinned ? .isSelected : [])
+    }
+}
+
+extension ListCardRow where Leading == RowLeadingView {
+    /// With a kit leading mark; avatars are drawn solid, as in the chat list.
+    init(
+        _ title: String,
+        subtitle: String? = nil,
+        leading: RowLeading = .plain,
+        titleSymbol: String? = nil,
+        time: String? = nil,
+        count: Int = 0,
+        pinned: Bool = false,
+        muted: Bool = false,
+        badge: String? = nil,
+        badgeTone: BadgeTone = .neutral,
+        chevron: Bool = true
+    ) {
+        self.init(
+            title, subtitle: subtitle, titleSymbol: titleSymbol, time: time, count: count, pinned: pinned,
+            muted: muted, badge: badge, badgeTone: badgeTone, chevron: chevron
+        ) {
+            RowLeadingView(leading: leading, size: 50, avatarStyle: .solid)
+        }
     }
 }
 

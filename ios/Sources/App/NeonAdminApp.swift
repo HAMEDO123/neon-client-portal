@@ -30,7 +30,7 @@ struct NeonAdminApp: App {
         WindowGroup {
             ZStack {
                 #if DEBUG
-                if let screen = DebugScreens.requested, api.isLoggedIn || screen == "login" || screen == "kit" {
+                if let screen = DebugScreens.requested, api.isLoggedIn || screen == "login" || screen == "kit" || screen.hasPrefix("kit-") {
                     DebugScreenHost(id: screen)
                 } else {
                     root

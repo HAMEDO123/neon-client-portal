@@ -15,7 +15,7 @@ struct Chip: View {
         _ title: String,
         symbol: String? = nil,
         isSelected: Bool = false,
-        tint: Color = .neonInk,
+        tint: Color = .neonAccent,
         count: Int? = nil,
         action: (() -> Void)? = nil
     ) {
@@ -46,9 +46,10 @@ struct Chip: View {
         ChipLabel(title: title, symbol: symbol, count: count, isSelected: isSelected)
             .background {
                 if isSelected {
-                    Capsule().fill(tint)
+                    Capsule().fill(tint == .neonAccent ? AnyShapeStyle(LinearGradient.neonAccent) : AnyShapeStyle(tint))
+                        .shadow(color: tint.opacity(0.28), radius: 8, x: 0, y: 4)
                 } else {
-                    Capsule().fill(Color.white.opacity(0.78))
+                    Capsule().fill(Color.white.opacity(0.94))
                         .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
                 }
             }
@@ -73,17 +74,17 @@ struct ChipLabel: View {
                 .lineLimit(1)
             if let count {
                 Text(NeonFormat.integer(count))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(.system(size: 11, weight: .bold))
                     .monospacedDigit()
                     .padding(.horizontal, 6)
                     .frame(minWidth: 18, minHeight: 18)
                     .background(Capsule().fill(isSelected ? Color.white.opacity(0.24) : Color.neonInk.opacity(0.07)))
             }
         }
-        .font(.system(size: 14, weight: .semibold))
-        .foregroundStyle(isSelected ? Color.white : Color.neonInk.opacity(0.72))
-        .padding(.horizontal, 14)
-        .frame(height: 36)
+        .font(.system(.subheadline, weight: isSelected ? .semibold : .medium))
+        .foregroundStyle(isSelected ? Color.white : Color.neonInk.opacity(0.78))
+        .padding(.horizontal, 15)
+        .frame(minHeight: 36)
         .contentShape(Capsule())
     }
 }
@@ -105,7 +106,7 @@ struct FilterChips<Option: Hashable>: View {
     init(
         selection: Binding<Option>,
         options: [Option],
-        tint: Color = .neonInk,
+        tint: Color = .neonAccent,
         inset: CGFloat = 0,
         title: @escaping (Option) -> String,
         symbol: ((Option) -> String?)? = nil,
@@ -136,11 +137,12 @@ struct FilterChips<Option: Hashable>: View {
                                 .background {
                                     if selected {
                                         Capsule()
-                                            .fill(tint)
+                                            .fill(tint == .neonAccent ? AnyShapeStyle(LinearGradient.neonAccent) : AnyShapeStyle(tint))
+                                            .shadow(color: tint.opacity(0.28), radius: 8, x: 0, y: 4)
                                             .matchedGeometryEffect(id: "selection", in: namespace)
                                     } else {
                                         Capsule()
-                                            .fill(Color.white.opacity(0.78))
+                                            .fill(Color.white.opacity(0.94))
                                             .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
                                     }
                                 }
@@ -153,6 +155,7 @@ struct FilterChips<Option: Hashable>: View {
                 .padding(.horizontal, inset)
                 .padding(.vertical, 4)
             }
+            .onAppear { proxy.scrollTo(selection, anchor: .center) }
         }
     }
 }
@@ -228,6 +231,166 @@ struct SegmentedPill<Option: Hashable>: View {
     }
 }
 
+// MARK: - The pill filter bar
+
+/// The filters over a list, in one white capsule: the chosen one a solid
+/// indigo-blue pill that slides between them, the others plain, a red count
+/// where something is waiting. Spreads out evenly when the options fit and
+/// scrolls sideways when they don't.
+///
+///     PillFilterBar(selection: $filter, options: ChatFilter.allCases,
+///                   title: { $0.label }, count: { $0 == .unread ? unread : nil })
+struct PillFilterBar<Option: Hashable>: View {
+    @Binding var selection: Option
+    let options: [Option]
+    let title: (Option) -> String
+    var count: ((Option) -> Int?)?
+
+    @Namespace private var namespace
+
+    init(
+        selection: Binding<Option>,
+        options: [Option],
+        title: @escaping (Option) -> String,
+        count: ((Option) -> Int?)? = nil
+    ) {
+        self._selection = selection
+        self.options = options
+        self.title = title
+        self.count = count
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 2) {
+                ForEach(options, id: \.self) { option in
+                    pill(option, proxy: nil).frame(maxWidth: .infinity)
+                }
+            }
+            .padding(5)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        ForEach(options, id: \.self) { option in
+                            pill(option, proxy: proxy)
+                        }
+                    }
+                    .padding(5)
+                }
+                // Starts on the chosen pill, whichever way the language reads.
+                .onAppear { proxy.scrollTo(selection, anchor: .center) }
+            }
+        }
+        .background(Capsule().fill(Color.white.opacity(0.94)))
+        .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
+        .clipShape(Capsule())
+        .neonShadow(.low)
+    }
+
+    private func pill(_ option: Option, proxy: ScrollViewProxy?) -> some View {
+        let selected = option == selection
+        return Button {
+            guard !selected else { return }
+            Haptic.selection()
+            withNeonAnimation(NeonMotion.snappy) { selection = option }
+            if let proxy {
+                withAnimation(NeonMotion.smooth) { proxy.scrollTo(option, anchor: .center) }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(title(option))
+                    .lineLimit(1)
+                if let value = count?(option), value > 0 {
+                    CountBadge(value, tone: .danger, size: 19)
+                }
+            }
+            .font(.system(.subheadline, weight: selected ? .semibold : .medium))
+            .foregroundStyle(selected ? Color.white : Color.neonInk.opacity(0.82))
+            .padding(.horizontal, 16)
+            .frame(minHeight: 40)
+            .frame(maxWidth: proxy == nil ? .infinity : nil)
+            .background {
+                if selected {
+                    Capsule()
+                        .fill(LinearGradient.neonAccent)
+                        .shadow(color: Color.neonAccent.opacity(0.32), radius: 8, x: 0, y: 4)
+                        .matchedGeometryEffect(id: "pill", in: namespace)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableStyle(scale: 0.95))
+        .id(option)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+// MARK: - Small controls
+
+/// A white capsule that opens a menu: "Revenue ⌄" at the head of a chart.
+struct PillMenu<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        Menu { content } label: {
+            HStack(spacing: 5) {
+                Text(title).lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(.caption2, weight: .bold))
+            }
+            .font(.system(.footnote, weight: .semibold))
+            .foregroundStyle(Color.neonInk.opacity(0.85))
+            .padding(.horizontal, 12)
+            .frame(minHeight: 30)
+            .background(Capsule().fill(Color.white))
+            .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
+            .neonShadow(.low)
+        }
+    }
+}
+
+/// A task's tick: a green disc with a white check when done, a grey ring
+/// when not. Wrap it in a Button to make it tappable.
+struct CheckCircle: View {
+    let isOn: Bool
+    var hue: NeonHue
+    var size: CGFloat
+
+    init(_ isOn: Bool, hue: NeonHue = .green, size: CGFloat = 26) {
+        self.isOn = isOn
+        self.hue = hue
+        self.size = size
+    }
+
+    var body: some View {
+        ZStack {
+            if isOn {
+                Circle()
+                    .fill(hue.fill)
+                    .shadow(color: hue.color.opacity(0.3), radius: 5, x: 0, y: 2)
+                Image(systemName: "checkmark")
+                    .font(.system(size: size * 0.46, weight: .bold))
+                    .foregroundStyle(.white)
+                    .transition(.neonPop)
+            } else {
+                Circle()
+                    .strokeBorder(Color.neonTextFaint, lineWidth: max(1.5, size * 0.07))
+            }
+        }
+        .frame(width: size, height: size)
+        .animation(NeonMotion.bouncy, value: isOn)
+        .accessibilityElement()
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityLabel(isOn ? L("Done") : L("Not done"))
+    }
+}
+
 // MARK: - Search
 
 /// The kit's search box. Filter with `matchesSearch(query, fields…)`, which
@@ -249,7 +412,7 @@ struct SearchField: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(focused ? Color.neonPurpleStrong : Color.neonTextTertiary)
+                .foregroundStyle(focused ? Color.neonAccent : Color.neonTextTertiary)
             TextField("", text: $text, prompt: Text(prompt).foregroundColor(Color.neonTextTertiary))
                 .font(.system(size: 15))
                 .foregroundStyle(Color.neonInk)
@@ -271,17 +434,17 @@ struct SearchField: View {
                 .accessibilityLabel(L("Clear"))
             }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
+        .padding(.horizontal, 16)
+        .frame(height: 46)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(focused ? 0.95 : 0.75))
+            Capsule()
+                .fill(Color.white.opacity(focused ? 1 : 0.94))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(focused ? Color.neonPurple.opacity(0.55) : Color.neonLine, lineWidth: focused ? 1.5 : 1)
+            Capsule()
+                .strokeBorder(focused ? Color.neonAccent.opacity(0.5) : Color.neonLine, lineWidth: focused ? 1.5 : 1)
         )
-        .shadow(color: focused ? Color.neonPurple.opacity(0.15) : .clear, radius: 10, x: 0, y: 4)
+        .shadow(color: focused ? Color.neonAccent.opacity(0.14) : Color.neonShadowTint.opacity(0.06), radius: 10, x: 0, y: 4)
         .animation(NeonMotion.quick, value: focused)
         .animation(NeonMotion.snappy, value: text.isEmpty)
         .contentShape(Rectangle())

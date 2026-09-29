@@ -139,7 +139,7 @@ struct AvatarStack: View {
             }
             if rest > 0 {
                 Text(verbatim: "+\(NeonFormat.integer(rest))")
-                    .font(.system(size: size * 0.36, weight: .bold, design: .rounded))
+                    .font(.system(size: size * 0.36, weight: .bold))
                     .foregroundStyle(Color.neonInk.opacity(0.7))
                     .frame(width: size, height: size)
                     .background(Circle().fill(Color.neonBgSoft))
@@ -198,6 +198,106 @@ struct PersonChip: View {
         .background(Capsule().fill(isSelected ? Color.neonPurple.opacity(0.14) : Color.white.opacity(0.85)))
         .overlay(Capsule().strokeBorder(isSelected ? Color.neonPurple.opacity(0.35) : Color.neonLine, lineWidth: 1))
         .animation(NeonMotion.snappy, value: isSelected)
+    }
+}
+
+// MARK: - Presence and stories
+
+/// The green "here right now" dot, ringed in white so it reads on any picture.
+struct OnlineDot: View {
+    var size: CGFloat = 12
+
+    var body: some View {
+        Circle()
+            .fill(Color.neonSuccess)
+            .frame(width: size, height: size)
+            .overlay(Circle().strokeBorder(Color.white, lineWidth: max(1.5, size * 0.2)))
+            .transition(.neonPop)
+            .accessibilityLabel(L("Online now"))
+    }
+}
+
+enum StoryRingStyle {
+    /// No ring.
+    case none
+    /// Something new to watch: the brand's colours all the way round.
+    case unseen
+    /// Watched already: a quiet grey ring.
+    case seen
+}
+
+/// Somebody in the stories row: their picture inside a gradient ring, the
+/// green dot when they are here, a "+" on your own to add one, and their
+/// name under it.
+///
+///     StoryAvatar(name: L("My Story"), url: me.avatarURL, ring: .none, showsAdd: true)
+///     StoryAvatar(name: person.name, url: person.avatarURL, online: person.online)
+struct StoryAvatar: View {
+    let name: String
+    var url: URL?
+    var size: CGFloat
+    var ring: StoryRingStyle
+    var online: Bool
+    var showsAdd: Bool
+    var showsName: Bool
+
+    init(
+        name: String,
+        url: URL? = nil,
+        size: CGFloat = 58,
+        ring: StoryRingStyle = .unseen,
+        online: Bool = false,
+        showsAdd: Bool = false,
+        showsName: Bool = true
+    ) {
+        self.name = name
+        self.url = url
+        self.size = size
+        self.ring = ring
+        self.online = online
+        self.showsAdd = showsAdd
+        self.showsName = showsName
+    }
+
+    var body: some View {
+        let ringWidth = max(2, size * 0.04)
+        let inner = size - ringWidth * 2 - size * 0.08
+        VStack(spacing: 6) {
+            ZStack {
+                switch ring {
+                case .none:
+                    Circle().fill(Color.white)
+                        .neonShadow(.low)
+                case .unseen:
+                    Circle().strokeBorder(AngularGradient.neonStory, lineWidth: ringWidth)
+                case .seen:
+                    Circle().strokeBorder(Color.neonLineStrong, lineWidth: ringWidth)
+                }
+                AvatarView(url: url, name: name, size: inner, style: .solid)
+            }
+            .frame(width: size, height: size)
+            .overlay(alignment: .bottomTrailing) {
+                if showsAdd {
+                    Image(systemName: "plus")
+                        .font(.system(size: size * 0.17, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: size * 0.34, height: size * 0.34)
+                        .background(Circle().fill(LinearGradient.neonAction))
+                        .overlay(Circle().strokeBorder(Color.white, lineWidth: max(2, size * 0.04)))
+                        .offset(x: size * 0.02, y: size * 0.02)
+                } else if online {
+                    OnlineDot(size: size * 0.26)
+                        .offset(x: -size * 0.02, y: -size * 0.02)
+                }
+            }
+            if showsName {
+                DirText(name, font: .system(.footnote, weight: .medium), color: .neonInk.opacity(0.85), fill: false, lineLimit: 1)
+                    .frame(maxWidth: size + 14)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: name))
+        .accessibilityValue(online ? Text(L("Online now")) : Text(""))
     }
 }
 

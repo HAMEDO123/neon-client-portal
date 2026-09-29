@@ -25,12 +25,16 @@ enum DebugScreens {
         "tab-home": .home, "tab-projects": .projects, "tab-tasks": .tasks, "tab-chat": .chat, "tab-more": .more,
     ]
 
-    static let appIds = ["login", "kit"]
+    static let appIds = ["login", "kit"] + (2...DesignKitGallery.slices).map { "kit-\($0)" }
 
     @MainActor static func view(_ id: String) -> AnyView? {
         switch id {
         case "login": return AnyView(LoginView())
         case "kit": return AnyView(DesignKitGallery())
+        case let kit where kit.hasPrefix("kit-"):
+            if let slice = Int(kit.dropFirst(4)), (2...DesignKitGallery.slices).contains(slice) {
+                return AnyView(DesignKitGallery(slice: slice))
+            }
         default: break
         }
         for area in areas {
