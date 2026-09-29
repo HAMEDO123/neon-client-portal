@@ -15,15 +15,21 @@ struct AnalyticsRootView: View {
         LoadStateView(value: data, error: errorMessage, cachedAt: cachedAt, retry: load) {
             NeonScroll { SkeletonRows(count: 6) }
         } content: { data in
-            NeonScroll(spacing: NeonSpace.xxl) {
-                Text(L("How each person's day and month are going."))
-                    .font(.neonFootnote)
-                    .foregroundStyle(Color.neonTextSecondary)
+            ScrollViewReader { proxy in
+                NeonScroll(spacing: NeonSpace.xxl) {
+                    Text(L("How each person's day and month are going."))
+                        .font(.neonFootnote)
+                        .foregroundStyle(Color.neonTextSecondary)
 
-                DailySection(data: data, goTo: { day = $0; Task { await load() } })
-                MonthlySection(data: data, goTo: { period = $0; Task { await load() } }, onApplied: { await load() })
+                    DailySection(data: data, goTo: { day = $0; Task { await load() } })
+                        .id("daily")
+
+                    MonthlySection(data: data, goTo: { period = $0; Task { await load() } }, onApplied: { await load() })
+                        .id("monthly")
+                }
+                .refreshable { Haptic.tap(); await load() }
+                .debugScroll(proxy)
             }
-            .refreshable { Haptic.tap(); await load() }
         }
         .navigationTitle(L("Analytics"))
         .task { await load() }
@@ -45,6 +51,17 @@ struct AnalyticsRootView: View {
     }
 }
 
+/// `DayStateCounts` as the kit's own split bar + dot legend, rather than a
+/// hand-rolled bar — the exact piece the mockups use for "Project Progress".
+private func insightsDaySegments(_ counts: DayStateCounts) -> [ProgressSegment] {
+    [
+        ProgressSegment(L("Done"), value: Double(counts.done), hue: .green),
+        ProgressSegment(L("In review"), value: Double(counts.review), hue: .purple),
+        ProgressSegment(L("In progress"), value: Double(counts.working), hue: .cyan),
+        ProgressSegment(L("Pending"), value: Double(counts.pending), hue: .grey),
+    ]
+}
+
 // MARK: - Daily progress
 
 private struct DailySection: View {
@@ -52,25 +69,13 @@ private struct DailySection: View {
     let goTo: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: NeonSpace.md) {
-            HStack(alignment: .firstTextBaseline) {
-                SectionHeader(L("Daily progress"), subtitle: homeDayHeading(data.day, today: data.today))
-                Spacer(minLength: 8)
-                HStack(spacing: 6) {
-                    IconButton("chevron.left", label: L("Previous day")) { goTo(data.previousDay) }
-                    if !data.live {
-                        Button(L("Today")) { goTo(data.today) }
-                            .buttonStyle(.neon(.secondary, size: .small))
-                    }
-                    IconButton("chevron.right", label: L("Next day")) { goTo(data.nextDay) }
-                }
-            }
+        SectionCard(L("Daily progress"), subtitle: homeDayHeading(data.day, today: data.today), symbol: "calendar", hue: .blue) {
             Text(L("Each person's list for the day — board steps scheduled on it and jobs from the week table — counted the way their own phone shows it."))
                 .font(.neonCaption)
                 .foregroundStyle(Color.neonTextFaint)
 
             if data.daily.isEmpty {
-                EmptyState(symbol: "chart.bar.xaxis", title: L("No employees yet"), detail: L("Add the team, and their day appears here."))
+                EmptyState(symbol: "chart.bar.xaxis", title: L("No employees yet"), detail: L("Add the team, and their day appears here."), hue: .blue)
             } else {
                 if data.teamDay.total > 0 {
                     TeamDayCard(counts: data.teamDay)
@@ -84,10 +89,20 @@ private struct DailySection: View {
                 }
 
                 VStack(spacing: NeonSpace.sm) {
-                    ForEach(data.daily) { person in
+                    ForEach(Array(data.daily.enumerated()), id: \.element.id) { index, person in
                         DayPersonCard(person: person, live: data.live, selected: data.day, goTo: goTo)
+                            .staggered(index)
                     }
                 }
+            }
+        } trailing: {
+            HStack(spacing: 6) {
+                IconButton("chevron.backward", label: L("Previous day")) { goTo(data.previousDay) }
+                if !data.live {
+                    Button(L("Today")) { goTo(data.today) }
+                        .buttonStyle(.neon(.secondary, size: .small))
+                }
+                IconButton("chevron.forward", label: L("Next day")) { goTo(data.nextDay) }
             }
         }
     }
@@ -105,8 +120,7 @@ private struct TeamDayCard: View {
                     .font(.neonNumberSmall)
                     .foregroundStyle(Color.neonTextSecondary)
             }
-            DayCountsBar(counts: counts)
-            DayCountsLegend(counts: counts)
+            SegmentedProgress(insightsDaySegments(counts))
         }
     }
 }
@@ -122,13 +136,13 @@ private struct DayPersonCard: View {
     var body: some View {
         NeonCard {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Circle().fill(employeeFill(person.employee.color)).frame(width: 8, height: 8)
+                HStack(spacing: 8) {
+                    Circle().fill(employeeFill(person.employee.color)).frame(width: 9, height: 9)
+                    VStack(alignment: .leading, spacing: 2) {
                         DirText(person.employee.name, font: .neonHeadline, fill: false)
-                    }
-                    if let role = person.employee.role {
-                        Text(role).font(.neonCaption).foregroundStyle(Color.neonTextFaint)
+                        if let role = person.employee.role {
+                            Text(role).font(.neonCaption).foregroundStyle(Color.neonTextFaint)
+                        }
                     }
                 }
                 Spacer(minLength: 8)
@@ -144,14 +158,13 @@ private struct DayPersonCard: View {
             .opacity(person.employee.active ? 1 : 0.5)
 
             if person.counts.total > 0 {
-                DayCountsBar(counts: person.counts)
-                DayCountsLegend(counts: person.counts)
+                SegmentedProgress(insightsDaySegments(person.counts))
             }
 
             if live, !person.working.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Circle().fill(Color.neonCyanStrong).frame(width: 6, height: 6)
+                        Circle().fill(Color.neonCyanStrong).frame(width: 6, height: 6).neonPulse(true)
                         Text(L("Working on now")).font(.neonOverline).foregroundStyle(Color.neonCyanStrong)
                     }
                     ForEach(person.working) { item in
@@ -166,58 +179,15 @@ private struct DayPersonCard: View {
                 .neonSurface(.tinted(.neonCyan), radius: NeonRadius.sm)
             }
 
-            DayHistoryStrip(history: person.history, selected: selected, live: live, goTo: goTo)
+            InsightsDayHistoryStrip(history: person.history, selected: selected, live: live, goTo: goTo)
         }
     }
 }
 
-private struct DayCountsBar: View {
-    let counts: DayStateCounts
-
-    private var parts: [(Int, Color)] {
-        [(counts.done, .neonSuccess), (counts.review, .neonPurple), (counts.working, .neonCyan)]
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            HStack(spacing: 2) {
-                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                    if part.0 > 0 {
-                        part.1.frame(width: max(geo.size.width * CGFloat(part.0) / CGFloat(max(counts.total, 1)), 3))
-                    }
-                }
-            }
-            .frame(width: geo.size.width, alignment: .leading)
-        }
-        .frame(height: 8)
-        .background(Color.neonSurfaceSunken)
-        .clipShape(Capsule())
-    }
-}
-
-private struct DayCountsLegend: View {
-    let counts: DayStateCounts
-
-    var body: some View {
-        let parts: [(String, Int, Color)] = [
-            (L("Done"), counts.done, .neonSuccess),
-            (L("In review"), counts.review, .neonPurple),
-            (L("In progress"), counts.working, .neonCyan),
-            (L("Pending"), counts.pending, .neonTextFaint),
-        ]
-        FlowRow {
-            ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                HStack(spacing: 5) {
-                    Circle().fill(part.2).frame(width: 7, height: 7)
-                    Text(part.0).font(.neonCaption).foregroundStyle(Color.neonTextSecondary)
-                    Text(NeonFormat.integer(part.1)).font(.neonCaption.weight(.semibold)).foregroundStyle(Color.neonInk)
-                }
-            }
-        }
-    }
-}
-
-private struct DayHistoryStrip: View {
+/// The kit has no tappable day-by-day strip, and "jump to that day" is a real
+/// feature this screen needs — so it's built locally rather than forced into
+/// `MiniBars`, which has no per-bar tap.
+private struct InsightsDayHistoryStrip: View {
     let history: [DayHistoryPoint]
     let selected: String
     let live: Bool
@@ -233,7 +203,7 @@ private struct DayHistoryStrip: View {
                 ForEach(history) { point in
                     let share = point.total == 0 ? 0 : Double(point.done) / Double(point.total)
                     let isSelected = point.dayKey == selected
-                    Button { goTo(point.dayKey) } label: {
+                    Button { withNeonAnimation(.snappy) { goTo(point.dayKey) } } label: {
                         VStack(spacing: 3) {
                             ZStack(alignment: .bottom) {
                                 RoundedRectangle(cornerRadius: 3)
@@ -241,7 +211,7 @@ private struct DayHistoryStrip: View {
                                     .background(RoundedRectangle(cornerRadius: 3).fill(point.total == 0 ? Color.clear : Color.neonSurfaceSunken))
                                 if share > 0 {
                                     RoundedRectangle(cornerRadius: 3)
-                                        .fill(Color.neonSuccess)
+                                        .fill(LinearGradient(colors: [NeonHue.green.color, NeonHue.green.deep], startPoint: .bottom, endPoint: .top))
                                         .frame(height: max(28 * share, 4))
                                 }
                             }
@@ -276,61 +246,52 @@ private struct MonthlySection: View {
     let onApplied: () async -> Void
 
     @EnvironmentObject var api: APIClient
-    @State private var confirming = false
-    @State private var applying = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: NeonSpace.md) {
-            HStack(alignment: .firstTextBaseline) {
-                SectionHeader(L("Monthly progress"), subtitle: homePeriodLabel(data.period))
-                Spacer(minLength: 8)
-                HStack(spacing: 6) {
-                    Button(L("Previous month")) { goTo(data.previousPeriod) }
-                        .buttonStyle(.neon(.secondary, size: .small))
-                    if data.period != data.thisMonth {
-                        Button(L("This month")) { goTo(data.thisMonth) }
-                            .buttonStyle(.neon(.secondary, size: .small))
-                    }
-                }
-            }
+        SectionCard(L("Monthly progress"), subtitle: homePeriodLabel(data.period), symbol: "chart.bar.xaxis", hue: .indigo) {
             Text(L("Completed board steps over assigned ones. Below %d%% costs %.2f JOD, and the employee is told why.", data.target, data.penalty))
                 .font(.neonCaption)
                 .foregroundStyle(Color.neonTextFaint)
 
             StatGrid {
-                StatTile(L("Team"), value: Double(data.month.team), symbol: "person.2.fill")
-                StatTile(L("Average progress"), value: Double(data.month.average), format: .percent, symbol: "chart.line.uptrend.xyaxis")
+                StatTile(L("Team"), value: Double(data.month.team), symbol: "person.2.fill", tint: .neonBlueStrong)
+                StatTile(L("Average progress"), value: Double(data.month.average), format: .percent, symbol: "chart.line.uptrend.xyaxis", tint: .neonIndigoStrong)
                 StatTile(L("Below %d%%", data.target), value: Double(data.month.below), symbol: "arrow.down.right", tint: .neonWarningStrong)
                 StatTile(L("Deductions applied"), text: "\(data.month.deductionsApplied) / \(data.month.below)", symbol: "scissors", tint: .neonDangerStrong)
             }
 
             if !data.month.owing.isEmpty {
-                OwingBanner(
-                    owing: data.month.owing, target: data.target, penalty: data.penalty, period: data.period,
-                    confirming: $confirming, applying: $applying, apply: apply
-                )
+                OwingBanner(owing: data.month.owing, target: data.target, penalty: data.penalty, period: data.period, apply: apply)
             }
 
             if data.rows.isEmpty {
-                EmptyState(symbol: "chart.bar.xaxis", title: L("No employees yet"), detail: L("Add the team, and their progress appears here."))
+                EmptyState(symbol: "chart.bar.xaxis", title: L("No employees yet"), detail: L("Add the team, and their progress appears here."), hue: .indigo)
             } else {
                 VStack(spacing: NeonSpace.sm) {
-                    ForEach(data.rows) { row in
+                    ForEach(Array(data.rows.enumerated()), id: \.element.id) { index, row in
                         EmployeeProgressCard(row: row)
+                            .id(index == 0 ? "rows" : "rows-\(index)")
+                            .staggered(index)
                     }
+                }
+            }
+        } trailing: {
+            HStack(spacing: 6) {
+                Button(L("Previous month")) { goTo(data.previousPeriod) }
+                    .buttonStyle(.neon(.secondary, size: .small))
+                if data.period != data.thisMonth {
+                    Button(L("This month")) { goTo(data.thisMonth) }
+                        .buttonStyle(.neon(.secondary, size: .small))
                 }
             }
         }
     }
 
     private func apply() async {
-        applying = true
-        defer { applying = false }
         do {
             try await api.applyHomeDeductions(period: data.period)
             Haptic.success()
             Toast.success(L("Applied"))
-            confirming = false
             await onApplied()
         } catch {
             Toast.error(error)
@@ -338,13 +299,13 @@ private struct MonthlySection: View {
     }
 }
 
+/// The confirm step is `NeonButton`'s own (`confirm:`/`confirmMessage:`)
+/// rather than a hand-rolled Yes/Cancel pair.
 private struct OwingBanner: View {
     let owing: [MonthOwingPerson]
     let target: Int
     let penalty: Double
     let period: String
-    @Binding var confirming: Bool
-    @Binding var applying: Bool
     let apply: () async -> Void
 
     var body: some View {
@@ -356,17 +317,12 @@ private struct OwingBanner: View {
                 .font(.neonFootnote)
                 .foregroundStyle(Color.neonTextSecondary)
 
-            if confirming {
-                HStack(spacing: NeonSpace.sm) {
-                    NeonButton(L("Yes, deduct and notify"), symbol: "scissors", kind: .destructive, size: .medium, isLoading: applying) { await apply() }
-                    NeonButton(L("Cancel"), kind: .ghost, size: .medium) { confirming = false }
-                }
-            } else {
-                NeonButton(
-                    owing.count == 1 ? L("Apply the deduction") : L("Apply %d deductions", owing.count),
-                    symbol: "scissors", kind: .destructive, size: .medium, fullWidth: false
-                ) { confirming = true }
-            }
+            NeonButton(
+                owing.count == 1 ? L("Apply the deduction") : L("Apply %d deductions", owing.count),
+                symbol: "scissors", kind: .destructive, size: .medium, fullWidth: false,
+                confirm: headline,
+                confirmMessage: L("Applying this takes %.2f JOD off each of their salaries for the period and sends them a notification with the numbers behind it. Running it twice changes nothing.", penalty)
+            ) { await apply() }
         }
         .padding(NeonSpace.md)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -386,13 +342,13 @@ private struct EmployeeProgressCard: View {
     var body: some View {
         NeonCard {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Circle().fill(employeeFill(row.employee.color)).frame(width: 8, height: 8)
+                HStack(spacing: 8) {
+                    Circle().fill(employeeFill(row.employee.color)).frame(width: 9, height: 9)
+                    VStack(alignment: .leading, spacing: 2) {
                         DirText(row.employee.name, font: .neonHeadline, fill: false)
-                    }
-                    if let role = row.employee.role {
-                        Text(role).font(.neonCaption).foregroundStyle(Color.neonTextFaint)
+                        if let role = row.employee.role {
+                            Text(role).font(.neonCaption).foregroundStyle(Color.neonTextFaint)
+                        }
                     }
                 }
                 Spacer(minLength: 8)
@@ -420,14 +376,12 @@ private struct EmployeeProgressCard: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 5)
-                    .background(Color.neonSurfaceSunken, in: RoundedRectangle(cornerRadius: 8))
+                    .background(Color.neonSurfaceSunken, in: RoundedRectangle(cornerRadius: NeonRadius.sm))
                 }
             }
 
             if let deduction = row.deduction {
-                Label(L("−%.2f deducted", deduction.amount), systemImage: "scissors")
-                    .font(.neonCaption.weight(.semibold))
-                    .foregroundStyle(Color.neonDangerStrong)
+                BadgeView(text: L("−%.2f deducted", deduction.amount), tone: .danger, symbol: "scissors")
             }
         }
     }
