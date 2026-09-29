@@ -118,3 +118,10 @@
 "Saved" = "تم الحفظ";
 "min" = "دقيقة";
 "≈ %@" = "≈ %@";
+"%d handed to you directly" = "%d أُسند إليك مباشرة";
+"%d of %d done so far today." = "أُنجز %d من %d حتى الآن اليوم.";
+"%d on the board for today" = "%d على اللوحة لهذا اليوم";
+"%d on the board" = "%d على اللوحة";
+"%d planned" = "%d مخطَّطة";
+"%d task card(s)" = "%d بطاقة مهمة";
+"Nothing on the board today." = "لا شيء على اللوحة اليوم.";

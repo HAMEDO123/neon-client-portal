@@ -17,8 +17,14 @@ struct MyRequestsRootView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                SegmentedPill(selection: $tab, options: RequestsTab.allCases, title: { $0.label }, symbol: { _ in nil }, badge: { _ in nil })
+            VStack(alignment: .leading, spacing: NeonSpace.stack) {
+                SegmentedPill(selection: $tab, options: RequestsTab.allCases, title: { $0.label }, symbol: { tab in
+                    switch tab {
+                    case .supplies: return "shippingbox"
+                    case .receipts: return "receipt"
+                    case .report: return "text.book.closed"
+                    }
+                }, badge: { _ in nil })
 
                 if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
@@ -77,39 +83,42 @@ struct MyRequestsRootView: View {
     }
 
     private func supplyRow(_ request: SupplyRequestRow) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
-                        DirText(request.item, font: .system(size: 15, weight: .semibold))
-                        if let quantity = request.quantity, !quantity.isEmpty {
-                            DirText(quantity, font: .system(size: 13), color: .neonInk.opacity(0.5))
+        HStack(alignment: .top, spacing: 12) {
+            IconTile("shippingbox.fill", hue: request.urgent ? .pink : .orange, size: 36)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            DirText(request.item, font: .system(.callout, weight: .semibold))
+                            if let quantity = request.quantity, !quantity.isEmpty {
+                                DirText(quantity, font: .neonSubtitle, color: .neonTextSecondary)
+                            }
+                        }
+                        if let note = request.note, !note.isEmpty {
+                            DirText(note, font: .neonSubtitle, color: .neonTextSecondary)
+                        }
+                        if let decision = request.decisionNote, !decision.isEmpty {
+                            Text(L("Manager: %@", decision))
+                                .font(.neonCaption)
+                                .foregroundStyle(Color.neonTextTertiary)
                         }
                     }
-                    if let note = request.note, !note.isEmpty {
-                        DirText(note, font: .system(size: 13), color: .neonInk.opacity(0.6))
-                    }
-                    if let decision = request.decisionNote, !decision.isEmpty {
-                        Text(L("Manager: %@", decision))
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.neonInk.opacity(0.5))
-                    }
+                    Spacer()
+                    if request.urgent { BadgeView(text: L("Urgent"), tone: .pink) }
                 }
-                Spacer()
-                if request.urgent { BadgeView(text: L("Urgent"), tone: .pink) }
-            }
-            HStack(spacing: 8) {
-                BadgeView(text: supplyStatusLabel(request.status), tone: supplyStatusTone(request.status))
-                if let cost = request.estimatedCost {
-                    Text(L("≈ %@", NeonFormat.money(cost)))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.neonInk.opacity(0.45))
-                }
-                Spacer()
-                if request.status == "PENDING" {
-                    Button(L("Cancel")) { cancelling = request }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.neonInk.opacity(0.4))
+                HStack(spacing: 8) {
+                    BadgeView(text: supplyStatusLabel(request.status), tone: supplyStatusTone(request.status))
+                    if let cost = request.estimatedCost {
+                        Text(L("≈ %@", NeonFormat.money(cost)))
+                            .font(.neonCaption)
+                            .foregroundStyle(Color.neonTextTertiary)
+                    }
+                    Spacer()
+                    if request.status == "PENDING" {
+                        Button(L("Cancel")) { cancelling = request }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.neonTextFaint)
+                    }
                 }
             }
         }
@@ -181,7 +190,7 @@ struct MyRequestsRootView: View {
                         .font(.system(size: 14, weight: .semibold))
                 }
                 if let summary = receipt.summary, !summary.isEmpty {
-                    DirText(summary, font: .system(size: 12), color: .neonInk.opacity(0.5))
+                    DirText(summary, font: .neonCaption, color: .neonTextTertiary)
                 }
                 HStack(spacing: 8) {
                     if receipt.status == "FAILED" {
@@ -338,27 +347,14 @@ private struct ReceiptUploadButton: View {
     var body: some View {
         HStack(spacing: 10) {
             if CameraPicker.isAvailable {
-                Button {
+                NeonButton(L("Photograph a receipt"), symbol: "camera.fill", kind: .brand) {
                     Haptic.tap()
                     showCamera = true
-                } label: {
-                    Label(L("Photograph a receipt"), systemImage: "camera.fill")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
                 }
-                .background(Color.neonInk, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .foregroundStyle(.white)
-                .buttonStyle(.pressable)
                 .disabled(working)
             }
             PhotosPicker(selection: $photoItem, matching: .images) {
-                Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 50, height: 50)
-                    .foregroundStyle(Color.neonInk)
-                    .background(Color.white.opacity(0.75), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.neonInk.opacity(0.1)))
+                IconTile("photo.on.rectangle", hue: .blue, size: 50, style: .glass)
             }
             .buttonStyle(.pressable)
             .disabled(working)

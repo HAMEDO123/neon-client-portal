@@ -15,60 +15,68 @@ struct TasksView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Picker(L("Show"), selection: $filter) {
-                        ForEach(TaskFilter.allCases) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
+            NeonScroll(spacing: NeonSpace.stack) {
+                ScreenHeader(L("Tasks")) {
+                    AccountMenu()
+                }
 
-                    if let cachedAt { OfflineBanner(savedAt: cachedAt) }
+                PillFilterBar(selection: $filter, options: TaskFilter.allCases, title: { $0.label })
 
-                    if let tasks {
-                        SectionLabel(L("On the project board"))
+                if let cachedAt { OfflineBanner(savedAt: cachedAt) }
+
+                if let tasks {
+                    SectionCard(L("On the project board"), subtitle: boardSubtitle, symbol: "square.stack.3d.up.fill", hue: .blue) {
                         if tasks.isEmpty {
                             EmptyState(
                                 symbol: "checklist",
                                 title: filter == .completed ? L("No approved work yet") : L("Nothing on your list"),
-                                detail: filter == .open ? L("Work the manager puts on the board for you appears here.") : nil
+                                detail: filter == .open ? L("Work the manager puts on the board for you appears here.") : nil,
+                                hue: .blue
                             )
-                            .glassCard(radius: 18)
                         } else {
-                            TaskList(tasks: tasks)
+                            VStack(spacing: NeonSpace.sm) {
+                                ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                                    NavigationLink(value: TaskRoute(id: task.id)) {
+                                        TodayTaskRow(task: task)
+                                    }
+                                    .buttonStyle(.pressableCard)
+                                    .staggered(index)
+                                    if task.id != tasks.last?.id { NeonDivider() }
+                                }
+                            }
                         }
+                    }
 
-                        if let jobs, !jobs.isEmpty {
-                            SectionLabel(L("From the manager"))
-                            VStack(spacing: 10) {
-                                ForEach(jobs) { job in
+                    if let jobs, !jobs.isEmpty {
+                        SectionCard(L("From the manager"), subtitle: L("%d handed to you directly", jobs.count), symbol: "shippingbox.fill", hue: .purple) {
+                            VStack(spacing: NeonSpace.sm) {
+                                ForEach(Array(jobs.enumerated()), id: \.element.id) { index, job in
                                     NavigationLink(value: JobRoute(id: job.id)) {
                                         JobRow(job: job)
                                     }
                                     .buttonStyle(.pressableCard)
+                                    .staggered(index)
+                                    if job.id != jobs.last?.id { NeonDivider() }
                                 }
                             }
                         }
-
-                        MyChatJobsSection(filter: filter, cards: cards, viewer: api.identity) { part, card in
-                            proofFor = ProofTarget(id: part.id, title: card.title, detail: card.description)
-                        }
-                    } else if let errorMessage {
-                        ErrorState(message: errorMessage) { await load() }
-                    } else {
-                        SkeletonRows(count: 5)
                     }
+
+                    MyChatJobsSection(filter: filter, cards: cards, viewer: api.identity) { part, card in
+                        proofFor = ProofTarget(id: part.id, title: card.title, detail: card.description)
+                    }
+                } else if let errorMessage {
+                    ErrorState(message: errorMessage) { await load() }
+                } else {
+                    SkeletonRows(count: 5)
                 }
-                .padding(16)
             }
             .refreshable {
                 Haptic.tap()
                 await load()
                 await cards.load(api)
             }
-            .navigationTitle(L("Tasks"))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { AccountMenu() }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: TaskRoute.self) { route in
                 TaskDetailView(taskId: route.id)
             }
@@ -89,6 +97,11 @@ struct TasksView: View {
                 Task { await cards.load(api) }
             }
         }
+    }
+
+    private var boardSubtitle: String {
+        guard let tasks else { return "" }
+        return L("%d on the board", tasks.count)
     }
 
     private func load() async {
@@ -119,7 +132,6 @@ struct TaskDetailView: View {
     @State private var task: StaffTask?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
-    @State private var working = false
     @State private var actionError: String?
     @State private var showProof = false
     @State private var justSubmitted = false
@@ -127,7 +139,7 @@ struct TaskDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: NeonSpace.stack) {
                 if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
                 if let task {
@@ -144,7 +156,7 @@ struct TaskDetailView: View {
                     SkeletonRows(count: 3)
                 }
             }
-            .padding(16)
+            .padding(NeonSpace.gutter)
         }
         .refreshable { await load() }
         .navigationTitle(L("Task"))
@@ -176,13 +188,13 @@ struct TaskDetailView: View {
 
     private func header(_ task: StaffTask) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            DirText(task.task.name, font: .system(size: 24, weight: .bold, design: .rounded))
+            DirText(task.task.name, font: .neonTitle2)
             DirText(
                 [task.project.name, task.project.clientName, task.project.location]
                     .compactMap { $0?.isEmpty == false ? $0 : nil }
                     .joined(separator: " · "),
-                font: .system(size: 14),
-                color: .neonInk.opacity(0.55)
+                font: .neonSubtitle,
+                color: .neonTextSecondary
             )
             FlowRow {
                 BadgeView(text: taskStateLabel(task.state), tone: taskStateTone(task.state))
@@ -201,10 +213,11 @@ struct TaskDetailView: View {
                     Label(L("Due %@", due), systemImage: "clock")
                 }
             }
-            .font(.system(size: 13))
-            .foregroundStyle(Color.neonInk.opacity(0.6))
+            .font(.neonFootnote)
+            .foregroundStyle(Color.neonTextSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .neonAppear()
     }
 
     @ViewBuilder
@@ -225,46 +238,26 @@ struct TaskDetailView: View {
                 detail: formattedISODate(task.completedAt).map { L("Approved %@", $0) }
             )
         default:
-            VStack(spacing: 10) {
-                Button {
+            VStack(spacing: NeonSpace.sm) {
+                NeonButton(L("Send proof of finished work"), symbol: "camera.fill", kind: .brand) {
                     Haptic.tap()
                     showProof = true
-                } label: {
-                    Label(L("Send proof of finished work"), systemImage: "camera.fill")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
                 }
-                .background(Color.neonInk, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .foregroundStyle(.white)
-                .buttonStyle(.pressable)
+                .disabled(cachedAt != nil)
 
                 if task.state == "IN_PROGRESS" {
-                    moveButton(L("Put back to pending"), symbol: "arrow.uturn.backward", to: "TODO", task: task)
+                    NeonButton(L("Put back to pending"), symbol: "arrow.uturn.backward", kind: .secondary) {
+                        await move(task, to: "TODO")
+                    }
+                    .disabled(cachedAt != nil)
                 } else {
-                    moveButton(L("Start this task"), symbol: "play.fill", to: "IN_PROGRESS", task: task)
+                    NeonButton(L("Start this task"), symbol: "play.fill", kind: .secondary) {
+                        await move(task, to: "IN_PROGRESS")
+                    }
+                    .disabled(cachedAt != nil)
                 }
             }
-            .disabled(working || cachedAt != nil)
         }
-    }
-
-    private func moveButton(_ title: String, symbol: String, to state: String, task: StaffTask) -> some View {
-        Button {
-            Task { await move(task, to: state) }
-        } label: {
-            HStack {
-                if working { ProgressView() } else { Image(systemName: symbol) }
-                Text(title)
-            }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .frame(maxWidth: .infinity)
-            .frame(height: 46)
-            .foregroundStyle(Color.neonInk)
-            .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.neonInk.opacity(0.12)))
-        }
-        .buttonStyle(.pressable)
     }
 
     @ViewBuilder
@@ -275,7 +268,7 @@ struct TaskDetailView: View {
                 if let by = task.blockedBy {
                     Text(L("Waiting on %@", by.name))
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.neonInk.opacity(0.55))
+                        .foregroundStyle(Color.neonTextSecondary)
                 }
             }
         }
@@ -368,8 +361,6 @@ struct TaskDetailView: View {
     }
 
     private func move(_ task: StaffTask, to state: String) async {
-        working = true
-        defer { working = false }
         do {
             try await api.setTaskState(id: task.id, state: state)
             Haptic.success()

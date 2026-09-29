@@ -57,20 +57,27 @@ struct ProfileRootView: View {
 
     private func identityCard(_ employee: ProfileEmployee, deviceCount: Int) -> some View {
         NeonCard {
-            DirText(employee.name, font: .system(size: 20, weight: .bold, design: .rounded))
-            DirText(employee.role ?? L("Employee"), font: .system(size: 13), color: .neonInk.opacity(0.5))
+            HStack(spacing: 14) {
+                AvatarView(url: nil, name: employee.name, size: 56, style: .solid)
+                VStack(alignment: .leading, spacing: 2) {
+                    DirText(employee.name, font: .neonTitle3)
+                    DirText(employee.role ?? L("Employee"), font: .neonSubtitle, color: .neonTextSecondary)
+                }
+                Spacer(minLength: 0)
+            }
             NeonDivider()
-            if let email = employee.email, !email.isEmpty { profileLine(symbol: "envelope", value: email) }
-            if let phone = employee.phone, !phone.isEmpty { profileLine(symbol: "phone", value: phone) }
-            if let code = employee.employeeCode, !code.isEmpty { profileLine(symbol: "person.text.rectangle", value: "ID \(code)") }
-            profileLine(symbol: "smartphone", value: L("%d device(s) receiving push", deviceCount))
+            if let email = employee.email, !email.isEmpty { profileLine(symbol: "envelope.fill", hue: .blue, value: email) }
+            if let phone = employee.phone, !phone.isEmpty { profileLine(symbol: "phone.fill", hue: .green, value: phone) }
+            if let code = employee.employeeCode, !code.isEmpty { profileLine(symbol: "person.text.rectangle.fill", hue: .purple, value: "ID \(code)") }
+            profileLine(symbol: "iphone.gen3", hue: .cyan, value: L("%d device(s) receiving push", deviceCount))
         }
+        .neonAppear()
     }
 
-    private func profileLine(symbol: String, value: String) -> some View {
+    private func profileLine(symbol: String, hue: NeonHue, value: String) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(Color.neonInk.opacity(0.35)).frame(width: 16)
-            Text(value).font(.system(size: 14)).foregroundStyle(Color.neonInk.opacity(0.75))
+            IconTile(symbol, hue: hue, size: 28)
+            Text(value).font(.system(.subheadline)).foregroundStyle(Color.neonInk.opacity(0.82))
             Spacer()
         }
     }
@@ -113,15 +120,13 @@ struct ProfileRootView: View {
 
     private func deviceRow(_ device: ProfileDevice) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "smartphone")
-                .font(.system(size: 14))
-                .foregroundStyle(device.active ? Color.neonSuccessStrong : Color.neonInk.opacity(0.3))
+            IconTile("iphone.gen3", hue: device.active ? .green : .grey, size: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.label).font(.system(size: 13, weight: .medium)).lineLimit(1)
                 Text(device.active ? L("Receiving") : L("Muted"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.neonInk.opacity(0.4))
+                    .font(.neonCaption)
+                    .foregroundStyle(Color.neonTextTertiary)
             }
             Spacer()
 
@@ -130,15 +135,16 @@ struct ProfileRootView: View {
                 set: { newValue in Task { await setActive(device, newValue) } }
             ))
             .labelsHidden()
+            .tint(.neonSuccessStrong)
 
             Button {
                 forgetting = device
             } label: {
-                Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Color.neonInk.opacity(0.3))
+                Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Color.neonTextFaint)
             }
         }
         .padding(10)
-        .background(Color.white.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .neonSurface(.solid, radius: NeonRadius.md)
     }
 
     // MARK: Loading and writing

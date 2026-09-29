@@ -11,11 +11,20 @@ struct TodayView: View {
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @State private var employeeName: String?
+    @State private var showAlerts = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+            ScrollViewReader { proxy in
+                NeonScroll(spacing: NeonSpace.stack) {
+                    ScreenHeader.brand {
+                        IconButton("bell", label: L("Alerts"), size: NeonSize.circleButton, dot: store.badges.unread > 0) {
+                            Haptic.tap()
+                            showAlerts = true
+                        }
+                        AccountMenu()
+                    }
+
                     if !store.warnings.isEmpty {
                         WarningsCard(warnings: store.warnings)
                     }
@@ -26,17 +35,42 @@ struct TodayView: View {
                         TodayHero(dayKey: day.dayKey, employeeName: employeeName, tasks: day.tasks)
                         NowNextCard(state: day.nowNext, hours: day.hours)
 
-                        SectionHeader(L("Today's work"), count: day.tasks.count)
                         if day.tasks.isEmpty {
-                            EmptyState(symbol: "calendar", title: L("Nothing is scheduled on today"))
-                                .glassCard(radius: 18)
+                            EmptyState(
+                                symbol: "calendar",
+                                title: L("Nothing is scheduled on today"),
+                                hue: .indigo,
+                                card: true
+                            )
                         } else {
-                            TaskList(tasks: day.tasks)
+                            SectionCard(L("Today's work"), subtitle: L("%d on the board for today", day.tasks.count), symbol: "checklist", hue: .blue) {
+                                VStack(spacing: NeonSpace.sm) {
+                                    ForEach(Array(day.tasks.enumerated()), id: \.element.id) { index, task in
+                                        NavigationLink(value: TaskRoute(id: task.id)) {
+                                            TodayTaskRow(task: task)
+                                        }
+                                        .buttonStyle(.pressableCard)
+                                        .staggered(index)
+                                        if task.id != day.tasks.last?.id { NeonDivider() }
+                                    }
+                                }
+                            }
                         }
 
                         if !day.tomorrow.isEmpty {
-                            SectionHeader(L("Tomorrow"), count: day.tomorrow.count)
-                            TaskList(tasks: day.tomorrow)
+                            SectionCard(L("Tomorrow"), subtitle: L("%d planned", day.tomorrow.count), symbol: "sunrise.fill", hue: .amber) {
+                                VStack(spacing: NeonSpace.sm) {
+                                    ForEach(Array(day.tomorrow.enumerated()), id: \.element.id) { index, task in
+                                        NavigationLink(value: TaskRoute(id: task.id)) {
+                                            TodayTaskRow(task: task)
+                                        }
+                                        .buttonStyle(.pressableCard)
+                                        .staggered(index)
+                                        if task.id != day.tomorrow.last?.id { NeonDivider() }
+                                    }
+                                }
+                            }
+                            .id("tomorrow")
                         }
                     } else if let errorMessage {
                         ErrorState(message: errorMessage) { await load() }
@@ -44,29 +78,24 @@ struct TodayView: View {
                         SkeletonRows(count: 4)
                     }
                 }
-                .padding(16)
+                .debugScroll(proxy)
             }
             .refreshable {
                 Haptic.tap()
                 await load()
                 await store.refresh()
             }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { AccountMenu() }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: TaskRoute.self) { route in
                 TaskDetailView(taskId: route.id)
             }
             .neonAmbientBackground()
+            .sheet(isPresented: $showAlerts) {
+                NavigationStack { NotificationsView() }
+                    .neonSheet([.large])
+            }
         }
         .task { await load() }
-    }
-
-    private var title: String {
-        guard let day else { return L("Today") }
-        return formattedDayKey(day.dayKey)
     }
 
     private func load() async {
@@ -113,18 +142,13 @@ private struct TodayHero: View {
     private var totalCount: Int { tasks.count }
 
     var body: some View {
-        HStack(alignment: .center, spacing: NeonSpace.lg) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(greeting)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(longDayLabel(dayKey))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.82))
-            }
-            Spacer(minLength: 8)
+        HeroCard(
+            employeeName?.isEmpty == false ? employeeName! : greeting,
+            eyebrow: greeting,
+            eyebrowSymbol: greetingSymbol,
+            subtitle: longDayLabel(dayKey),
+            footnote: totalCount == 0 ? L("Nothing on the board today.") : L("%d of %d done so far today.", doneCount, totalCount)
+        ) {
             if totalCount > 0 {
                 ProgressRing(progress: Double(doneCount) / Double(totalCount), size: 56, lineWidth: 5.5, tint: .white) {
                     Text(verbatim: "\(doneCount)/\(totalCount)")
@@ -135,21 +159,22 @@ private struct TodayHero: View {
                 }
             }
         }
-        .padding(NeonSpace.xl)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .neonSurface(.brand, radius: NeonRadius.xxl)
-        .neonAppear()
+    }
+
+    private var greetingSymbol: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 0..<12: return "sun.max.fill"
+        case 12..<17: return "sun.min.fill"
+        default: return "moon.stars.fill"
+        }
     }
 
     private var greeting: String {
-        let time: String
         switch Calendar.current.component(.hour, from: Date()) {
-        case 0..<12: time = L("Good morning")
-        case 12..<17: time = L("Good afternoon")
-        default: time = L("Good evening")
+        case 0..<12: return L("Good morning")
+        case 12..<17: return L("Good afternoon")
+        default: return L("Good evening")
         }
-        guard let employeeName, !employeeName.isEmpty else { return time }
-        return L("%@, %@", time, employeeName)
     }
 }
 
@@ -163,19 +188,19 @@ struct NowNextCard: View {
     let hours: WorkHours
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: NeonSpace.md) {
             HStack(spacing: 8) {
-                Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .semibold))
+                IconTile(symbol, hue: state.now != nil ? .green : .cyan, size: 32)
                 Text(label)
-                    .font(.system(size: 12, weight: .semibold))
-                    .tracking(0.5)
+                    .font(.neonOverline)
+                    .foregroundStyle(state.now != nil ? Color.neonSuccessStrong : Color.neonCyanStrong)
+                Spacer(minLength: 0)
+                if state.now != nil { OnlineDot(size: 9).neonPulse(true) }
             }
-            .foregroundStyle(Color.neonCyanStrong)
 
             if let now = state.now {
                 routed(now.entryId) {
-                    DirText(now.what, font: .system(size: 22, weight: .bold, design: .rounded))
+                    DirText(now.what, font: .neonTitle3)
                 }
                 HStack(spacing: 6) {
                     Text("\(now.from)–\(now.to)")
@@ -184,52 +209,54 @@ struct NowNextCard: View {
                         Text(L("%@ left", describeMinutes(left)))
                     }
                 }
-                .font(.system(size: 13))
-                .foregroundStyle(Color.neonInk.opacity(0.55))
+                .font(.neonSubheadline)
+                .foregroundStyle(Color.neonTextSecondary)
                 if state.onBreak {
-                    Text(L("Break until %@", lunchEnd ?? hours.end))
-                        .font(.system(size: 13, weight: .medium))
+                    Label(L("Break until %@", lunchEnd ?? hours.end), systemImage: "cup.and.saucer.fill")
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(Color.neonOrangeStrong)
                 }
             } else {
                 Text(headline)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .font(.neonTitle3)
                     .foregroundStyle(Color.neonInk)
             }
 
             if let next = state.next, !state.afterWork {
-                Divider()
+                NeonDivider()
                 routed(next.entryId) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(L("Next"))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.neonInk.opacity(0.45))
-                        DirText(next.what, font: .system(size: 15, weight: .semibold))
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(Color.neonTextTertiary)
+                        DirText(next.what, font: .system(.subheadline, weight: .semibold))
                         Text(untilNext)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.neonInk.opacity(0.5))
+                            .font(.neonCaption)
+                            .foregroundStyle(Color.neonTextTertiary)
                     }
                 }
             }
 
             if !state.beforeWork && !state.afterWork {
                 Text(L("%@ of the working day left", describeMinutes(state.leftOfDay)))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
+                    .font(.neonCaption)
+                    .foregroundStyle(Color.neonTextTertiary)
             } else {
                 Text(L("Working hours %@–%@", hours.start, hours.end))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
+                    .font(.neonCaption)
+                    .foregroundStyle(Color.neonTextTertiary)
             }
         }
-        .padding(18)
+        .padding(NeonSpace.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .neonSurface(.strong, radius: NeonRadius.xxl)
+        .neonSurface(.glass, radius: NeonRadius.xl)
+        .neonContextShape(radius: NeonRadius.xl)
+        .neonAppear(delay: 0.05)
     }
 
     private var symbol: String {
-        if state.onBreak && state.now == nil { return "cup.and.saucer" }
-        return state.now != nil ? "play.circle" : "clock"
+        if state.onBreak && state.now == nil { return "cup.and.saucer.fill" }
+        return state.now != nil ? "play.fill" : "clock.fill"
     }
 
     private var label: String {
@@ -268,7 +295,7 @@ struct NowNextCard: View {
                     content()
                     Image(systemName: "chevron.forward")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.neonInk.opacity(0.3))
+                        .foregroundStyle(Color.neonTextFaint)
                 }
             }
             .buttonStyle(.plain)
@@ -287,15 +314,15 @@ struct WarningsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
+            HStack(spacing: 8) {
+                IconTile("exclamationmark.triangle.fill", hue: .orange, size: 32)
                 Text(warnings.count == 1 ? L("You have a warning") : L("You have %d warnings", warnings.count))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                 Spacer()
                 HStack(spacing: 3) {
                     ForEach(0..<warningLimit, id: \.self) { index in
                         Capsule()
-                            .fill(index < warnings.count ? Color.red.opacity(0.75) : Color.neonInk.opacity(0.12))
+                            .fill(index < warnings.count ? Color.neonDangerStrong.opacity(0.8) : Color.neonInk.opacity(0.12))
                             .frame(width: 16, height: 5)
                     }
                 }
@@ -314,28 +341,75 @@ struct WarningsCard: View {
             if warnings.count == warningLimit - 1 {
                 Text(L("One more warning closes your account."))
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.red.opacity(0.85))
+                    .foregroundStyle(Color.neonDangerStrong)
             }
         }
-        .padding(16)
+        .padding(NeonSpace.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(hex: 0xFFFBEB), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color(hex: 0xFCD34D), lineWidth: 1))
+        .background(Color(hex: 0xFFFBEB), in: RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous).strokeBorder(Color(hex: 0xFCD34D), lineWidth: 1))
+        .neonAppear()
     }
 }
 
 // MARK: - Task rows
 
+/// A compact row for inside a `SectionCard` (Today, Tomorrow) — the state's
+/// tile, what and where, and a due time.
+struct TodayTaskRow: View {
+    let task: StaffTask
+
+    private var tone: BadgeTone { taskStateTone(task.state) }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            IconTile(taskRowGlyph(task.state), hue: tone.hue, size: 38)
+
+            VStack(alignment: .leading, spacing: 4) {
+                DirText(task.task.name, font: .system(.callout, weight: .semibold))
+                DirText(task.project.name, font: .neonSubtitle, color: .neonTextSecondary)
+
+                FlowRow {
+                    BadgeView(text: taskStateLabel(task.state), tone: tone)
+                    if let priority = priorityLabel(task.priority) {
+                        BadgeView(text: priority, tone: task.priority == "HIGH" ? .pink : .neutral)
+                    }
+                    if !task.waitingOn.isEmpty {
+                        BadgeView(text: L("Waiting"), tone: .orange)
+                    }
+                    if task.blockedReason?.isEmpty == false {
+                        BadgeView(text: L("Blocked"), tone: .warning)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 4) {
+                if let due = formattedISODate(task.dueAt) {
+                    Text(due)
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextTertiary)
+                }
+                Image(systemName: "chevron.forward")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.neonTextFaint)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// A stand-alone card version of the same row, for a screen with no
+/// surrounding `SectionCard` (the board list, jobs, follow-up targets).
 struct TaskList: View {
     let tasks: [StaffTask]
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: NeonSpace.stack) {
             ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
                 NavigationLink(value: TaskRoute(id: task.id)) {
                     TaskRow(task: task)
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.pressableCard)
                 .staggered(index)
             }
         }
@@ -349,13 +423,13 @@ struct TaskRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            IconTile(taskRowGlyph(task.state), tint: tone.color, size: 38, style: .soft)
+            IconTile(taskRowGlyph(task.state), hue: tone.hue, size: 38)
 
             VStack(alignment: .leading, spacing: 5) {
-                DirText(task.task.name, font: .system(size: 16, weight: .semibold))
-                DirText(task.project.name, font: .system(size: 13), color: .neonInk.opacity(0.55))
+                DirText(task.task.name, font: .system(.callout, weight: .semibold))
+                DirText(task.project.name, font: .neonSubtitle, color: .neonTextSecondary)
 
-                HStack(spacing: 6) {
+                FlowRow {
                     BadgeView(text: taskStateLabel(task.state), tone: tone)
                     if let priority = priorityLabel(task.priority) {
                         BadgeView(text: priority, tone: task.priority == "HIGH" ? .pink : .neutral)
@@ -369,19 +443,20 @@ struct TaskRow: View {
                 }
                 if let due = formattedISODate(task.dueAt) {
                     Label(L("Due %@", due), systemImage: "clock")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.neonInk.opacity(0.5))
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextTertiary)
                 }
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.forward")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.neonInk.opacity(0.25))
+                .foregroundStyle(Color.neonTextFaint)
                 .padding(.top, 8)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .neonSurface(.tinted(tone.color), radius: NeonRadius.lg)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+        .neonContextShape(radius: NeonRadius.lg)
     }
 }
 
