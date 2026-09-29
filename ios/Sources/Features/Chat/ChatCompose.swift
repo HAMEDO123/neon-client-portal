@@ -278,14 +278,26 @@ struct ChatAssistantSheet: View {
     @State private var asking = false
 
     var body: some View {
-        SheetHeader(L("Ask the assistant"), subtitle: L("Answers only you can see, in this chat"), symbol: "sparkles") { dismiss() }
-        VStack(alignment: .leading, spacing: 14) {
-            NeonTextEditor(L("Question"), text: $question, minLines: 3, maxLines: 8, limit: 2000)
-            NeonButton(L("Ask"), symbol: "sparkles", isLoading: asking) { await ask() }
-                .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        VStack(spacing: 0) {
+            SheetHeader(L("Ask the assistant"), subtitle: L("Answers only you can see, in this chat"), symbol: "sparkles") { dismiss() }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    NeonTextEditor(L("Question"), text: $question, minLines: 3, maxLines: 8, limit: 2000)
+                    StatusNote(
+                        symbol: "eye.slash.fill", tone: .purple,
+                        title: L("Only you see this"),
+                        detail: L("The question and its answer appear in this chat marked \"Only you\". Nobody else sees them.")
+                    )
+                    NeonButton(L("Ask"), symbol: "sparkles", kind: .brand, isLoading: asking) { await ask() }
+                        .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding(.horizontal, NeonSpace.gutter)
+                .padding(.bottom, NeonSpace.xxl)
+            }
+            .scrollDismissesKeyboard(.interactively)
         }
-        .padding(16)
-        .neonSheet([.medium])
+        .background(NeonAmbient().ignoresSafeArea())
+        .neonSheet([.medium, .large])
     }
 
     private func ask() async {

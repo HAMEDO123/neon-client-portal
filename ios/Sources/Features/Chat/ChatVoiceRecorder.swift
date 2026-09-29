@@ -11,6 +11,12 @@ final class ChatVoiceRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     @Published private(set) var isRecording = false
     @Published private(set) var elapsed: TimeInterval = 0
     @Published var permissionDenied = false
+    /// The microphone's level over the last few seconds, 0…1, newest last —
+    /// what the recording row draws as it listens.
+    @Published private(set) var levels: [CGFloat] = []
+
+    /// How many recent levels are kept for the live bars.
+    static let levelCount = 36
 
     private var recorder: AVAudioRecorder?
     private var startedAt: Date?
@@ -39,6 +45,7 @@ final class ChatVoiceRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     }
 
     private func beginRecording() {
+        ChatVoicePlayer.shared.stop()
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
@@ -52,23 +59,36 @@ final class ChatVoiceRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
             let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).m4a")
             let recorder = try AVAudioRecorder(url: url, settings: settings)
             recorder.delegate = self
+            recorder.isMeteringEnabled = true
             recorder.record()
             self.recorder = recorder
             self.fileURL = url
             self.startedAt = Date()
             self.elapsed = 0
+            self.levels = []
             self.isRecording = true
             Haptic.impact(.medium)
             timer?.invalidate()
-            timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
-                Task { @MainActor in
-                    guard let self, let startedAt = self.startedAt else { return }
-                    self.elapsed = Date().timeIntervalSince(startedAt)
-                }
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.tick() }
             }
         } catch {
             isRecording = false
         }
+    }
+
+    private func tick() {
+        guard let startedAt else { return }
+        elapsed = Date().timeIntervalSince(startedAt)
+        guard let recorder else { return }
+        recorder.updateMeters()
+        // Decibels (−160…0) to a bar: the bottom 50 dB are silence to the ear.
+        let power = recorder.averagePower(forChannel: 0)
+        let level = CGFloat(max(0, min(1, (power + 50) / 50)))
+        var next = levels
+        next.append(level)
+        if next.count > Self.levelCount { next.removeFirst(next.count - Self.levelCount) }
+        levels = next
     }
 
     /// Stops and hands back the file and its length — `nil` when it never
@@ -78,6 +98,7 @@ final class ChatVoiceRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
         timer?.invalidate()
         timer = nil
         isRecording = false
+        levels = []
         guard let recorder, let startedAt, let fileURL else { return nil }
         recorder.stop()
         self.recorder = nil
@@ -95,6 +116,7 @@ final class ChatVoiceRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
         recorder?.stop()
         if let fileURL { try? FileManager.default.removeItem(at: fileURL) }
         recorder = nil
+        levels = []
         isRecording = false
     }
 }
@@ -106,27 +128,40 @@ final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = ChatVoicePlayer()
 
     @Published var playingURL: URL?
+    /// Fetching the note before it can play.
+    @Published var loadingURL: URL?
     @Published var progress: Double = 0
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
 
     func toggle(url: URL) {
-        if playingURL == url {
+        if playingURL == url || loadingURL == url {
             stop()
             return
         }
         stop()
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard let self, let data else { return }
-            Task { @MainActor in self.play(data: data, url: url) }
-        }.resume()
+        loadingURL = url
+        Task {
+            let data = await ChatVoiceNotes.shared.data(for: url)
+            // Tapped something else, or stopped, while it was on its way.
+            guard loadingURL == url else { return }
+            loadingURL = nil
+            guard let data else {
+                Toast.error(L("That voice message could not be played."))
+                return
+            }
+            play(data: data, url: url)
+        }
     }
 
     private func play(data: Data, url: URL) {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         try? AVAudioSession.sharedInstance().setActive(true)
-        guard let player = try? AVAudioPlayer(data: data) else { return }
+        guard let player = try? AVAudioPlayer(data: data) else {
+            Toast.error(L("That voice message could not be played."))
+            return
+        }
         player.delegate = self
         player.play()
         self.player = player
@@ -147,10 +182,145 @@ final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
         player?.stop()
         player = nil
         playingURL = nil
+        loadingURL = nil
         progress = 0
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in stop() }
+    }
+}
+
+// MARK: - The note's own shape
+
+/// Voice notes fetched once, and the shape of each one's sound — read from
+/// the recording itself, bucket by bucket, so the bars under a note are that
+/// note and not a pattern. In memory only, like the photo cache.
+@MainActor
+final class ChatVoiceNotes {
+    static let shared = ChatVoiceNotes()
+
+    /// Bars under one note.
+    nonisolated static let bars = 30
+
+    private let files = NSCache<NSURL, NSData>()
+    private var shapes: [String: [CGFloat]] = [:]
+    private var inFlight: [URL: Task<Data?, Never>] = [:]
+
+    private init() {
+        files.countLimit = 40
+    }
+
+    func cachedShape(_ key: String) -> [CGFloat]? { shapes[key] }
+
+    /// The recording's bytes, fetched at most once at a time.
+    func data(for url: URL) async -> Data? {
+        if let cached = files.object(forKey: url as NSURL) { return cached as Data }
+        let task: Task<Data?, Never>
+        if let running = inFlight[url] {
+            task = running
+        } else {
+            task = Task.detached(priority: .utility) {
+                guard let (data, response) = try? await URLSession.shared.data(from: url),
+                      (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true
+                else { return nil }
+                return data
+            }
+            inFlight[url] = task
+        }
+        let data = await task.value
+        inFlight[url] = nil
+        if let data { files.setObject(data as NSData, forKey: url as NSURL) }
+        return data
+    }
+
+    /// The note's shape: `bars` levels, 0…1, loudest at 1. nil when the
+    /// recording could not be fetched or read.
+    func shape(for url: URL) async -> [CGFloat]? {
+        let key = url.absoluteString
+        if let cached = shapes[key] { return cached }
+        guard let data = await data(for: url) else { return nil }
+        return await shape(of: data, key: key)
+    }
+
+    /// The same, for a recording this phone already holds (one still sending).
+    func shape(of data: Data, key: String) async -> [CGFloat]? {
+        if let cached = shapes[key] { return cached }
+        let levels = await Task.detached(priority: .utility) { ChatVoiceNotes.analyse(data) }.value
+        if let levels {
+            if shapes.count > 300 { shapes.removeAll() }
+            shapes[key] = levels
+        }
+        return levels
+    }
+
+    nonisolated private static func analyse(_ data: Data) -> [CGFloat]? {
+        // AVAudioFile reads from a file, so the bytes go to one for a moment.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("wave-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard (try? data.write(to: url)) != nil,
+              let file = try? AVAudioFile(forReading: url),
+              file.length > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
+              (try? file.read(into: buffer)) != nil,
+              let samples = buffer.floatChannelData?[0]
+        else { return nil }
+        let count = Int(buffer.frameLength)
+        guard count > bars else { return nil }
+        let size = count / bars
+        var levels: [CGFloat] = []
+        levels.reserveCapacity(bars)
+        for bar in 0..<bars {
+            var sum: Float = 0
+            let start = bar * size
+            // Every fourth sample is plenty for a bar's loudness.
+            var index = start
+            var taken = 0
+            while index < start + size {
+                sum += samples[index] * samples[index]
+                taken += 1
+                index += 4
+            }
+            levels.append(CGFloat(sqrt(sum / Float(max(1, taken)))))
+        }
+        let loudest = levels.max() ?? 0
+        guard loudest > 0 else { return Array(repeating: 0, count: bars) }
+        // Square-rooted so quiet speech still shows as speech.
+        return levels.map { sqrt($0 / loudest) }
+    }
+}
+
+/// Bars for a voice note: its real shape once read, flat and quiet until
+/// then (never a made-up pattern), filled up to how far it has played.
+struct ChatWaveform: View {
+    let levels: [CGFloat]?
+    var progress: Double = 0
+    var tint: Color
+    var track: Color
+    var height: CGFloat = 26
+
+    var body: some View {
+        let bars = levels ?? Array(repeating: 0, count: ChatVoiceNotes.bars)
+        GeometryReader { geo in
+            let count = max(1, bars.count)
+            let gap: CGFloat = 2
+            let width = max(1.5, (geo.size.width - gap * CGFloat(count - 1)) / CGFloat(count))
+            HStack(alignment: .center, spacing: gap) {
+                ForEach(Array(bars.enumerated()), id: \.offset) { index, level in
+                    let played = Double(index) / Double(count) < progress
+                    Capsule()
+                        .fill(played ? tint : track)
+                        .frame(width: width, height: max(3, height * (0.14 + 0.86 * level)))
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
+            .animation(NeonMotion.resolved(NeonMotion.quick), value: progress)
+            .animation(NeonMotion.resolved(NeonMotion.smooth), value: levels)
+        }
+        .frame(height: height)
+        // A recording runs forward in time on either kind of phone, as the
+        // progress bar under a video does; not mirrored.
+        .environment(\.layoutDirection, .leftToRight)
+        .accessibilityHidden(true)
     }
 }

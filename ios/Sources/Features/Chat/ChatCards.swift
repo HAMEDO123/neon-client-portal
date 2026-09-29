@@ -87,45 +87,54 @@ extension TaskCard {
     }
 }
 
+/// One card from a conversation, for the lists of every card (the manager's
+/// Tasks tab): what it is, where it lives, when it is due, and each person's part.
 struct ChatTaskRow: View {
     let item: ChatCardsLoader.Item
     let viewer: Identity?
 
     var body: some View {
         if let card = item.message.task {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top) {
-                    DirText(card.title, font: .system(size: 16, weight: .semibold))
-                    BadgeView(text: cardStateLabel(card.overall), tone: taskStateTone(card.overall))
-                }
-                HStack(spacing: 6) {
-                    Image(systemName: item.conversation.isGroup ? "person.3" : "bubble.left")
-                    Text(item.conversation.title)
-                    if let due = formattedISODate(card.dueAt) {
-                        Text("·")
-                        Text(L("Due %@", due))
-                            .foregroundStyle(card.isOverdue ? Color.red.opacity(0.8) : Color.neonInk.opacity(0.5))
-                    }
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(Color.neonInk.opacity(0.5))
-
-                FlowRow {
-                    ForEach(card.assignments) { part in
-                        HStack(spacing: 4) {
-                            Circle().fill(taskStateTone(part.state).foreground).frame(width: 7, height: 7)
-                            Text(part.employee?.name ?? "—")
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
+                    IconTile("checklist", hue: .purple, size: NeonSize.iconTile)
+                    VStack(alignment: .leading, spacing: 4) {
+                        DirText(card.title, font: .neonRowTitle, lineLimit: 2)
+                        MetaLabel(item.conversation.title, symbol: item.conversation.isGroup ? "person.3.fill" : "bubble.left.fill")
+                        if let due = formattedISODate(card.dueAt) {
+                            MetaLabel(L("Due %@", due), symbol: card.isOverdue ? "exclamationmark.circle.fill" : "clock",
+                                      tint: card.isOverdue ? .neonDangerStrong : .neonTextTertiary)
                         }
-                        .font(.system(size: 12, weight: .medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.neonInk.opacity(0.05), in: Capsule())
                     }
+                    Spacer(minLength: 4)
+                    StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
+                               symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
+                }
+
+                if !card.assignments.isEmpty {
+                    FlowRow(spacing: 6) {
+                        ForEach(card.assignments) { part in
+                            HStack(spacing: 5) {
+                                AvatarView(url: nil, name: part.employee?.name ?? "—", size: 20, style: .solid)
+                                Text(verbatim: part.employee?.name ?? "—")
+                                    .font(.system(.caption, weight: .semibold))
+                                    .foregroundStyle(Color.neonInk.opacity(0.85))
+                                    .lineLimit(1)
+                                Circle().fill(taskStateTone(part.state).color).frame(width: 6, height: 6)
+                            }
+                            .padding(.leading, 3)
+                            .padding(.trailing, 9)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(taskStateTone(part.state).hue.wash))
+                            .accessibilityElement(children: .combine)
+                            .accessibilityValue(cardStateLabel(part.state))
+                        }
+                    }
+                    .padding(.leading, NeonSize.iconTile + 12)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard(radius: 16)
+            .padding(NeonSpace.card - 2)
+            .rowCard()
         }
     }
 }
@@ -143,68 +152,66 @@ func cardStateLabel(_ state: String) -> String {
 
 // MARK: - Meetings
 
+/// Every meeting card from every conversation this person is in: what is
+/// coming up (with Join from ten minutes before, and Answer while they have
+/// not), then what has passed. Pushed from the chat list and More.
 struct MeetingsView: View {
     @EnvironmentObject var api: APIClient
     @StateObject private var cards = ChatCardsLoader()
     @State private var showCompose = false
 
     var body: some View {
-        Group {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    // Only the manager sets meetings (lib/chat-meetings.ts).
-                    // Set from the team's own chat, exactly where the web's + →
-                    // Meeting lives — the same native sheet a conversation's own
-                    // + button opens.
-                    if api.identity?.side == .admin {
-                        Button {
-                            Haptic.tap()
-                            showCompose = true
-                        } label: {
-                            Label(L("Set a meeting"), systemImage: "calendar.badge.plus")
-                                .font(.system(size: 14, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
-                                .foregroundStyle(.white)
-                                .background(Color.neonInk, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(.pressable)
+        ScrollViewReader { proxy in
+            NeonScroll(spacing: NeonSpace.stack) {
+                // Only the manager sets meetings (lib/chat-meetings.ts).
+                // Set from the team's own chat, exactly where the web's + →
+                // Meeting lives — the same native sheet a conversation's own
+                // + button opens.
+                if api.identity?.side == .admin {
+                    NeonButton(L("Set a meeting"), symbol: "calendar.badge.plus", kind: .brand) {
+                        showCompose = true
                     }
-
-                    if let cachedAt = cards.cachedAt { OfflineBanner(savedAt: cachedAt) }
-
-                    if !cards.loaded, let error = cards.errorMessage {
-                        ErrorState(message: error) { await cards.load(api) }
-                    } else if !cards.loaded {
-                        SkeletonRows(count: 3)
-                    } else {
-                        SectionLabel(L("Coming up"))
-                        if upcoming.isEmpty {
-                            EmptyState(symbol: "calendar", title: L("No meetings coming up"),
-                                       detail: L("Meetings set from a chat appear here."))
-                                .glassCard(radius: 18)
-                        } else {
-                            ForEach(upcoming) { row($0) }
-                        }
-
-                        if !past.isEmpty {
-                            SectionLabel(L("Earlier"))
-                            ForEach(past) { row($0) }
-                        }
-                    }
-
-                    Text(L("Meetings from the last 200 messages of each chat."))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.neonInk.opacity(0.4))
+                    .neonAppear()
                 }
-                .padding(16)
+
+                if let cachedAt = cards.cachedAt { OfflineBanner(savedAt: cachedAt) }
+
+                if !cards.loaded, let error = cards.errorMessage {
+                    ErrorState(message: error) { await cards.load(api) }
+                } else if !cards.loaded {
+                    SkeletonRows(count: 3)
+                } else {
+                    SectionHeader(L("Coming up"), count: upcoming.isEmpty ? nil : upcoming.count)
+                        .padding(.top, 4)
+                        .id("coming-up")
+                    if upcoming.isEmpty {
+                        EmptyState(symbol: "calendar", title: L("No meetings coming up"),
+                                   detail: L("Meetings set from a chat appear here."), hue: .cyan, card: true)
+                    } else {
+                        ForEach(Array(upcoming.enumerated()), id: \.element.id) { index, item in
+                            row(item).staggered(index)
+                        }
+                    }
+
+                    if !past.isEmpty {
+                        SectionHeader(L("Earlier"), count: past.count)
+                            .padding(.top, 10)
+                            .id("earlier")
+                        ForEach(past) { row($0) }
+                    }
+                }
+
+                Text(L("Meetings from the last 200 messages of each chat."))
+                    .font(.neonMeta)
+                    .foregroundStyle(Color.neonTextTertiary)
+                    .padding(.top, 4)
+                    .debugScroll(proxy)
             }
-            .refreshable { await cards.load(api) }
-            .navigationTitle(L("Meetings"))
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
-            .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
-            .neonAmbientBackground()
         }
+        .refreshable { await cards.load(api) }
+        .navigationTitle(L("Meetings"))
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
+        .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
         .task { await cards.load(api) }
         .sheet(isPresented: $showCompose) {
             ChatMeetingComposeSheet(conversationSlug: "team") {
@@ -242,59 +249,68 @@ private struct MeetingRow: View {
     let viewer: Identity?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 12) {
+            ChatMeetingDateTile(iso: meeting.startsAt, size: 46)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        DirText(meeting.title, font: .neonRowTitle, lineLimit: 2)
+                        if let agenda = meeting.agenda, !agenda.isEmpty {
+                            DirText(agenda, font: .neonSubtitle, color: .neonTextSecondary, lineLimit: 2)
+                        }
+                    }
+                    if isLive {
+                        StateBadge(L("Now"), tone: .pink, pulsing: true)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
-                    DirText(meeting.title, font: .system(size: 17, weight: .semibold))
-                    if let agenda = meeting.agenda, !agenda.isEmpty {
-                        DirText(agenda, font: .system(size: 13), color: .neonInk.opacity(0.65))
+                    if let starts = formattedISODate(meeting.startsAt) {
+                        MetaLabel(meeting.durationMinutes.map { L("%@ · %d min", starts, $0) } ?? starts, symbol: "clock")
+                    }
+                    MetaLabel(
+                        meeting.mode == "IN_PERSON" ? (meeting.place?.isEmpty == false ? meeting.place! : L("In person")) : L("Online"),
+                        symbol: meeting.mode == "IN_PERSON" ? "mappin.and.ellipse" : "video.fill"
+                    )
+                    MetaLabel(conversation.title, symbol: conversation.isGroup ? "person.3.fill" : "bubble.left.fill")
+                }
+
+                if !meeting.attendees.isEmpty {
+                    FlowRow(spacing: 6) {
+                        ForEach(meeting.attendees) { person in
+                            HStack(spacing: 4) {
+                                Image(systemName: rsvpSymbol(person.rsvp))
+                                    .font(.system(size: 10, weight: .bold))
+                                Text(verbatim: chatMemberName(key: person.memberKey, name: person.name))
+                                    .lineLimit(1)
+                            }
+                            .font(.system(.caption, weight: .semibold))
+                            .foregroundStyle(rsvpTone(person.rsvp).foreground)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(rsvpTone(person.rsvp).background))
+                            .accessibilityElement(children: .combine)
+                            .accessibilityValue(rsvpLabel(person.rsvp))
+                        }
                     }
                 }
-                if isLive {
-                    BadgeView(text: L("Now"), tone: .pink)
-                }
-            }
 
-            VStack(alignment: .leading, spacing: 4) {
-                if let starts = formattedISODate(meeting.startsAt) {
-                    Label(meeting.durationMinutes.map { L("%@ · %d min", starts, $0) } ?? starts, systemImage: "clock")
-                }
-                Label(
-                    meeting.mode == "IN_PERSON" ? (meeting.place?.isEmpty == false ? meeting.place! : L("In person")) : L("Online"),
-                    systemImage: meeting.mode == "IN_PERSON" ? "mappin.and.ellipse" : "video"
-                )
-                Label(conversation.title, systemImage: conversation.isGroup ? "person.3" : "bubble.left")
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(Color.neonInk.opacity(0.6))
-
-            FlowRow {
-                ForEach(meeting.attendees) { person in
-                    HStack(spacing: 4) {
-                        Image(systemName: person.rsvp == "ACCEPTED" ? "checkmark.circle.fill" : person.rsvp == "DECLINED" ? "xmark.circle" : "questionmark.circle")
-                            .foregroundStyle(person.rsvp == "ACCEPTED" ? Color.green : Color.neonInk.opacity(0.4))
-                        Text(person.name)
+                if (meeting.mode != "IN_PERSON" && joinable) || (myAnswer == "INVITED" && !isOver) {
+                    HStack(spacing: 8) {
+                        if meeting.mode != "IN_PERSON" && joinable {
+                            actionButton(L("Join"), symbol: "video.fill", primary: true)
+                        }
+                        if myAnswer == "INVITED" && !isOver {
+                            actionButton(L("Answer"), symbol: "hand.raised.fill", primary: !joinable)
+                        }
                     }
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.neonInk.opacity(0.05), in: Capsule())
-                }
-            }
-
-            HStack(spacing: 8) {
-                if meeting.mode != "IN_PERSON" && joinable {
-                    actionButton(L("Join"), symbol: "video.fill", primary: true)
-                }
-                if myAnswer == "INVITED" && !isOver {
-                    actionButton(L("Answer"), symbol: "hand.raised", primary: !joinable)
                 }
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 16)
-        .opacity(isOver ? 0.7 : 1)
+        .padding(NeonSpace.card)
+        .rowCard()
+        .opacity(isOver ? 0.72 : 1)
     }
 
     private var start: Date? { parseISODate(meeting.startsAt) }
@@ -315,13 +331,7 @@ private struct MeetingRow: View {
     private func actionButton(_ title: String, symbol: String, primary: Bool) -> some View {
         NavigationLink(value: ChatRoute(conversation)) {
             Label(title, systemImage: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 36)
-                .foregroundStyle(primary ? Color.white : Color.neonInk)
-                .background(primary ? Color.neonInk : Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.neonInk.opacity(primary ? 0 : 0.12)))
         }
-        .buttonStyle(.pressable)
+        .buttonStyle(.neon(primary ? .primary : .secondary, size: .small, fullWidth: true))
     }
 }

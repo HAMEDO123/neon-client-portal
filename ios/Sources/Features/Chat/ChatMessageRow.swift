@@ -3,9 +3,10 @@ import UIKit
 
 // How a conversation's messages are laid out: the rows (a day's heading,
 // one message, a grid of photos, a message still on its way), and how each
-// message is drawn — a bubble with its time and ticks inside it, WhatsApp's
-// way; a photo with no bubble at all, its time and ticks over the picture;
-// the task and meeting cards; a call's line across the conversation.
+// message is drawn — a bubble with a tail on the first of a run, its time and
+// ticks inside it, WhatsApp's way; a photo with no bubble at all, its time and
+// ticks over the picture; a voice note with its own sound's bars; the task
+// and meeting cards; a call's line across the conversation.
 
 // MARK: - Rows
 
@@ -113,26 +114,33 @@ func chatRows(
     return rows
 }
 
+/// The day's chip between days: Today, Yesterday, or the date.
 struct ChatDaySeparator: View {
     let iso: String
 
     var body: some View {
         Text(label)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Color.neonInk.opacity(0.5))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Color.white.opacity(0.75), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.neonInk.opacity(0.05)))
+            .font(.system(.caption, weight: .semibold))
+            .foregroundStyle(Color.neonTextSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(Color.white.opacity(0.92)))
+            .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 0.75))
+            .neonShadow(.low)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private var label: String {
         guard let date = parseISODate(iso) else { return "" }
         if Calendar.current.isDateInToday(date) { return L("Today") }
         if Calendar.current.isDateInYesterday(date) { return L("Yesterday") }
-        return date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, locale: AppLanguage.current.locale))
+        let sameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
+        let style = sameYear
+            ? Date.FormatStyle(locale: AppLanguage.current.locale).weekday(.wide).day().month(.wide)
+            : Date.FormatStyle(date: .abbreviated, time: .omitted, locale: AppLanguage.current.locale)
+        return date.formatted(style)
     }
 }
 
@@ -140,6 +148,25 @@ struct ChatDaySeparator: View {
 func chatClock(_ iso: String) -> String {
     guard let time = parseISODate(iso) else { return "" }
     return time.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.current.locale))
+}
+
+/// "1:05" — a voice note's length, or how far into it the player is.
+func chatDuration(_ seconds: Double) -> String {
+    let whole = max(0, Int(seconds.rounded()))
+    return String(format: "%d:%02d", whole / 60, whole % 60)
+}
+
+/// Only emoji, and no more than three: drawn large with no bubble, as a
+/// messaging app does.
+func chatIsJumboEmoji(_ text: String) -> Bool {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, trimmed.count <= 3 else { return false }
+    return trimmed.allSatisfy { character in
+        let scalars = character.unicodeScalars
+        guard let first = scalars.first else { return false }
+        // Digits and # are "emoji" to Unicode only when a keycap follows.
+        return first.properties.isEmojiPresentation || (first.properties.isEmoji && scalars.count > 1)
+    }
 }
 
 // MARK: - The time inside a bubble
@@ -154,25 +181,26 @@ struct ChatBubbleMeta: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            if pinned { Image(systemName: "pin.fill").font(.system(size: 9)) }
+            if pinned { Image(systemName: "pin.fill").font(.system(size: 9, weight: .semibold)) }
             if managerOnly {
-                Image(systemName: "eye.slash").font(.system(size: 9))
+                Image(systemName: "eye.slash").font(.system(size: 9, weight: .semibold))
                 Text(L("Only you"))
             }
             Text(time).monospacedDigit()
             if let delivery {
                 ChatTicks(
                     delivery: delivery,
-                    tint: onDark ? .white.opacity(0.75) : Color.neonInk.opacity(0.42),
+                    tint: onDark ? .white.opacity(0.78) : Color.neonTextTertiary,
                     readTint: onDark ? ChatTickPalette.read : ChatTickPalette.readOnLight
                 )
                 .padding(.leading, 1)
             }
         }
-        .font(.system(size: 11))
-        .foregroundStyle(onDark ? Color.white.opacity(0.72) : Color.neonInk.opacity(0.45))
+        .font(.system(.caption2))
+        .foregroundStyle(onDark ? Color.white.opacity(0.78) : Color.neonTextTertiary)
         .lineLimit(1)
         .fixedSize()
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 }
 
@@ -189,6 +217,8 @@ struct ChatMessageRow: View {
     let tallies: [ChatReactionTally]
     let isPinned: Bool
     let callSlug: String
+    /// A group or the team: somebody else's messages carry who wrote them.
+    var inGroup = false
     /// A stand-in for a message this phone is sending (or failed to).
     var outgoing: ChatOutgoing?
     let openImage: () -> Void
@@ -202,35 +232,39 @@ struct ChatMessageRow: View {
     var onMediaResize: (() -> Void)?
 
     @Environment(\.openURL) private var openURL
-    @ObservedObject private var voicePlayer = ChatVoicePlayer.shared
+
+    private var bubbleShape: ChatBubbleShape { ChatBubbleShape(mine: mine, tail: tail) }
+    private var isAgent: Bool { message.authorType == "AGENT" }
 
     var body: some View {
         switch message.kind {
         case "CALL":
-            callLine
+            ChatCallLine(message: message)
         case "TASK":
             if let card = message.task {
-                aligned(metaBelow: true) {
+                aligned(metaBelow: true, authorAbove: true) {
                     ChatTaskCardView(card: card, message: message, viewer: viewerIdentity, sendProof: sendProof, onChanged: onCardChanged)
                         .contextMenu { pinMenu }
                 }
             } else {
-                aligned { bubble.contextMenu { menu } }
+                aligned { textBubble }
             }
         case "MEETING":
             if let meeting = message.meeting {
-                aligned(metaBelow: true) {
+                aligned(metaBelow: true, authorAbove: true) {
                     ChatMeetingCardView(meeting: meeting, callSlug: callSlug, callTitle: message.body ?? "", viewer: viewerIdentity, onChanged: onCardChanged)
                         .contextMenu { pinMenu }
                 }
             } else {
-                aligned { bubble.contextMenu { menu } }
+                aligned { textBubble }
             }
         default:
             if message.isPicture && (message.attachmentURL != nil || outgoing?.localImage != nil) {
-                aligned { photo }
+                aligned(authorAbove: true) { photo }
+            } else if message.kind == "TEXT", let text = message.body, message.project == nil, chatIsJumboEmoji(text) {
+                aligned(metaBelow: true, authorAbove: true) { jumbo(text) }
             } else {
-                aligned { bubble.contextMenu { menu } }
+                aligned { textBubble }
             }
         }
     }
@@ -256,6 +290,7 @@ struct ChatMessageRow: View {
                 Button {
                     UIPasteboard.general.string = body
                     Haptic.tap()
+                    Toast.info(L("Copied"))
                 } label: { Label(L("Copy"), systemImage: "doc.on.doc") }
             }
             pinMenu
@@ -276,44 +311,76 @@ struct ChatMessageRow: View {
 
     /// Mine on the trailing side, everybody else's on the leading side — which
     /// flips with the app's language, as a chat on either kind of phone does.
-    private func aligned<Content: View>(metaBelow: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
-            if showAuthor && !mine, let name = message.authorName {
-                Text(name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ChatTint.pair(name: name).1)
-                    .padding(.horizontal, 6)
+    /// In a group, somebody else's run starts with their initials beside it.
+    private func aligned<Content: View>(metaBelow: Bool = false, authorAbove: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            if inGroup && !mine {
+                ChatAuthorBadge(name: message.authorName, isAgent: isAgent)
+                    .opacity(showAuthor ? 1 : 0)
+                    .accessibilityHidden(true)
             }
-            content()
-            // Sized to its chips, so it sits under the message's own side
-            // rather than spreading across the row from the leading edge.
-            ChatReactionRow(tallies: tallies, onToggle: onReact)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 6)
-            if metaBelow {
-                ChatBubbleMeta(time: chatClock(message.createdAt), delivery: delivery, onDark: false, pinned: isPinned, managerOnly: message.managerOnly == true)
-                    .padding(.horizontal, 6)
-            }
-            if let failure = outgoing?.failure {
-                Button { onRetry?() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                        Text(L("Not sent. Tap to retry."))
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.neonDangerStrong)
+            VStack(alignment: mine ? .trailing : .leading, spacing: 0) {
+                if authorAbove, showAuthor, !mine, let name = message.authorName {
+                    authorLabel(name)
+                        .padding(.leading, 6)
+                        .padding(.bottom, 3)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 6)
-                .accessibilityHint(failure)
+                content()
+                // Tucked up against the bubble's lower edge.
+                ChatReactionRow(tallies: tallies, onToggle: onReact)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 10 + (mine ? ChatBubbleShape.tailWidth : 0))
+                    .padding(.leading, mine ? 0 : ChatBubbleShape.tailWidth)
+                    .padding(.top, tallies.isEmpty ? 0 : -6)
+                if metaBelow {
+                    ChatBubbleMeta(time: chatClock(message.createdAt), delivery: delivery, onDark: false, pinned: isPinned, managerOnly: message.managerOnly == true)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.85)))
+                        .padding(.top, 4)
+                        .padding(.horizontal, 4)
+                }
+                if let failure = outgoing?.failure {
+                    Button { onRetry?() } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                            Text(L("Not sent. Tap to retry."))
+                        }
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(Color.neonDangerStrong)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(NeonHue.red.wash))
+                    }
+                    .buttonStyle(.pressable)
+                    .padding(.top, 4)
+                    .accessibilityHint(failure)
+                    .transition(.neonPop)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
         .padding(mine ? .leading : .trailing, 44)
-        .padding(.top, tail ? 4 : 0)
+        .padding(.top, tail ? 6 : 0)
     }
 
-    private var bubbleFill: Color { mine ? .neonPurpleStrong : .white }
+    private func authorLabel(_ name: String) -> some View {
+        HStack(spacing: 4) {
+            if isAgent {
+                Image(systemName: "sparkles").font(.system(size: 10, weight: .bold))
+            }
+            Text(verbatim: name).lineLimit(1)
+        }
+        .font(.system(.caption, weight: .semibold))
+        .foregroundStyle(isAgent ? NeonHue.purple.deep : chatAuthorColor(name))
+    }
+
+    private var bubbleFill: AnyShapeStyle {
+        if mine { return AnyShapeStyle(LinearGradient.neonAction) }
+        if isAgent { return AnyShapeStyle(NeonHue.purple.wash) }
+        return AnyShapeStyle(Color.white)
+    }
+
     private var bubbleText: Color { mine ? .white : .neonInk }
 
     private var meta: some View {
@@ -326,13 +393,26 @@ struct ChatMessageRow: View {
         )
     }
 
-    @ViewBuilder
-    private var bubble: some View {
-        VStack(alignment: .leading, spacing: 5) {
+    private func projectTag(_ project: ChatMessage.ProjectTag) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "folder.fill").font(.system(size: 10, weight: .semibold))
+            Text(verbatim: project.name).lineLimit(1)
+        }
+        .font(.system(.caption2, weight: .semibold))
+        .foregroundStyle(mine ? Color.white : NeonHue.blue.deep)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(mine ? Color.white.opacity(0.2) : NeonHue.blue.wash))
+        .accessibilityLabel(L("Project: %@", project.name))
+    }
+
+    private var textBubble: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if showAuthor, !mine, let name = message.authorName {
+                authorLabel(name)
+            }
             if let project = message.project {
-                Label(project.name, systemImage: "folder")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(mine ? Color.white.opacity(0.8) : Color.neonCyanStrong)
+                projectTag(project)
             }
 
             if let body = message.body, !body.isEmpty {
@@ -341,12 +421,12 @@ struct ChatMessageRow: View {
                 // same line; a longer one wraps and puts it under the last line.
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .bottom, spacing: 8) {
-                        DirText(body, font: .system(size: 16), color: bubbleText, fill: false)
+                        DirText(body, font: .neonCallout, color: bubbleText, fill: false)
                             .fixedSize(horizontal: true, vertical: false)
-                        meta.offset(y: 2)
+                        meta.offset(y: 3)
                     }
                     VStack(alignment: .trailing, spacing: 1) {
-                        DirText(body, font: .system(size: 16), color: bubbleText, fill: true)
+                        DirText(body, font: .neonCallout, color: bubbleText, fill: true)
                         meta
                     }
                 }
@@ -359,81 +439,39 @@ struct ChatMessageRow: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .padding(.leading, 12 + (mine ? 0 : ChatBubbleShape.tailWidth))
+        .padding(.trailing, 12 + (mine ? ChatBubbleShape.tailWidth : 0))
+        .padding(.top, 7)
         .padding(.bottom, 6)
-        .background(bubbleFill, in: ChatBubbleShape(mine: mine, tail: tail))
-        .overlay(ChatBubbleShape(mine: mine, tail: tail).stroke(mine ? Color.clear : Color.neonInk.opacity(0.07)))
+        .background(bubbleShape.fill(bubbleFill))
+        .overlay {
+            if !mine { bubbleShape.stroke(isAgent ? Color.neonPurple.opacity(0.22) : Color.neonLine, lineWidth: 0.75) }
+        }
+        .shadow(color: mine ? Color.neonIndigo.opacity(0.18) : Color.neonShadowTint.opacity(0.07), radius: mine ? 6 : 5, x: 0, y: 2)
         .fixedSize(horizontal: false, vertical: true)
-        .opacity(outgoing?.failure != nil ? 0.75 : 1)
+        .opacity(outgoing?.failure != nil ? 0.72 : 1)
+        .contentShape(.contextMenuPreview, bubbleShape)
+        .contextMenu { menu }
+    }
+
+    private func jumbo(_ text: String) -> some View {
+        Text(verbatim: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            .font(.system(.largeTitle))
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+            .contextMenu { menu }
+            .accessibilityLabel(Text(verbatim: text))
     }
 
     @ViewBuilder
     private var attachment: some View {
         switch message.kind {
-        case "VOICE": voiceBubble
-        case "FILE", "IMAGE": fileBubble
-        default: EmptyView()
-        }
-    }
-
-    @ViewBuilder
-    private var fileBubble: some View {
-        let label = HStack(spacing: 10) {
-            Image(systemName: "doc.fill").font(.system(size: 26))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: message.attachmentName ?? L("File"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                Text(fileDetail)
-                    .font(.system(size: 11))
-                    .opacity(0.7)
-            }
-        }
-        .foregroundStyle(bubbleText)
-
-        if let url = message.attachmentURL {
-            Button { openURL(url) } label: { label }.buttonStyle(.plain)
-        } else {
-            label
-        }
-    }
-
-    private var fileDetail: String {
-        var parts: [String] = []
-        if let type = message.attachmentType, !type.isEmpty { parts.append(type.uppercased()) }
-        if let size = message.attachmentSize { parts.append(byteCount(size)) }
-        if message.attachmentURL != nil { parts.append(L("Tap to open")) }
-        return parts.joined(separator: " · ")
-    }
-
-    @ViewBuilder
-    private var voiceBubble: some View {
-        let seconds = message.durationSeconds.map { String(format: "%d:%02d", Int($0) / 60, Int($0) % 60) } ?? L("Voice message")
-        if let url = message.attachmentURL {
-            let playing = voicePlayer.playingURL == url
-            Button { voicePlayer.toggle(url: url) } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: playing ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 30))
-                    VStack(alignment: .leading, spacing: 4) {
-                        ProgressBar(progress: playing ? voicePlayer.progress : 0, tint: mine ? .white : .neonPurpleStrong, height: 4)
-                            .frame(width: 130)
-                        Text(seconds).font(.system(size: 11)).monospacedDigit()
-                    }
-                }
-                .foregroundStyle(bubbleText)
-            }
-            .buttonStyle(.plain)
-        } else {
-            HStack(spacing: 10) {
-                Image(systemName: "waveform.circle.fill").font(.system(size: 30))
-                VStack(alignment: .leading, spacing: 4) {
-                    Capsule().fill(bubbleText.opacity(0.35)).frame(width: 130, height: 4)
-                    Text(seconds).font(.system(size: 11)).monospacedDigit()
-                }
-            }
-            .foregroundStyle(bubbleText.opacity(0.85))
+        case "VOICE":
+            ChatVoiceNoteView(message: message, outgoing: outgoing, mine: mine)
+        case "FILE", "IMAGE":
+            ChatFileAttachment(message: message, mine: mine)
+        default:
+            EmptyView()
         }
     }
 
@@ -441,12 +479,10 @@ struct ChatMessageRow: View {
 
     @ViewBuilder
     private var photo: some View {
-        VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
+        let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
+        VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
             if let project = message.project {
-                Label(project.name, systemImage: "folder")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.neonCyanStrong)
-                    .padding(.horizontal, 6)
+                projectTag(project)
             }
             Button(action: openImage) {
                 ChatPhotoFrame(url: message.attachmentURL, local: outgoing?.localImage, onResize: onMediaResize)
@@ -462,39 +498,231 @@ struct ChatMessageRow: View {
                                 .background(.black.opacity(0.35), in: Circle())
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous).strokeBorder(Color.neonInk.opacity(0.06)))
-                    .contentShape(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
+                    .clipShape(shape)
+                    .overlay(shape.strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
+                    .contentShape(shape)
             }
             .buttonStyle(PressableStyle(scale: 0.98))
+            .neonShadow(.low)
             .disabled(message.attachmentURL == nil)
+            .neonContextShape(radius: NeonRadius.md)
             .contextMenu { menu }
             .accessibilityLabel(L("Photo"))
 
             if let caption = message.body, !caption.isEmpty {
-                DirText(caption, font: .system(size: 15), color: bubbleText, fill: true)
-                    .padding(.horizontal, 11)
+                let captionShape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+                DirText(caption, font: .neonCallout, color: bubbleText, fill: true)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 7)
                     .frame(width: ChatPhotoLayout.width)
-                    .background(bubbleFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(mine ? Color.clear : Color.neonInk.opacity(0.07)))
+                    .background(captionShape.fill(bubbleFill))
+                    .overlay { if !mine { captionShape.strokeBorder(Color.neonLine, lineWidth: 0.75) } }
+                    .neonContextShape(radius: 14)
                     .contextMenu { menu }
             }
         }
     }
+}
 
-    private var callLine: some View {
-        HStack(spacing: 6) {
-            Image(systemName: message.call?.kind == "VIDEO" ? "video.fill" : "phone.fill")
-            Text(verbatim: [message.body ?? L("Call"), message.authorName, chatClock(message.createdAt)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+// MARK: - Pieces of a message
+
+/// Who wrote a message in a group: their initials on their colour, or the
+/// assistant's sparkles. The same width on every row, so a run lines up.
+struct ChatAuthorBadge: View {
+    let name: String?
+    var isAgent = false
+
+    static let size: CGFloat = 28
+
+    var body: some View {
+        Group {
+            if isAgent {
+                IconTile("sparkles", hue: .purple, size: Self.size, style: .filled)
+                    .clipShape(Circle())
+            } else if let name {
+                AvatarView(url: nil, name: name, size: Self.size, style: .solid)
+            } else {
+                Color.clear
+            }
         }
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(message.call?.endReason == "missed" ? Color.red.opacity(0.8) : Color.neonInk.opacity(0.5))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.white.opacity(0.7), in: Capsule())
+        .frame(width: Self.size, height: Self.size)
+    }
+}
+
+/// A file in a bubble: its kind on a tile, its name, and what it is.
+struct ChatFileAttachment: View {
+    let message: ChatMessage
+    let mine: Bool
+
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        let label = HStack(spacing: 10) {
+            IconTile(kind.symbol, hue: kind.hue, size: 40, style: mine ? .glass : .soft)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: message.attachmentName ?? L("File"))
+                    .font(.system(.subheadline, weight: .semibold))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Text(detail)
+                    .font(.system(.caption2))
+                    .opacity(0.75)
+            }
+            .foregroundStyle(mine ? Color.white : Color.neonInk)
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .frame(minWidth: 200, maxWidth: 250, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous)
+                .fill(mine ? Color.white.opacity(0.16) : Color.neonSurfaceSunken)
+        )
+
+        if let url = message.attachmentURL {
+            Button {
+                Haptic.tap()
+                openURL(url)
+            } label: { label }
+            .buttonStyle(PressableStyle(scale: 0.97))
+            .accessibilityHint(L("Tap to open"))
+        } else {
+            label
+        }
+    }
+
+    private var detail: String {
+        var parts: [String] = []
+        if let type = message.attachmentType, !type.isEmpty { parts.append(type.uppercased()) }
+        if let size = message.attachmentSize { parts.append(byteCount(size)) }
+        if message.attachmentURL != nil { parts.append(L("Tap to open")) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var kind: (symbol: String, hue: NeonHue) {
+        switch message.attachmentType?.lowercased() ?? "" {
+        case "pdf": return ("doc.richtext.fill", .red)
+        case "zip", "rar", "7z": return ("doc.zipper", .amber)
+        case "xls", "xlsx", "csv", "numbers": return ("tablecells.fill", .green)
+        case "doc", "docx", "pages", "txt", "rtf": return ("doc.text.fill", .blue)
+        case "ppt", "pptx", "key": return ("rectangle.on.rectangle.angled", .orange)
+        case "dwg", "dxf", "skp", "rvt", "3dm", "max": return ("square.3.layers.3d", .cyan)
+        case "png", "jpg", "jpeg", "gif", "webp", "heic": return ("photo.fill", .pink)
+        case "mp4", "mov", "m4v": return ("film.fill", .purple)
+        default: return ("doc.fill", .indigo)
+        }
+    }
+}
+
+/// A voice note: play, the bars of its own sound filling as it plays, and
+/// how long it is (or how far in, while it plays).
+struct ChatVoiceNoteView: View {
+    let message: ChatMessage
+    var outgoing: ChatOutgoing?
+    let mine: Bool
+
+    @ObservedObject private var player = ChatVoicePlayer.shared
+    @State private var levels: [CGFloat]?
+
+    private var url: URL? { message.attachmentURL }
+    private var playing: Bool { url != nil && player.playingURL == url }
+    private var loading: Bool { url != nil && player.loadingURL == url }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                guard let url else { return }
+                Haptic.tap()
+                player.toggle(url: url)
+            } label: {
+                ZStack {
+                    Circle().fill(mine ? AnyShapeStyle(Color.white) : AnyShapeStyle(LinearGradient.neonAction))
+                    if loading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(mine ? .neonIndigo : .white)
+                    } else {
+                        Image(systemName: playing ? "pause.fill" : "play.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(mine ? Color.neonIndigo : Color.white)
+                            // The play triangle sits a touch right of centre to look centred.
+                            .offset(x: playing ? 0 : 1.5)
+                            .environment(\.layoutDirection, .leftToRight)
+                    }
+                }
+                .frame(width: 38, height: 38)
+                .shadow(color: (mine ? Color.black : Color.neonIndigo).opacity(0.15), radius: 4, x: 0, y: 2)
+            }
+            .buttonStyle(PressableStyle(scale: 0.88))
+            .disabled(url == nil)
+            .accessibilityLabel(playing ? L("Pause") : L("Play voice message"))
+
+            VStack(alignment: .leading, spacing: 4) {
+                ChatWaveform(
+                    levels: levels,
+                    progress: playing ? player.progress : 0,
+                    tint: mine ? .white : .neonIndigo,
+                    track: mine ? Color.white.opacity(0.38) : Color.neonIndigo.opacity(0.2)
+                )
+                .frame(width: 150)
+                Text(timeText)
+                    .font(.system(.caption2, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(mine ? Color.white.opacity(0.85) : Color.neonTextSecondary)
+            }
+        }
+        .task(id: message.attachmentUrl ?? outgoing?.id) { await loadShape() }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L("Voice message"))
+        .accessibilityValue(timeText)
+    }
+
+    private var timeText: String {
+        guard let seconds = message.durationSeconds else { return L("Voice message") }
+        if playing { return chatDuration(seconds * player.progress) }
+        return chatDuration(seconds)
+    }
+
+    private func loadShape() async {
+        if let url {
+            if let cached = ChatVoiceNotes.shared.cachedShape(url.absoluteString) {
+                levels = cached
+                return
+            }
+            let shape = await ChatVoiceNotes.shared.shape(for: url)
+            withAnimation(NeonMotion.resolved(NeonMotion.smooth)) { levels = shape }
+        } else if let outgoing, case .voice(let file, _) = outgoing.payload {
+            levels = await ChatVoiceNotes.shared.shape(of: file.data, key: outgoing.id)
+        }
+    }
+}
+
+/// A call's line across the conversation: what happened, who, when.
+struct ChatCallLine: View {
+    let message: ChatMessage
+
+    var body: some View {
+        let missed = message.call?.endReason == "missed"
+        let video = message.call?.kind == "VIDEO"
+        HStack(spacing: 8) {
+            IconTile(
+                missed ? (video ? "video.slash.fill" : "phone.down.fill") : (video ? "video.fill" : "phone.fill"),
+                hue: missed ? .red : .green,
+                size: 24
+            )
+            Text(verbatim: [message.body ?? L("Call"), message.authorName, chatClock(message.createdAt)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.system(.footnote, weight: .medium))
+                .foregroundStyle(missed ? Color.neonDangerStrong : Color.neonTextSecondary)
+                .lineLimit(2)
+        }
+        .padding(.leading, 5)
+        .padding(.trailing, 12)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.white.opacity(0.94)))
+        .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 0.75))
+        .neonShadow(.low)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -509,6 +737,7 @@ struct ChatAlbumRow: View {
     let photos: [ChatMessage]
     let mine: Bool
     let showAuthor: Bool
+    var inGroup = false
     let delivery: ChatDelivery?
     let open: (ChatMessage) -> Void
     let onReact: (ChatMessage, String) -> Void
@@ -520,38 +749,46 @@ struct ChatAlbumRow: View {
     private var side: CGFloat { (ChatPhotoLayout.width - gap) / 2 }
 
     var body: some View {
-        VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
-            if showAuthor && !mine, let name = photos.first?.authorName {
-                Text(name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ChatTint.pair(name: name).1)
-                    .padding(.horizontal, 6)
+        let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
+        HStack(alignment: .top, spacing: 6) {
+            if inGroup && !mine {
+                ChatAuthorBadge(name: photos.first?.authorName)
+                    .opacity(showAuthor ? 1 : 0)
+                    .accessibilityHidden(true)
             }
-            VStack(spacing: gap) {
-                HStack(spacing: gap) {
-                    tile(0)
-                    tile(1)
+            VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
+                if showAuthor && !mine, let name = photos.first?.authorName {
+                    Text(verbatim: name)
+                        .font(.system(.caption, weight: .semibold))
+                        .foregroundStyle(chatAuthorColor(name))
+                        .padding(.horizontal, 6)
                 }
-                HStack(spacing: gap) {
-                    tile(2)
-                    tile(3)
+                VStack(spacing: gap) {
+                    HStack(spacing: gap) {
+                        tile(0)
+                        tile(1)
+                    }
+                    HStack(spacing: gap) {
+                        tile(2)
+                        tile(3)
+                    }
                 }
+                .overlay { ChatPhotoShade().allowsHitTesting(false) }
+                .overlay(alignment: .bottomTrailing) {
+                    if let last = photos.last {
+                        ChatPhotoMeta(time: chatClock(last.createdAt), delivery: delivery).allowsHitTesting(false)
+                    }
+                }
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.7), lineWidth: 1).allowsHitTesting(false))
+                .neonShadow(.low)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(L("%d photos", photos.count))
             }
-            .overlay { ChatPhotoShade().allowsHitTesting(false) }
-            .overlay(alignment: .bottomTrailing) {
-                if let last = photos.last {
-                    ChatPhotoMeta(time: chatClock(last.createdAt), delivery: delivery).allowsHitTesting(false)
-                }
-            }
-            .padding(3)
-            .background(mine ? Color.neonPurpleStrong : Color.white, in: RoundedRectangle(cornerRadius: NeonRadius.md + 3, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: NeonRadius.md + 3, style: .continuous))
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(L("%d photos", photos.count))
         }
         .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
         .padding(mine ? .leading : .trailing, 44)
-        .padding(.top, 4)
+        .padding(.top, 6)
     }
 
     @ViewBuilder
@@ -566,13 +803,13 @@ struct ChatAlbumRow: View {
                         if index == 3, more > 0 {
                             ZStack {
                                 Color.black.opacity(0.45)
-                                Text(verbatim: "+\(more)")
-                                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                                Text(verbatim: "+\(NeonFormat.integer(more))")
+                                    .font(.system(.title, weight: .bold))
                                     .foregroundStyle(.white)
                             }
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: NeonRadius.md - 2, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.97))

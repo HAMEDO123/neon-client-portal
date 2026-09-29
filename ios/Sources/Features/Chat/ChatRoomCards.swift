@@ -1,0 +1,485 @@
+import SwiftUI
+
+// The two cards a conversation carries besides messages: a job handed out
+// from the chat, and a meeting set from it. Both are white cards with a
+// coloured edge — purple for work, cyan for meetings, the same families the
+// rest of the app uses for them.
+
+// MARK: - Task card
+
+/// A job handed out from the chat. Each person on it has their own part; the
+/// person looking at their own part, while it is still theirs to do, gets the
+/// one action that moves it on — sending proof. The manager approves or sends
+/// it back right here, exactly where the web review queue's buttons lead —
+/// "Done" stays the manager's word either way — and everybody on the card can
+/// talk about it in the thread underneath.
+struct ChatTaskCardView: View {
+    let card: TaskCard
+    let message: ChatMessage
+    let viewer: Identity?
+    let sendProof: (TaskCard.Assignment, TaskCard) -> Void
+    let onChanged: () -> Void
+
+    @EnvironmentObject private var api: APIClient
+    @Environment(\.openURL) private var openURL
+    @State private var commentDraft = ""
+    @State private var sendingComment = false
+    @State private var reviewNote = ""
+    @State private var reviewingSubmissionId: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                IconTile("checklist", hue: .purple, size: 34, style: .filled)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("TASK"))
+                        .font(.neonOverline)
+                        .tracking(0.6)
+                        .foregroundStyle(NeonHue.purple.deep)
+                    StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
+                               symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
+                        .scaleEffect(0.92, anchor: .leading)
+                }
+                Spacer(minLength: 4)
+                if let priority = priorityLabel(card.priority) {
+                    BadgeView(text: priority, tone: statusTone(card.priority ?? ""), symbol: card.priority == "HIGH" ? "flame.fill" : nil)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                DirText(card.title, font: .neonCardTitle)
+                if let description = card.description, !description.isEmpty {
+                    DirText(description, font: .neonSubheadline, color: .neonTextSecondary)
+                }
+            }
+
+            if let due = formattedISODate(card.dueAt) {
+                MetaLabel(L("Due %@", due), symbol: card.isOverdue ? "exclamationmark.circle.fill" : "clock",
+                          tint: card.isOverdue ? .neonDangerStrong : .neonTextSecondary)
+            }
+
+            if let url = resolvedMediaURL(card.attachmentUrl) {
+                Button {
+                    Haptic.tap()
+                    openURL(url)
+                } label: {
+                    HStack(spacing: 8) {
+                        IconTile("paperclip", hue: .blue, size: 28)
+                        Text(verbatim: card.attachmentName ?? L("Attachment"))
+                            .font(.system(.footnote, weight: .semibold))
+                            .foregroundStyle(Color.neonInk)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.up.forward")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.neonTextTertiary)
+                    }
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous).fill(Color.neonSurfaceSunken))
+                }
+                .buttonStyle(PressableStyle(scale: 0.97))
+            }
+
+            NeonDivider()
+
+            ForEach(card.assignments) { part in
+                assignmentRow(part)
+            }
+
+            if viewer != nil {
+                NeonDivider()
+                commentsSection
+            }
+        }
+        .padding(NeonSpace.lg - 2)
+        .frame(maxWidth: 300, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous).fill(Color.white))
+        .overlay(alignment: .top) { ChatRoomCardEdge(hue: .purple) }
+        .clipShape(RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous).strokeBorder(Color.neonPurple.opacity(0.16), lineWidth: 1))
+        .neonShadow(.card)
+        .neonContextShape(radius: NeonRadius.lg)
+        .animation(NeonMotion.resolved(NeonMotion.snappy), value: reviewingSubmissionId)
+    }
+
+    @ViewBuilder
+    private func assignmentRow(_ part: TaskCard.Assignment) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                AvatarView(url: nil, name: part.employee?.name ?? "—", size: 26, style: .solid)
+                DirText(part.employee?.name ?? "—", font: .system(.subheadline, weight: .semibold), fill: false, lineLimit: 1)
+                Spacer(minLength: 4)
+                StateBadge(cardStateLabel(part.state), tone: taskStateTone(part.state),
+                           symbol: StateBadge.symbol(for: part.state), pulsing: part.state == "IN_PROGRESS")
+            }
+            if let pending = part.submissions?.first, part.state == "SUBMITTED" {
+                HStack(spacing: 6) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                    Text(viewer?.side == .admin ? L("Proof waiting for your review") : L("Proof sent — waiting for review"))
+                }
+                .font(.system(.caption, weight: .medium))
+                .foregroundStyle(NeonHue.purple.deep)
+                if let note = pending.note, !note.isEmpty {
+                    DirText(note, font: .system(.footnote), color: .neonTextSecondary)
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: NeonRadius.xs, style: .continuous).fill(NeonHue.purple.wash))
+                }
+                if viewer?.side == .admin {
+                    if reviewingSubmissionId == pending.id {
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField(L("Note (optional)"), text: $reviewNote, axis: .vertical)
+                                .font(.system(.footnote))
+                                .lineLimit(1...4)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .background(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous).fill(Color.neonSurfaceSunken))
+                                .environment(\.layoutDirection, naturalDirection(reviewNote) ?? AppLanguage.current.layoutDirection)
+                            HStack(spacing: 8) {
+                                NeonButton(L("Approve"), symbol: "checkmark", kind: .tinted(.neonSuccessStrong), size: .small, fullWidth: true) {
+                                    await respond(to: pending.id, approve: true)
+                                }
+                                NeonButton(L("Send back"), symbol: "arrow.uturn.backward", kind: .tinted(.neonDangerStrong), size: .small, fullWidth: true) {
+                                    await respond(to: pending.id, approve: false)
+                                }
+                            }
+                        }
+                        .transition(.neonRise)
+                    } else {
+                        NeonButton(L("Review"), symbol: "checkmark.seal", kind: .primary, size: .small, fullWidth: true) {
+                            reviewNote = ""
+                            reviewingSubmissionId = pending.id
+                        }
+                    }
+                }
+            }
+            // Nobody marks their own work done: their part's only move is proof,
+            // which goes to the manager's review.
+            if isMine(part), part.state != "SUBMITTED", part.state != "DONE" {
+                NeonButton(L("Send proof"), symbol: "camera.fill", kind: .brand, size: .medium, fullWidth: true) {
+                    sendProof(part, card)
+                }
+            }
+        }
+    }
+
+    private var commentsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !card.comments.isEmpty {
+                ForEach(card.comments) { comment in
+                    HStack(alignment: .top, spacing: 8) {
+                        AvatarView(url: nil, name: comment.authorName, size: 22, style: .solid)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(verbatim: comment.authorName)
+                                .font(.system(.caption, weight: .semibold))
+                                .foregroundStyle(chatAuthorColor(comment.authorName))
+                            DirText(comment.body, font: .system(.footnote), color: .neonText)
+                        }
+                    }
+                    .transition(.neonRise)
+                }
+            }
+            HStack(spacing: 8) {
+                TextField(L("Write a comment…"), text: $commentDraft, axis: .vertical)
+                    .font(.system(.footnote))
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.neonSurfaceSunken))
+                    .environment(\.layoutDirection, naturalDirection(commentDraft) ?? AppLanguage.current.layoutDirection)
+                Button {
+                    send()
+                } label: {
+                    Group {
+                        if sendingComment {
+                            ProgressView().controlSize(.small).tint(.white)
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(LinearGradient.neonAction))
+                }
+                .buttonStyle(PressableStyle(scale: 0.88))
+                .disabled(commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sendingComment)
+                .opacity(commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+                .accessibilityLabel(L("Send"))
+            }
+        }
+        .animation(NeonMotion.resolved(NeonMotion.snappy), value: card.comments.count)
+    }
+
+    private func isMine(_ part: TaskCard.Assignment) -> Bool {
+        viewer?.side == .employee && viewer?.id == part.employeeId
+    }
+
+    private func send() {
+        let body = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        commentDraft = ""
+        Haptic.tap()
+        sendingComment = true
+        Task {
+            defer { sendingComment = false }
+            do {
+                _ = try await api.addChatTaskComment(taskId: card.id, body: body)
+                onChanged()
+            } catch {
+                commentDraft = body
+                Toast.error(error)
+            }
+        }
+    }
+
+    private func respond(to submissionId: String, approve: Bool) async {
+        do {
+            if approve {
+                _ = try await api.approveChatSubmission(id: submissionId, note: reviewNote)
+            } else {
+                _ = try await api.rejectChatSubmission(id: submissionId, note: reviewNote)
+            }
+            Haptic.success()
+            reviewingSubmissionId = nil
+            onChanged()
+        } catch {
+            Haptic.error()
+            Toast.error(error)
+        }
+    }
+}
+
+// MARK: - Meeting card
+
+/// A meeting set from the chat: the manager's ONLINE or IN_PERSON card with
+/// its attendees. Whoever was asked answers ACCEPTED or DECLINED right here;
+/// the manager can call it off; Join opens ten minutes before the start,
+/// through the same call buttons the conversation's header carries. Somebody
+/// who has not answered is "Not answered yet" — never read as a no.
+struct ChatMeetingCardView: View {
+    let meeting: MeetingCard
+    let callSlug: String
+    let callTitle: String
+    let viewer: Identity?
+    let onChanged: () -> Void
+
+    @EnvironmentObject private var api: APIClient
+    @State private var confirmCancel = false
+    @State private var cancelling = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                ChatMeetingDateTile(iso: meeting.startsAt)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("MEETING"))
+                        .font(.neonOverline)
+                        .tracking(0.6)
+                        .foregroundStyle(NeonHue.cyan.deep)
+                    DirText(meeting.title, font: .neonCardTitle, lineLimit: 3)
+                }
+                Spacer(minLength: 4)
+                if viewer?.side == .admin {
+                    Button {
+                        Haptic.warning()
+                        confirmCancel = true
+                    } label: {
+                        Group {
+                            if cancelling {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "xmark").font(.system(size: 12, weight: .bold))
+                            }
+                        }
+                        .foregroundStyle(NeonHue.red.deep)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(NeonHue.red.wash))
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.88))
+                    .disabled(cancelling)
+                    .accessibilityLabel(L("Cancel meeting"))
+                }
+            }
+
+            if let agenda = meeting.agenda, !agenda.isEmpty {
+                DirText(agenda, font: .neonSubheadline, color: .neonTextSecondary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                if let starts = formattedISODate(meeting.startsAt) {
+                    MetaLabel(meeting.durationMinutes.map { L("%@ · %d min", starts, $0) } ?? starts, symbol: "clock", tint: .neonTextSecondary)
+                }
+                MetaLabel(
+                    meeting.mode == "IN_PERSON" ? (meeting.place?.isEmpty == false ? meeting.place! : L("In person")) : L("Online"),
+                    symbol: meeting.mode == "IN_PERSON" ? "mappin.and.ellipse" : "video.fill",
+                    tint: .neonTextSecondary
+                )
+            }
+
+            if meeting.mode != "IN_PERSON", isUpcoming {
+                HStack(spacing: 8) {
+                    StateBadge(isLive ? L("Now") : L("Starting soon"), tone: isLive ? .pink : .cyan, pulsing: isLive)
+                    Spacer(minLength: 0)
+                    CallButtons(slug: callSlug, title: callTitle)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous).fill(NeonHue.cyan.wash))
+            }
+
+            if !meeting.attendees.isEmpty {
+                NeonDivider()
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(meeting.attendees) { person in
+                        HStack(spacing: 8) {
+                            AvatarView(url: nil, name: chatMemberName(key: person.memberKey, name: person.name), size: 24, style: .solid)
+                            DirText(chatMemberName(key: person.memberKey, name: person.name), font: .system(.subheadline, weight: .medium), fill: false, lineLimit: 1)
+                            Spacer(minLength: 4)
+                            StateBadge(rsvpLabel(person.rsvp), tone: rsvpTone(person.rsvp), symbol: rsvpSymbol(person.rsvp))
+                        }
+                    }
+                }
+            }
+
+            if let mine = myAttendee {
+                HStack(spacing: 8) {
+                    NeonButton(L("Coming"), symbol: "checkmark",
+                               kind: mine.rsvp == "ACCEPTED" ? .tinted(.neonSuccessStrong) : .secondary,
+                               size: .small, fullWidth: true) {
+                        await rsvp("ACCEPTED")
+                    }
+                    NeonButton(L("Not coming"), symbol: "xmark",
+                               kind: mine.rsvp == "DECLINED" ? .tinted(.neonDangerStrong) : .secondary,
+                               size: .small, fullWidth: true) {
+                        await rsvp("DECLINED")
+                    }
+                }
+            }
+        }
+        .padding(NeonSpace.lg - 2)
+        .frame(maxWidth: 300, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous).fill(Color.white))
+        .overlay(alignment: .top) { ChatRoomCardEdge(hue: .cyan) }
+        .clipShape(RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous).strokeBorder(Color.neonCyan.opacity(0.2), lineWidth: 1))
+        .neonShadow(.card)
+        .neonContextShape(radius: NeonRadius.lg)
+        .confirmationDialog(L("Cancel this meeting?"), isPresented: $confirmCancel, titleVisibility: .visible) {
+            Button(L("Cancel meeting"), role: .destructive) { cancel() }
+            Button(L("Keep it"), role: .cancel) {}
+        }
+    }
+
+    private var myKey: String? {
+        guard let viewer else { return nil }
+        return viewer.side == .admin ? "admin" : viewer.id
+    }
+
+    private var myAttendee: MeetingCard.Attendee? {
+        guard let myKey else { return nil }
+        return meeting.attendees.first { $0.memberKey == myKey }
+    }
+
+    /// Ten minutes before the start and while it is plausibly still running —
+    /// the same window the card's own Join button opens in on the web.
+    private var isUpcoming: Bool {
+        guard let starts = parseISODate(meeting.startsAt) else { return true }
+        let duration = TimeInterval((meeting.durationMinutes ?? 60) * 60)
+        return Date() > starts.addingTimeInterval(-600) && Date() < starts.addingTimeInterval(duration + 1800)
+    }
+
+    private var isLive: Bool {
+        guard let starts = parseISODate(meeting.startsAt) else { return false }
+        return Date() >= starts
+    }
+
+    private func rsvp(_ answer: String) async {
+        do {
+            _ = try await api.setChatMeetingRsvp(meetingId: meeting.id, rsvp: answer)
+            Haptic.success()
+            onChanged()
+        } catch {
+            Haptic.error()
+            Toast.error(error)
+        }
+    }
+
+    private func cancel() {
+        Haptic.tap()
+        cancelling = true
+        Task {
+            defer { cancelling = false }
+            do {
+                _ = try await api.cancelChatMeeting(id: meeting.id)
+                onChanged()
+            } catch {
+                Toast.error(error)
+            }
+        }
+    }
+}
+
+/// What a meeting answer looks like: yes in green, no in red, and not yet in
+/// a calm grey — silence is not a refusal.
+func rsvpTone(_ rsvp: String) -> BadgeTone {
+    switch rsvp {
+    case "ACCEPTED": return .success
+    case "DECLINED": return .danger
+    default: return .neutral
+    }
+}
+
+func rsvpSymbol(_ rsvp: String) -> String {
+    switch rsvp {
+    case "ACCEPTED": return "checkmark.circle.fill"
+    case "DECLINED": return "xmark.circle.fill"
+    default: return "hourglass"
+    }
+}
+
+/// A meeting's day as a little calendar leaf: the month on a band, the day under it.
+struct ChatMeetingDateTile: View {
+    let iso: String
+    var size: CGFloat = 44
+
+    var body: some View {
+        let date = parseISODate(iso)
+        let locale = AppLanguage.current.locale
+        VStack(spacing: 0) {
+            Text(date.map { $0.formatted(Date.FormatStyle(locale: locale).month(.abbreviated)) } ?? "—")
+                .font(.system(.caption2, weight: .bold))
+                .textCase(.uppercase)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+                .frame(height: size * 0.36)
+                .background(NeonHue.cyan.fill)
+            Text(date.map { $0.formatted(Date.FormatStyle(locale: locale).day()) } ?? "")
+                .font(.system(.title3, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(Color.neonInk)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: size, height: size + 4)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: NeonRadius.tile(size), style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: NeonRadius.tile(size), style: .continuous).strokeBorder(Color.neonLine, lineWidth: 1))
+        .neonShadow(.low)
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The coloured band along a card's top edge.
+struct ChatRoomCardEdge: View {
+    let hue: NeonHue
+
+    var body: some View {
+        LinearGradient(colors: hue.gradient, startPoint: .leading, endPoint: .trailing)
+            .frame(height: 4)
+            .flipsForRightToLeftLayoutDirection(true)
+            .accessibilityHidden(true)
+    }
+}

@@ -23,6 +23,12 @@ func chatMemberName(key: String, name: String) -> String {
     key == "admin" ? L("Manager") : name
 }
 
+/// The colour a person's name wears over their messages in a group — the
+/// same family their initials avatar is drawn in, so the two read as one.
+func chatAuthorColor(_ name: String) -> Color {
+    NeonPalette.hue(for: name).deep
+}
+
 /// The bubble at the foot of the conversation: three dots rising and falling
 /// in turn, with the writers' names above it in a group. Still dots under
 /// Reduce Motion.
@@ -30,59 +36,68 @@ struct ChatTypingBubble: View {
     let typers: [ChatPeopleSnapshot.Typing]
     let isGroup: Bool
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             if isGroup {
                 Text(verbatim: typers.map { chatMemberName(key: $0.memberKey, name: $0.name) }.joined(separator: AppLanguage.current == .arabic ? "، " : ", "))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(typers.count == 1 ? ChatTint.pair(name: typers[0].name).1 : Color.neonPurpleStrong)
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(typers.count == 1 ? chatAuthorColor(typers[0].name) : Color.neonAccent)
                     .lineLimit(1)
-                    .padding(.horizontal, 6)
+                    .padding(.leading, ChatBubbleShape.tailWidth + 6)
             }
-            dots
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(Color.white, in: ChatBubbleShape(mine: false, tail: true))
-                .overlay(ChatBubbleShape(mine: false, tail: true).stroke(Color.neonInk.opacity(0.07)))
+            ChatTypingDots(tint: .neonTextTertiary, size: 7)
+                .padding(.leading, 14 + ChatBubbleShape.tailWidth)
+                .padding(.trailing, 14)
+                .padding(.vertical, 13)
+                .background(ChatBubbleShape(mine: false, tail: true).fill(Color.white))
+                .overlay(ChatBubbleShape(mine: false, tail: true).stroke(Color.neonLine, lineWidth: 0.75))
+                .neonShadow(.low)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(chatTypingLine(typers, isGroup: true) ?? L("typing…"))
     }
+}
 
-    @ViewBuilder
-    private var dots: some View {
+/// Three dots rising and falling in turn — in the typing bubble, and small
+/// beside "typing…" in the header. Still under Reduce Motion.
+struct ChatTypingDots: View {
+    var tint: Color
+    var size: CGFloat = 7
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
         if reduceMotion {
-            HStack(spacing: 5) {
+            HStack(spacing: size * 0.7) {
                 ForEach(0..<3, id: \.self) { index in
-                    Circle().fill(Color.neonInk.opacity(0.28 + 0.12 * Double(index))).frame(width: 7, height: 7)
+                    Circle().fill(tint.opacity(0.55 + 0.15 * Double(index))).frame(width: size, height: size)
                 }
             }
         } else {
             TimelineView(.animation) { context in
                 let t = context.date.timeIntervalSinceReferenceDate
-                HStack(spacing: 5) {
+                HStack(spacing: size * 0.7) {
                     ForEach(0..<3, id: \.self) { index in
                         // Each dot a third of a beat behind the one before it.
                         let phase = (t * 2.4 - Double(index) * 0.33).truncatingRemainder(dividingBy: 1)
                         let lift = max(0, sin(phase * .pi * 2))
                         Circle()
-                            .fill(Color.neonInk.opacity(0.28 + 0.32 * lift))
-                            .frame(width: 7, height: 7)
-                            .offset(y: -4 * lift)
+                            .fill(tint.opacity(0.45 + 0.55 * lift))
+                            .frame(width: size, height: size)
+                            .offset(y: -size * 0.55 * lift)
                     }
                 }
-                .frame(height: 11, alignment: .bottom)
+                .frame(height: size * 1.6, alignment: .bottom)
             }
         }
     }
 }
 
-/// A message bubble's outline: a rounded rectangle, with WhatsApp's small tail
-/// at the top on the sender's side for the first message in a run. The tail
-/// follows the app's direction, as the bubbles do.
+/// A message bubble's outline, WhatsApp's way: a rounded rectangle with a
+/// small curved tail at the top on the sender's side, for the first message
+/// of a run. Every bubble leaves the tail's width free on that side, tail or
+/// not, so the bubbles of one run line up under the first.
 struct ChatBubbleShape: InsettableShape {
     let mine: Bool
     var tail: Bool = false
@@ -92,6 +107,9 @@ struct ChatBubbleShape: InsettableShape {
     var radius: CGFloat = 18
     var inset: CGFloat = 0
 
+    /// How far the tail reaches past the bubble's body.
+    static let tailWidth: CGFloat = 7
+
     func inset(by amount: CGFloat) -> ChatBubbleShape {
         var copy = self
         copy.inset += amount
@@ -100,25 +118,35 @@ struct ChatBubbleShape: InsettableShape {
 
     func path(in rect: CGRect) -> Path {
         let rect = rect.insetBy(dx: inset, dy: inset)
-        let r = min(radius, rect.height / 2, rect.width / 2)
-        // The corner the tail sits on is squared off, so the tail reads as
-        // part of the bubble rather than a sticker on it.
-        let small: CGFloat = tail ? 5 : r
+        let t = Self.tailWidth
+        // Drawn with the tail on the right, then mirrored when it belongs on the left.
+        let body = CGRect(x: rect.minX, y: rect.minY, width: max(0, rect.width - t), height: rect.height)
+        let r = min(radius, body.height / 2, body.width / 2)
+        var path = Path()
+        path.move(to: CGPoint(x: body.minX + r, y: body.minY))
+        if tail {
+            let drop = min(13, max(4, body.height - r))
+            path.addLine(to: CGPoint(x: body.maxX + t - 1.6, y: body.minY))
+            // A softened tip, then a concave sweep back into the bubble's side.
+            path.addQuadCurve(to: CGPoint(x: body.maxX + t - 1.4, y: body.minY + 2.4),
+                              control: CGPoint(x: body.maxX + t + 0.6, y: body.minY + 0.5))
+            path.addQuadCurve(to: CGPoint(x: body.maxX, y: body.minY + drop),
+                              control: CGPoint(x: body.maxX + 1.2, y: body.minY + drop * 0.45))
+        } else {
+            path.addLine(to: CGPoint(x: body.maxX - r, y: body.minY))
+            path.addArc(tangent1End: CGPoint(x: body.maxX, y: body.minY), tangent2End: CGPoint(x: body.maxX, y: body.minY + r), radius: r)
+        }
+        path.addLine(to: CGPoint(x: body.maxX, y: body.maxY - r))
+        path.addArc(tangent1End: CGPoint(x: body.maxX, y: body.maxY), tangent2End: CGPoint(x: body.maxX - r, y: body.maxY), radius: r)
+        path.addLine(to: CGPoint(x: body.minX + r, y: body.maxY))
+        path.addArc(tangent1End: CGPoint(x: body.minX, y: body.maxY), tangent2End: CGPoint(x: body.minX, y: body.maxY - r), radius: r)
+        path.addLine(to: CGPoint(x: body.minX, y: body.minY + r))
+        path.addArc(tangent1End: CGPoint(x: body.minX, y: body.minY), tangent2End: CGPoint(x: body.minX + r, y: body.minY), radius: r)
+        path.closeSubpath()
+
         // Mine sit on the trailing side: the right, unless the app is in Arabic.
         let tailOnRight = mine != rightToLeft
-        let topLeading = tailOnRight ? r : small
-        let topTrailing = tailOnRight ? small : r
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + topLeading, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - topTrailing, y: rect.minY))
-        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY), tangent2End: CGPoint(x: rect.maxX, y: rect.minY + topTrailing), radius: topTrailing)
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY), tangent2End: CGPoint(x: rect.maxX - r, y: rect.maxY), radius: r)
-        path.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
-        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.maxY - r), radius: r)
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + topLeading))
-        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY), tangent2End: CGPoint(x: rect.minX + topLeading, y: rect.minY), radius: topLeading)
-        path.closeSubpath()
-        return path
+        guard !tailOnRight else { return path }
+        return path.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: rect.minX + rect.maxX, ty: 0))
     }
 }
