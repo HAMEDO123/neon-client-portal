@@ -18,6 +18,16 @@
 "%d approvals" = "%d موافقات";
 "%d comments" = "%d تعليقات";
 
+/* Right now */
+"Right now" = "الآن";
+"Next: %@ at %@" = "التالي: %@ عند %@";
+"%@–%@ · %@ left" = "%@–%@ · باقي %@";
+"%@–%@" = "%@–%@";
+"for %@" = "منذ %@";
+"The day hasn't started yet" = "لم يبدأ اليوم بعد";
+"Outside working hours" = "خارج ساعات العمل";
+"Nothing planned right now" = "لا شيء مخطط الآن";
+
 /* The day board */
 "The day" = "اليوم";
 "On the day" = "في اليوم";

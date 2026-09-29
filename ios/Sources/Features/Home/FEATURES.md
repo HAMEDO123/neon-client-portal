@@ -5,6 +5,18 @@ Read from `src/app/admin/(dashboard)/page.tsx`, `alerts/page.tsx`,
 they use. Kept here so a later run can see what is built and what is left.
 
 ## Dashboard (`AdminHomeView`, tab root)
+- [x] "Right now" — one card per active employee (avatar, online dot, name): the
+      current block from their published day plan (`myDay`, minutes left) and/or
+      any board cell or hand-assigned job they have `IN_PROGRESS` (title, project,
+      elapsed time since `startedAt` — a job's own start is read from
+      `TaskStateChange`, since `AssignedTask` has no `startedAt` column), and
+      what's next. Nothing planned/in progress reads "Nothing planned right now" —
+      never idleness. Server: `home/now` (`lib/mobile/home-now.ts`), reusing
+      `myDay` and `ownedBy` rather than re-deriving ownership. Refreshes every
+      60 s on screen and on pull-to-refresh. Tapping a card opens
+      `EmployeeDetailView`; there is no native per-task screen this area may open
+      (see "Not built"), so a specific IN_PROGRESS task itself isn't a separate
+      tap target.
 - [x] Four stat cards: Total Projects, Published, Pending Approvals, Updated This Week (`getDashboardStats`).
 - [x] "+ New Project" — **not built**: no server action reachable without a
       multi-field project-creation form; out of scope for this pass (see notImplemented).
@@ -51,3 +63,7 @@ they use. Kept here so a later run can see what is built and what is left.
 ## Not built (see `notImplemented` in the run's report)
 - New Project form from the dashboard (`/admin/projects/new`) — creating a project is Projects' area, not Home's.
 - Deep links from an alert into another area's native screen.
+- Opening a specific IN_PROGRESS task natively from a "Right now" card — the
+  Tasks area's own contract exposes only `TasksRootView()` (the whole board),
+  no per-cell screen with an id-based initialiser to push to, and this area
+  may not add navigation into another area's files.
