@@ -14,6 +14,14 @@ import SwiftUI
 /// `Features/<Area>/<Area>Screens.swift`, so adding one never means two
 /// people editing the same switch.
 enum DebugScreens {
+    /// `-neonScroll <anchor>`: once loaded, scroll to the view with that
+    /// `.id(...)`, to screenshot what is below the first screenful.
+    static var scrollAnchor: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "-neonScroll"), args.indices.contains(index + 1) else { return nil }
+        return args[index + 1]
+    }
+
     static var requested: String? {
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: "-neonScreen"), args.indices.contains(index + 1) else { return nil }
@@ -45,16 +53,16 @@ enum DebugScreens {
 
     @MainActor private static var areas: [(String) -> AnyView?] {
         [
-            HomeScreens.view, ProjectsScreens.view, ProjectFilesScreens.view, TasksScreens.view,
-            TeamScreens.view, OpsScreens.view, WhatsAppScreens.view, ChatScreens.view,
-            MeScreens.view, CallsScreens.view,
+            HomeScreens.view, HomeInsightsScreens.view, ProjectsScreens.view, ProjectFilesScreens.view,
+            TasksScreens.view, TeamScreens.view, OpsScreens.view, WhatsAppScreens.view, ChatScreens.view,
+            ChatRoomScreens.view, MeScreens.view, CallsScreens.view,
         ]
     }
 
     static var allIds: [String] {
-        tabs.keys.sorted() + appIds + HomeScreens.ids + ProjectsScreens.ids + ProjectFilesScreens.ids
-            + TasksScreens.ids + TeamScreens.ids + OpsScreens.ids + WhatsAppScreens.ids + ChatScreens.ids
-            + MeScreens.ids + CallsScreens.ids
+        tabs.keys.sorted() + appIds + HomeScreens.ids + HomeInsightsScreens.ids + ProjectsScreens.ids
+            + ProjectFilesScreens.ids + TasksScreens.ids + TeamScreens.ids + OpsScreens.ids + WhatsAppScreens.ids
+            + ChatScreens.ids + ChatRoomScreens.ids + MeScreens.ids + CallsScreens.ids
     }
 }
 
@@ -73,6 +81,18 @@ struct DebugScreenHost: View {
                 Text(verbatim: "Launch with -neonScreen list to print them.").font(.footnote)
             }
             .onAppear { print("NEON SCREENS:", DebugScreens.allIds.joined(separator: " ")) }
+        }
+    }
+}
+
+extension View {
+    /// Honours `-neonScroll <anchor>` for screenshots: put it on the content
+    /// inside a ScrollViewReader, and `.id("anchor")` on the sections.
+    func debugScroll(_ proxy: ScrollViewProxy) -> some View {
+        task {
+            guard let anchor = DebugScreens.scrollAnchor else { return }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            proxy.scrollTo(anchor, anchor: .top)
         }
     }
 }
