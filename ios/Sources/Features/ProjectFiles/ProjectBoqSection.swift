@@ -27,8 +27,11 @@ struct ProjectBoqSection: View {
                         symbol: "list.bullet.rectangle",
                         title: L("No BOQ items yet"),
                         detail: L("Add quantities and specifications."),
-                        actionTitle: L("Add item")
-                    ) { showAdd = true }
+                        actionTitle: L("Add item"),
+                        action: { showAdd = true },
+                        hue: .orange,
+                        card: true
+                    )
                 } else {
                     CardList(rows) { item in
                         ListRow(
@@ -42,6 +45,36 @@ struct ProjectBoqSection: View {
                         ) {
                             Button(role: .destructive) { toDelete = item } label: { Image(systemName: "trash").foregroundStyle(.red) }
                         }
+                    }
+                    .neonAppear()
+
+                    // Not the web admin's own total (it has none — only the
+                    // client page sums BOQ, gated by showBoqPrices/Quantities).
+                    // A real, honestly-scoped derived figure: only the lines
+                    // that actually carry a unit price are counted, and the
+                    // caption says so rather than implying a full estimate.
+                    let pricedLines = rows.compactMap { item in item.unitPrice.map { $0 * item.quantity } }
+                    if !pricedLines.isEmpty {
+                        HStack(spacing: 14) {
+                            IconTile("banknote.fill", hue: .orange, size: NeonSize.iconTileLarge)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L("Priced Items Subtotal"))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color.neonTextSecondary)
+                                Text(L("Only items with a unit price are counted."))
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(Color.neonTextTertiary)
+                            }
+                            Spacer(minLength: 8)
+                            Text(NeonFormat.money(pricedLines.reduce(0, +)))
+                                .font(.neonNumber)
+                                .foregroundStyle(Color.neonOrangeStrong)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .padding(16)
+                        .neonSurface(.tinted(.neonOrange), radius: NeonRadius.lg)
+                        .neonAppear(delay: 0.05)
                     }
                 }
             }
@@ -78,7 +111,7 @@ struct ProjectBoqSection: View {
     }
 }
 
-private struct AddBoqSheet: View {
+struct AddBoqSheet: View {
     let projectId: String
     let onSaved: () -> Void
 

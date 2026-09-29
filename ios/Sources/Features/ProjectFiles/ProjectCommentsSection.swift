@@ -34,12 +34,15 @@ struct ProjectCommentsSection: View {
                     EmptyState(
                         symbol: "bubble.left.and.bubble.right",
                         title: L("No comments yet"),
-                        detail: L("Client feedback and change requests appear here.")
+                        detail: L("Client feedback and change requests appear here."),
+                        hue: .blue,
+                        card: true
                     )
                 } else {
                     VStack(spacing: 10) {
-                        ForEach(rows) { comment in
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, comment in
                             commentCard(comment)
+                                .staggered(index)
                         }
                     }
                 }

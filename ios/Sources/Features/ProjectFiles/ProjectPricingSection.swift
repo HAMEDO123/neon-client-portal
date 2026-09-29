@@ -35,8 +35,11 @@ struct ProjectPricingSection: View {
                         symbol: "wallet.pass",
                         title: L("No pricing yet"),
                         detail: L("Add cost breakdown line items."),
-                        actionTitle: L("Add line item")
-                    ) { showAdd = true }
+                        actionTitle: L("Add line item"),
+                        action: { showAdd = true },
+                        hue: .green,
+                        card: true
+                    )
                 } else {
                     CardList(data.items) { item in
                         ListRow(
@@ -50,14 +53,32 @@ struct ProjectPricingSection: View {
                             Button(role: .destructive) { toDelete = item } label: { Image(systemName: "trash").foregroundStyle(.red) }
                         }
                     }
+                    .neonAppear()
 
-                    HStack {
-                        Text(L("Total Project Cost")).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.neonInk)
-                        Spacer()
-                        Text(NeonFormat.money(data.total)).font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(Color.neonInk)
+                    // The same sum the web computes: every non-optional line.
+                    // Made a clear, hero-weight total — the one figure this
+                    // whole tab exists to answer.
+                    let includedCount = data.items.filter { !$0.isOptional }.count
+                    HStack(spacing: 14) {
+                        IconTile("banknote.fill", hue: .green, size: NeonSize.iconTileLarge)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L("Total Project Cost"))
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.neonTextSecondary)
+                            Text(L("%d line items", includedCount))
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Color.neonTextTertiary)
+                        }
+                        Spacer(minLength: 8)
+                        Text(NeonFormat.money(data.total))
+                            .font(.neonNumber)
+                            .foregroundStyle(Color.neonSuccessStrong)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     .padding(16)
-                    .neonSurface(.strong, radius: NeonRadius.lg)
+                    .neonSurface(.tinted(.neonSuccess), radius: NeonRadius.lg)
+                    .neonAppear(delay: 0.05)
                 }
             }
         }
@@ -93,7 +114,7 @@ struct ProjectPricingSection: View {
     }
 }
 
-private struct AddPricingSheet: View {
+struct AddPricingSheet: View {
     let projectId: String
     let onSaved: () -> Void
 

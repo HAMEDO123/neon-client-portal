@@ -27,17 +27,22 @@ struct ProjectFurnitureSection: View {
                         symbol: "sofa",
                         title: L("No furniture yet"),
                         detail: L("Build the furniture and product schedule."),
-                        actionTitle: L("Add item")
-                    ) { showAdd = true }
+                        actionTitle: L("Add item"),
+                        action: { showAdd = true },
+                        hue: .indigo,
+                        card: true
+                    )
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(rows) { item in
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, item in
                             furnitureCard(item)
+                                .neonContextShape(radius: NeonRadius.lg)
                                 .contextMenu {
                                     Button(role: .destructive) { toDelete = item } label: {
                                         Label(L("Delete"), systemImage: "trash")
                                     }
                                 }
+                                .staggered(index)
                         }
                     }
                 }
@@ -94,7 +99,7 @@ struct ProjectFurnitureSection: View {
     }
 }
 
-private struct AddFurnitureSheet: View {
+struct AddFurnitureSheet: View {
     let projectId: String
     let onSaved: () -> Void
 

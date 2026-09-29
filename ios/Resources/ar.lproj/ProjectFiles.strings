@@ -97,6 +97,11 @@
 "Optional item" = "بند اختياري";
 "Shown separately, not in the total." = "يُعرض بشكل منفصل، ولا يُحتسب في الإجمالي.";
 "Total Project Cost" = "إجمالي تكلفة المشروع";
+"%d line items" = "%d بند";
+
+/* BOQ subtotal — a derived figure, honestly scoped: only priced lines. */
+"Priced Items Subtotal" = "إجمالي البنود المسعّرة";
+"Only items with a unit price are counted." = "تُحتسب العناصر التي لها سعر وحدة فقط.";
 
 /* Materials & Furniture */
 "Add material" = "إضافة مادة";

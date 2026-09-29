@@ -27,17 +27,22 @@ struct ProjectMaterialsSection: View {
                         symbol: "paintpalette",
                         title: L("No materials yet"),
                         detail: L("Build the material and finish board."),
-                        actionTitle: L("Add material")
-                    ) { showAdd = true }
+                        actionTitle: L("Add material"),
+                        action: { showAdd = true },
+                        hue: .pink,
+                        card: true
+                    )
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(rows) { material in
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, material in
                             materialCard(material)
+                                .neonContextShape(radius: NeonRadius.lg)
                                 .contextMenu {
                                     Button(role: .destructive) { toDelete = material } label: {
                                         Label(L("Delete"), systemImage: "trash")
                                     }
                                 }
+                                .staggered(index)
                         }
                     }
                 }
@@ -96,7 +101,7 @@ struct ProjectMaterialsSection: View {
     }
 }
 
-private struct AddMaterialSheet: View {
+struct AddMaterialSheet: View {
     let projectId: String
     let onSaved: () -> Void
 
