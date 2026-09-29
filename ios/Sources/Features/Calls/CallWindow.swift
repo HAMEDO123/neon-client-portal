@@ -29,10 +29,11 @@ final class CallWindow {
 
     func attach() {
         guard observer == nil else { return }
-        // objectWillChange fires before the change lands; reading on the next
-        // turn of the run loop sees the new state.
+        // objectWillChange fires before the change lands; reading it a turn
+        // later sees the new state. The main queue, not the run loop: a run
+        // loop turn waits while somebody is scrolling, and a call must not.
         observer = CallCenter.shared.objectWillChange
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refresh() }
         refresh()
     }

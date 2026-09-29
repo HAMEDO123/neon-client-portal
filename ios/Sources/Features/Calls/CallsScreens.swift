@@ -173,11 +173,12 @@ enum CallsScreens {
     private static var buttonsFixture: some View {
         NeonScroll(spacing: NeonSpace.stack) {
             SectionCard(L("Call"), subtitle: "CallButtons", symbol: "phone.fill", hue: .green) {
-                HStack(spacing: NeonSpace.lg) {
+                VStack(alignment: .leading, spacing: NeonSpace.md) {
                     CallButtons(slug: "fixture-none", title: "Sally")
                     CallLivePill(title: L("Join call"), symbol: "video.fill") {}
                     CallLivePill(title: L("Back to call"), symbol: "phone.fill") {}
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

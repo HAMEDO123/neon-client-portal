@@ -68,6 +68,7 @@ struct CallLivePill: View {
             .frame(height: 32)
             .background(Capsule().fill(NeonHue.green.fill))
             .shadow(color: .neonSuccess.opacity(0.35), radius: 8, x: 0, y: 3)
+            .fixedSize()
         }
         .buttonStyle(.pressable)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
