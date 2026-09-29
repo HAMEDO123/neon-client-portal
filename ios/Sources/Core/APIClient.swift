@@ -136,6 +136,12 @@ final class APIClient: ObservableObject {
     }
 
     func logout() {
+        // This phone stops receiving the person's notifications — asked while
+        // the token still works, then signed out without waiting on it.
+        let bearer = token
+        Task {
+            await PushCenter.shared.unregister(bearer: bearer)
+        }
         signOut(notice: false)
     }
 

@@ -70,6 +70,9 @@ struct ChatListView: View {
             guard path.isEmpty, mode == .tasks else { return }
             await loadTasks()
         }
+        .onReceive(PushCenter.shared.$pendingPath) { webPath in
+            Task { await openFromNotification(webPath) }
+        }
     }
 
     @ViewBuilder
@@ -112,6 +115,18 @@ struct ChatListView: View {
         } else {
             SkeletonRows(count: 5)
         }
+    }
+
+    /// A tapped notification pointing at a conversation ("/admin/chat/<slug>",
+    /// "/employee/chat/<slug>?task=…"): open it once the list knows it.
+    private func openFromNotification(_ webPath: String?) async {
+        guard let webPath, let range = webPath.range(of: "/chat/") else { return }
+        let slug = String(webPath[range.upperBound...].prefix { $0 != "?" && $0 != "/" })
+        guard !slug.isEmpty else { return }
+        if conversations == nil { await load() }
+        guard let summary = conversations?.first(where: { $0.slug == slug }) else { return }
+        PushCenter.shared.pendingPath = nil
+        path = [ChatRoute(summary)]
     }
 
     private func load() async {

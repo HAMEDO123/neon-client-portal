@@ -27,6 +27,12 @@ targets:
         buildPhase: resources
     dependencies:
       - package: WebRTC
+    # Push notifications (APNs). Xcode's automatic signing turns the
+    # capability on for the App ID; an App Store export makes it "production".
+    entitlements:
+      path: NeonAdmin.entitlements
+      properties:
+        aps-environment: development
     info:
       path: Info.plist
       properties:

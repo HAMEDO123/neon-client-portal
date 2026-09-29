@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct NeonAdminApp: App {
+    @UIApplicationDelegateAdaptor(NeonAppDelegate.self) private var appDelegate
     @StateObject private var api = APIClient.shared
     // Observed so the whole tree rebuilds (via .id) when the language toggles.
     @AppStorage(AppLanguage.storageKey) private var languageRaw = AppLanguage.current.rawValue
@@ -28,6 +29,9 @@ struct NeonAdminApp: App {
             }
             // A ringing or running call sits above every screen.
             .overlay { if api.isLoggedIn { CallOverlay() } }
+            // Signed in: ask for notifications (once — iOS remembers the answer)
+            // and register this phone for the person's pushes.
+            .task(id: api.isLoggedIn) { if api.isLoggedIn { PushCenter.shared.start() } }
             #if DEBUG
             .task { if DecodeCheck.requested, api.isLoggedIn { await DecodeCheck.run(api) } }
             #endif
@@ -82,6 +86,13 @@ struct EmployeeHome: View {
         }
         .environmentObject(store)
         .task { await store.poll() }
+        // A tapped notification: its tab, and the chat list opens the
+        // conversation itself.
+        .onReceive(PushCenter.shared.$pendingPath) { webPath in
+            guard let webPath else { return }
+            tab = PushRoute.employeeTab(webPath)
+            if tab != .chat { PushCenter.shared.pendingPath = nil }
+        }
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await store.refresh() } }
         }
@@ -124,6 +135,11 @@ struct AdminHome: View {
                 .tag(AdminTab.more)
         }
         .task { await pollUnread() }
+        .onReceive(PushCenter.shared.$pendingPath) { webPath in
+            guard let webPath else { return }
+            tab = PushRoute.adminTab(webPath)
+            if tab != .chat { PushCenter.shared.pendingPath = nil }
+        }
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await refreshUnread() } }
         }
