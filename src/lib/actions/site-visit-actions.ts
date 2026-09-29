@@ -55,11 +55,17 @@ async function askForReview(visit: {
 
   if (!phone) return { sentAt: null, note: "No client number on this visit — nobody was asked." };
 
-  const greeting = name ? `Hi ${name}` : "Hello";
-  const text =
-    `${greeting}, thank you for having us at the site today. ` +
-    `How did the visit go? Anything we could have done better? ` +
-    `Just reply to this message — it comes straight to the NEON team.`;
+  // Arabic, because the client is: the studio works in Amman and this is the
+  // one message here that a client reads rather than the studio. Everything
+  // the team reads — the note below, the screens — stays English, the same
+  // split the client portal already makes.
+  const greeting = name ? `مرحباً ${name}،` : "مرحباً،";
+  const text = [
+    greeting,
+    "شكراً لاستقبالكم لنا في الموقع اليوم.",
+    "كيف كانت الزيارة؟ وهل هناك ما كان بإمكاننا تحسينه؟",
+    "يسعدنا أن تشاركنا رأيك بالرد على هذه الرسالة — تصل مباشرة إلى فريق NEON.",
+  ].join("\n");
 
   const result = await sendWhatsApp(phone, text).catch((error: unknown) => ({
     ok: false as const,
