@@ -193,7 +193,18 @@ final class CallCenter: ObservableObject {
         guard let jsonData = data.data(using: .utf8) else { return }
         switch name {
         case "ready":
-            ready = try? JSONDecoder().decode(CallReady.self, from: jsonData)
+            // Not `try?`. That set `ready` to nil on a payload it could not
+            // read — no error, no message, and the screen saying "still
+            // connecting" for ever, which is the same dead end the silent
+            // returns above used to produce. It also wiped a good `ready`
+            // that had already arrived, so one odd payload broke calls until
+            // the app was restarted.
+            do {
+                ready = try JSONDecoder().decode(CallReady.self, from: jsonData)
+                reportStream(nil)
+            } catch {
+                reportStream(L("Calls cannot read what the server sent. The app may need updating."))
+            }
         case "calls":
             guard let value = try? JSONDecoder().decode([CallView].self, from: jsonData) else { return }
             calls = value
