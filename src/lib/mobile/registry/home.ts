@@ -10,6 +10,7 @@ import {
   homeReviews,
   markHomeAlertRead,
 } from "@/lib/mobile/home-reads";
+import { homeNow } from "@/lib/mobile/home-now";
 import {
   guarded,
   guardedAction,
@@ -35,6 +36,11 @@ export const reads: ReadRegistry = {
 
   // The dashboard's "The day" section: the team's day board for today.
   "home/day": guarded(requireAdmin, async () => homeDay()),
+
+  // The dashboard's "Right now" strip: what each active employee is on and
+  // what is next. Not on the website — an app-only read, still guarded like
+  // the rest of the dashboard because it is the same admin-only figures.
+  "home/now": guarded(requireAdmin, async () => homeNow()),
 
   // Activity (src/app/admin/(dashboard)/alerts/page.tsx).
   "home/alerts": guarded(requireAdmin, async () => homeAlerts()),

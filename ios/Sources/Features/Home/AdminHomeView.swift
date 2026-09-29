@@ -12,6 +12,9 @@ struct AdminHomeView: View {
     @State private var day: HomeDay?
     @State private var dayCachedAt: Date?
     @State private var dayError: String?
+    @State private var now: HomeNow?
+    @State private var nowCachedAt: Date?
+    @State private var nowError: String?
     @State private var showNewProject = false
     @State private var newProjectId: String?
     @State private var showHandOutTask = false
@@ -52,6 +55,23 @@ struct AdminHomeView: View {
                     onSetMeeting: { showSetMeeting = true },
                     onOpenBoard: { destination = .tasksBoard }
                 )
+
+                SectionLabel(L("Right now"))
+                if let now {
+                    if now.people.isEmpty {
+                        EmptyState(symbol: "person.2", title: L("No employees yet"), detail: L("Add the team, and their day appears here."))
+                    } else {
+                        VStack(spacing: NeonSpace.sm) {
+                            ForEach(now.people) { person in
+                                RightNowCard(person: person, onTap: { destination = .employee(id: person.id) })
+                            }
+                        }
+                    }
+                } else if let nowError {
+                    ErrorState(message: nowError, retry: loadNow)
+                } else {
+                    SkeletonRows(count: 3)
+                }
 
                 if let day {
                     SectionHeader(L("The day"), subtitle: longDayLabel(day.dayKey))
@@ -139,12 +159,24 @@ struct AdminHomeView: View {
             }
         }
         .task { await load() }
+        .task {
+            // "Right now" moves on its own — somebody starts a task, a break
+            // ends — so it refreshes every 60 s while Home is on screen, same
+            // as pull-to-refresh but without waiting for a tug. Cancelled
+            // automatically when the tab is torn down.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                await loadNow()
+            }
+        }
     }
 
     private func load() async {
         async let overviewTask: Void = loadOverview()
         async let dayTask: Void = loadDay()
-        _ = await (overviewTask, dayTask)
+        async let nowTask: Void = loadNow()
+        _ = await (overviewTask, dayTask, nowTask)
     }
 
     private func loadOverview() async {
@@ -166,6 +198,17 @@ struct AdminHomeView: View {
             dayError = nil
         } catch {
             dayError = error.localizedDescription
+        }
+    }
+
+    private func loadNow() async {
+        do {
+            let loaded = try await api.fetchHomeNow()
+            now = loaded.value
+            nowCachedAt = loaded.cachedAt
+            nowError = nil
+        } catch {
+            nowError = error.localizedDescription
         }
     }
 }
@@ -526,6 +569,94 @@ private struct PressingPersonCard: View {
                 .neonSurface(.tinted(.neonWarning), radius: NeonRadius.sm)
             }
         }
+    }
+}
+
+// MARK: - Right now
+
+/// One employee, right now: the block their published day plan says they are
+/// on, and/or whatever board cell or hand-assigned job they have IN_PROGRESS
+/// — the two can agree, run ahead of each other, or disagree entirely — plus
+/// what is next. Neither existing is not idleness: the platform cannot tell
+/// "nothing to do" from "hasn't started" from "no plan was made", so it says
+/// so in as many neutral words rather than implying anybody did nothing.
+private struct RightNowCard: View {
+    let person: HomeNowPerson
+    let onTap: () -> Void
+
+    var body: some View {
+        Button {
+            Haptic.tap()
+            onTap()
+        } label: {
+            NeonCard {
+                HStack(alignment: .top, spacing: NeonSpace.md) {
+                    AvatarView(url: resolvedMediaURL(person.avatar), name: person.name, size: 46, online: person.online)
+                    VStack(alignment: .leading, spacing: 6) {
+                        DirText(person.name, font: .neonHeadline, fill: false)
+                        activity
+                        if let next = person.next {
+                            DirText(L("Next: %@ at %@", next.what, next.from), font: .neonCaption, color: .neonTextTertiary)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.forward")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.neonTextTertiary)
+                }
+            }
+        }
+        .buttonStyle(.pressableCard)
+    }
+
+    @ViewBuilder
+    private var activity: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if let now = person.now {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Circle().fill(Color.neonSuccessStrong).frame(width: 6, height: 6)
+                    DirText(now.what, font: .neonSubheadline.weight(.semibold), fill: false)
+                }
+                if let leftMinutes = now.leftMinutes {
+                    Text(L("%@–%@ · %@ left", now.from, now.to, describeMinutes(Double(leftMinutes))))
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextSecondary)
+                } else {
+                    Text(L("%@–%@", now.from, now.to))
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextSecondary)
+                }
+            }
+
+            ForEach(person.inProgress) { item in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: item.kind == "job" ? "bolt.fill" : "checklist")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.neonPurpleStrong)
+                    VStack(alignment: .leading, spacing: 1) {
+                        DirText(
+                            item.projectName != nil ? "\(item.title) · \(item.projectName!)" : item.title,
+                            font: .neonSubheadline.weight(.semibold), fill: false
+                        )
+                        Text(item.minutes.map { L("for %@", describeMinutes(Double($0))) } ?? L("In progress"))
+                            .font(.neonCaption)
+                            .foregroundStyle(Color.neonTextSecondary)
+                    }
+                }
+            }
+
+            if person.now == nil && person.inProgress.isEmpty {
+                Text(neutralState)
+                    .font(.neonSubheadline)
+                    .foregroundStyle(Color.neonTextTertiary)
+            }
+        }
+    }
+
+    private var neutralState: String {
+        if person.beforeWork { return L("The day hasn't started yet") }
+        if person.afterWork { return L("Outside working hours") }
+        return L("Nothing planned right now")
     }
 }
 

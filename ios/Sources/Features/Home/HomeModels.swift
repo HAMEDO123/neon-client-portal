@@ -101,6 +101,51 @@ struct HomeDay: Codable {
     let everyone: [HomePersonDay]
 }
 
+// MARK: - Right now (home/now)
+
+/// The block a published day plan says somebody is on, or the block due next
+/// — `now`/`next` in home-now.ts, both this same shape. `leftMinutes` is only
+/// ever set on `now`: a block that hasn't started yet has nothing left of it.
+struct HomeNowSlot: Codable {
+    let what: String
+    let from: String
+    let to: String
+    let leftMinutes: Int?
+    let entryId: String?
+    let jobId: String?
+}
+
+/// A board cell or a hand-assigned job this person has IN_PROGRESS right now
+/// — there can be more than one, and it can run ahead of, behind, or entirely
+/// outside whatever their day plan says.
+struct HomeInProgressItem: Codable, Identifiable {
+    let kind: String // "cell" | "job"
+    let id: String
+    let title: String
+    let projectName: String?
+    let startedAt: String?
+    /// Minutes since it started, where a start was ever recorded — null for a
+    /// job moved to IN_PROGRESS before anything logged it.
+    let minutes: Int?
+}
+
+struct HomeNowPerson: Codable, Identifiable {
+    let id: String
+    let name: String
+    let color: String
+    let avatar: String?
+    let online: Bool
+    let now: HomeNowSlot?
+    let next: HomeNowSlot?
+    let inProgress: [HomeInProgressItem]
+    let afterWork: Bool
+    let beforeWork: Bool
+}
+
+struct HomeNow: Codable {
+    let people: [HomeNowPerson]
+}
+
 // MARK: - Activity (home/alerts)
 
 struct HomeAlertEmployee: Codable {

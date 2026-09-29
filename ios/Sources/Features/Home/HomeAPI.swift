@@ -12,6 +12,10 @@ extension APIClient {
         try await read("home/day", as: HomeDay.self)
     }
 
+    func fetchHomeNow() async throws -> Loaded<HomeNow> {
+        try await read("home/now", as: HomeNow.self)
+    }
+
     func fetchHomeAlerts() async throws -> Loaded<HomeAlerts> {
         try await read("home/alerts", as: HomeAlerts.self)
     }
