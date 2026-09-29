@@ -186,6 +186,7 @@
 "Arrival delays" = "تأخيرات الحضور";
 "Record" = "تسجيل";
 "Recorded per day and per person. The fingerprint device writes these same rows, and never writes over a figure you typed here." = "تُسجَّل ليوم واحد لشخص واحد. جهاز البصمة يكتب نفس هذه الصفوف، ولا يستبدل رقماً كتبته هنا أبداً.";
+"Fingerprint pairing" = "ربط جهاز البصمة";
 "Paired by the device's own user number, never by name." = "الربط برقم المستخدم في الجهاز نفسه، وليس بالاسم أبداً.";
 "device no." = "رقم الجهاز";
 "Pair" = "ربط";

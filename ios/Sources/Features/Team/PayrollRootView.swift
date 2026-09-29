@@ -16,15 +16,20 @@ struct PayrollRootView: View {
     @State private var removingAttendance: TeamAttendanceRecord?
 
     var body: some View {
-        NeonScroll {
-            LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: { await load() }) { data in
-                periodSwitch(data)
-                totals(data.totals, isThisMonth: data.isThisMonth)
-                paySheet(data)
-                salaries(data)
-                attendanceSection(data)
-                receiptsSection(data)
+        ScrollViewReader { proxy in
+            NeonScroll {
+                LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: { await load() }) { data in
+                    periodSwitch(data).id("totals")
+                    totals(data.totals, isThisMonth: data.isThisMonth)
+                    paySheet(data).id("paysheet")
+                    salaries(data).id("salaries")
+                    attendanceSection(data).id("attendance")
+                    receiptsSection(data).id("receipts")
+                }
             }
+            #if DEBUG
+            .debugScroll(proxy)
+            #endif
         }
         .refreshable {
             Haptic.tap()
@@ -269,10 +274,7 @@ private struct DeviceIdsCard: View {
     @State private var saving: String?
 
     var body: some View {
-        NeonCard {
-            Text(L("Paired by the device's own user number, never by name."))
-                .font(.neonCaption)
-                .foregroundStyle(Color.neonTextTertiary)
+        SectionCard(L("Fingerprint pairing"), subtitle: L("Paired by the device's own user number, never by name."), symbol: "touchid", hue: .cyan) {
             ForEach(employees) { employee in
                 HStack(spacing: 8) {
                     Text(employee.name).font(.neonSubheadline).foregroundStyle(Color.neonInk).lineLimit(1)
@@ -313,7 +315,8 @@ private struct DeviceIdsCard: View {
 
 // MARK: - Sheets
 
-private struct EditPaySheet: View {
+// Not `private`: TeamScreens.swift opens it directly for screenshots.
+struct EditPaySheet: View {
     let employee: TeamPayrollEmployeeInfo
     var onSaved: () async -> Void
 
@@ -358,7 +361,8 @@ private struct EditPaySheet: View {
     }
 }
 
-private struct RecordAttendanceSheet: View {
+// Not `private`: TeamScreens.swift opens it directly for screenshots.
+struct RecordAttendanceSheet: View {
     let employees: [TeamPayrollEmployee]
     var onSaved: () async -> Void
 
@@ -409,7 +413,8 @@ private struct RecordAttendanceSheet: View {
     }
 }
 
-private struct CorrectReceiptSheet: View {
+// Not `private`: TeamScreens.swift opens it directly for screenshots.
+struct CorrectReceiptSheet: View {
     let receipt: TeamReceipt
     var onSaved: () async -> Void
 

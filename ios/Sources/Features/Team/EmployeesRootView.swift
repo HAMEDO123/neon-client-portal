@@ -28,6 +28,8 @@ struct EmployeesRootView: View {
             }
 
             LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
+                teamSummary(data.employees)
+
                 if data.employees.count > 6 {
                     SearchField(text: $search, prompt: L("Search employees"))
                 }
@@ -62,6 +64,21 @@ struct EmployeesRootView: View {
         }
         .task {
             if response == nil { await load() }
+        }
+    }
+
+    /// The team at a glance, above the list — real counts off what just
+    /// loaded, never a figure invented for the sake of a fuller-looking row.
+    @ViewBuilder
+    private func teamSummary(_ employees: [TeamEmployeeSummary]) -> some View {
+        let active = employees.filter { $0.hasAccount && $0.active }.count
+        let warned = employees.filter { $0.warningCount > 0 }.count
+        let noAccount = employees.filter { !$0.hasAccount }.count
+        StatGrid(columns: 4) {
+            KPICard(L("Team"), value: Double(employees.count), symbol: "person.2.fill", hue: .blue, density: .compact) { EmptyView() }
+            KPICard(L("Active"), value: Double(active), symbol: "checkmark.seal.fill", hue: .green, density: .compact) { EmptyView() }
+            KPICard(L("Warnings"), value: Double(warned), symbol: "exclamationmark.triangle.fill", hue: .orange, density: .compact) { EmptyView() }
+            KPICard(L("No account"), value: Double(noAccount), symbol: "person.crop.circle.badge.questionmark", hue: .grey, density: .compact) { EmptyView() }
         }
     }
 
@@ -128,7 +145,8 @@ private struct EmployeeSummaryRow: View {
     }
 }
 
-private struct CreateEmployeeSheet: View {
+// Not `private`: TeamScreens.swift opens it directly for screenshots.
+struct CreateEmployeeSheet: View {
     var onCreated: () async -> Void
 
     @EnvironmentObject var api: APIClient
