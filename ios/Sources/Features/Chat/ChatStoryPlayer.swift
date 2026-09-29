@@ -28,6 +28,8 @@ struct ChatStoryPlayer: View {
     @State private var mediaFailed = false
     @State private var player: AVPlayer?
     @State private var holding = false
+    /// A press held past a tap's length: the controls step aside and the pause shows.
+    @State private var longHold = false
     @State private var pressStart: Date?
     @State private var dragOffset: CGFloat = 0
     @State private var viewersFor: ViewersTarget?
@@ -97,10 +99,10 @@ struct ChatStoryPlayer: View {
                 .padding(.horizontal, NeonSpace.md)
                 .padding(.top, NeonSpace.sm)
                 .padding(.bottom, NeonSpace.md)
-                .opacity(holding ? 0 : 1)
-                .animation(NeonMotion.quick, value: holding)
+                .opacity(longHold ? 0 : 1)
+                .animation(NeonMotion.quick, value: longHold)
 
-                if holding {
+                if longHold {
                     Image(systemName: "pause.fill")
                         .font(.system(.title2, weight: .bold))
                         .foregroundStyle(.white)
@@ -116,7 +118,7 @@ struct ChatStoryPlayer: View {
             .scaleEffect(1 - min(dragOffset, 400) / 2400)
             .id(ring?.id)
             .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading)))
-            .animation(NeonMotion.snappy, value: holding)
+            .animation(NeonMotion.snappy, value: longHold)
         }
         .background(Color.black.opacity(1 - Double(min(dragOffset, 400)) / 600).ignoresSafeArea())
         .statusBarHidden(true)
@@ -312,8 +314,12 @@ struct ChatStoryPlayer: View {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 if pressStart == nil {
-                    pressStart = Date()
+                    let started = Date()
+                    pressStart = started
                     holding = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if holding, pressStart == started { longHold = true }
+                    }
                 }
                 let down = value.translation.height
                 if down > 0, abs(down) > abs(value.translation.width) {
@@ -324,6 +330,7 @@ struct ChatStoryPlayer: View {
                 let held = Date().timeIntervalSince(pressStart ?? Date())
                 pressStart = nil
                 holding = false
+                longHold = false
                 if dragOffset > 120 || value.predictedEndTranslation.height > 320 {
                     close()
                     return

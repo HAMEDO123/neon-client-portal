@@ -29,61 +29,67 @@ struct ChatNewConversationSheet: View {
                     subtitle: isManager ? L("Message someone, or make a group") : L("Message someone at the studio"),
                     symbol: "square.and.pencil"
                 )
-                ScrollView {
-                    VStack(alignment: .leading, spacing: NeonSpace.stack) {
-                        if isManager {
-                            NavigationLink {
-                                ChatGroupForm(people: (people ?? []).filter { $0.id != "manager" }, onlineIds: onlineIds) { route in
-                                    open(route)
-                                }
-                            } label: {
-                                ChatListActionTile(
-                                    title: L("New group"),
-                                    detail: L("Name it, add a photo, pick who is in"),
-                                    symbol: "person.3.fill",
-                                    hue: .purple
-                                )
-                            }
-                            .buttonStyle(.pressableCard)
-                            .neonAppear()
-                        }
-
-                        SearchField(text: $query, prompt: L("Search people"))
-                            .padding(.top, 4)
-
-                        if let people {
-                            let shown = people.filter { matchesSearch(query, $0.name, $0.role) }
-                            SectionHeader(L("Message someone"), count: shown.isEmpty ? nil : shown.count)
-                                .padding(.top, 4)
-                            if shown.isEmpty {
-                                EmptyState(symbol: query.isEmpty ? "person.2" : "magnifyingglass",
-                                           title: query.isEmpty ? L("No one to message yet") : L("No matches"),
-                                           hue: .indigo, card: true)
-                            } else {
-                                CardList(shown, dividerInset: 72) { person in
-                                    Button {
-                                        Haptic.tap()
-                                        open(ChatRoute(slug: person.id, title: person.name, subtitle: person.role, avatar: person.avatar, isGroup: false))
-                                    } label: {
-                                        ChatPersonRow(person: person, online: onlineIds.contains(person.id)) {
-                                            IconTile("bubble.left.fill", hue: .indigo, size: 34)
-                                        }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: NeonSpace.stack) {
+                            if isManager {
+                                NavigationLink {
+                                    ChatGroupForm(people: (people ?? []).filter { $0.id != "manager" }, onlineIds: onlineIds) { route in
+                                        open(route)
                                     }
-                                    .buttonStyle(.pressable)
+                                } label: {
+                                    ChatListActionTile(
+                                        title: L("New group"),
+                                        detail: L("Name it, add a photo, pick who is in"),
+                                        symbol: "person.3.fill",
+                                        hue: .purple
+                                    )
                                 }
-                                .neonAppear(delay: 0.05)
+                                .buttonStyle(.pressableCard)
+                                .neonAppear()
                             }
-                        } else if let problem {
-                            ErrorState(message: problem) { await load() }
-                        } else {
-                            SkeletonRows(count: 4)
+
+                            SearchField(text: $query, prompt: L("Search people"))
+                                .padding(.top, 4)
+
+                            if let people {
+                                let shown = people.filter { matchesSearch(query, $0.name, $0.role) }
+                                SectionHeader(L("Message someone"), count: shown.isEmpty ? nil : shown.count)
+                                    .padding(.top, 4)
+                                    .id("people")
+                                if shown.isEmpty {
+                                    EmptyState(symbol: query.isEmpty ? "person.2" : "magnifyingglass",
+                                               title: query.isEmpty ? L("No one to message yet") : L("No matches"),
+                                               hue: .indigo, card: true)
+                                } else {
+                                    CardList(shown, dividerInset: 72) { person in
+                                        Button {
+                                            Haptic.tap()
+                                            open(ChatRoute(slug: person.id, title: person.name, subtitle: person.role, avatar: person.avatar, isGroup: false))
+                                        } label: {
+                                            ChatPersonRow(person: person, online: onlineIds.contains(person.id)) {
+                                                IconTile("bubble.left.fill", hue: .indigo, size: 34)
+                                            }
+                                        }
+                                        .buttonStyle(.pressable)
+                                    }
+                                    .neonAppear(delay: 0.05)
+                                }
+                            } else if let problem {
+                                ErrorState(message: problem) { await load() }
+                            } else {
+                                SkeletonRows(count: 4)
+                            }
                         }
+                        .padding(.horizontal, NeonSpace.gutter)
+                        .padding(.bottom, NeonSpace.xxl)
+                        .animation(NeonMotion.smooth, value: people == nil)
                     }
-                    .padding(.horizontal, NeonSpace.gutter)
-                    .padding(.bottom, NeonSpace.xxl)
-                    .animation(NeonMotion.smooth, value: people == nil)
+                    .scrollDismissesKeyboard(.interactively)
+                    #if DEBUG
+                    .debugScroll(proxy)
+                    #endif
                 }
-                .scrollDismissesKeyboard(.interactively)
             }
             .background(NeonAmbient().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
