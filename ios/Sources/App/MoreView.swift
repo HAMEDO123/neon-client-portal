@@ -1,37 +1,47 @@
 import SwiftUI
 
 /// Everything the manager has beyond the four main tabs — the rest of the
-/// admin portal's sidebar, one row each.
+/// admin portal's sidebar, as a beautiful grid of coloured destination tiles
+/// instead of a plain list, grouped the way the sidebar groups them.
 struct AdminMoreView: View {
     var body: some View {
         NavigationStack {
-            List {
-                Section(L("Work")) {
-                    MoreRow(L("Reviews"), symbol: "checkmark.seal", tint: .neonPurpleStrong) { ReviewsRootView() }
-                    MoreRow(L("Meetings"), symbol: "calendar", tint: .neonCyanStrong) { MeetingsView() }
-                    MoreRow(L("Alerts"), symbol: "bell", tint: .neonOrangeStrong) { AlertsRootView() }
+            NeonScroll(spacing: NeonSpace.stack) {
+                ScreenHeader(L("More"), subtitle: L("Signed in as the manager")) {
+                    AccountMenu()
                 }
-                Section(L("Team")) {
-                    MoreRow(L("Employees"), symbol: "person.2", tint: .neonPurpleStrong) { EmployeesRootView() }
-                    MoreRow(L("Payroll"), symbol: "banknote", tint: .green) { PayrollRootView() }
-                    MoreRow(L("Attendance"), symbol: "clock.badge.checkmark", tint: .neonCyanStrong) { AttendanceRootView() }
-                    MoreRow(L("Requests"), symbol: "tray.full", tint: .neonOrangeStrong) { RequestsRootView() }
-                    MoreRow(L("Site visits"), symbol: "mappin.and.ellipse", tint: .neonPinkStrong) { SiteVisitsRootView() }
+
+                MoreDestinationGroup(L("Work"), symbol: "briefcase.fill", hue: .blue) {
+                    MoreDestinationTile(L("Reviews"), symbol: "checkmark.seal.fill", hue: .purple) { ReviewsRootView() }
+                    MoreDestinationTile(L("Meetings"), symbol: "calendar", hue: .cyan) { MeetingsView() }
+                    MoreDestinationTile(L("Alerts"), symbol: "bell.fill", hue: .orange) { AlertsRootView() }
                 }
-                Section(L("Studio")) {
-                    MoreRow(L("Analytics"), symbol: "chart.bar.xaxis", tint: .neonCyanStrong) { AnalyticsRootView() }
-                    MoreRow(L("WhatsApp"), symbol: "phone.bubble", tint: .green) { WhatsAppRootView() }
-                    MoreRow(L("Settings"), symbol: "gearshape", tint: .neonInk) { SettingsRootView() }
+
+                MoreDestinationGroup(L("Team"), symbol: "person.2.fill", hue: .purple) {
+                    MoreDestinationTile(L("Employees"), symbol: "person.2.fill", hue: .purple) { EmployeesRootView() }
+                    MoreDestinationTile(L("Payroll"), symbol: "banknote.fill", hue: .green) { PayrollRootView() }
+                    MoreDestinationTile(L("Attendance"), symbol: "clock.badge.checkmark.fill", hue: .cyan) { AttendanceRootView() }
+                    MoreDestinationTile(L("Requests"), symbol: "tray.full.fill", hue: .orange) { RequestsRootView() }
+                    MoreDestinationTile(L("Site visits"), symbol: "mappin.and.ellipse", hue: .pink) { SiteVisitsRootView() }
                 }
-                AccountSection()
+
+                MoreDestinationGroup(L("Studio"), symbol: "building.2.fill", hue: .indigo) {
+                    MoreDestinationTile(L("Analytics"), symbol: "chart.bar.xaxis", hue: .cyan) { AnalyticsRootView() }
+                    MoreDestinationTile(L("WhatsApp"), symbol: "phone.bubble.fill", hue: .green) { WhatsAppRootView() }
+                    MoreDestinationTile(L("Settings"), symbol: "gearshape.fill", hue: .grey) { SettingsRootView() }
+                }
+
+                AccountCard()
             }
-            .navigationTitle(L("More"))
+            .toolbar(.hidden, for: .navigationBar)
+            .neonAmbientBackground()
         }
     }
 }
 
 /// The team's More tab: the portal's other destinations, and the three that
-/// only exist for somebody the manager has ticked for them.
+/// only exist for somebody the manager has ticked for them — a colourful
+/// grid, exactly as the manager's own More tab now reads.
 struct EmployeeMoreView: View {
     var openChat: () -> Void = {}
 
@@ -45,35 +55,47 @@ struct EmployeeMoreView: View {
         var canLogSiteVisits = false
     }
 
+    private var hasGivenTo: Bool {
+        permissions.canAssignTasks || permissions.canLogSiteVisits || permissions.canReadWhatsApp
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    MoreRow(L("Alerts"), symbol: "bell", tint: .neonOrangeStrong, badge: store.badges.unread) {
+            NeonScroll(spacing: NeonSpace.stack) {
+                ScreenHeader(L("More"), subtitle: api.identity.map { L("Signed in as %@", $0.name) }) {
+                    AccountMenu()
+                }
+
+                MoreDestinationGroup(L("Your day"), symbol: "sparkles", hue: .indigo) {
+                    MoreDestinationTile(L("Alerts"), symbol: "bell.fill", hue: .orange, badge: store.badges.unread) {
                         NotificationsView(openChat: openChat)
                     }
-                    MoreRow(L("Meetings"), symbol: "calendar", tint: .neonCyanStrong) { MeetingsView() }
-                    MoreRow(L("My requests"), symbol: "tray.full", tint: .neonPurpleStrong) { MyRequestsRootView() }
+                    MoreDestinationTile(L("Meetings"), symbol: "calendar", hue: .cyan) { MeetingsView() }
+                    MoreDestinationTile(L("My requests"), symbol: "tray.full.fill", hue: .purple) { MyRequestsRootView() }
                 }
-                if permissions.canAssignTasks || permissions.canLogSiteVisits || permissions.canReadWhatsApp {
-                    Section(L("Given to you")) {
+
+                if hasGivenTo {
+                    MoreDestinationGroup(L("Given to you"), symbol: "hand.raised.fill", hue: .pink) {
                         if permissions.canAssignTasks {
-                            MoreRow(L("Assign work"), symbol: "person.badge.plus", tint: .neonPurpleStrong) { AssignRootView() }
+                            MoreDestinationTile(L("Assign work"), symbol: "person.badge.plus", hue: .purple) { AssignRootView() }
                         }
                         if permissions.canLogSiteVisits {
-                            MoreRow(L("Site visits"), symbol: "mappin.and.ellipse", tint: .neonPinkStrong) { SiteVisitsRootView() }
+                            MoreDestinationTile(L("Site visits"), symbol: "mappin.and.ellipse", hue: .pink) { SiteVisitsRootView() }
                         }
                         if permissions.canReadWhatsApp {
-                            MoreRow(L("WhatsApp"), symbol: "phone.bubble", tint: .green) { WhatsAppRootView() }
+                            MoreDestinationTile(L("WhatsApp"), symbol: "phone.bubble.fill", hue: .green) { WhatsAppRootView() }
                         }
                     }
                 }
-                Section {
-                    MoreRow(L("Profile"), symbol: "person.crop.circle", tint: .neonInk) { ProfileRootView() }
+
+                MoreDestinationGroup(L("You"), symbol: "person.fill", hue: .grey) {
+                    MoreDestinationTile(L("Profile"), symbol: "person.crop.circle.fill", hue: .indigo) { ProfileRootView() }
                 }
-                AccountSection()
+
+                AccountCard()
             }
-            .navigationTitle(L("More"))
+            .toolbar(.hidden, for: .navigationBar)
+            .neonAmbientBackground()
             .task {
                 if let loaded = try? await api.read("me/permissions", as: Permissions.self) {
                     permissions = loaded.value
@@ -83,73 +105,131 @@ struct EmployeeMoreView: View {
     }
 }
 
-struct MoreRow<Destination: View>: View {
+// MARK: - Destination grid
+
+/// A `SectionCard` holding a grid of coloured destination tiles — the same
+/// shape as the mockups' Quick Actions block, reused as this tab's whole
+/// layout. The kit's `QuickActionGrid` only takes a tap action, not a screen
+/// to push, so this area builds its own tile that pushes a `NavigationLink`
+/// instead (see `MoreDestinationTile` below; reported under kitRequests).
+private struct MoreDestinationGroup<Content: View>: View {
     let title: String
     let symbol: String
-    let tint: Color
-    var badge = 0
-    @ViewBuilder let destination: () -> Destination
+    let hue: NeonHue
+    let content: Content
 
-    init(_ title: String, symbol: String, tint: Color, badge: Int = 0, @ViewBuilder destination: @escaping () -> Destination) {
+    init(_ title: String, symbol: String, hue: NeonHue, @ViewBuilder content: () -> Content) {
         self.title = title
         self.symbol = symbol
-        self.tint = tint
-        self.badge = badge
-        self.destination = destination
+        self.hue = hue
+        self.content = content()
     }
 
     var body: some View {
-        NavigationLink {
-            destination()
-                .toolbar(.hidden, for: .tabBar)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(tint.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Text(title)
-                    .font(.system(size: 16))
-                Spacer()
-                if badge > 0 {
-                    Text("\(badge)")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 7)
-                        .frame(minHeight: 22)
-                        .background(Color.red, in: Capsule())
-                }
+        SectionCard(title, symbol: symbol, hue: hue) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: NeonSpace.sm), GridItem(.flexible(), spacing: NeonSpace.sm), GridItem(.flexible())], spacing: NeonSpace.sm) {
+                content
             }
         }
     }
 }
 
+/// One coloured tile in the grid, pushing its destination — visually the
+/// kit's `QuickActionTile`, wired to a `NavigationLink` instead of a tap
+/// action so it can push a whole screen.
+private struct MoreDestinationTile<Destination: View>: View {
+    let title: String
+    let symbol: String
+    let hue: NeonHue
+    var badge: Int
+    let destination: Destination
+
+    init(_ title: String, symbol: String, hue: NeonHue, badge: Int = 0, @ViewBuilder destination: () -> Destination) {
+        self.title = title
+        self.symbol = symbol
+        self.hue = hue
+        self.badge = badge
+        self.destination = destination()
+    }
+
+    var body: some View {
+        NavigationLink {
+            destination
+                .toolbar(.hidden, for: .tabBar)
+        } label: {
+            VStack(spacing: 9) {
+                IconTile(symbol, hue: hue, size: 42, style: .filled)
+                    .overlay(alignment: .topTrailing) {
+                        if badge > 0 { CountBadge(badge, size: 18).offset(x: 7, y: -7) }
+                    }
+                Text(title)
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(Color.neonInk.opacity(0.88))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, minHeight: 100)
+            .background {
+                let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
+                shape.fill(LinearGradient(colors: [hue.wash.opacity(0.7), hue.wash], startPoint: .top, endPoint: .bottom))
+                    .overlay(shape.strokeBorder(hue.color.opacity(0.08), lineWidth: 1))
+            }
+            .contentShape(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
+        }
+        .buttonStyle(.pressableCard)
+        .accessibilityLabel(Text(badge > 0 ? L("%@, %d new", title, badge) : title))
+    }
+}
+
 /// Language and signing out, at the foot of both More tabs.
-struct AccountSection: View {
+private struct AccountCard: View {
     @EnvironmentObject var api: APIClient
     @State private var confirmSignOut = false
 
     var body: some View {
-        Section {
+        NeonCard {
             Button {
                 Haptic.tap()
                 AppLanguage.toggle()
             } label: {
-                Label(AppLanguage.current == .arabic ? "English" : "العربية", systemImage: "globe")
+                HStack {
+                    Label(AppLanguage.current == .arabic ? "English" : "العربية", systemImage: "globe")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(Color.neonInk)
+                    Spacer()
+                    Image(systemName: "chevron.forward")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.neonTextFaint)
+                }
             }
+            .buttonStyle(.pressable)
+
+            NeonDivider()
+
             Button(role: .destructive) {
                 confirmSignOut = true
             } label: {
-                Label(L("Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
+                HStack {
+                    Label(L("Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(Color.neonDangerStrong)
+                    Spacer()
+                }
             }
+            .buttonStyle(.pressable)
             .confirmationDialog(L("Sign out of NEON?"), isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button(L("Sign Out"), role: .destructive) { api.logout() }
                 Button(L("Cancel"), role: .cancel) {}
             }
-        } footer: {
+
             if let identity = api.identity {
                 Text(identity.side == .admin ? L("Signed in as the manager") : L("Signed in as %@", identity.name))
+                    .font(.neonCaption)
+                    .foregroundStyle(Color.neonTextTertiary)
             }
         }
     }

@@ -1,0 +1,7 @@
+/* App/MoreView.swift and App/LoginView.swift — the app shell's own screens.
+   Most of their strings (screen titles like "Settings", "Payroll", "Profile")
+   are already translated in the area whose screen they open, since L()
+   searches every table; only what is new here gets a line of its own. */
+
+"Your day" = "يومك";
+"%@, %d new" = "%@، %d جديد";

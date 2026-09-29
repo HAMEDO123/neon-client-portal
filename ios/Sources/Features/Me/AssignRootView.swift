@@ -17,7 +17,7 @@ struct AssignRootView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: NeonSpace.stack) {
                 if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
                 if let week {
@@ -27,14 +27,14 @@ struct AssignRootView: View {
                         EmptyState(
                             symbol: "shippingbox",
                             title: L("Nothing handed out this week"),
-                            actionTitle: L("Hand out a job")
-                        ) {
-                            creating = true
-                        }
-                        .glassCard(radius: 18)
+                            actionTitle: L("Hand out a job"),
+                            action: { creating = true },
+                            hue: .purple,
+                            card: true
+                        )
                     } else {
-                        VStack(spacing: 10) {
-                            ForEach(week.tasks) { job in
+                        VStack(spacing: NeonSpace.sm) {
+                            ForEach(Array(week.tasks.enumerated()), id: \.element.id) { index, job in
                                 Button {
                                     Haptic.tap()
                                     editing = job
@@ -42,6 +42,7 @@ struct AssignRootView: View {
                                     assignedJobRow(job)
                                 }
                                 .buttonStyle(.pressableCard)
+                                .staggered(index)
                             }
                         }
                     }
@@ -51,7 +52,7 @@ struct AssignRootView: View {
                     SkeletonRows(count: 4)
                 }
             }
-            .padding(16)
+            .padding(NeonSpace.gutter)
             .padding(.bottom, 70)
         }
         .refreshable {
@@ -80,48 +81,42 @@ struct AssignRootView: View {
 
     private func weekHeader(_ week: AssignWeekResponse) -> some View {
         HStack {
-            Button {
-                Haptic.selection()
+            IconButton("chevron.backward", label: L("Previous week"), size: 36) {
                 weekOffset -= 1
-            } label: {
-                Image(systemName: "chevron.backward").font(.system(size: 14, weight: .semibold))
             }
-            .buttonStyle(.pressable)
 
             Spacer()
             VStack(spacing: 2) {
-                Text(week.weekLabel).font(.system(size: 15, weight: .semibold))
+                Text(week.weekLabel).font(.system(.subheadline, weight: .semibold))
                 if weekOffset != 0 {
                     Button(L("This week")) {
                         Haptic.selection()
-                        weekOffset = 0
+                        withNeonAnimation(.snappy) { weekOffset = 0 }
                     }
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.neonCyanStrong)
+                } else {
+                    Color.clear.frame(height: 14)
                 }
             }
             Spacer()
 
-            Button {
-                Haptic.selection()
+            IconButton("chevron.forward", label: L("Next week"), size: 36) {
                 weekOffset += 1
-            } label: {
-                Image(systemName: "chevron.forward").font(.system(size: 14, weight: .semibold))
             }
-            .buttonStyle(.pressable)
         }
         .padding(.horizontal, 4)
     }
 
     private func assignedJobRow(_ job: MyAssignedJob) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(url: nil, name: name(for: job.employeeId), size: 38)
+            AvatarView(url: nil, name: name(for: job.employeeId), size: 40)
             VStack(alignment: .leading, spacing: 5) {
-                DirText(job.title, font: .system(size: 15, weight: .semibold))
+                DirText(job.title, font: .system(.callout, weight: .semibold))
                 Text(name(for: job.employeeId))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
-                HStack(spacing: 6) {
+                    .font(.neonCaption)
+                    .foregroundStyle(Color.neonTextTertiary)
+                FlowRow {
                     BadgeView(text: taskStateLabel(job.state), tone: taskStateTone(job.state))
                     if let priority = priorityLabel(job.priority) {
                         BadgeView(text: priority, tone: job.priority == "HIGH" ? .pink : .neutral)
@@ -131,11 +126,12 @@ struct AssignRootView: View {
             Spacer(minLength: 0)
             Image(systemName: "chevron.forward")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.neonInk.opacity(0.25))
+                .foregroundStyle(Color.neonTextFaint)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 16)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+        .neonContextShape(radius: NeonRadius.lg)
     }
 
     private func name(for employeeId: String) -> String {

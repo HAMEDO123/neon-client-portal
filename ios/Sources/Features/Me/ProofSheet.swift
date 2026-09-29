@@ -60,13 +60,13 @@ struct ProofSheet: View {
 
                     HStack(spacing: 10) {
                         if CameraPicker.isAvailable {
-                            sourceButton(L("Camera"), symbol: "camera.fill") { showCamera = true }
+                            sourceButton(L("Camera"), symbol: "camera.fill", hue: .purple) { showCamera = true }
                         }
                         PhotosPicker(selection: $photoItem, matching: .images) {
-                            sourceLabel(L("Photos"), symbol: "photo.on.rectangle")
+                            sourceLabel(L("Photos"), symbol: "photo.on.rectangle", hue: .blue)
                         }
                         .buttonStyle(.pressable)
-                        sourceButton(L("File"), symbol: "doc.fill") { showFiles = true }
+                        sourceButton(L("File"), symbol: "doc.fill", hue: .orange) { showFiles = true }
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -147,29 +147,29 @@ struct ProofSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         } else if let file {
             HStack(spacing: 12) {
-                Image(systemName: "doc.fill").font(.system(size: 26)).foregroundStyle(Color.neonPurpleStrong)
+                IconTile("doc.fill", hue: .purple, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.filename).font(.system(size: 14, weight: .semibold)).lineLimit(2)
-                    Text(byteCount(file.data.count)).font(.system(size: 12)).foregroundStyle(Color.neonInk.opacity(0.5))
+                    Text(byteCount(file.data.count)).font(.neonCaption).foregroundStyle(Color.neonTextSecondary)
                 }
                 Spacer()
             }
             .padding(14)
-            .glassCard(radius: 16)
+            .neonSurface(.glass, radius: NeonRadius.lg)
         } else {
-            VStack(spacing: 6) {
-                Image(systemName: "photo.badge.plus").font(.system(size: 30))
+            VStack(spacing: 8) {
+                IconTile("photo.badge.plus", hue: .indigo, size: 52).neonFloat()
                 Text(L("Add a photo or a file of the finished work"))
                     .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.neonTextSecondary)
                     .multilineTextAlignment(.center)
             }
-            .foregroundStyle(Color.neonInk.opacity(0.4))
             .frame(maxWidth: .infinity)
             .frame(height: 150)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous)
                     .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
-                    .foregroundStyle(Color.neonInk.opacity(0.18))
+                    .foregroundStyle(Color.neonLine)
             )
         }
     }
@@ -180,21 +180,19 @@ struct ProofSheet: View {
         preview = made.mimeType.hasPrefix("image/") ? UIImage(data: made.data) : nil
     }
 
-    private func sourceButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { sourceLabel(title, symbol: symbol) }
+    private func sourceButton(_ title: String, symbol: String, hue: NeonHue, action: @escaping () -> Void) -> some View {
+        Button(action: action) { sourceLabel(title, symbol: symbol, hue: hue) }
             .buttonStyle(.pressable)
     }
 
-    private func sourceLabel(_ title: String, symbol: String) -> some View {
-        VStack(spacing: 5) {
-            Image(systemName: symbol).font(.system(size: 18))
-            Text(title).font(.system(size: 12, weight: .semibold))
+    private func sourceLabel(_ title: String, symbol: String, hue: NeonHue) -> some View {
+        VStack(spacing: 6) {
+            IconTile(symbol, hue: hue, size: 32)
+            Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.neonInk)
         }
-        .foregroundStyle(Color.neonInk)
         .frame(maxWidth: .infinity)
-        .frame(height: 62)
-        .background(Color.white.opacity(0.75), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.neonInk.opacity(0.1)))
+        .frame(height: 78)
+        .neonSurface(.glass, radius: NeonRadius.md)
     }
 
     private func send() async {

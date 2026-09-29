@@ -22,50 +22,46 @@ struct MyChatJobsSection: View {
         }
 
         if !mine.isEmpty {
-            SectionLabel(L("Handed out in chat"))
-            ForEach(mine, id: \.0.id) { item, card, part in
-                VStack(alignment: .leading, spacing: 8) {
-                    NavigationLink(value: ChatRoute(item.conversation)) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(alignment: .top) {
-                                DirText(card.title, font: .system(size: 16, weight: .semibold))
-                                BadgeView(text: cardStateLabel(part.state), tone: taskStateTone(part.state))
-                            }
-                            if let description = card.description, !description.isEmpty {
-                                DirText(description, font: .system(size: 13), color: .neonInk.opacity(0.6))
-                            }
-                            HStack(spacing: 6) {
-                                Image(systemName: "bubble.left")
-                                Text(item.conversation.title)
-                                if let due = formattedISODate(card.dueAt) {
-                                    Text("·")
-                                    Text(L("Due %@", due))
+            SectionCard(L("Handed out in chat"), subtitle: L("%d task card(s)", mine.count), symbol: "bubble.left.and.text.bubble.right.fill", hue: .cyan) {
+                VStack(spacing: NeonSpace.sm) {
+                    ForEach(Array(mine.enumerated()), id: \.element.0.id) { index, entry in
+                        let (item, card, part) = entry
+                        VStack(alignment: .leading, spacing: 8) {
+                            NavigationLink(value: ChatRoute(item.conversation)) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack(alignment: .top) {
+                                        DirText(card.title, font: .system(.callout, weight: .semibold))
+                                        Spacer(minLength: 8)
+                                        BadgeView(text: cardStateLabel(part.state), tone: taskStateTone(part.state))
+                                    }
+                                    if let description = card.description, !description.isEmpty {
+                                        DirText(description, font: .neonSubtitle, color: .neonTextSecondary)
+                                    }
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "bubble.left")
+                                        Text(item.conversation.title)
+                                        if let due = formattedISODate(card.dueAt) {
+                                            Text("·")
+                                            Text(L("Due %@", due))
+                                        }
+                                    }
+                                    .font(.neonCaption)
+                                    .foregroundStyle(Color.neonTextTertiary)
                                 }
                             }
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.neonInk.opacity(0.5))
-                        }
-                    }
-                    .buttonStyle(.plain)
+                            .buttonStyle(.plain)
 
-                    if part.state != "SUBMITTED" && part.state != "DONE" {
-                        Button {
-                            Haptic.tap()
-                            sendProof(part, card)
-                        } label: {
-                            Label(L("Send proof"), systemImage: "camera.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .foregroundStyle(.white)
-                                .background(Color.neonInk, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            if part.state != "SUBMITTED" && part.state != "DONE" {
+                                NeonButton(L("Send proof"), symbol: "camera.fill", kind: .secondary, size: .medium) {
+                                    Haptic.tap()
+                                    sendProof(part, card)
+                                }
+                            }
                         }
-                        .buttonStyle(.pressable)
+                        .staggered(index)
+                        if item.id != mine.last?.0.id { NeonDivider() }
                     }
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassCard(radius: 16)
             }
         }
     }

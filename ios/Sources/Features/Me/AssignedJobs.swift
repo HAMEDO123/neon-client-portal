@@ -15,41 +15,35 @@ struct JobRoute: Hashable {
 struct JobRow: View {
     let job: MyAssignedJob
 
+    private var tone: BadgeTone { taskStateTone(job.state) }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(taskStateTone(job.state).foreground)
-                .frame(width: 9, height: 9)
-                .padding(.top, 6)
+            IconTile("shippingbox.fill", hue: .purple, size: 38)
 
             VStack(alignment: .leading, spacing: 5) {
-                DirText(job.title, font: .system(size: 16, weight: .semibold))
-                HStack(spacing: 6) {
-                    Image(systemName: "shippingbox")
-                    Text(L("From the manager"))
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(Color.neonInk.opacity(0.5))
+                DirText(job.title, font: .system(.callout, weight: .semibold))
+                Text(L("From the manager"))
+                    .font(.neonCaption)
+                    .foregroundStyle(Color.neonTextTertiary)
 
-                HStack(spacing: 6) {
-                    BadgeView(text: taskStateLabel(job.state), tone: taskStateTone(job.state))
+                FlowRow {
+                    BadgeView(text: taskStateLabel(job.state), tone: tone)
                     if let priority = priorityLabel(job.priority) {
                         BadgeView(text: priority, tone: job.priority == "HIGH" ? .pink : .neutral)
                     }
                 }
                 Label(when, systemImage: "calendar")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.neonInk.opacity(0.5))
+                    .font(.neonCaption)
+                    .foregroundStyle(Color.neonTextTertiary)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.forward")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.neonInk.opacity(0.25))
-                .padding(.top, 6)
+                .foregroundStyle(Color.neonTextFaint)
+                .padding(.top, 8)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 16)
+        .padding(.vertical, 4)
     }
 
     private var when: String {
@@ -70,7 +64,6 @@ struct JobDetailView: View {
     @State private var submissions: [JobSubmission] = []
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
-    @State private var working = false
     @State private var actionError: String?
     @State private var showProof = false
     @State private var justSubmitted = false
@@ -124,7 +117,7 @@ struct JobDetailView: View {
                 BadgeView(text: L("From the manager"), tone: .neutral, symbol: "shippingbox.fill")
                 Spacer()
             }
-            DirText(job.title, font: .system(size: 24, weight: .bold, design: .rounded))
+            DirText(job.title, font: .neonTitle2)
             FlowRow {
                 BadgeView(text: taskStateLabel(job.state), tone: taskStateTone(job.state))
                 if let priority = priorityLabel(job.priority) {
@@ -132,10 +125,11 @@ struct JobDetailView: View {
                 }
             }
             Label(when(job), systemImage: "calendar")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.neonInk.opacity(0.6))
+                .font(.neonFootnote)
+                .foregroundStyle(Color.neonTextSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .neonAppear()
     }
 
     private func when(_ job: MyAssignedJob) -> String {
@@ -157,46 +151,26 @@ struct JobDetailView: View {
         case "DONE":
             StatusNote(symbol: "checkmark.seal.fill", tone: .success, title: L("Approved by the manager"), detail: nil)
         default:
-            VStack(spacing: 10) {
-                Button {
+            VStack(spacing: NeonSpace.sm) {
+                NeonButton(L("Send proof of finished work"), symbol: "camera.fill", kind: .brand) {
                     Haptic.tap()
                     showProof = true
-                } label: {
-                    Label(L("Send proof of finished work"), systemImage: "camera.fill")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
                 }
-                .background(Color.neonInk, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .foregroundStyle(.white)
-                .buttonStyle(.pressable)
+                .disabled(cachedAt != nil)
 
                 if job.state == "IN_PROGRESS" {
-                    moveButton(L("Put back to pending"), symbol: "arrow.uturn.backward", to: "TODO")
+                    NeonButton(L("Put back to pending"), symbol: "arrow.uturn.backward", kind: .secondary) {
+                        await move(to: "TODO")
+                    }
+                    .disabled(cachedAt != nil)
                 } else {
-                    moveButton(L("Start this task"), symbol: "play.fill", to: "IN_PROGRESS")
+                    NeonButton(L("Start this task"), symbol: "play.fill", kind: .secondary) {
+                        await move(to: "IN_PROGRESS")
+                    }
+                    .disabled(cachedAt != nil)
                 }
             }
-            .disabled(working || cachedAt != nil)
         }
-    }
-
-    private func moveButton(_ title: String, symbol: String, to state: String) -> some View {
-        Button {
-            Task { await move(to: state) }
-        } label: {
-            HStack {
-                if working { ProgressView() } else { Image(systemName: symbol) }
-                Text(title)
-            }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .frame(maxWidth: .infinity)
-            .frame(height: 46)
-            .foregroundStyle(Color.neonInk)
-            .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.neonInk.opacity(0.12)))
-        }
-        .buttonStyle(.pressable)
     }
 
     @ViewBuilder
@@ -228,7 +202,7 @@ struct JobDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             BadgeView(text: submissionLabel(submission.status), tone: submissionTone(submission.status))
                             if let time = formattedISODate(submission.createdAt) {
-                                Text(time).font(.system(size: 11)).foregroundStyle(Color.neonInk.opacity(0.45))
+                                Text(time).font(.neonCaption).foregroundStyle(Color.neonTextTertiary)
                             }
                             if let note = submission.reviewNote, !note.isEmpty {
                                 DirText(note, font: .system(size: 13))
@@ -269,8 +243,6 @@ struct JobDetailView: View {
     }
 
     private func move(to state: String) async {
-        working = true
-        defer { working = false }
         do {
             try await api.setJobStatus(id: jobId, state: state)
             Haptic.success()

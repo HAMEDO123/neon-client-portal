@@ -24,13 +24,14 @@ struct NotificationsView: View {
 
                     if let items {
                         if items.isEmpty {
-                            EmptyState(symbol: "bell", title: L("No notifications"))
+                            EmptyState(symbol: "bell", title: L("No notifications"), hue: .cyan, card: true)
                         } else {
-                            ForEach(items) { item in
+                            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                 Button { Task { await open(item) } } label: {
                                     NotificationRow(item: item)
                                 }
-                                .buttonStyle(.pressable)
+                                .buttonStyle(.pressableCard)
+                                .staggered(index)
                             }
                         }
                     } else if let errorMessage {
@@ -171,31 +172,30 @@ private struct NotificationRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 34, height: 34)
-                .background(tint.opacity(0.12), in: Circle())
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
-                    DirText(item.title, font: .system(size: 15, weight: item.readAt == nil ? .semibold : .regular))
+            IconTile(symbol, hue: hue, size: 38)
+                .overlay(alignment: .topTrailing) {
                     if item.readAt == nil {
-                        Circle().fill(Color.neonPurpleStrong).frame(width: 8, height: 8)
+                        Circle().fill(Color.neonPurpleStrong).frame(width: 9, height: 9)
+                            .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
+                            .offset(x: 3, y: -3)
                     }
                 }
-                DirText(item.message, font: .system(size: 13), color: .neonInk.opacity(0.6))
+
+            VStack(alignment: .leading, spacing: 4) {
+                DirText(item.title, font: .system(.subheadline, weight: item.readAt == nil ? .semibold : .regular))
+                DirText(item.message, font: .neonSubtitle, color: .neonTextSecondary)
                 if let time = formattedISODate(item.createdAt) {
                     Text(time)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.neonInk.opacity(0.4))
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextTertiary)
                 }
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 16)
-        .opacity(item.readAt == nil ? 1 : 0.8)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+        .neonContextShape(radius: NeonRadius.lg)
+        .opacity(item.readAt == nil ? 1 : 0.72)
     }
 
     private var symbol: String {
@@ -209,12 +209,12 @@ private struct NotificationRow: View {
         }
     }
 
-    private var tint: Color {
+    private var hue: NeonHue {
         switch item.type {
-        case "WARNING": return .neonOrangeStrong
-        case "CHAT_MESSAGE": return .neonPurpleStrong
-        case "TASK_DEADLINE_REMINDER": return .neonPinkStrong
-        default: return .neonCyanStrong
+        case "WARNING": return .orange
+        case "CHAT_MESSAGE": return .purple
+        case "TASK_DEADLINE_REMINDER": return .pink
+        default: return .cyan
         }
     }
 }
