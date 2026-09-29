@@ -1,6 +1,37 @@
-import { RpcError, bool, guarded, guardedAction, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import {
+  RpcError,
+  bool,
+  guarded,
+  guardedAction,
+  param,
+  str,
+  strArray,
+  type ActionRegistry,
+  type ReadRegistry,
+} from "@/lib/mobile/rpc";
 import { prisma } from "@/lib/db";
-import { channelFor, parseConversation, requireChatViewer } from "@/lib/chat";
+import { channelFor, parseConversation, readerKeyFor, requireChatViewer } from "@/lib/chat";
+import type { ChatViewer } from "@/lib/chat-conversations";
+import {
+  changeGroupMembers,
+  chatPeople,
+  createGroup,
+  deleteGroup,
+  groupDetail,
+  updateGroup,
+} from "@/lib/chat-group-store";
+import { readMemberIds } from "@/lib/chat-groups";
+import { setPrefs } from "@/lib/chat-pref-store";
+import { readPrefsPatch } from "@/lib/chat-prefs";
+import {
+  liveStoryAuthor,
+  markStoryViewed,
+  postStory,
+  removeStory,
+  storiesFor,
+  storyAuthor,
+  storyViewers,
+} from "@/lib/chat-story-store";
 import { taskListFor, taskMembers } from "@/lib/chat-task-store";
 import { meetingListFor, meetingMembers } from "@/lib/chat-meeting-store";
 import { reactionSnapshot } from "@/lib/chat-reaction-store";
@@ -25,7 +56,10 @@ import { approveSubmission, rejectSubmission } from "@/lib/actions/submission-ac
 // everything else the web chat does: the Tasks and Meetings lists (the same
 // pure `taskListFor` / `meetingListFor` the web's own tabs read), who a task or
 // meeting in a conversation can go to, reactions and pins, typing, and the
-// manager's assistant.
+// manager's assistant — and the pieces the web chat has no screen for yet:
+// this person's own settings for a conversation (pinned, muted, favourite),
+// the groups the manager makes, who a group or a new chat can include, and
+// the studio's 24-hour stories.
 
 /**
  * Rebuilds a task-creation form so `createChatTask` sees an ordinary
@@ -47,6 +81,19 @@ function expandAssignees(form: FormData): FormData {
   }
   for (const id of ids) expanded.append("assignee", id);
   return expanded;
+}
+
+/** Groups are the manager's to make and change; everybody else is refused with a 403. */
+function requireManager(viewer: ChatViewer) {
+  if (viewer.type !== "ADMIN") throw new RpcError("Only the manager manages groups.", 403);
+}
+
+/** A story id from the arguments, for a story that is still up. */
+async function liveStory(raw: unknown) {
+  const storyId = str(raw, "storyId");
+  const author = await liveStoryAuthor(storyId);
+  if (!author) throw new RpcError("That story is no longer available.", 404);
+  return { storyId, author };
 }
 
 /** The conversation a request names, opened for this viewer — the same door every other read and action uses. */
@@ -92,6 +139,30 @@ export const reads: ReadRegistry = {
   // inline (the same query, admin and employee alike) rather than reading it
   // from a projects-area query, so it is reproduced here rather than adding a
   // dependency on that area's registry.
+  // A group's info screen: its name, photo and people, and whether this viewer
+  // may change them. Somebody not in the group finds nothing.
+  "chat/groups/detail": guarded(requireChatViewer, async (params, viewer) => {
+    const detail = await groupDetail(viewer, param(params, "slug"));
+    if (!detail) throw new RpcError("That conversation is not yours.", 404);
+    return detail;
+  }),
+
+  // Who a group can include, and whom a new private chat can be with.
+  "chat/people": guarded(requireChatViewer, async (_params, viewer) => ({ people: await chatPeople(viewer) })),
+
+  // The story bar: this person's own stories, and everybody else's that are
+  // still up — what they have not seen yet first.
+  "chat/stories": guarded(requireChatViewer, async (_params, viewer) => storiesFor(viewer)),
+
+  // Who has seen one of your stories. Nobody else's.
+  "chat/stories/viewers": guarded(requireChatViewer, async (params, viewer) => {
+    const storyId = param(params, "storyId");
+    const author = await storyAuthor(storyId);
+    if (!author) throw new RpcError("That story is no longer available.", 404);
+    if (author !== readerKeyFor(viewer)) throw new RpcError("Only the person who posted a story can see who viewed it.", 403);
+    return { viewers: await storyViewers(storyId) };
+  }),
+
   "chat/projects": guarded(requireChatViewer, async () => ({
     projects: await prisma.project.findMany({
       where: { publishState: { not: "ARCHIVED" } },
@@ -152,4 +223,71 @@ export const actions: ActionRegistry = {
 
   // The manager's "Ask the assistant" panel. Its own guard refuses anybody else.
   "chat/assistant/ask": (input) => askChatAssistant(input.form),
+
+  // This person's own settings for one conversation: args [slug, { pinned?, muted?, favorite? }].
+  // Opened through channelFor like every other door, so a conversation that is
+  // not theirs cannot be pinned either.
+  "chat/prefs": guardedAction(requireChatViewer, async (input, viewer) => {
+    const conversation = parseConversation(str(input.args[0], "conversation"), viewer);
+    const channel = conversation ? await channelFor(viewer, conversation) : null;
+    if (!channel) throw new RpcError("That conversation is not yours.", 404);
+    let patch;
+    try {
+      patch = readPrefsPatch(input.args[1]);
+    } catch (error) {
+      throw new RpcError(error instanceof Error ? error.message : "Those settings could not be read.");
+    }
+    return setPrefs(readerKeyFor(viewer), channel.id, patch);
+  }),
+
+  // The manager's groups. The form carries name, member (repeated, or one
+  // comma-joined field from a multipart upload) and an optional photo.
+  "chat/groups/create": guardedAction(requireChatViewer, async (input, viewer) => {
+    requireManager(viewer);
+    return createGroup({
+      name: input.form.get("name"),
+      memberIds: readMemberIds([...input.form.getAll("member"), ...input.form.getAll("members")]),
+      photo: input.form.get("photo"),
+    });
+  }),
+  // args [groupId]; form name?, photo?
+  "chat/groups/update": guardedAction(requireChatViewer, async (input, viewer) => {
+    requireManager(viewer);
+    return updateGroup(str(input.args[0], "groupId"), { name: input.form.get("name"), photo: input.form.get("photo") });
+  }),
+  // args [groupId, { add?: string[], remove?: string[] }]
+  "chat/groups/members": guardedAction(requireChatViewer, async (input, viewer) => {
+    requireManager(viewer);
+    const change = (input.args[1] ?? {}) as { add?: unknown; remove?: unknown };
+    return changeGroupMembers(str(input.args[0], "groupId"), {
+      add: change.add === undefined || change.add === null ? [] : readMemberIds(strArray(change.add, "add")),
+      remove: change.remove === undefined || change.remove === null ? [] : readMemberIds(strArray(change.remove, "remove")),
+    });
+  }),
+  // args [groupId]. The app confirms first: this deletes every message in it.
+  "chat/groups/delete": guardedAction(requireChatViewer, async (input, viewer) => {
+    requireManager(viewer);
+    return deleteGroup(str(input.args[0], "groupId"));
+  }),
+
+  // Stories. Anybody signed in may post one — multipart: media (a photo or an
+  // MP4), caption — and everybody sees it for 24 hours.
+  "chat/stories/post": guardedAction(requireChatViewer, async (input, viewer) =>
+    postStory(viewer, input.form.get("media"), input.form.get("caption"))
+  ),
+  // args [storyId]. Seeing it twice is seeing it once.
+  "chat/stories/view": guardedAction(requireChatViewer, async (input, viewer) => {
+    const { storyId, author } = await liveStory(input.args[0]);
+    if (author !== readerKeyFor(viewer)) await markStoryViewed(viewer, storyId);
+    return { ok: true };
+  }),
+  // args [storyId]. Only its author may take a story down.
+  "chat/stories/delete": guardedAction(requireChatViewer, async (input, viewer) => {
+    const storyId = str(input.args[0], "storyId");
+    const author = await storyAuthor(storyId);
+    if (!author) throw new RpcError("That story is no longer available.", 404);
+    if (author !== readerKeyFor(viewer)) throw new RpcError("Only the person who posted a story can delete it.", 403);
+    await removeStory(storyId);
+    return { ok: true };
+  }),
 };

@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/db";
 import { messageSelect, recordChatRead, type ChatViewer, type Conversation } from "@/lib/chat";
 import { adminChatUrl, employeeChatUrl, otherPeer } from "@/lib/chat-conversations";
+import { groupEmployees } from "@/lib/chat-group-store";
+import { mutedReaders } from "@/lib/chat-pref-store";
+import { unmuted } from "@/lib/chat-prefs";
 import { managerEmployeeId } from "@/lib/manager-account";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { chatCopy, chatKey, chatPreview } from "@/lib/notifications/types";
@@ -64,12 +67,30 @@ async function managerRecipient(): Promise<Recipient[]> {
  *
  * The team group is deliberately not pushed to the manager. They are in every
  * one of them, so it would put the whole studio's chatter on their phone; the
- * list and its sound are the right weight for that.
+ * list and its sound are the right weight for that. A group the manager made
+ * is different — they chose to be in that conversation — so an employee's
+ * message there reaches the manager as well as the other members.
+ *
+ * Anybody who muted this conversation (their own setting, chat-prefs.ts) is
+ * left out: no row, no push. Their list and unread count are unaffected.
  */
-async function notifyOfMessage(messageId: string, sender: ChatViewer, conversation: Conversation, preview: string) {
+async function notifyOfMessage(
+  messageId: string,
+  sender: ChatViewer,
+  conversation: Conversation,
+  channelId: string,
+  preview: string
+) {
   try {
-    const recipients: Recipient[] =
-      conversation.kind === "team"
+    const everyone: Recipient[] =
+      conversation.kind === "group"
+        ? [
+            ...(await groupEmployees(conversation.groupId))
+              .filter((member) => sender.type !== "EMPLOYEE" || member.id !== sender.id)
+              .map((member) => ({ id: member.id })),
+            ...(sender.type === "EMPLOYEE" ? await managerRecipient() : []),
+          ]
+        : conversation.kind === "team"
         ? await prisma.employee.findMany({
             where: {
               active: true,
@@ -90,6 +111,11 @@ async function notifyOfMessage(messageId: string, sender: ChatViewer, conversati
               // else's. Still empty when there is no such row — a message that
               // was sent is sent either way.
               await managerRecipient();
+    if (everyone.length === 0) return;
+
+    const keyOf = (recipient: Recipient) => (recipient.isManager ? "admin" : recipient.id);
+    const muted = await mutedReaders(channelId, everyone.map(keyOf));
+    const recipients = unmuted(everyone, muted, keyOf);
     if (recipients.length === 0) return;
 
     const copy = chatCopy(sender.name, preview);
@@ -237,6 +263,7 @@ export async function postChatMessage(
     message.id,
     viewer,
     conversation,
+    channelId,
     chatPreview(input.kind, input.body, input.durationSeconds ?? null, input.attachmentName ?? null)
   );
 

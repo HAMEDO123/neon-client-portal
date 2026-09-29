@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { TEAM_CHANNEL_KEY, directChannelKey, peerKeyPatterns } from "@/lib/chat-conversations";
+import { TEAM_CHANNEL_KEY, directChannelKey, groupChannelKey, peerKeyPatterns } from "@/lib/chat-conversations";
 
 // The two counts in the employee portal's chrome, in one round trip.
 //
@@ -10,8 +10,8 @@ import { TEAM_CHANNEL_KEY, directChannelKey, peerKeyPatterns } from "@/lib/chat-
 // statement it is one.
 //
 // The chat count is every conversation the employee is in: the team's, their
-// private one with the manager and those with colleagues, each measured against
-// its own read marker.
+// private one with the manager, those with colleagues and the groups they are
+// a member of, each measured against its own read marker.
 
 export type EmployeeBadges = { unread: number; unreadChat: number };
 
@@ -32,6 +32,7 @@ export async function getEmployeeBadges(employeeId: string): Promise<EmployeeBad
               c.key IN (${TEAM_CHANNEL_KEY}, ${directChannelKey(employeeId)})
               OR c.key LIKE ${peerFirst}
               OR c.key LIKE ${peerSecond}
+              OR c.key IN (SELECT ${groupChannelKey("")}::text || g."groupId" FROM "ChatGroupMember" g WHERE g."employeeId" = ${employeeId})
             )
           LEFT JOIN "ChatRead" r ON r."channelId" = c.id AND r."readerKey" = ${employeeId}
           WHERE m."managerOnly" = false

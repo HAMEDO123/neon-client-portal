@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { channelFor, listMessages, parseConversation, recordChatRead, requireChatViewer } from "@/lib/chat";
-import { otherPeer } from "@/lib/chat-conversations";
+import { isGroupConversation, otherPeer } from "@/lib/chat-conversations";
+import { groupMemberNames } from "@/lib/chat-group-store";
 import { memberLine } from "@/lib/group-members";
 import { avatarUrl } from "@/lib/avatar";
 import { getTimezone } from "@/lib/settings";
@@ -45,7 +46,9 @@ export default async function EmployeeConversationPage({
           orderBy: { order: "asc" },
           select: { name: true },
         })
-      : [];
+      : conversation.kind === "group"
+        ? (await groupMemberNames(conversation.groupId)).map((name) => ({ name }))
+        : [];
   const colleague =
     conversation.kind === "peer"
       ? await prisma.employee.findUnique({
@@ -57,7 +60,8 @@ export default async function EmployeeConversationPage({
 
   await recordChatRead(viewer, channel.id);
 
-  const group = conversation.kind === "team";
+  // The team, or a group the manager made: both are drawn as a group.
+  const group = isGroupConversation(conversation);
   const withName = conversation.kind === "peer" ? (colleague?.name ?? channel.name) : "the manager";
 
   return (

@@ -534,6 +534,8 @@ model Employee {
   preference      NotificationPreference?
   chatMessages    ChatMessage[]
   chatReads       ChatRead[]
+  chatGroups      ChatGroupMember[]
+  chatStories     ChatStory[]
   supplyRequests  SupplyRequest[]
   submissions     TaskSubmission[]
   receipts        ExpenseReceipt[]
@@ -1100,6 +1102,7 @@ model ChatChannel {
   tasks    ChatTask[]
   calls    Call[]
   meetings ChatMeeting[]
+  prefs    ChatPref[]
 }
 
 model ChatMessage {
@@ -1233,6 +1236,99 @@ model ChatPresence {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([lastSeenAt])
+}
+
+// A group conversation the manager made: a name, an optional photo, and the
+// people in it. The manager is in every group without a row of their own. Its
+// messages live in an ordinary ChatChannel keyed "grp:<id>", made with the
+// group and deleted with it (lib/chat-group-store.ts), so everything a channel
+// carries — messages, reads, tasks, calls — works in a group unchanged.
+model ChatGroup {
+  id       String  @id @default(cuid())
+  name     String
+  photoUrl String?
+
+  members ChatGroupMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model ChatGroupMember {
+  id String @id @default(cuid())
+
+  groupId String
+  group   ChatGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  addedAt DateTime @default(now())
+
+  @@unique([groupId, employeeId])
+  @@index([employeeId])
+}
+
+// One person's own settings for one conversation: pinned to the top of their
+// list, muted (no push for its messages), a favourite. Keyed the way ChatRead
+// is — "admin" for the manager, the employee id otherwise — and nobody else
+// ever sees them.
+model ChatPref {
+  id        String      @id @default(cuid())
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  readerKey String
+
+  pinned   Boolean @default(false)
+  muted    Boolean @default(false)
+  favorite Boolean @default(false)
+
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([channelId, readerKey])
+  @@index([readerKey])
+}
+
+// A photo or a short video anybody in the studio shares with everybody, for 24
+// hours. Keyed like ChatPresence ("admin" or the employee id); the employee
+// relation is there so somebody deleted takes their stories with them.
+model ChatStory {
+  id String @id @default(cuid())
+
+  authorKey  String
+  authorName String
+  authorId   String?
+  author     Employee? @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  mediaUrl  String
+  // "image" or "video".
+  mediaType String
+  caption   String? @db.Text
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  views ChatStoryView[]
+
+  @@index([expiresAt])
+  @@index([authorKey, createdAt])
+}
+
+// Who has seen a story, once each.
+model ChatStoryView {
+  id String @id @default(cuid())
+
+  storyId String
+  story   ChatStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  viewerKey  String
+  viewerName String
+
+  viewedAt DateTime @default(now())
+
+  @@unique([storyId, viewerKey])
+  @@index([viewerKey])
 }
 
 // An employee asking for something to be bought for the office. The manager

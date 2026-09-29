@@ -6,9 +6,10 @@ import {
   conversationFromKey,
   conversationSlug,
   employeeChatUrl,
-  mayOpen,
+  isGroupConversation,
   type Conversation,
 } from "@/lib/chat-conversations";
+import { groupEmployees, mayOpenNow } from "@/lib/chat-group-store";
 import {
   RING_MS,
   AWAY_GRACE_MS,
@@ -49,6 +50,12 @@ export async function callMembers(conversation: Conversation): Promise<Member[]>
       select,
     });
     return [manager, ...team.map((person) => ({ key: person.id, name: person.name, color: person.color }))];
+  }
+
+  // A group the manager made: the manager, who is in every group, and its members.
+  if (conversation.kind === "group") {
+    const members = await groupEmployees(conversation.groupId);
+    return [manager, ...members.map((person) => ({ key: person.id, name: person.name, color: person.color }))];
   }
 
   const ids = conversation.kind === "direct" ? [conversation.employeeId] : conversation.employeeIds;
@@ -211,7 +218,11 @@ export async function startCall(viewer: ChatViewer, conversation: Conversation, 
         type: "CHAT_MESSAGE",
         title: kind === "VIDEO" ? "Incoming video call" : "Incoming call",
         message:
-          conversation.kind === "team" ? `${viewer.name} started a call in the team chat.` : `${viewer.name} is calling you.`,
+          conversation.kind === "team"
+            ? `${viewer.name} started a call in the team chat.`
+            : conversation.kind === "group"
+              ? `${viewer.name} started a call in the group.`
+              : `${viewer.name} is calling you.`,
         url: forManager ? adminChatUrl(conversation) : employeeChatUrl(conversation, member.key),
         icon: viewer.type === "ADMIN" ? avatarUrl("Manager", "ink") : undefined,
         dedupeKey: `CALL:${call.id}:${member.key}`,
@@ -244,7 +255,7 @@ export async function joinCall(viewer: ChatViewer, callId: string) {
   // from a chat they are not in, and their own row is what says they were
   // asked. Nobody can write that row for themselves — see inviteToCall.
   const invited = call.participants.length > 0;
-  if (!invited && (!conversation || !mayOpen(viewer, conversation))) {
+  if (!invited && (!conversation || !(await mayOpenNow(viewer, conversation)))) {
     throw new CallError("That call is not in a conversation you are in.");
   }
   if (call.status === "ENDED") throw new CallError("This call has ended.");
@@ -357,7 +368,7 @@ export async function sweep(callId: string, now = Date.now()) {
       status: call.status,
       createdAt: call.createdAt,
       startedByKey: call.startedByKey,
-      group: conversation?.kind === "team",
+      group: conversation ? isGroupConversation(conversation) : false,
       participants: call.participants,
     },
     now
@@ -503,8 +514,8 @@ export async function callsFor(viewer: ChatViewer) {
       {
         ...call,
         conversationSlug: conversationSlug(conversation, viewer),
-        title: conversation.kind === "team" ? channel.name : others.join(", "),
-        isGroup: conversation.kind === "team",
+        title: isGroupConversation(conversation) ? channel.name : others.join(", "),
+        isGroup: isGroupConversation(conversation),
       },
     ];
   });

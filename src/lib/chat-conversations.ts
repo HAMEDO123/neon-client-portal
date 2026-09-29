@@ -10,13 +10,17 @@ import type { ChatMessageKind } from "@/generated/prisma/enums";
 // There is one team conversation everybody is in, one private conversation
 // between the manager and each employee, and one private conversation between
 // any two employees. The manager is not in that last kind: what two people on
-// the team say to each other is theirs.
+// the team say to each other is theirs. And there are the groups the manager
+// makes: a name and the people in it, with the manager in every one.
 
 export const TEAM_CHANNEL_KEY = "team";
 const DIRECT_PREFIX = "dm:";
 /** Every private conversation with the manager's channel key, as a SQL LIKE pattern. */
 export const DIRECT_KEY_PATTERN = `${DIRECT_PREFIX}%`;
 const PEER_PREFIX = "pair:";
+const GROUP_PREFIX = "grp:";
+/** How a URL names a group: "g-<groupId>". The hyphen keeps it apart from any employee id. */
+const GROUP_SLUG_PREFIX = "g-";
 
 /** The group's picture: the studio's own mark. */
 export const GROUP_AVATAR = "/admin-icon-192.png";
@@ -29,7 +33,10 @@ export type Conversation =
   | { kind: "team" }
   | { kind: "direct"; employeeId: string }
   // Two employees, always in id order, so each pair has exactly one conversation.
-  | { kind: "peer"; employeeIds: [string, string] };
+  | { kind: "peer"; employeeIds: [string, string] }
+  // A group the manager made. Who is in it lives in the database, so mayOpen
+  // is handed the member ids rather than reading them itself.
+  | { kind: "group"; groupId: string };
 
 export type PeerConversation = Extract<Conversation, { kind: "peer" }>;
 
@@ -44,6 +51,31 @@ export function chatSide(value: string | null | undefined): ChatSide | undefined
 /** The channel key of the private conversation between the manager and one employee. */
 export function directChannelKey(employeeId: string) {
   return `${DIRECT_PREFIX}${employeeId}`;
+}
+
+/** The channel key of a group's conversation. */
+export function groupChannelKey(groupId: string) {
+  return `${GROUP_PREFIX}${groupId}`;
+}
+
+/** How a URL, the app and the chat routes name a group: "g-<groupId>". */
+export function groupSlug(groupId: string) {
+  return `${GROUP_SLUG_PREFIX}${groupId}`;
+}
+
+/** The group a slug names, or null for anything that is not a group's slug. */
+export function groupIdFromSlug(value: string | null | undefined) {
+  if (!value || !value.startsWith(GROUP_SLUG_PREFIX)) return null;
+  const id = value.slice(GROUP_SLUG_PREFIX.length);
+  return EMPLOYEE_ID.test(id) ? id : null;
+}
+
+/** Every group channel's key, as a SQL LIKE pattern. */
+export const GROUP_KEY_PATTERN = `${GROUP_PREFIX}%`;
+
+/** Whether a conversation is one many people are in — the team or a group — rather than a private chat. */
+export function isGroupConversation(conversation: Conversation) {
+  return conversation.kind === "team" || conversation.kind === "group";
 }
 
 /** The conversation between two employees, whichever of them names it. */
@@ -82,6 +114,11 @@ export function conversationFromKey(key: string): Conversation | null {
     return EMPLOYEE_ID.test(id) ? { kind: "direct", employeeId: id } : null;
   }
 
+  if (key.startsWith(GROUP_PREFIX)) {
+    const id = key.slice(GROUP_PREFIX.length);
+    return EMPLOYEE_ID.test(id) ? { kind: "group", groupId: id } : null;
+  }
+
   if (key.startsWith(PEER_PREFIX)) {
     const ids = key.slice(PEER_PREFIX.length).split(":");
     const [first, second] = ids;
@@ -92,18 +129,24 @@ export function conversationFromKey(key: string): Conversation | null {
   return null;
 }
 
-// Employee ids are cuids: letters and digits only.
+// Employee ids (and group ids) are cuids: letters and digits only.
 const EMPLOYEE_ID = /^[a-z0-9]{8,40}$/i;
 
 /**
  * A conversation from how a URL or a form names it: "team"; for an employee,
  * "manager" for their own private chat and a colleague's id for their chat with
  * that colleague; for the manager, the id of the employee the private chat is
- * with. Anything else is nothing.
+ * with; for both, "g-<groupId>" for a group. Anything else is nothing — and a
+ * group named here is only a name: whether this viewer is in it is mayOpen's
+ * question, answered with the group's members.
  */
 export function parseConversation(value: string | null | undefined, viewer: ChatViewer): Conversation | null {
   if (!value) return null;
   if (value === "team") return { kind: "team" };
+  if (value.startsWith(GROUP_SLUG_PREFIX)) {
+    const groupId = groupIdFromSlug(value);
+    return groupId ? { kind: "group", groupId } : null;
+  }
   if (viewer.type === "EMPLOYEE") {
     if (value === "manager") return { kind: "direct", employeeId: viewer.id };
     // Every id an employee can name is a conversation they are in; never one with themselves.
@@ -116,11 +159,16 @@ export function parseConversation(value: string | null | undefined, viewer: Chat
  * Whether this viewer may open a conversation. The team: everyone. A private
  * chat with the manager: the manager, and the one employee it is with. A chat
  * between two employees: those two — not the manager, and nobody else, whatever
- * ids they send.
+ * ids they send. A group: the manager, who is in every group, and the
+ * employees who are its members — `groupMembers` is that group's member ids,
+ * read by the caller; without it no employee is let in.
  */
-export function mayOpen(viewer: ChatViewer, conversation: Conversation) {
+export function mayOpen(viewer: ChatViewer, conversation: Conversation, groupMembers?: readonly string[] | null) {
   if (conversation.kind === "team") return true;
   if (conversation.kind === "direct") return viewer.type === "ADMIN" || viewer.id === conversation.employeeId;
+  if (conversation.kind === "group") {
+    return viewer.type === "ADMIN" || (groupMembers ?? []).includes(viewer.id);
+  }
 
   const [first, second] = conversation.employeeIds;
   return viewer.type === "EMPLOYEE" && first !== second && (viewer.id === first || viewer.id === second);
@@ -130,6 +178,7 @@ export function mayOpen(viewer: ChatViewer, conversation: Conversation) {
 export function conversationSlug(conversation: Conversation, viewer: ChatViewer) {
   if (conversation.kind === "team") return "team";
   if (conversation.kind === "direct") return viewer.type === "EMPLOYEE" ? "manager" : conversation.employeeId;
+  if (conversation.kind === "group") return groupSlug(conversation.groupId);
   return otherPeer(conversation, viewer.id ?? "");
 }
 
@@ -137,6 +186,7 @@ export function conversationSlug(conversation: Conversation, viewer: ChatViewer)
 export function employeeChatUrl(conversation: Conversation, recipientId: string) {
   if (conversation.kind === "team") return "/employee/chat/team";
   if (conversation.kind === "direct") return "/employee/chat/manager";
+  if (conversation.kind === "group") return `/employee/chat/${groupSlug(conversation.groupId)}`;
   return `/employee/chat/${otherPeer(conversation, recipientId)}`;
 }
 
@@ -153,6 +203,7 @@ export function employeeChatUrl(conversation: Conversation, recipientId: string)
 export function adminChatUrl(conversation: Conversation) {
   if (conversation.kind === "team") return "/admin/chat/team";
   if (conversation.kind === "direct") return `/admin/chat/${conversation.employeeId}`;
+  if (conversation.kind === "group") return `/admin/chat/${groupSlug(conversation.groupId)}`;
   return "/admin/chat";
 }
 
@@ -196,4 +247,12 @@ export function previewLine(last: LastMessage | null, isGroup: boolean) {
   const text = chatPreview(last.kind, last.body, last.durationSeconds, last.attachmentName);
   if (last.mine) return `You: ${text}`;
   return isGroup ? `${last.authorName}: ${text}` : text;
+}
+
+/** The channel key behind a conversation — the inverse of conversationFromKey. */
+export function channelKeyOf(conversation: Conversation) {
+  if (conversation.kind === "team") return TEAM_CHANNEL_KEY;
+  if (conversation.kind === "direct") return directChannelKey(conversation.employeeId);
+  if (conversation.kind === "group") return groupChannelKey(conversation.groupId);
+  return peerChannelKey(...conversation.employeeIds);
 }

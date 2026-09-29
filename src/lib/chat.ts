@@ -10,7 +10,10 @@ import {
   GROUP_AVATAR,
   TEAM_CHANNEL_KEY,
   directChannelKey,
+  groupChannelKey,
+  groupSlug,
   mayOpen,
+  otherPeer,
   peerChannelKey,
   peerConversation,
   peerKeyPatterns,
@@ -19,6 +22,14 @@ import {
   type Conversation,
   type LastMessage,
 } from "@/lib/chat-conversations";
+import { getGroupChannel, groupsFor } from "@/lib/chat-group-store";
+import { prefsFor } from "@/lib/chat-pref-store";
+import { DEFAULT_PREFS, orderConversations } from "@/lib/chat-prefs";
+import { STREAK_LOOKBACK_DAYS, chatStreak, type ChatStreak } from "@/lib/chat-streaks";
+import { presenceFor } from "@/lib/presence-store";
+import { isOnline } from "@/lib/presence";
+import { getTimezone } from "@/lib/settings";
+import { dayKeyIn } from "@/lib/time";
 
 export {
   GROUP_AVATAR,
@@ -40,7 +51,9 @@ export {
 // an employee sees the team, their own chat with the manager and their own
 // chats with colleagues, never anybody else's; the manager sees the team and
 // every chat with the manager, plus their own exchanges with the assistant in
-// the team conversation, and never a chat between two employees.
+// the team conversation, and never a chat between two employees. Groups the
+// manager made are open to the manager and to their members
+// (chat-group-store.ts).
 
 /**
  * Resolves whoever is asking from their session cookie. Never takes an
@@ -142,6 +155,8 @@ async function getPeerChannel([first, second]: [string, string]) {
  * The rule itself is mayOpen, in chat-conversations.ts.
  */
 export async function channelFor(viewer: ChatViewer, conversation: Conversation) {
+  // A group's members live in the database, so its door reads them itself.
+  if (conversation.kind === "group") return getGroupChannel(viewer, conversation.groupId);
   if (!mayOpen(viewer, conversation)) return null;
   if (conversation.kind === "team") return getTeamChannel();
   if (conversation.kind === "direct") return getDirectChannel(conversation.employeeId);
@@ -270,9 +285,20 @@ export type ConversationSummary = {
   isGroup: boolean;
   last: LastMessage | null;
   unread: number;
+  /** This viewer's own settings for it (chat-prefs.ts). */
+  pinned: boolean;
+  muted: boolean;
+  favorite: boolean;
+  /** Days in a row both people wrote (chat-streaks.ts). Private chats only; null for none. */
+  streak: ChatStreak | null;
+  /** Whether the other person has the platform open now. Private chats only. */
+  online: boolean | null;
+  /** How many people are in it, the manager included. The team and groups only. */
+  memberCount: number | null;
 };
 
 type SummaryRow = {
+  id: string;
   key: string;
   kind: ChatMessageKind | null;
   body: string | null;
@@ -329,28 +355,79 @@ async function chatPartners(viewer: ChatViewer) {
 }
 
 /**
+ * Every private chat's streak, by channel key: one query that returns, per
+ * conversation, the studio-calendar days on which both of its people wrote
+ * something other than a call's line. The rule that turns those days into a
+ * number is chatStreak, in chat-streaks.ts.
+ */
+async function streaksByKey(keys: string[], now: Date) {
+  const result = new Map<string, ChatStreak>();
+  if (keys.length === 0) return result;
+
+  const timeZone = await getTimezone();
+  const since = new Date(now.getTime() - (STREAK_LOOKBACK_DAYS + 2) * 86_400_000);
+  const rows = await prisma.$queryRaw<{ key: string; day: string }[]>`
+    SELECT c.key, to_char((m."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${timeZone}, 'YYYY-MM-DD') AS day
+    FROM "ChatMessage" m
+    JOIN "ChatChannel" c ON c.id = m."channelId"
+    WHERE c.key IN (${Prisma.join(keys)})
+      AND m.kind <> 'CALL'
+      AND m."managerOnly" = false
+      AND m."authorType" IN ('ADMIN', 'EMPLOYEE')
+      AND m."createdAt" >= ${since}
+    GROUP BY 1, 2
+    HAVING COUNT(DISTINCT CASE WHEN m."authorType" = 'ADMIN' THEN 'admin' ELSE m."authorId" END) >= 2
+  `;
+
+  const daysByKey = new Map<string, string[]>();
+  for (const row of rows) {
+    const days = daysByKey.get(row.key) ?? [];
+    days.push(row.day);
+    daysByKey.set(row.key, days);
+  }
+
+  const today = dayKeyIn(timeZone, now);
+  for (const [key, days] of daysByKey) {
+    const streak = chatStreak(days, today);
+    if (streak) result.set(key, streak);
+  }
+  return result;
+}
+
+/** The person on the other side of a private chat, by the key presence is kept under. */
+function otherMemberKey(viewer: ChatViewer, conversation: Conversation) {
+  if (conversation.kind === "direct") return viewer.type === "ADMIN" ? conversation.employeeId : "admin";
+  if (conversation.kind === "peer") return otherPeer(conversation, viewer.id ?? "");
+  return null;
+}
+
+/**
  * The list of conversations this viewer has, WhatsApp-style: each with its
- * last message and how many are unread, in one query. The group first, then
- * the private conversations, the most recent first — for the manager one per
+ * last message and how many are unread, in one query. The team, the groups this
+ * viewer is in, and the private conversations — for the manager one per
  * employee, for an employee the manager and one per colleague, whether or not
- * anything has been said yet.
+ * anything has been said yet. Each carries this viewer's own settings, a
+ * private chat's streak and whether the other person is here, and a group's
+ * size.
+ *
+ * The order is chat-prefs.ts's: what this viewer pinned first, then the rest
+ * by their last message, newest first.
  */
 export async function conversationsFor(viewer: ChatViewer): Promise<ConversationSummary[]> {
+  const now = new Date();
   const team = await getTeamChannel();
   const people = await chatPartners(viewer);
+  const groups = await groupsFor(viewer);
 
-  const keys =
+  const privateKeys =
     viewer.type === "ADMIN"
-      ? [TEAM_CHANNEL_KEY, ...people.map((person) => directChannelKey(person.id))]
-      : [
-          TEAM_CHANNEL_KEY,
-          directChannelKey(viewer.id),
-          ...people.map((person) => peerChannelKey(viewer.id, person.id)),
-        ];
+      ? people.map((person) => directChannelKey(person.id))
+      : [directChannelKey(viewer.id), ...people.map((person) => peerChannelKey(viewer.id, person.id))];
+  const keys = [TEAM_CHANNEL_KEY, ...groups.map((group) => groupChannelKey(group.id)), ...privateKeys];
 
   const rows = await prisma.$queryRaw<SummaryRow[]>`
     SELECT
-      c.key,
+      c.id, c.key,
       lm.kind, lm.body, lm."durationSeconds", lm."attachmentName",
       lm."authorName", lm."authorType", lm."authorId", lm."createdAt",
       (
@@ -374,8 +451,86 @@ export async function conversationsFor(viewer: ChatViewer): Promise<Conversation
   `;
 
   const byKey = new Map(rows.map((row) => [row.key, row]));
+  const prefs = await prefsFor(
+    readerKeyFor(viewer),
+    rows.map((row) => row.id)
+  );
+  const streaks = await streaksByKey(
+    privateKeys.filter((key) => byKey.has(key)),
+    now
+  );
+  const teamSize = (await prisma.employee.count({ where: { active: true, accessRole: "EMPLOYEE" } })) + 1;
 
-  const summarize = (key: string, base: Omit<ConversationSummary, "last" | "unread">): ConversationSummary => {
+  type Base = Omit<
+    ConversationSummary,
+    "last" | "unread" | "pinned" | "muted" | "favorite" | "streak" | "online" | "memberCount"
+  >;
+  const bases: { key: string; base: Base; memberCount: number | null }[] = [
+    {
+      key: TEAM_CHANNEL_KEY,
+      base: { conversation: { kind: "team" }, slug: "team", title: team.name, subtitle: null, avatar: GROUP_AVATAR, isGroup: true },
+      memberCount: teamSize,
+    },
+    ...groups.map((group) => ({
+      key: groupChannelKey(group.id),
+      base: {
+        conversation: { kind: "group", groupId: group.id } as Conversation,
+        slug: groupSlug(group.id),
+        title: group.name,
+        subtitle: null,
+        avatar: group.avatar,
+        isGroup: true,
+      },
+      memberCount: group.memberCount,
+    })),
+    ...(viewer.type === "ADMIN"
+      ? people.map((person) => ({
+          key: directChannelKey(person.id),
+          base: {
+            conversation: { kind: "direct", employeeId: person.id } as Conversation,
+            slug: person.id,
+            title: person.name,
+            subtitle: person.role,
+            avatar: avatarUrl(person.name, person.color),
+            isGroup: false,
+          },
+          memberCount: null,
+        }))
+      : [
+          {
+            key: directChannelKey(viewer.id),
+            base: {
+              conversation: { kind: "direct", employeeId: viewer.id } as Conversation,
+              slug: "manager",
+              title: "Manager",
+              subtitle: null,
+              avatar: avatarUrl("Manager", "ink"),
+              isGroup: false,
+            },
+            memberCount: null,
+          },
+          ...people.map((person) => ({
+            key: peerChannelKey(viewer.id, person.id),
+            base: {
+              conversation: peerConversation(viewer.id, person.id) as Conversation,
+              slug: person.id,
+              title: person.name,
+              subtitle: person.active ? person.role : "No longer on the team",
+              avatar: avatarUrl(person.name, person.color),
+              isGroup: false,
+            },
+            memberCount: null,
+          })),
+        ]),
+  ];
+
+  const otherKeys = bases.flatMap(({ base }) => {
+    const other = otherMemberKey(viewer, base.conversation);
+    return other ? [other] : [];
+  });
+  const seen = await presenceFor(otherKeys);
+
+  const summaries = bases.map(({ key, base, memberCount }): ConversationSummary => {
     const row = byKey.get(key);
     const last: LastMessage | null =
       row?.createdAt && row.kind
@@ -392,53 +547,20 @@ export async function conversationsFor(viewer: ChatViewer): Promise<Conversation
             createdAt: row.createdAt,
           }
         : null;
-    return { ...base, last, unread: Number(row?.unread ?? 0) };
-  };
-
-  const group = summarize(TEAM_CHANNEL_KEY, {
-    conversation: { kind: "team" },
-    slug: "team",
-    title: team.name,
-    subtitle: null,
-    avatar: GROUP_AVATAR,
-    isGroup: true,
+    const other = otherMemberKey(viewer, base.conversation);
+    const settings = (row && prefs.get(row.id)) ?? DEFAULT_PREFS;
+    return {
+      ...base,
+      last,
+      unread: Number(row?.unread ?? 0),
+      pinned: settings.pinned,
+      muted: settings.muted,
+      favorite: settings.favorite,
+      streak: other ? (streaks.get(key) ?? null) : null,
+      online: other ? isOnline(seen.get(other), now.getTime()) : null,
+      memberCount: base.isGroup ? memberCount : null,
+    };
   });
 
-  const direct =
-    viewer.type === "ADMIN"
-      ? people.map((person) =>
-          summarize(directChannelKey(person.id), {
-            conversation: { kind: "direct", employeeId: person.id },
-            slug: person.id,
-            title: person.name,
-            subtitle: person.role,
-            avatar: avatarUrl(person.name, person.color),
-            isGroup: false,
-          })
-        )
-      : [
-          summarize(directChannelKey(viewer.id), {
-            conversation: { kind: "direct", employeeId: viewer.id },
-            slug: "manager",
-            title: "Manager",
-            subtitle: null,
-            avatar: avatarUrl("Manager", "ink"),
-            isGroup: false,
-          }),
-          ...people.map((person) =>
-            summarize(peerChannelKey(viewer.id, person.id), {
-              conversation: peerConversation(viewer.id, person.id),
-              slug: person.id,
-              title: person.name,
-              subtitle: person.active ? person.role : "No longer on the team",
-              avatar: avatarUrl(person.name, person.color),
-              isGroup: false,
-            })
-          ),
-        ];
-
-  // Sorting is stable, so people nobody has written to yet keep the team's order.
-  direct.sort((a, b) => (b.last?.createdAt.getTime() ?? 0) - (a.last?.createdAt.getTime() ?? 0));
-
-  return [group, ...direct];
+  return orderConversations(summaries);
 }

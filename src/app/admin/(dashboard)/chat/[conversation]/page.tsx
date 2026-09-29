@@ -17,6 +17,8 @@ import { isAiConfigured } from "@/lib/ai/client";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { dayKeyIn } from "@/lib/time";
 import { memberLine } from "@/lib/group-members";
+import { isGroupConversation } from "@/lib/chat-conversations";
+import { groupMemberNames } from "@/lib/chat-group-store";
 import { avatarUrl } from "@/lib/avatar";
 import { ChatRoom } from "@/components/chat/chat-room";
 import { AssistantPanel } from "@/components/chat/assistant-panel";
@@ -61,14 +63,18 @@ export default async function AdminConversationPage({
   const panel = await projectPanelFor(channel.id);
   const timezone = await getTimezone();
 
-  const group = conversation.kind === "team";
-  const team = group
-    ? await prisma.employee.findMany({
-        where: { active: true, accessRole: "EMPLOYEE" },
-        orderBy: { order: "asc" },
-        select: { name: true },
-      })
-    : [];
+  // The team, or a group the manager made: both are drawn as a group.
+  const group = isGroupConversation(conversation);
+  const team =
+    conversation.kind === "team"
+      ? await prisma.employee.findMany({
+          where: { active: true, accessRole: "EMPLOYEE" },
+          orderBy: { order: "asc" },
+          select: { name: true },
+        })
+      : conversation.kind === "group"
+        ? (await groupMemberNames(conversation.groupId)).map((name) => ({ name }))
+        : [];
   const person =
     conversation.kind === "direct"
       ? await prisma.employee.findUnique({
@@ -151,7 +157,8 @@ export default async function AdminConversationPage({
           emptyText={group ? undefined : `No messages yet. Only you and ${personName} can see this chat.`}
         />
         </div>
-        {group && <AssistantPanel configured={isAiConfigured()} />}
+        {/* The assistant reads the team's conversation, so it lives there alone. */}
+        {conversation.kind === "team" && <AssistantPanel configured={isAiConfigured()} />}
       </div>
 
       {/* The project beside the talk. The first thing to go when the window

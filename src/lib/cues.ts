@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db";
 import {
   DIRECT_KEY_PATTERN,
+  GROUP_KEY_PATTERN,
   TEAM_CHANNEL_KEY,
   directChannelKey,
+  groupChannelKey,
   peerKeyPatterns,
   type ChatViewer,
 } from "@/lib/chat-conversations";
@@ -14,7 +16,8 @@ import {
 // else sent into a conversation you are in, and the newest of your other
 // notifications. The app compares them with the last it heard and plays the
 // matching sound. Timestamps rather than unread counts, because a count also
-// moves when something is read, and reading is not news.
+// moves when something is read, and reading is not news. A conversation this
+// person muted (ChatPref.muted) makes no sound for them.
 
 export type Cues = { messages: number; updates: number };
 
@@ -22,16 +25,19 @@ type Row = { messages: Date | null; updates: Date | null };
 
 async function readCues(viewer: ChatViewer) {
   if (viewer.type === "ADMIN") {
-    // The team and every private chat with the manager — never a chat between
-    // two employees, which the manager is not in.
+    // The team, every group and every private chat with the manager — never a
+    // chat between two employees, which the manager is not in.
     return prisma.$queryRaw<Row[]>`
       SELECT
         (
           SELECT MAX(m."createdAt") FROM "ChatMessage" m
           JOIN "ChatChannel" c ON c.id = m."channelId"
-          WHERE (c.key = ${TEAM_CHANNEL_KEY} OR c.key LIKE ${DIRECT_KEY_PATTERN})
+          WHERE (c.key = ${TEAM_CHANNEL_KEY} OR c.key LIKE ${DIRECT_KEY_PATTERN} OR c.key LIKE ${GROUP_KEY_PATTERN})
             AND m."authorType" = 'EMPLOYEE'
             AND m."managerOnly" = false
+            AND NOT EXISTS (
+              SELECT 1 FROM "ChatPref" p WHERE p."channelId" = c.id AND p."readerKey" = 'admin' AND p.muted
+            )
         ) AS messages,
         (SELECT MAX("createdAt") FROM "AdminNotification") AS updates
     `;
@@ -47,9 +53,13 @@ async function readCues(viewer: ChatViewer) {
             c.key IN (${TEAM_CHANNEL_KEY}, ${directChannelKey(viewer.id)})
             OR c.key LIKE ${peerFirst}
             OR c.key LIKE ${peerSecond}
+            OR c.key IN (SELECT ${groupChannelKey("")}::text || g."groupId" FROM "ChatGroupMember" g WHERE g."employeeId" = ${viewer.id})
           )
           AND m."managerOnly" = false
           AND NOT (m."authorType" = 'EMPLOYEE' AND m."authorId" = ${viewer.id})
+          AND NOT EXISTS (
+            SELECT 1 FROM "ChatPref" p WHERE p."channelId" = c.id AND p."readerKey" = ${viewer.id} AND p.muted
+          )
       ) AS messages,
       (
         -- A chat message is already the other sound.

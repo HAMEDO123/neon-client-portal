@@ -9,7 +9,8 @@ import {
   requireChatViewer,
   type ChatViewer,
 } from "@/lib/chat";
-import { conversationFromKey, conversationSlug, employeeChatUrl, mayOpen } from "@/lib/chat-conversations";
+import { conversationFromKey, conversationSlug, employeeChatUrl } from "@/lib/chat-conversations";
+import { mayOpenNow } from "@/lib/chat-group-store";
 import {
   DEFAULT_DURATION,
   DEFAULT_REMIND,
@@ -195,7 +196,7 @@ export async function setMeetingRsvp(formData: FormData) {
 
   const conversation = conversationFromKey(meeting.channel.key);
   const memberKeys = meeting.attendees.map((one) => one.memberKey);
-  if (!conversation || !mayOpen(viewer, conversation) || !mayRespond(viewer, memberKeys)) {
+  if (!conversation || !(await mayOpenNow(viewer, conversation)) || !mayRespond(viewer, memberKeys)) {
     throw new Error("Only the people asked to this meeting can answer it.");
   }
 
