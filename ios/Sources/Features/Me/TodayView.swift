@@ -10,6 +10,7 @@ struct TodayView: View {
     @State private var day: TodayResponse?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
+    @State private var employeeName: String?
 
     var body: some View {
         NavigationStack {
@@ -22,9 +23,10 @@ struct TodayView: View {
                     if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
                     if let day {
+                        TodayHero(dayKey: day.dayKey, employeeName: employeeName, tasks: day.tasks)
                         NowNextCard(state: day.nowNext, hours: day.hours)
 
-                        SectionLabel(L("Today's work"))
+                        SectionHeader(L("Today's work"), count: day.tasks.count)
                         if day.tasks.isEmpty {
                             EmptyState(symbol: "calendar", title: L("Nothing is scheduled on today"))
                                 .glassCard(radius: 18)
@@ -33,7 +35,7 @@ struct TodayView: View {
                         }
 
                         if !day.tomorrow.isEmpty {
-                            SectionLabel(L("Tomorrow"))
+                            SectionHeader(L("Tomorrow"), count: day.tomorrow.count)
                             TaskList(tasks: day.tomorrow)
                         }
                     } else if let errorMessage {
@@ -50,6 +52,7 @@ struct TodayView: View {
                 await store.refresh()
             }
             .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { AccountMenu() }
             }
@@ -67,6 +70,12 @@ struct TodayView: View {
     }
 
     private func load() async {
+        async let dayTask: Void = loadDay()
+        async let meTask: Void = loadName()
+        _ = await (dayTask, meTask)
+    }
+
+    private func loadDay() async {
         do {
             let loaded = try await api.fetchToday()
             day = loaded.value
@@ -76,11 +85,72 @@ struct TodayView: View {
             errorMessage = error.localizedDescription
         }
     }
+
+    /// Just the name, for the hero's greeting — everything else the tabs
+    /// need from `/me` (badges, warnings) is already `StaffStore`'s job.
+    private func loadName() async {
+        if let me = try? await api.fetchMe() { employeeName = me.name }
+    }
 }
 
 /// A task to open, by id — what every list and notification pushes.
 struct TaskRoute: Hashable {
     let id: String
+}
+
+// MARK: - Hero
+
+/// A warm greeting, today's date and — once there is something to count — a
+/// ring of how much of today's work is done. Purely a friendlier frame
+/// around real numbers: it counts `DONE` among today's own tasks, nothing
+/// guessed and nothing fetched beyond what this screen already reads.
+private struct TodayHero: View {
+    let dayKey: String
+    let employeeName: String?
+    let tasks: [StaffTask]
+
+    private var doneCount: Int { tasks.filter { $0.state == "DONE" }.count }
+    private var totalCount: Int { tasks.count }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: NeonSpace.lg) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(greeting)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(longDayLabel(dayKey))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.82))
+            }
+            Spacer(minLength: 8)
+            if totalCount > 0 {
+                ProgressRing(progress: Double(doneCount) / Double(totalCount), size: 56, lineWidth: 5.5, tint: .white) {
+                    Text(verbatim: "\(doneCount)/\(totalCount)")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(NeonSpace.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .neonSurface(.brand, radius: NeonRadius.xxl)
+        .neonAppear()
+    }
+
+    private var greeting: String {
+        let time: String
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 0..<12: time = L("Good morning")
+        case 12..<17: time = L("Good afternoon")
+        default: time = L("Good evening")
+        }
+        guard let employeeName, !employeeName.isEmpty else { return time }
+        return L("%@, %@", time, employeeName)
+    }
 }
 
 // MARK: - Now and next
@@ -154,7 +224,7 @@ struct NowNextCard: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 20)
+        .neonSurface(.strong, radius: NeonRadius.xxl)
     }
 
     private var symbol: String {
@@ -261,11 +331,12 @@ struct TaskList: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            ForEach(tasks) { task in
+            ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
                 NavigationLink(value: TaskRoute(id: task.id)) {
                     TaskRow(task: task)
                 }
                 .buttonStyle(.pressable)
+                .staggered(index)
             }
         }
     }
@@ -274,19 +345,18 @@ struct TaskList: View {
 struct TaskRow: View {
     let task: StaffTask
 
+    private var tone: BadgeTone { taskStateTone(task.state) }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(taskStateTone(task.state).foreground)
-                .frame(width: 9, height: 9)
-                .padding(.top, 6)
+            IconTile(taskRowGlyph(task.state), tint: tone.color, size: 38, style: .soft)
 
             VStack(alignment: .leading, spacing: 5) {
                 DirText(task.task.name, font: .system(size: 16, weight: .semibold))
                 DirText(task.project.name, font: .system(size: 13), color: .neonInk.opacity(0.55))
 
                 HStack(spacing: 6) {
-                    BadgeView(text: taskStateLabel(task.state), tone: taskStateTone(task.state))
+                    BadgeView(text: taskStateLabel(task.state), tone: tone)
                     if let priority = priorityLabel(task.priority) {
                         BadgeView(text: priority, tone: task.priority == "HIGH" ? .pink : .neutral)
                     }
@@ -307,10 +377,17 @@ struct TaskRow: View {
             Image(systemName: "chevron.forward")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.neonInk.opacity(0.25))
-                .padding(.top, 6)
+                .padding(.top, 8)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 16)
+        .neonSurface(.tinted(tone.color), radius: NeonRadius.lg)
     }
+}
+
+/// The state's own icon (`StateBadge.symbol(for:)`, the same one its badge
+/// wears), with a concrete fallback for `IN_PROGRESS` — the one state that
+/// badge draws as a plain pulsing dot instead of a symbol.
+private func taskRowGlyph(_ state: String) -> String {
+    StateBadge.symbol(for: state) ?? "play.circle.fill"
 }
