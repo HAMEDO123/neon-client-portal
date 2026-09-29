@@ -8,8 +8,9 @@ stage periods). Actions: `task-actions.ts`, `task-detail-actions.ts`,
 `stage-deadlines`, `task-types`, `task-graph`, `week`.
 
 Registry: `src/lib/mobile/registry/tasks.ts` (reads `tasks/board`,
-`tasks/week`, `tasks/process`; every write listed there). Helpers:
-`src/lib/mobile/tasks-board.ts`, `tasks-process.ts`, `tasks-week.ts`.
+`tasks/week`, `tasks/process`, `tasks/people`; every write listed there).
+Helpers: `src/lib/mobile/tasks-board.ts`, `tasks-process.ts`, `tasks-week.ts`,
+`tasks-people.ts` (+ the pure `tasks-people-rules.ts`).
 
 Everything below is implemented natively unless marked **NOT BUILT**.
 
@@ -81,6 +82,22 @@ Everything below is implemented natively unless marked **NOT BUILT**.
   delete (steps survive unassigned); reorder.
 - Stage periods: from-step → to-step, days; add/edit sheet; delete; footer
   explains ranges chaining into derived deadlines.
+
+## Team segment (`tasks/people`)
+- Week / Month switch (weeks Sunday–Saturday; month = the payroll month),
+  previous / next, "Back to this week"; pull to refresh.
+- A card per active person, in the board's order: avatar, name, role, a big
+  animated ring with the percentage done (green with a seal at 100%), or a
+  dashed ring and "Nothing given this week" when nothing was given — never 0%.
+  Chips: done, sent for review, in progress, to do, overdue (red); board
+  steps x/y and jobs x/y.
+- Tapping a card pushes the person's list: late, still to do, sent for
+  review, done — each row with its state badge and due / completed day.
+  A board step opens the existing cell editor (when the board has it).
+- What counts: board cells the person owns (`ownedBy`), in the period by the
+  analytics page's monthly rule, not "not counted"; plus the jobs handed to
+  them that overlap it. Done = DONE (approved); SUBMITTED is "sent for
+  review". For a month, `boardCells` equals the web analytics' "Done x/y".
 
 ## Chat segment (kept from the pre-existing `ManagerTasksView`)
 - Reviews entry point → `ReviewsRootView()` (home area's contract) with an

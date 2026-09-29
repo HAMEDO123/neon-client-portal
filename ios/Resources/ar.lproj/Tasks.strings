@@ -150,3 +150,37 @@
 "days" = "أيام";
 "h" = "س";
 "Team chat" = "محادثة الفريق";
+
+/* The Team segment: each person's share of the work they were given, done. */
+"Team" = "الفريق";
+"Month" = "الشهر";
+"Nobody on the board yet" = "لا أحد على اللوحة بعد";
+"Add the team in Settings, and their work shows here." = "أضف الفريق من الإعدادات، وسيظهر عملهم هنا.";
+"Team: %d of %d done" = "الفريق: %d من %d منجزة";
+"%d overdue" = "%d متأخرة";
+"Nothing given this week" = "لم يُكلَّف بشيء هذا الأسبوع";
+"Nothing given this month" = "لم يُكلَّف بشيء هذا الشهر";
+"Nothing given" = "لم يُكلَّف بشيء";
+"Previous month" = "الشهر السابق";
+"Next month" = "الشهر القادم";
+"This month" = "هذا الشهر";
+"Back to this week" = "العودة إلى هذا الأسبوع";
+"Back to this month" = "العودة إلى هذا الشهر";
+"%d of %d done" = "%d من %d منجزة";
+"Board steps %d/%d" = "خطوات اللوحة %d/%d";
+"Jobs %d/%d" = "المهام اليدوية %d/%d";
+"done" = "منجزة";
+"sent for review" = "أُرسلت للمراجعة";
+"in progress" = "قيد التنفيذ";
+"to do" = "لم تبدأ";
+"overdue" = "متأخرة";
+"Sent for review" = "أُرسلت للمراجعة";
+"To do" = "لم تبدأ";
+"Overdue" = "متأخرة";
+"Still to do" = "ما زال مطلوبًا";
+"No longer on the board" = "لم يعد على اللوحة";
+"Nothing given is not a mark against anybody." = "عدم التكليف بشيء لا يُحسب على أحد.";
+"Job handed out by hand" = "مهمة موزَّعة يدويًا";
+"Completed %@" = "أُنجزت %@";
+"Was due %@" = "كان موعدها %@";
+"Scheduled %@" = "مجدولة %@";
