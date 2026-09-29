@@ -307,10 +307,16 @@ final class ChatConversationStore: ObservableObject {
                             list.sort { $0.createdAt < $1.createdAt }
                         }
                     }
-                    withNeonAnimation(NeonMotion.quick) {
-                        messages = list
-                        outgoing.removeAll { $0.id == item.id }
+                    // The picture already on screen is the server's picture:
+                    // kept under its new address, the real message draws at
+                    // once, at the same shape, without fetching it back.
+                    if let image = item.localImage, let url = message.attachmentURL {
+                        ChatPhotoCache.shared.store(image, for: url)
                     }
+                    // Swapped in one step, not animated: two rows crossfading
+                    // would briefly take the space of both.
+                    messages = list
+                    outgoing.removeAll { $0.id == item.id }
                 } catch {
                     guard let failed = outgoing.firstIndex(where: { $0.id == item.id }) else { continue }
                     if outgoing[failed].echoed {
@@ -443,7 +449,11 @@ struct ChatOutgoing: Identifiable {
             name = file.filename
             type = (file.filename as NSString).pathExtension.lowercased()
             size = file.data.count
-            if file.mimeType.hasPrefix("image/") { image = UIImage(data: file.data) }
+            if file.mimeType.hasPrefix("image/"), let full = UIImage(data: file.data) {
+                // Shown at chat size, not held at the upload's 2400 pixels.
+                let scale = min(1, 900 / max(full.size.width, full.size.height, 1))
+                image = full.preparingThumbnail(of: CGSize(width: full.size.width * scale, height: full.size.height * scale)) ?? full
+            }
         case .voice(let file, let length):
             kind = "VOICE"
             name = file.filename

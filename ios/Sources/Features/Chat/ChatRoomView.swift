@@ -228,7 +228,11 @@ struct ChatRoomView: View {
             .onPreferenceChange(ChatViewportKey.self) { scroll.setViewport($0) }
             .onPreferenceChange(ChatScrollBottomKey.self) { scroll.setContentBottom($0) }
             .scrollDismissesKeyboard(.interactively)
-            .overlay(alignment: .bottom) { jumpControl(proxy) }
+            .overlay(alignment: .bottom) {
+                jumpControl(proxy)
+                    .animation(NeonMotion.resolved(NeonMotion.snappy), value: scroll.nearBottom)
+                    .animation(NeonMotion.resolved(NeonMotion.snappy), value: unseen > 0)
+            }
             .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             .onChange(of: store.messages?.last?.id) { _ in
                 guard !searching else { return }

@@ -37,7 +37,7 @@ struct ChatTypingBubble: View {
             if isGroup {
                 Text(verbatim: typers.map { chatMemberName(key: $0.memberKey, name: $0.name) }.joined(separator: AppLanguage.current == .arabic ? "، " : ", "))
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.neonPurpleStrong)
+                    .foregroundStyle(typers.count == 1 ? ChatTint.pair(name: typers[0].name).1 : Color.neonPurpleStrong)
                     .lineLimit(1)
                     .padding(.horizontal, 6)
             }

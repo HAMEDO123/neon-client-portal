@@ -285,7 +285,10 @@ struct ChatMessageRow: View {
                     .padding(.horizontal, 6)
             }
             content()
+            // Sized to its chips, so it sits under the message's own side
+            // rather than spreading across the row from the leading edge.
             ChatReactionRow(tallies: tallies, onToggle: onReact)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 6)
             if metaBelow {
                 ChatBubbleMeta(time: chatClock(message.createdAt), delivery: delivery, onDark: false, pinned: isPinned, managerOnly: message.managerOnly == true)
@@ -332,16 +335,8 @@ struct ChatMessageRow: View {
                     .foregroundStyle(mine ? Color.white.opacity(0.8) : Color.neonCyanStrong)
             }
 
-            switch message.kind {
-            case "VOICE":
-                voiceBubble
-            case "FILE", "IMAGE":
-                fileBubble
-            default:
-                EmptyView()
-            }
-
             if let body = message.body, !body.isEmpty {
+                attachment
                 // WhatsApp's layout: a short message keeps its time on the
                 // same line; a longer one wraps and puts it under the last line.
                 ViewThatFits(in: .horizontal) {
@@ -356,7 +351,12 @@ struct ChatMessageRow: View {
                     }
                 }
             } else {
-                meta.frame(maxWidth: .infinity, alignment: .trailing)
+                // A voice note or a file on its own: the time beside it, so
+                // the bubble stays the attachment's own width.
+                HStack(alignment: .bottom, spacing: 8) {
+                    attachment
+                    meta
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -366,6 +366,15 @@ struct ChatMessageRow: View {
         .overlay(ChatBubbleShape(mine: mine, tail: tail).stroke(mine ? Color.clear : Color.neonInk.opacity(0.07)))
         .fixedSize(horizontal: false, vertical: true)
         .opacity(outgoing?.failure != nil ? 0.75 : 1)
+    }
+
+    @ViewBuilder
+    private var attachment: some View {
+        switch message.kind {
+        case "VOICE": voiceBubble
+        case "FILE", "IMAGE": fileBubble
+        default: EmptyView()
+        }
     }
 
     @ViewBuilder
@@ -463,10 +472,10 @@ struct ChatMessageRow: View {
             .accessibilityLabel(L("Photo"))
 
             if let caption = message.body, !caption.isEmpty {
-                DirText(caption, font: .system(size: 15), color: bubbleText, fill: false)
+                DirText(caption, font: .system(size: 15), color: bubbleText, fill: true)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 7)
-                    .frame(maxWidth: ChatPhotoLayout.width, alignment: .leading)
+                    .frame(width: ChatPhotoLayout.width)
                     .background(bubbleFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(mine ? Color.clear : Color.neonInk.opacity(0.07)))
                     .contextMenu { menu }
