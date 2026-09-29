@@ -6,7 +6,8 @@ import SwiftUI
 //   that conversation — the Swift counterpart of components/calls/call-buttons.tsx.
 // - `CallOverlay()` is mounted once at the app's root (App/NeonAdminApp.swift)
 //   and shows a ringing or running call above everything, full screen or as
-//   a small floating pill — the counterpart of call-provider.tsx.
+//   a small floating window, in a window of its own — the counterpart of
+//   call-provider.tsx.
 //
 // Every conversation slug the chat area hands here is one calls may be made
 // in: the server's mayCallIn (src/lib/calls.ts) already covers every kind of
@@ -20,12 +21,13 @@ struct CallButtons: View {
     var body: some View {
         if let ongoing = center.ongoingCall(conversationSlug: slug) {
             if center.session?.callId == ongoing.id {
-                pill(L("Back to call"), symbol: "phone.fill") {
+                CallLivePill(title: L("Back to call"), symbol: "phone.fill") {
                     Haptic.tap()
                     center.expand()
                 }
             } else if ongoing.participants.contains(where: { $0.state == "JOINED" }) {
-                pill(L("Join call"), symbol: "phone.arrow.down.left.fill") {
+                CallLivePill(title: L("Join call"), symbol: ongoing.isVideo ? "video.fill" : "phone.fill") {
+                    Haptic.tap()
                     center.prepare(.join(callId: ongoing.id, kind: ongoing.kind, title: title))
                 }
             }
@@ -40,93 +42,54 @@ struct CallButtons: View {
             }
         }
     }
+}
 
-    private func pill(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+/// The green capsule a conversation's header shows while a call is going in
+/// it: a breathing dot, and what tapping does.
+struct CallLivePill: View {
+    let title: String
+    let symbol: String
+    let action: () -> Void
+
+    var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
-                Text(title).font(.system(size: 13, weight: .semibold))
+                ZStack {
+                    Circle().fill(Color.white.opacity(0.45)).frame(width: 8, height: 8).neonPulse()
+                    Circle().fill(Color.white).frame(width: 6, height: 6)
+                }
+                Image(systemName: symbol).font(.system(size: 11, weight: .bold))
+                Text(title)
+                    .font(.system(.footnote, weight: .semibold))
+                    .lineLimit(1)
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 12)
             .frame(height: 32)
-            .background(Capsule().fill(Color.neonSuccessStrong))
+            .background(Capsule().fill(NeonHue.green.fill))
+            .shadow(color: .neonSuccess.opacity(0.35), radius: 8, x: 0, y: 3)
         }
         .buttonStyle(.pressable)
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 }
 
+/// Mounted once at the app's root while somebody is signed in: it starts the
+/// calls stream and hands everything calls draw to their own window
+/// (CallWindow.swift), above every sheet the app can open.
 struct CallOverlay: View {
-    @ObservedObject private var center = CallCenter.shared
-
     var body: some View {
-        ZStack {
-            if let session = center.session {
-                let activeCall = center.calls.first { $0.id == session.callId }
-                if center.viewMode == .full {
-                    CallScreenView(center: center, session: session, call: activeCall, me: center.me ?? session.me)
-                        .transition(.opacity)
-                        .zIndex(2)
-                } else {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            MinimizedCallPill(center: center, session: session, call: activeCall)
-                        }
-                        .padding(.trailing, NeonSpace.gutter)
-                        .padding(.bottom, 92)
-                    }
-                    .transition(.neonPop)
-                    .zIndex(2)
-                    .allowsHitTesting(true)
-                }
+        Color.clear
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onAppear {
+                CallCenter.shared.start()
+                CallWindow.shared.attach()
             }
-
-            if let ringing = center.ringingCall, ringing.id != center.session?.callId {
-                VStack {
-                    IncomingCallView(
-                        call: ringing, inCall: center.session != nil, answering: center.answering,
-                        onAccept: { video in Task { await center.accept(ringing, video: video) } },
-                        onDecline: { center.decline(ringing) }
-                    )
-                    Spacer(minLength: 0)
-                }
-                .padding(.top, 4)
-                .zIndex(3)
+            .onDisappear {
+                CallWindow.shared.detach()
+                CallCenter.shared.stop()
             }
-
-            if center.session == nil, let notice = center.notice {
-                VStack {
-                    Spacer()
-                    HStack(alignment: .top, spacing: NeonSpace.sm) {
-                        Text(notice).font(.neonFootnote).foregroundStyle(.white)
-                        Spacer(minLength: 0)
-                        Button { center.dismissNotice() } label: {
-                            Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white.opacity(0.7))
-                        }
-                    }
-                    .padding(NeonSpace.sm)
-                    .background(Color.neonInk.opacity(0.94), in: RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous))
-                    .padding(.horizontal, NeonSpace.gutter)
-                    .padding(.bottom, 92)
-                }
-                .transition(.neonRise)
-                .zIndex(2)
-            }
-        }
-        .animation(NeonMotion.smooth, value: center.session != nil)
-        .animation(NeonMotion.smooth, value: center.viewMode)
-        .sheet(item: $center.prejoinRequest) { request in
-            PreJoinView(
-                request: request,
-                onCancel: { center.cancelPreJoin() },
-                onConfirm: { mic, camera, muted, problem in
-                    await center.confirmPreJoin(mic: mic, camera: camera, audioMuted: muted, problem: problem)
-                }
-            )
-        }
-        .onAppear { center.start() }
-        .onDisappear { center.stop() }
     }
 }

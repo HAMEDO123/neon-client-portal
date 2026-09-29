@@ -1,3 +1,4 @@
+import AudioToolbox
 import UIKit
 import Foundation
 import WebRTC
@@ -45,7 +46,10 @@ final class CallCenter: ObservableObject {
     @Published var prejoinRequest: PreJoinRequest?
     @Published var notice: String?
     @Published var answering = false
-    private var dismissedCallIds: Set<String> = []
+    /// Published, so a declined call leaves the screen the moment Decline is
+    /// tapped rather than when the server's next list arrives.
+    @Published private var dismissedCallIds: Set<String> = []
+    private var ringTask: Task<Void, Never>?
 
     private var streamTask: Task<Void, Never>?
     private var lastEventId = 0
@@ -102,8 +106,11 @@ final class CallCenter: ObservableObject {
         ready = nil
         calls = []
         streamProblem = nil
-        Task { [weak self] in await self?.session?.leave() }
+        prejoinRequest = nil
+        let current = session
         session = nil
+        Task { await current?.leave() }
+        updateRinging()
     }
 
     private func runStream() async {
@@ -128,6 +135,10 @@ final class CallCenter: ObservableObject {
     }
 
     private func connectOnce() async {
+        #if DEBUG
+        // The offline test mode promises no network at all; its token is not real.
+        if APIClient.uiTestMode { return }
+        #endif
         guard let token = APIClient.shared.token else {
             reportStream(L("You are signed out. Sign in again to make calls."))
             return
@@ -194,6 +205,7 @@ final class CallCenter: ObservableObject {
             calls = value
             let active = session.flatMap { current in value.first { $0.id == current.callId } }
             session?.sync(active)
+            updateRinging()
         case "signals":
             if let id { lastEventId = id }
             guard let value = try? JSONDecoder().decode([CallSignal].self, from: jsonData) else { return }
@@ -207,21 +219,27 @@ final class CallCenter: ObservableObject {
 
     func prepare(_ request: PreJoinRequest) { prejoinRequest = request }
 
-    /// Starts or joins, with the devices chosen on the pre-join screen.
-    func confirmPreJoin(mic: RTCAudioTrack?, camera: RTCVideoTrack?, audioMuted: Bool, problem: CallMediaProblem?) async {
-        guard let request = prejoinRequest else { return }
-        prejoinRequest = nil
+    /// Starts or joins, with the devices chosen on the pre-join screen —
+    /// which hands its microphone and camera over to the call.
+    func confirmPreJoin(media: LocalMedia, mic: RTCAudioTrack?, camera: RTCVideoTrack?, audioMuted: Bool, problem: CallMediaProblem?) async {
+        guard let request = prejoinRequest else {
+            media.stopAll()
+            return
+        }
         do {
-            try await begin(request, mic: mic, camera: camera, audioMuted: audioMuted)
+            try await begin(request, media: media, mic: mic, camera: camera, audioMuted: audioMuted)
+            prejoinRequest = nil
             if let problem { notice = problem.text }
         } catch {
+            prejoinRequest = nil
+            media.stopAll()
             notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
     }
 
     func cancelPreJoin() { prejoinRequest = nil }
 
-    private func begin(_ request: PreJoinRequest, mic: RTCAudioTrack?, camera: RTCVideoTrack?, audioMuted: Bool) async throws {
+    private func begin(_ request: PreJoinRequest, media: LocalMedia, mic: RTCAudioTrack?, camera: RTCVideoTrack?, audioMuted: Bool) async throws {
         // Tapped before the stream's first event arrived (just after launch,
         // or on a slow connection): wait for it rather than refusing at once.
         if ready == nil {
@@ -250,43 +268,84 @@ final class CallCenter: ObservableObject {
             servers = answer.iceServers
         }
 
+        var ended: ((String?) -> Void)?
         let next = CallSession(
             callId: callId, me: ready.me, iceServers: servers.isEmpty ? ready.iceServers : servers,
-            mic: mic, camera: camera, audioMuted: audioMuted,
-            onEnded: { [weak self] problem in
-                Task { @MainActor in self?.endSession(problem) }
-            }
+            media: media, mic: mic, camera: camera, audioMuted: audioMuted,
+            onEnded: { problem in ended?(problem) }
         )
+        ended = { [weak self, weak next] problem in
+            Task { @MainActor in
+                guard let self, let next else { return }
+                self.endSession(next, problem)
+            }
+        }
         session = next
         next.start()
+        // The stream's list may already say this device has joined — it
+        // often arrives before the answer to the join itself. Waiting for the
+        // next list instead left the session not knowing it was in the call,
+        // so it never offered, and both phones sat on "Connecting…".
+        next.sync(calls.first { $0.id == callId })
         viewMode = .full
     }
 
-    private func endSession(_ problem: String?) {
+    /// A call closed. Only the one on screen closes the screen: a call left
+    /// because another was answered must not take the new one with it.
+    private func endSession(_ ended: CallSession, _ problem: String?) {
+        guard session === ended else { return }
         session = nil
         viewMode = .full
-        if let problem { notice = problem }
+        if let problem {
+            notice = problem
+        } else if !ended.endedByMe {
+            Toast.info(L("Call ended"))
+        }
+        updateRinging()
     }
 
     func accept(_ call: CallView, video: Bool) async {
         Haptic.soft()
         answering = true
-        dismissedCallIds.insert(call.id)
+        updateRinging()
         let media = LocalMedia()
         let opened = await openCallMedia(video: video, media: media)
+        // Dismissed only now: the ringing screen stays (with its spinner)
+        // through the permission prompt, instead of vanishing and leaving
+        // nothing on screen until the call opens.
+        dismissedCallIds.insert(call.id)
         do {
-            try await begin(.join(callId: call.id, kind: call.kind, title: call.title), mic: opened.mic, camera: opened.camera, audioMuted: false)
+            try await begin(.join(callId: call.id, kind: call.kind, title: call.title), media: media, mic: opened.mic, camera: opened.camera, audioMuted: false)
             if let problem = opened.problem { notice = problem.text }
         } catch {
             media.stopAll()
             notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
         answering = false
+        updateRinging()
     }
 
     func decline(_ call: CallView) {
         dismissedCallIds.insert(call.id)
+        updateRinging()
         Task { try? await APIClient.shared.callDecline(callId: call.id) }
+    }
+
+    /// The phone buzzes while a call rings, as a phone call does — the only
+    /// thing that reaches somebody who has put the phone down.
+    private func updateRinging() {
+        let ringing = ringingCall != nil && !answering
+        if ringing, ringTask == nil {
+            ringTask = Task { @MainActor in
+                while !Task.isCancelled {
+                    AudioServicesPlayAlertSound(SystemSoundID(kSystemSoundID_Vibrate))
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                }
+            }
+        } else if !ringing {
+            ringTask?.cancel()
+            ringTask = nil
+        }
     }
 
     func expand() { viewMode = .full }
