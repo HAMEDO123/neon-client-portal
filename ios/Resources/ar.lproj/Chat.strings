@@ -187,3 +187,17 @@
 "No one has seen it yet" = "لم يشاهدها أحد بعد";
 "Seen" = "تمت المشاهدة";
 "Just now" = "الآن";
+
+/* A conversation, WhatsApp's way: ticks, typing, photos, sending. */
+"Not sent" = "لم تُرسَل";
+"Delivered" = "وصلت";
+"Read" = "قُرئت";
+"typing…" = "يكتب الآن…";
+"%@ are typing…" = "%@ يكتبون الآن…";
+"Not sent. Tap to retry." = "لم تُرسَل. اضغط لإعادة المحاولة.";
+"%d photos" = "%d صور";
+"1 new message" = "رسالة جديدة واحدة";
+"%d new messages" = "%d رسائل جديدة";
+"Newest messages" = "أحدث الرسائل";
+"online now" = "متصل الآن";
+"That recording could not be read." = "تعذّرت قراءة هذا التسجيل.";

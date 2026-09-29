@@ -87,9 +87,23 @@ extension APIClient {
 
     /// A conversation's slug to say this person is writing in it, or `nil` to
     /// say they have stopped, wherever they were.
+    ///
+    /// Posted straight to the action route rather than through `perform`:
+    /// `perform` announces `.neonDataChanged` after every success, and a note
+    /// sent every four seconds while somebody types would have every open
+    /// screen that listens for it (the projects dashboard reloads on any)
+    /// re-reading the server all the way through a message.
     func sendChatTyping(conversation: String?) async {
         let arg: Any = conversation.map { $0 as Any } ?? NSNull()
-        _ = try? await perform("chat/typing", args: [arg])
+        _ = try? await post("do/chat/typing", json: ["args": [arg]])
+    }
+
+    // MARK: - Ticks and typing, without the stream
+
+    /// The stream's `people` snapshot, read on its own: who is writing, and
+    /// everybody else's read marker and last heartbeat for the ticks.
+    func fetchChatReceipts(conversation: String) async throws -> Loaded<ChatPeopleSnapshot> {
+        try await read("chat/receipts", ["conversation": conversation], as: ChatPeopleSnapshot.self)
     }
 
     // MARK: - Task cards

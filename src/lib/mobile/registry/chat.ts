@@ -36,6 +36,7 @@ import { taskListFor, taskMembers } from "@/lib/chat-task-store";
 import { meetingListFor, meetingMembers } from "@/lib/chat-meeting-store";
 import { reactionSnapshot } from "@/lib/chat-reaction-store";
 import { memberKeyFor, setTyping } from "@/lib/presence-store";
+import { conversationRoster, peopleSnapshot } from "@/lib/mobile/chat-receipts";
 import { createChatTask, deleteChatTask, addChatTaskComment } from "@/lib/actions/chat-task-actions";
 import { createChatMeeting, cancelChatMeeting, setMeetingRsvp } from "@/lib/actions/chat-meeting-actions";
 import { reactToMessage, setMessagePinned } from "@/lib/actions/chat-reaction-actions";
@@ -133,6 +134,21 @@ export const reads: ReadRegistry = {
   "chat/reactions": guarded(requireChatViewer, async (params, viewer) => {
     const channel = await openConversation(params, viewer);
     return reactionSnapshot(channel.id);
+  }),
+
+  // Who is writing, how far each person has read, and — for the phone's
+  // WhatsApp ticks — everybody else in the conversation with their read
+  // marker and their last heartbeat. The stream's own `people` event, in the
+  // same shape, for a screen whose stream has not connected (or before its
+  // first event arrives); lib/mobile/chat-receipt-rules.ts is the rule the
+  // ticks are drawn by.
+  "chat/receipts": guarded(requireChatViewer, async (params, viewer) => {
+    const slug = param(params, "conversation");
+    const conversation = parseConversation(slug, viewer);
+    const channel = conversation ? await channelFor(viewer, conversation) : null;
+    if (!conversation || !channel) throw new RpcError("That conversation is not yours.", 404);
+    const { snapshot } = await peopleSnapshot(viewer, await conversationRoster(conversation), channel.id);
+    return snapshot;
   }),
 
   // The composer's project picker — both conversation pages compute this
