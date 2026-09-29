@@ -50,43 +50,51 @@ func chatTally(_ rows: [ChatReactionSnapshot.Reaction], messageId: String, myKey
         }
 }
 
-/// The row of tallies under a bubble, each tappable to toggle the viewer's own.
+/// The row of tallies under a bubble, each tappable to toggle the viewer's
+/// own: white pills tucked up against the bubble's lower edge, WhatsApp's
+/// way, the viewer's own tinted.
 struct ChatReactionRow: View {
     let tallies: [ChatReactionTally]
     let onToggle: (String) -> Void
 
     var body: some View {
         if !tallies.isEmpty {
-            FlowRow(spacing: 5) {
+            FlowRow(spacing: 4) {
                 ForEach(tallies) { tally in
                     Button {
-                        Haptic.tap()
+                        Haptic.selection()
                         onToggle(tally.emoji)
                     } label: {
                         HStack(spacing: 3) {
-                            Text(tally.emoji).font(.system(size: 12))
+                            Text(tally.emoji).font(.system(size: 13))
                             if tally.count > 1 {
-                                Text("\(tally.count)").font(.system(size: 11, weight: .semibold))
+                                Text(NeonFormat.integer(tally.count))
+                                    .font(.system(.caption2, weight: .bold))
+                                    .monospacedDigit()
                             }
                         }
+                        .foregroundStyle(tally.mine ? NeonHue.indigo.deep : Color.neonTextSecondary)
                         .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule().fill(tally.mine ? Color.neonPurple.opacity(0.18) : Color.neonInk.opacity(0.06))
-                        )
-                        .overlay(Capsule().strokeBorder(tally.mine ? Color.neonPurpleStrong.opacity(0.4) : .clear))
-                        .foregroundStyle(tally.mine ? Color.neonPurpleStrong : Color.neonInk.opacity(0.65))
+                        .frame(minHeight: 24)
+                        .background(Capsule().fill(tally.mine ? NeonHue.indigo.wash : Color.white))
+                        .overlay(Capsule().strokeBorder(tally.mine ? Color.neonIndigo.opacity(0.35) : Color.neonLine, lineWidth: 1))
+                        .neonShadow(.low)
+                        .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle(scale: 0.9))
+                    .transition(.neonPop)
+                    .accessibilityLabel(Text(verbatim: "\(tally.emoji) \(tally.names.joined(separator: ", "))"))
+                    .accessibilityAddTraits(tally.mine ? .isSelected : [])
                 }
             }
+            .animation(NeonMotion.resolved(NeonMotion.bouncy), value: tallies.map { "\($0.emoji)\($0.count)\($0.mine)" })
         }
     }
 }
 
-/// Every pinned message, as a horizontal strip a person can flick through and
-/// tap to jump to. Empty when nothing is pinned — never shown as a bar with
-/// nothing in it.
+/// Every pinned message, as a strip under the header a person can flick
+/// through and tap to jump to. Empty when nothing is pinned — never shown as
+/// a bar with nothing in it.
 struct ChatPinnedStrip: View {
     let pinned: [ChatReactionSnapshot.Pinned]
     let onOpen: (String) -> Void
@@ -94,31 +102,47 @@ struct ChatPinnedStrip: View {
 
     var body: some View {
         if !pinned.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(pinned) { item in
-                        Button { onOpen(item.id) } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "pin.fill").font(.system(size: 10))
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(item.authorName).font(.system(size: 10, weight: .semibold))
-                                    DirText(pinnedPreview(item), font: .system(size: 12), lineLimit: 1)
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.neonPurple.opacity(0.12), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button(role: .destructive) { onUnpin(item.id) } label: { Label(L("Unpin"), systemImage: "pin.slash") }
+            HStack(spacing: 10) {
+                IconTile("pin.fill", hue: .indigo, size: 30)
+                    .overlay(alignment: .topTrailing) {
+                        if pinned.count > 1 {
+                            CountBadge(pinned.count, tone: .blue, size: 16).offset(x: 6, y: -6)
                         }
                     }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pinned) { item in
+                            Button {
+                                Haptic.tap()
+                                onOpen(item.id)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(item.authorName)
+                                        .font(.system(.caption2, weight: .semibold))
+                                        .foregroundStyle(chatAuthorColor(item.authorName))
+                                        .lineLimit(1)
+                                    DirText(pinnedPreview(item), font: .system(.footnote), color: .neonText, fill: false, lineLimit: 1)
+                                }
+                                .frame(maxWidth: 220, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(NeonHue.indigo.wash))
+                                .overlay(Capsule().strokeBorder(Color.neonIndigo.opacity(0.12), lineWidth: 1))
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(PressableStyle(scale: 0.95))
+                            .contextMenu {
+                                Button(role: .destructive) { onUnpin(item.id) } label: { Label(L("Unpin"), systemImage: "pin.slash") }
+                            }
+                            .accessibilityHint(L("Shows the message"))
+                        }
+                    }
+                    .padding(.trailing, NeonSpace.gutter)
                 }
-                .padding(.horizontal, 12)
             }
-            .padding(.vertical, 6)
-            .background(Color.white.opacity(0.6))
+            .padding(.leading, NeonSpace.gutter)
+            .padding(.vertical, 8)
+            .transition(.neonRise)
         }
     }
 
