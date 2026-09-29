@@ -28,29 +28,35 @@ private struct ManagerSiteVisitsView: View {
     @State private var cachedAt: Date?
 
     var body: some View {
-        NeonScroll {
-            LoadStateView(value: visits, error: errorMessage, cachedAt: cachedAt, retry: load) { visits in
-                if visits.isEmpty {
-                    EmptyState(
-                        symbol: "mappin.and.ellipse",
-                        title: L("No site visits yet"),
-                        detail: L("When somebody schedules a visit, it appears here with what they planned to do — and afterwards, what came of it.")
-                    )
-                } else {
-                    let owed = visits.filter(siteVisitAwaitingReport)
-                    let upcoming = visits.filter(siteVisitUpcoming)
-                    let settled = visits.filter { !siteVisitAwaitingReport($0) && !siteVisitUpcoming($0) }
+        ScrollViewReader { proxy in
+            NeonScroll {
+                LoadStateView(value: visits, error: errorMessage, cachedAt: cachedAt, retry: load) { visits in
+                    if visits.isEmpty {
+                        EmptyState(
+                            symbol: "mappin.and.ellipse",
+                            title: L("No site visits yet"),
+                            detail: L("When somebody schedules a visit, it appears here with what they planned to do — and afterwards, what came of it."),
+                            hue: .indigo,
+                            card: true
+                        )
+                    } else {
+                        let owed = visits.filter(siteVisitAwaitingReport)
+                        let upcoming = visits.filter(siteVisitUpcoming)
+                        let settled = visits.filter { !siteVisitAwaitingReport($0) && !siteVisitUpcoming($0) }
 
-                    VisitGroup(
-                        title: L("Not written up yet"),
-                        hint: L("The time has passed and nobody has said what happened. That is not a record of anybody missing a visit."),
-                        visits: owed,
-                        tone: .neonWarningStrong
-                    )
-                    VisitGroup(title: L("Coming up"), visits: upcoming, tone: .neonCyanStrong)
-                    VisitGroup(title: L("Done"), visits: settled, tone: .neonInk)
+                        VisitGroup(
+                            title: L("Not written up yet"),
+                            hint: L("The time has passed and nobody has said what happened. That is not a record of anybody missing a visit."),
+                            visits: owed,
+                            tone: .neonWarningStrong
+                        )
+                        .id("owed")
+                        VisitGroup(title: L("Coming up"), visits: upcoming, tone: .neonCyanStrong).id("upcoming")
+                        VisitGroup(title: L("Done"), visits: settled, tone: .neonInk).id("done")
+                    }
                 }
             }
+            .debugScroll(proxy)
         }
         .refreshable { await load() }
         .navigationTitle(L("Site visits"))
@@ -80,12 +86,26 @@ private struct ManagerSiteVisitsView: View {
     }
 }
 
+/// One hue per idea, kept the same everywhere a visit's state is drawn:
+/// warm orange for one owed, cool cyan for one still ahead, green/red for a
+/// settled outcome, grey for one called off.
+private func siteVisitHue(_ visit: SiteVisit) -> NeonHue {
+    if siteVisitAwaitingReport(visit) { return .orange }
+    switch visit.state {
+    case "PLANNED": return .cyan
+    case "VISITED": return .green
+    case "MISSED": return .red
+    default: return .grey
+    }
+}
+
 private struct VisitReadRow: View {
     let visit: SiteVisit
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 10) {
+                IconTile("mappin.and.ellipse", hue: siteVisitHue(visit), size: NeonSize.iconTile)
                 VStack(alignment: .leading, spacing: 3) {
                     DirText(visit.title, font: .neonHeadline)
                     HStack(spacing: 6) {
@@ -124,22 +144,29 @@ private struct MySiteVisitsView: View {
     @State private var deleting: SiteVisit?
 
     var body: some View {
-        NeonScroll {
-            LoadStateView(value: data, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
-                let owed = data.visits.filter(siteVisitAwaitingReport)
-                let rest = data.visits.filter { !siteVisitAwaitingReport($0) }
+        ScrollViewReader { proxy in
+            NeonScroll {
+                LoadStateView(value: data, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
+                    let owed = data.visits.filter(siteVisitAwaitingReport)
+                    let rest = data.visits.filter { !siteVisitAwaitingReport($0) }
 
-                if data.visits.isEmpty {
-                    EmptyState(symbol: "mappin.and.ellipse", title: L("No site visits written down yet."))
-                } else {
-                    if !owed.isEmpty {
-                        SectionHeader(L("Waiting on your write-up"), count: owed.count)
-                        ForEach(owed) { visit in row(visit, projects: data.projects) }
+                    if data.visits.isEmpty {
+                        EmptyState(symbol: "mappin.and.ellipse", title: L("No site visits written down yet."), hue: .indigo, card: true)
+                    } else {
+                        if !owed.isEmpty {
+                            SectionHeader(L("Waiting on your write-up"), count: owed.count).id("owed")
+                            ForEach(Array(owed.enumerated()), id: \.element.id) { index, visit in
+                                row(visit, projects: data.projects).staggered(index)
+                            }
+                        }
+                        SectionHeader(L("Your visits")).id("mine")
+                        ForEach(Array(rest.enumerated()), id: \.element.id) { index, visit in
+                            row(visit, projects: data.projects).staggered(index)
+                        }
                     }
-                    SectionHeader(L("Your visits"))
-                    ForEach(rest) { visit in row(visit, projects: data.projects) }
                 }
             }
+            .debugScroll(proxy)
         }
         .refreshable { await load() }
         .navigationTitle(L("Site visits"))
@@ -220,7 +247,8 @@ private struct VisitEditRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 10) {
+                IconTile("mappin.and.ellipse", hue: siteVisitHue(visit), size: NeonSize.iconTile)
                 VStack(alignment: .leading, spacing: 3) {
                     DirText(visit.title, font: .neonHeadline)
                     HStack(spacing: 6) {

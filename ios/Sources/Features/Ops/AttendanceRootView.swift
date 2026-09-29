@@ -19,42 +19,51 @@ struct AttendanceRootView: View {
     @State private var monthKey: String?
 
     var body: some View {
-        NeonScroll {
-            LoadStateView(value: overview, error: overviewError, cachedAt: overviewCachedAt, retry: loadOverview) { overview in
-                DeviceStatusCard(overview: overview)
-                AttendanceConsoleCard()
-                DeviceUsersCard(overview: overview, onChanged: { await loadOverview() })
-                PairingCard(overview: overview, onChanged: { await loadOverview() })
-                WipeLogCard(canReach: overview.canReach)
-            }
+        ScrollViewReader { proxy in
+            NeonScroll {
+                LoadStateView(value: overview, error: overviewError, cachedAt: overviewCachedAt, retry: loadOverview) { overview in
+                    DeviceStatusCard(overview: overview)
+                        .neonAppear()
+                    AttendanceConsoleCard()
+                        .neonAppear(delay: 0.03)
+                    DeviceUsersCard(overview: overview, onChanged: { await loadOverview() })
+                        .neonAppear(delay: 0.06)
+                    PairingCard(overview: overview, onChanged: { await loadOverview() })
+                        .neonAppear(delay: 0.09)
+                    WipeLogCard(canReach: overview.canReach)
+                        .neonAppear(delay: 0.12)
+                }
 
-            SectionHeader(L("Recorded this month")) {
-                MonthNav(monthKey: monthKey ?? month?.thisMonth ?? "", onPrevious: { shiftMonth(-1) }, onNext: { shiftMonth(1) })
-            }
-            Text(L("An empty cell means nothing was recorded — not that somebody was absent."))
-                .font(.neonFootnote)
-                .foregroundStyle(Color.neonTextTertiary)
+                SectionHeader(L("Recorded this month")) {
+                    MonthNav(monthKey: monthKey ?? month?.thisMonth ?? "", onPrevious: { shiftMonth(-1) }, onNext: { shiftMonth(1) })
+                }
+                .id("month")
+                Text(L("An empty cell means nothing was recorded — not that somebody was absent."))
+                    .font(.neonFootnote)
+                    .foregroundStyle(Color.neonTextTertiary)
 
-            LoadStateView(value: month, error: monthError, cachedAt: monthCachedAt, retry: loadMonth) { month in
-                if month.rows.allSatisfy({ $0.daysRecorded == 0 }) {
-                    EmptyState(symbol: "calendar.badge.clock", title: L("Nothing recorded this month"))
-                } else {
-                    CardList(month.rows.sorted { $0.hoursLate > $1.hoursLate || ($0.hoursLate == $1.hoursLate && $0.name < $1.name) }) { row in
-                        NavigationLink(value: AttendancePersonRoute(row: row, monthKey: month.monthKey)) {
-                            ListRow(
-                                row.name,
-                                subtitle: row.daysRecorded == 0 ? L("Nothing recorded") : L("%d days recorded", row.daysRecorded),
-                                leading: .icon("person.fill", tint: NeonPalette.color(for: row.name)),
-                                value: row.hoursLate > 0 ? describeMinutes(row.hoursLate * 60) : nil,
-                                badge: row.active ? nil : L("Left the team"),
-                                badgeTone: .neutral,
-                                chevron: true
-                            )
+                LoadStateView(value: month, error: monthError, cachedAt: monthCachedAt, retry: loadMonth) { month in
+                    if month.rows.allSatisfy({ $0.daysRecorded == 0 }) {
+                        EmptyState(symbol: "calendar.badge.clock", title: L("Nothing recorded this month"), hue: .grey, card: true)
+                    } else {
+                        CardList(month.rows.sorted { $0.hoursLate > $1.hoursLate || ($0.hoursLate == $1.hoursLate && $0.name < $1.name) }) { row in
+                            NavigationLink(value: AttendancePersonRoute(row: row, monthKey: month.monthKey)) {
+                                ListRow(
+                                    row.name,
+                                    subtitle: row.daysRecorded == 0 ? L("Nothing recorded") : L("%d days recorded", row.daysRecorded),
+                                    leading: .icon("person.fill", tint: NeonPalette.color(for: row.name)),
+                                    value: row.hoursLate > 0 ? describeMinutes(row.hoursLate * 60) : nil,
+                                    badge: row.active ? nil : L("Left the team"),
+                                    badgeTone: .neutral,
+                                    chevron: true
+                                )
+                            }
+                            .buttonStyle(.pressableCard)
                         }
-                        .buttonStyle(.pressableCard)
                     }
                 }
             }
+            .debugScroll(proxy)
         }
         .refreshable { await loadAll() }
         .navigationTitle(L("Attendance"))
@@ -127,20 +136,14 @@ private struct DeviceStatusCard: View {
     let overview: AttendanceOverview
 
     var body: some View {
-        NeonCard {
-            HStack(spacing: 10) {
-                IconTile("touchid", tint: overview.canReach ? .neonSuccessStrong : .neonTextFaint, size: 38)
-                VStack(alignment: .leading, spacing: 2) {
-                    if let device = overview.device {
-                        Text("\(device.ip):\(device.port)").font(.neonHeadline)
-                    } else {
-                        Text(L("No device configured")).font(.neonHeadline)
-                    }
-                    if overview.canReach {
-                        Text(L("Reachable")).font(.neonFootnote).foregroundStyle(Color.neonSuccessStrong)
-                    }
-                }
-                Spacer()
+        SectionCard(
+            L("Attendance device"),
+            subtitle: overview.device.map { "\($0.ip):\($0.port)" } ?? L("No device configured"),
+            symbol: "touchid",
+            hue: overview.canReach ? .green : .grey
+        ) {
+            if overview.canReach {
+                BadgeView(text: L("Reachable"), tone: .success, symbol: "checkmark.circle.fill")
             }
 
             if let error = overview.reachError {
@@ -180,7 +183,7 @@ private struct AttendanceConsoleCard: View {
     @State private var clockResult: ClockResult?
 
     var body: some View {
-        NeonCard {
+        SectionCard(L("Sync with the device"), symbol: "arrow.triangle.2.circlepath", hue: .blue) {
             HStack(spacing: 10) {
                 NeonButton(L("Sync today"), symbol: "arrow.triangle.2.circlepath", kind: .primary, size: .medium) {
                     let report = try? await api.opsSyncAttendanceNow()
@@ -270,15 +273,17 @@ private struct DeviceUsersCard: View {
     @State private var result: DeviceWrite?
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("Enrolled on the device"), count: overview.users.count) {
-                IconButton("plus", label: L("Add")) { showAdd = true }
-            }
-
+        SectionCard(
+            L("Enrolled on the device"),
+            subtitle: L("%d people", overview.users.count),
+            symbol: "person.crop.circle.badge.checkmark",
+            hue: .purple
+        ) {
             if overview.users.isEmpty {
                 EmptyState(
                     symbol: "person.crop.circle.badge.questionmark",
-                    title: overview.canReach ? L("Nobody is enrolled yet") : L("Cannot read the device just now")
+                    title: overview.canReach ? L("Nobody is enrolled yet") : L("Cannot read the device just now"),
+                    hue: .grey
                 )
             } else {
                 ForEach(overview.users) { user in
@@ -307,6 +312,8 @@ private struct DeviceUsersCard: View {
                     detail: result.ok ? nil : result.error
                 )
             }
+        } trailing: {
+            IconButton("plus", label: L("Add")) { showAdd = true }
         }
         .sheet(isPresented: $showAdd) {
             AddDeviceUserSheet(nextNumber: nextSuggestedNumber) { await onChanged() }
@@ -380,8 +387,7 @@ private struct PairingCard: View {
     @State private var editing: AttendanceOverview.Employee?
 
     var body: some View {
-        NeonCard {
-            SectionHeader(L("Pair people"), subtitle: L("By the device's number, never by name."))
+        SectionCard(L("Pair people"), subtitle: L("By the device's number, never by name."), symbol: "person.2.badge.gearshape", hue: .indigo) {
             ForEach(overview.employees) { employee in
                 Button { editing = employee } label: {
                     ListRow(
@@ -448,7 +454,10 @@ private struct WipeLogCard: View {
 
     var body: some View {
         NeonCard(.tinted(.neonDangerStrong)) {
-            SectionLabel(L("Wipe the device's log"))
+            HStack(spacing: 10) {
+                IconTile("trash", hue: .red, size: NeonSize.iconTile)
+                SectionLabel(L("Wipe the device's log"))
+            }
             Text(L("This cannot be undone, and it destroys arrivals that exist nowhere else — a sync only records days from its cutoff onward."))
                 .font(.neonFootnote)
                 .foregroundStyle(Color.neonTextSecondary)

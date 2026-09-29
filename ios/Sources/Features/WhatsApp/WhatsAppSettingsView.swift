@@ -43,14 +43,7 @@ struct WhatsAppSettingsView: View {
     @ViewBuilder
     private func channelCard(_ line: WhatsAppLineResponse) -> some View {
         let connected = line.link?.status == "connected"
-        NeonCard {
-            HStack {
-                IconTile("message.fill", tint: .neonSuccessStrong, size: 44)
-                Spacer()
-                if connected { BadgeView(text: L("Linked"), tone: .success, symbol: "checkmark") }
-            }
-            Text(L("WhatsApp")).font(.neonHeadline).foregroundStyle(Color.neonInk)
-
+        SectionCard(L("WhatsApp"), symbol: "message.fill", hue: .green) {
             if connected {
                 Label(line.link?.phoneNumber.map { "+\($0)" } ?? L("This number is linked"), systemImage: "iphone")
                     .font(.neonSubheadline)
@@ -84,18 +77,14 @@ struct WhatsAppSettingsView: View {
                 }
                 .disabled(!line.workerConfigured)
             }
+        } trailing: {
+            if connected { BadgeView(text: L("Linked"), tone: .success, symbol: "checkmark") }
         }
     }
 
     @ViewBuilder
     private func transportCard(_ line: WhatsAppLineResponse) -> some View {
-        NeonCard {
-            HStack {
-                Label(L("Sending"), systemImage: "paperplane.fill").font(.neonHeadline).foregroundStyle(Color.neonInk)
-                Spacer()
-                BadgeView(text: transportBadgeText(line), tone: transportBadgeTone(line))
-            }
-
+        SectionCard(L("Sending"), symbol: "paperplane.fill", hue: .blue) {
             if line.transport != "none" {
                 KeyValueRow(
                     L("Transport"),
@@ -121,13 +110,14 @@ struct WhatsAppSettingsView: View {
                     .font(.neonSubheadline)
                     .foregroundStyle(Color.neonTextSecondary)
             }
+        } trailing: {
+            BadgeView(text: transportBadgeText(line), tone: transportBadgeTone(line))
         }
     }
 
     @ViewBuilder
     private func testCard(_ line: WhatsAppLineResponse) -> some View {
-        NeonCard {
-            Label(L("Send a test"), systemImage: "paperplane").font(.neonHeadline).foregroundStyle(Color.neonInk)
+        SectionCard(L("Send a test"), symbol: "paperplane.fill", hue: .purple) {
             NeonTextField(L("Send a test to"), text: $testPhone, prompt: "962790000000", symbol: "phone", keyboard: .phonePad, leftToRight: true)
             NeonTextField(L("Message"), text: $testText, symbol: "text.bubble")
             NeonButton(L("Send test"), symbol: "paperplane.fill", kind: .secondary, size: .medium) {
@@ -155,7 +145,8 @@ struct WhatsAppSettingsView: View {
                         Image(uiImage: image)
                             .resizable()
                             .frame(width: 200, height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(10)
+                            .neonSurface(.solid, radius: NeonRadius.md)
                         Text(L("WhatsApp → Settings → Linked devices → Link a device, then scan this."))
                             .font(.footnote)
                             .multilineTextAlignment(.center)

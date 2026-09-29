@@ -7,6 +7,7 @@
 "Settings" = "الإعدادات";
 
 /* --- Attendance: device status --- */
+"Attendance device" = "جهاز الحضور";
 "No device configured" = "لا يوجد جهاز معرَّف";
 "Reachable" = "متصل";
 "The device did not answer" = "لم يستجب الجهاز";
@@ -18,6 +19,7 @@
 "Set its clock. If it keeps drifting back, its backup battery needs replacing." = "اضبط ساعته. إذا استمر الفرق بالعودة فبطاريته الاحتياطية تحتاج تغييرًا.";
 
 /* --- Attendance: console --- */
+"Sync with the device" = "مزامنة مع الجهاز";
 "Sync today" = "مزامنة اليوم";
 "Set its clock" = "اضبط ساعته";
 "Clock set" = "تم ضبط الساعة";

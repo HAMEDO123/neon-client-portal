@@ -125,35 +125,13 @@ private struct WhatsAppChatRow: View {
     let timeZone: String
 
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(Color.neonInk.opacity(0.06))
-                Image(systemName: chat.isGroup ? "person.2.fill" : "message.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.neonInk.opacity(0.4))
-            }
-            .frame(width: 46, height: 46)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    DirText(chat.displayName, font: .system(size: 15.5, weight: .semibold), fill: false, lineLimit: 1)
-                    Spacer(minLength: 6)
-                    let when = whatsAppTimeLabel(chat.timestamp, timeZone: timeZone)
-                    if !when.isEmpty {
-                        Text(when)
-                            .font(.system(size: 11))
-                            .foregroundStyle(chat.unreadCount > 0 ? Color.neonSuccessStrong : Color.neonTextTertiary)
-                    }
-                }
-                HStack(spacing: 6) {
-                    DirText(whatsAppPreview(chat.lastMessage), font: .system(size: 13), color: .neonTextSecondary, fill: false, lineLimit: 1)
-                    Spacer(minLength: 0)
-                    CountBadge(chat.unreadCount, tone: .success)
-                }
-            }
-        }
-        .padding(12)
-        .neonSurface(.glass, radius: NeonRadius.lg)
+        ListCardRow(
+            chat.displayName,
+            subtitle: whatsAppPreview(chat.lastMessage),
+            leading: chat.isGroup ? .icon("person.2.fill", tint: .neonSuccessStrong) : .avatar(url: nil, name: chat.displayName),
+            time: whatsAppTimeLabel(chat.timestamp, timeZone: timeZone),
+            count: chat.unreadCount
+        )
     }
 }
 
