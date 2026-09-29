@@ -58,26 +58,12 @@ struct AlertsRootView: View {
             }
         }
         .navigationDestination(isPresented: Binding(get: { destination != nil }, set: { if !$0 { destination = nil } })) {
-            destinationView
+            homeDestinationView(destination)
         }
         .navigationDestination(isPresented: Binding(get: { chatRoute != nil }, set: { if !$0 { chatRoute = nil } })) {
             if let chatRoute { ChatRoomView(route: chatRoute) }
         }
         .task { await load() }
-    }
-
-    @ViewBuilder
-    private var destinationView: some View {
-        switch destination {
-        case .tasksBoard: TasksRootView()
-        case .reviews: ReviewsRootView()
-        case .employees: EmployeesRootView()
-        case .employee(let id): EmployeeDetailView(employeeId: id)
-        case .project(let id): ProjectDetailView(projectId: id)
-        case .requests: RequestsRootView()
-        case .siteVisits: SiteVisitsRootView()
-        case .chat, .unsupported, .none: EmptyView()
-        }
     }
 
     private var subtitle: String {

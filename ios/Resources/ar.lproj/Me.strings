@@ -2,6 +2,10 @@
    Strings already covered by Localizable.strings (Today, Tasks, proof,
    warnings…) are not repeated here — L() searches every table. */
 
+"Good morning" = "صباح الخير";
+"Good afternoon" = "مساء الخير";
+"Good evening" = "مساء الخير";
+"%@, %@" = "%@، %@";
 "%d device(s) receiving push" = "%d جهاز يستقبل الإشعارات";
 "%d receipt(s) · each counts up to %@, added to this month's pay" = "%d إيصال · كل واحد يُحتسب حتى %@، ويُضاف لراتب هذا الشهر";
 "2 boxes" = "علبتان";

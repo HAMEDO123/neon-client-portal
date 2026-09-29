@@ -1,5 +1,16 @@
 /* Home tab: dashboard */
 "Home" = "الرئيسية";
+"Good morning" = "صباح الخير";
+"Good afternoon" = "مساء الخير";
+"Good evening" = "مساء الخير";
+"Needs you" = "يحتاج منك";
+"Reviews waiting" = "مراجعات بانتظارك";
+"Unread alerts" = "تنبيهات غير مقروءة";
+"Open requests" = "طلبات مفتوحة";
+"Quick actions" = "إجراءات سريعة";
+"New project" = "مشروع جديد";
+"Open the board" = "افتح اللوحة";
+"Recent projects" = "مشاريع حديثة";
 "All Projects" = "كل المشاريع";
 "No projects yet" = "لا توجد مشاريع بعد";
 "Create your first client project to start building its delivery portal." = "أنشئ أول مشروع عميل لبدء بناء بوابة تسليمه.";

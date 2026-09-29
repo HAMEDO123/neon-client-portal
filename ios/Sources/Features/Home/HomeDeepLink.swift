@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 // What an alert's `url` (an admin web path, e.g. "/admin/tasks",
 // "/admin/employees/42", "/admin/chat/team?task=9") means as a native screen —
@@ -52,5 +52,23 @@ func parseAdminLink(_ raw: String) -> HomeLinkDestination? {
     case "site-visits": return .siteVisits
     case "chat": return rest.count >= 2 ? .chat(slug: rest[1]) : .unsupported
     default: return .unsupported
+    }
+}
+
+/// The screen a `HomeLinkDestination` pushes — shared by every screen in
+/// this area that resolves one, so `AlertsRootView` and `AdminHomeView`
+/// (its own project carousel, its "Open the board" quick action, a tapped
+/// avatar on the team's day) push exactly the same native screen.
+@ViewBuilder
+func homeDestinationView(_ destination: HomeLinkDestination?) -> some View {
+    switch destination {
+    case .tasksBoard: TasksRootView()
+    case .reviews: ReviewsRootView()
+    case .employees: EmployeesRootView()
+    case .employee(let id): EmployeeDetailView(employeeId: id)
+    case .project(let id): ProjectDetailView(projectId: id)
+    case .requests: RequestsRootView()
+    case .siteVisits: SiteVisitsRootView()
+    case .chat, .unsupported, .none: EmptyView()
     }
 }
