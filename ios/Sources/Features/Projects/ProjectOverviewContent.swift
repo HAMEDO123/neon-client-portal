@@ -44,7 +44,7 @@ struct ProjectOverviewContent: View {
                     Text(L("Completion"))
                         .font(.neonLabel)
                         .foregroundStyle(Color.neonTextSecondary)
-                    ProjectStatusPill(status: detail.pipelineStatus, live: true)
+                    ProjectStatusPill(status: detail.pipelineStatus)
                     if let date = formattedDay(detail.deliveryDate) {
                         MetaLabel(L("Delivery %@", date), symbol: "calendar")
                     }
