@@ -66,7 +66,7 @@ struct AttendanceCorrectionSheet: View {
             }
         } content: {
             FormSection {
-                DatePicker(L("Day"), selection: $day, displayedComponents: .date)
+                DateField(L("Day"), date: $day, symbol: "calendar")
                 NeonTextField(L("Hours late"), text: $delayHours, symbol: "clock", keyboard: .decimalPad)
                 NeonTextField(L("Hours left early"), text: $earlyHours, symbol: "clock.arrow.circlepath", keyboard: .decimalPad)
                 NeonTextField(L("Note"), text: $note, symbol: "text.alignleft")
