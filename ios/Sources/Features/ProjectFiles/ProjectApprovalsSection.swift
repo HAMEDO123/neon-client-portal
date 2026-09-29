@@ -27,8 +27,11 @@ struct ProjectApprovalsSection: View {
                         symbol: "checkmark.seal",
                         title: L("No approval milestones yet"),
                         detail: L("Add design milestones for the client to review."),
-                        actionTitle: L("Add milestone")
-                    ) { showAdd = true }
+                        actionTitle: L("Add milestone"),
+                        action: { showAdd = true },
+                        hue: .orange,
+                        card: true
+                    )
                 } else {
                     CardList(rows) { approval in
                         ListRow(
@@ -42,6 +45,7 @@ struct ProjectApprovalsSection: View {
                             Button(role: .destructive) { toDelete = approval } label: { Image(systemName: "trash").foregroundStyle(.red) }
                         }
                     }
+                    .neonAppear()
                 }
             }
         }
@@ -77,7 +81,7 @@ struct ProjectApprovalsSection: View {
     }
 }
 
-private struct AddApprovalSheet: View {
+struct AddApprovalSheet: View {
     let projectId: String
     let onSaved: () -> Void
 

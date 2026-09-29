@@ -29,12 +29,16 @@ struct ProjectDrawingsSection: View {
                         symbol: "square.on.square.dashed",
                         title: L("No drawings yet"),
                         detail: L("Upload the first technical drawing."),
-                        actionTitle: L("Add drawing")
-                    ) { showAdd = true }
+                        actionTitle: L("Add drawing"),
+                        action: { showAdd = true },
+                        hue: .cyan,
+                        card: true
+                    )
                 } else {
                     VStack(spacing: 10) {
-                        ForEach(items) { drawing in
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, drawing in
                             drawingCard(drawing)
+                                .staggered(index)
                         }
                     }
                 }
@@ -180,7 +184,7 @@ struct PFRevisionTarget: Identifiable {
 
 // MARK: - Add drawing
 
-private struct AddDrawingSheet: View {
+struct AddDrawingSheet: View {
     let projectId: String
     let onSaved: () -> Void
 
@@ -230,7 +234,7 @@ private struct AddDrawingSheet: View {
     }
 }
 
-private struct AddRevisionSheet: View {
+struct AddRevisionSheet: View {
     let projectId: String
     let drawing: PFDrawing
     let onSaved: () -> Void

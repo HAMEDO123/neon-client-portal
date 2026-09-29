@@ -25,8 +25,11 @@ struct ProjectDocumentsSection: View {
                         symbol: "folder",
                         title: L("No documents yet"),
                         detail: L("Upload contracts, reports, or specifications."),
-                        actionTitle: L("Add document")
-                    ) { showAdd = true }
+                        actionTitle: L("Add document"),
+                        action: { showAdd = true },
+                        hue: .purple,
+                        card: true
+                    )
                 } else {
                     CardList(items) { doc in
                         ListRow(
@@ -48,6 +51,7 @@ struct ProjectDocumentsSection: View {
                             .font(.system(size: 15))
                         }
                     }
+                    .neonAppear()
                 }
             }
         }
@@ -83,7 +87,7 @@ struct ProjectDocumentsSection: View {
     }
 }
 
-private struct AddDocumentSheet: View {
+struct AddDocumentSheet: View {
     let projectId: String
     let onSaved: () -> Void
 
