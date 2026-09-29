@@ -3,7 +3,7 @@ import { channelFor, messageSelect, parseConversation } from "@/lib/chat";
 import { taskSignature, taskSnapshot } from "@/lib/chat-task-store";
 import { meetingSignature, meetingSnapshot } from "@/lib/chat-meeting-store";
 import { reactionSignature, reactionSnapshot } from "@/lib/chat-reaction-store";
-import { readMarksFor, typingIn } from "@/lib/presence-store";
+import { conversationRoster, peopleSnapshot } from "@/lib/mobile/chat-receipts";
 import { mobileViewer } from "@/lib/mobile-auth";
 import type { ChatViewer } from "@/lib/chat-conversations";
 
@@ -12,6 +12,14 @@ import type { ChatViewer } from "@/lib/chat-conversations";
 // token in place of a session cookie. See that route's own comment for what
 // each of the five kinds of news means: `messages`, `tasks`, `meetings`,
 // `reactions`, `people`.
+//
+// One difference, and it is additive: the phone's `people` event also carries
+// `members` — everybody else in the conversation with their read marker and
+// their last heartbeat — which is what its WhatsApp ticks are drawn from
+// (lib/mobile/chat-receipt-rules.ts). `typing` and `reads` are the web's own,
+// unchanged. Because a heartbeat moves `members`, somebody still typing also
+// refreshes the event every few seconds (writing is beating), which lets the
+// app drop a typing line whose connection has gone quiet.
 //
 // One connection per open conversation, opened through channelFor like every
 // other read: an employee's stream can carry the team and their own private
@@ -39,7 +47,10 @@ export async function GET(request: Request) {
   // as the web's does.
   const conversation = parseConversation(url.searchParams.get("with") || "team", viewer);
   const channel = conversation ? await channelFor(viewer, conversation) : null;
-  if (!channel) return new Response("Forbidden", { status: 403 });
+  if (!conversation || !channel) return new Response("Forbidden", { status: 403 });
+  // Who is in it, read once: a connection lives four minutes, and who is in a
+  // conversation changes far less often than that.
+  const roster = await conversationRoster(conversation);
 
   // Everything after this instant is new. The app sends the timestamp of the
   // newest message it already has, so a reconnect never repeats or skips.
@@ -102,18 +113,10 @@ export async function GET(request: Request) {
       };
 
       const syncPeople = async () => {
-        const typing = await typingIn(channel.id);
-        const reads = await readMarksFor(channel.id);
-        const signature = [
-          typing.map((one) => one.memberKey).join(","),
-          reads.map((mark) => `${mark.readerKey}:${mark.lastReadAt.getTime()}`).join(","),
-        ].join("|");
+        const { signature, snapshot } = await peopleSnapshot(viewer, roster, channel.id);
         if (signature === peopleSeen) return false;
         peopleSeen = signature;
-        send("people", {
-          typing,
-          reads: reads.map((mark) => ({ key: mark.readerKey, at: mark.lastReadAt.toISOString() })),
-        });
+        send("people", snapshot);
         return true;
       };
 
