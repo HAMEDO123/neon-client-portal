@@ -32,11 +32,11 @@ struct NewProjectSheet: View {
         ) {
             await save()
         } content: {
-            FormSection(L("Project")) {
-                NeonTextField(L("Project Name"), text: $name, symbol: "textformat", isRequired: true)
+            FormSection(L("Project"), footer: L("Only the name is needed now; everything else can be filled in later from the project's page.")) {
+                NeonTextField(L("Project Name"), text: $name, prompt: L("Villa, café, office…"), symbol: "textformat", isRequired: true)
                 NeonTextField(L("Client Name"), text: $clientName, symbol: "person")
-                NeonTextField(L("Client Email"), text: $clientEmail, keyboard: .emailAddress, capitalization: .never, leftToRight: true)
-                NeonTextField(L("Client Phone"), text: $clientPhone, keyboard: .phonePad, leftToRight: true)
+                NeonTextField(L("Client Email"), text: $clientEmail, symbol: "envelope", keyboard: .emailAddress, contentType: .emailAddress, capitalization: .never, autocorrect: false, leftToRight: true)
+                NeonTextField(L("Client Phone"), text: $clientPhone, symbol: "phone", keyboard: .phonePad, contentType: .telephoneNumber, leftToRight: true)
                 OptionalDateField(L("Delivery Date"), date: $deliveryDate)
             }
             FormSection(L("Details")) {

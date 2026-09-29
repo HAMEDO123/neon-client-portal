@@ -83,8 +83,8 @@ struct EditProjectSheet: View {
             FormSection(L("Project")) {
                 NeonTextField(L("Project Name"), text: $name, symbol: "textformat", isRequired: true)
                 NeonTextField(L("Client Name"), text: $clientName, symbol: "person")
-                NeonTextField(L("Client Email"), text: $clientEmail, keyboard: .emailAddress, capitalization: .never, leftToRight: true)
-                NeonTextField(L("Client Phone"), text: $clientPhone, keyboard: .phonePad, leftToRight: true)
+                NeonTextField(L("Client Email"), text: $clientEmail, symbol: "envelope", keyboard: .emailAddress, contentType: .emailAddress, capitalization: .never, autocorrect: false, leftToRight: true)
+                NeonTextField(L("Client Phone"), text: $clientPhone, symbol: "phone", keyboard: .phonePad, contentType: .telephoneNumber, leftToRight: true)
                 OptionalDateField(L("Delivery Date"), date: $deliveryDate)
             }
             FormSection(L("Details")) {
@@ -102,7 +102,9 @@ struct EditProjectSheet: View {
                     L("Journey Stage"), selection: $currentStage, options: ProjectConstants.projectStages,
                     title: { localizedEnum("stage", $0) }
                 )
-                NumberField(L("Completion %"), value: $completionPercent, decimals: 0)
+                NumberField(L("Completion %"), value: $completionPercent, unit: "%", decimals: 0)
+                ProgressBar(progress: min(max(completionPercent ?? 0, 0), 100) / 100, height: 8)
+                    .animation(NeonMotion.resolved(NeonMotion.fill), value: completionPercent)
             }
             FormSection(L("Sale"), footer: L("This project counts as a sale for whoever is picked here, in the month of the date beside it. Leave the date empty and today is used.")) {
                 MenuField(
@@ -113,12 +115,12 @@ struct EditProjectSheet: View {
                 OptionalDateField(L("Sold on"), date: $soldOn)
             }
             FormSection(L("Client Visibility")) {
-                ToggleRow(L("Show Execution Pricing"), detail: L("Hide entirely until the proposal is ready."), isOn: $showPricing)
-                ToggleRow(L("Show Detailed Pricing Breakdown"), detail: L("Otherwise only the total is shown."), isOn: $showDetailedPricing)
-                ToggleRow(L("Show BOQ Quantities"), isOn: $showBoqQuantities)
-                ToggleRow(L("Show BOQ Unit Prices"), isOn: $showBoqPrices)
-                ToggleRow(L("Allow File Downloads"), detail: L("Drawings, documents and the handover package."), isOn: $allowDownloads)
-                ToggleRow(L("Enable Watermark"), detail: L("Overlays “NEON DESIGN — CONFIDENTIAL” on renders."), isOn: $watermarkEnabled)
+                ToggleRow(L("Show Execution Pricing"), detail: L("Hide entirely until the proposal is ready."), symbol: "banknote.fill", isOn: $showPricing)
+                ToggleRow(L("Show Detailed Pricing Breakdown"), detail: L("Otherwise only the total is shown."), symbol: "list.bullet.rectangle.fill", isOn: $showDetailedPricing)
+                ToggleRow(L("Show BOQ Quantities"), symbol: "number.square.fill", isOn: $showBoqQuantities)
+                ToggleRow(L("Show BOQ Unit Prices"), symbol: "tag.fill", isOn: $showBoqPrices)
+                ToggleRow(L("Allow File Downloads"), detail: L("Drawings, documents and the handover package."), symbol: "arrow.down.circle.fill", isOn: $allowDownloads)
+                ToggleRow(L("Enable Watermark"), detail: L("Overlays “NEON DESIGN — CONFIDENTIAL” on renders."), symbol: "drop.fill", isOn: $watermarkEnabled)
             }
         }
         .neonSheet([.large])
@@ -126,28 +128,59 @@ struct EditProjectSheet: View {
         .task { await loadSellers() }
     }
 
+    /// The cover as the client's page leads with it: the photo wide, with
+    /// replacing it on the photo itself and removing it under it.
     @ViewBuilder
     private var coverField: some View {
-        HStack(spacing: 12) {
+        let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
+        let showsNone = removeCover && coverUpload == nil
+        VStack(alignment: .leading, spacing: NeonSpace.md) {
             ZStack {
-                if let coverPreview {
+                if showsNone {
+                    VStack(spacing: 8) {
+                        IconTile("photo.on.rectangle.angled", hue: .grey, size: 44)
+                        Text(L("No cover — the page opens on the brand colours"))
+                            .font(.neonSubtitle)
+                            .foregroundStyle(Color.neonTextSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(NeonHue.grey.wash)
+                } else if let coverPreview {
                     coverPreview.resizable().aspectRatio(contentMode: .fill)
                 } else {
-                    RemoteImage(url: detail.resolvedCoverURL, contentMode: .fill)
+                    RemoteImage(url: detail.resolvedCoverURL, contentMode: .fill, placeholderSymbol: "photo.on.rectangle.angled")
                 }
             }
-            .frame(width: 84, height: 60)
-            .clipShape(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 8) {
+            .frame(maxWidth: .infinity)
+            .frame(height: 170)
+            .clipShape(shape)
+            .overlay(alignment: .bottomTrailing) {
                 PhotosPicker(selection: $coverSelection, matching: .images) {
-                    Label(detail.coverImageUrl == nil ? L("Upload cover image") : L("Replace cover image"), systemImage: "photo")
+                    Label(detail.coverImageUrl == nil && coverUpload == nil ? L("Upload cover image") : L("Replace cover image"), systemImage: "photo.badge.plus")
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 34)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(Color.black.opacity(0.3), in: Capsule())
+                        .environment(\.colorScheme, .dark)
                 }
-                .buttonStyle(.neon(.secondary, size: .small))
-                if detail.coverImageUrl != nil && coverUpload == nil {
-                    Toggle(L("Remove current cover image"), isOn: $removeCover)
-                        .font(.neonFootnote)
+                .buttonStyle(.pressable)
+                .padding(10)
+            }
+            .overlay(alignment: .topLeading) {
+                if coverUpload != nil {
+                    ProjectPhotoBadge(text: L("New"), symbol: "sparkles")
+                        .padding(10)
+                        .transition(.neonPop)
                 }
+            }
+            .animation(NeonMotion.resolved(NeonMotion.gentle), value: showsNone)
+
+            if detail.coverImageUrl != nil && coverUpload == nil {
+                ToggleRow(L("Remove current cover image"), symbol: "trash", tint: .neonDangerStrong, isOn: $removeCover)
             }
         }
         .onChange(of: coverSelection) { item in
@@ -156,9 +189,11 @@ struct EditProjectSheet: View {
                 if let data = try? await item.loadTransferable(type: Data.self), let uiImage = UIImage(data: data) {
                     let scaled = uiImage.scaledDown(maxDimension: 2400)
                     if let jpeg = scaled.jpegData(compressionQuality: 0.85) {
-                        coverUpload = UploadFile(field: "coverImage", filename: "cover.jpg", mimeType: "image/jpeg", data: jpeg)
-                        coverPreview = Image(uiImage: scaled)
-                        removeCover = false
+                        withNeonAnimation(NeonMotion.gentle) {
+                            coverUpload = UploadFile(field: "coverImage", filename: "cover.jpg", mimeType: "image/jpeg", data: jpeg)
+                            coverPreview = Image(uiImage: scaled)
+                            removeCover = false
+                        }
                     }
                 }
             }

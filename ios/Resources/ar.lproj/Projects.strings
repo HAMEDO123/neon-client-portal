@@ -186,3 +186,102 @@
 "activity.commented" = "ترك تعليق";
 "activity.sent_to_client" = "أُرسل رابط المشروع للعميل (واتساب)";
 "activity.sent_update" = "أُشعر العميل بتحديث (واتساب)";
+
+/* Redesign: the list */
+"Every client project, newest first" = "كل مشاريع العملاء، الأحدث أولاً";
+"Show as grid" = "عرض كشبكة";
+"Show as list" = "عرض كقائمة";
+"Project Pipeline" = "مسار المشاريع";
+"Where every project stands — tap one to filter" = "وين واصل كل مشروع — اضغط على وحدة لتفلتر";
+"Removes this filter" = "بيشيل هالفلتر";
+"All Projects" = "كل المشاريع";
+"Newest update first" = "الأحدث تحديثاً أولاً";
+"No projects match" = "لا مشاريع مطابقة";
+"None of the projects fit these filters." = "ولا مشروع بيطابق هالفلاتر.";
+"Create the first one and it shows here." = "أنشئ أول مشروع وبيظهر هون.";
+"When the studio starts a project, it shows here." = "لما يبدأ الاستوديو مشروع، بيظهر هون.";
+"Approvals: %d" = "الموافقات: %d";
+"Comments: %d" = "التعليقات: %d";
+"Loading" = "جاري التحميل";
+"%d of %d projects shown" = "ظاهر %d من %d مشروع";
+
+/* Redesign: a project's page */
+"Client Page" = "صفحة العميل";
+"Live — the client can open this link." = "منشور — العميل بيقدر يفتح هالرابط.";
+"Not published — the client sees nothing yet." = "مش منشور — العميل ما بيشوف شي لسا.";
+"Archived — hidden from the client link." = "مؤرشف — مخفي عن رابط العميل.";
+"Share" = "مشاركة";
+"Progress" = "التقدّم";
+"Stage: %@" = "المرحلة: %@";
+"Delivery %@" = "التسليم %@";
+"Spaces" = "المساحات";
+"Opens %@" = "بيفتح %@";
+"No client name yet" = "ما في اسم عميل بعد";
+"No email or phone number on file for this client." = "ما في إيميل ولا رقم مسجّل لهالعميل.";
+"No location, area, type or delivery date recorded yet." = "ما في موقع ولا مساحة ولا نوع ولا تاريخ تسليم مسجّل بعد.";
+"What the client's page shows" = "شو بتعرض صفحة العميل";
+"On" = "مفعّل";
+"Off" = "متوقف";
+"Only the name is needed now; everything else can be filled in later from the project's page." = "الاسم بس مطلوب هلأ؛ الباقي بتعبّيه بعدين من صفحة المشروع.";
+"Villa, café, office…" = "فيلا، كافيه، مكتب…";
+"No cover — the page opens on the brand colours" = "بلا غلاف — الصفحة بتفتح على ألوان الهوية";
+"New" = "جديد";
+
+/* Redesign: the gallery */
+"Renders and site photos, by space" = "الريندر وصور الموقع، حسب المساحة";
+"%d spaces · %d photos" = "%d مساحة · %d صورة";
+"Add" = "إضافة";
+"Hotspots: %d" = "النقاط: %d";
+"Photo %d of %d" = "صورة %d من %d";
+"No photos in this space yet" = "ما في صور بهالمساحة بعد";
+"Take them on site or pick renders from the library." = "صوّرها بالموقع أو اختار ريندر من المكتبة.";
+"A room or area the renders belong to" = "غرفة أو منطقة بتنتمي إلها الصور";
+"Suggestions" = "اقتراحات";
+"Kitchen" = "المطبخ";
+"Master Bedroom" = "غرفة النوم الرئيسية";
+"Bedroom" = "غرفة النوم";
+"Bathroom" = "الحمّام";
+"Dining Room" = "غرفة الطعام";
+"Entrance" = "المدخل";
+"Exterior" = "الواجهة الخارجية";
+
+/* Redesign: the viewer */
+"%d of %d" = "%d من %d";
+"Before" = "قبل";
+"After" = "بعد";
+"Hide hotspots" = "إخفاء النقاط";
+"Show hotspots" = "إظهار النقاط";
+"This photo couldn't be loaded." = "ما قدرنا نحمّل هالصورة.";
+
+/* Redesign: uploading */
+"From the library" = "من المكتبة";
+"Take a photo" = "التقاط صورة";
+"Pick up to 20 at a time. Each one is sent on its own, so a slow connection loses one photo at most, never the batch." = "اختار لحد 20 صورة بالمرة. كل وحدة بتنبعث لحالها، فالنت الضعيف بيضيّع صورة وحدة بالأكثر، مش الدفعة كلها.";
+"Shown under the photo on the client's page." = "بيظهر تحت الصورة بصفحة العميل.";
+"%d of %d uploaded" = "انرفع %d من %d";
+"Upload the rest" = "رفع الباقي";
+"The photos weren't uploaded" = "الصور ما انرفعت";
+"The “after” photo couldn't be read. Choose it again." = "ما قدرنا نقرأ صورة “بعد”. اختارها مرة ثانية.";
+"%d photo(s) couldn't be read on this phone. Remove them or try again." = "ما قدرنا نقرأ %d صورة على هالجهاز. احذفها أو جرّب مرة ثانية.";
+"Choose" = "اختيار";
+
+/* Redesign: hotspots */
+"Name the new point below" = "سمِّ النقطة الجديدة تحت";
+"The photo — tap to place a hotspot" = "الصورة — اضغط لتحط نقطة";
+"This photo couldn't be loaded, so points can't be placed on it right now." = "ما قدرنا نحمّل هالصورة، فما بتقدر تحط نقاط عليها هلأ.";
+"On this photo" = "على هالصورة";
+"No hotspots on this photo yet." = "ما في نقاط على هالصورة بعد.";
+"%d points the client can tap" = "%d نقطة بيقدر العميل يضغط عليها";
+"hotspot.Material" = "خامة";
+"hotspot.Furniture" = "أثاث";
+"hotspot.Lighting" = "إضاءة";
+"hotspot.Drawing" = "مخطط";
+"hotspot.Note" = "ملاحظة";
+
+/* Redesign: analytics */
+"All Activity" = "كل النشاط";
+"Not recorded by the client page yet" = "صفحة العميل ما بتسجّله لسا";
+"Everything the client did, by kind" = "كل اللي عمله العميل، حسب النوع";
+"events" = "حدث";
+"Newest first" = "الأحدث أولاً";
+"Nothing recent to show." = "ما في شي حديث.";

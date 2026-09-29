@@ -9,12 +9,24 @@ struct ProjectDetailView: View {
 
     @EnvironmentObject var api: APIClient
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var detail: ProjectDetail?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
-    @State private var section: DetailSection = .overview
+    @State private var section: DetailSection
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
+    @State private var confirmRegenerate = false
+    @State private var sending: String?
+    @State private var regenerating = false
+
+    /// `initialSection` opens the page on a tab other than Overview — a deep
+    /// link to a project's gallery or files.
+    init(projectId: String, seed: ProjectSummary? = nil, initialSection: DetailSection = .overview) {
+        self.projectId = projectId
+        self.seed = seed
+        _section = State(initialValue: initialSection)
+    }
 
     enum DetailSection: String, CaseIterable {
         case overview, gallery, drawings, boq, pricing, materials, furniture, documents, approvals, comments, analytics
@@ -53,16 +65,23 @@ struct ProjectDetailView: View {
     }
 
     var body: some View {
-        Group {
-            if let detail {
-                page(detail)
-            } else if let errorMessage {
-                ErrorState(message: errorMessage) { await load() }
-            } else {
-                NeonScroll { SkeletonRows(count: 5) }
+        ScrollViewReader { proxy in
+            NeonScroll(spacing: NeonSpace.stack) {
+                hero
+                    .id("hero")
+
+                if let detail {
+                    page(detail)
+                } else if let errorMessage {
+                    ErrorState(message: errorMessage) { await load() }
+                } else {
+                    SkeletonCard(lines: 4)
+                    SkeletonCard(lines: 3)
+                }
             }
+            .refreshable { await load() }
+            .debugScroll(proxy)
         }
-        .neonAmbientBackground()
         .navigationTitle(detail?.name ?? seed?.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -76,9 +95,9 @@ struct ProjectDetailView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        IconButtonLabel("ellipsis", size: 36)
                     }
-                    .foregroundStyle(Color.neonInk)
+                    .accessibilityLabel(Text(L("More")))
                 }
             }
         }
@@ -93,50 +112,111 @@ struct ProjectDetailView: View {
             actionTitle: L("Delete"),
             isPresented: $showDeleteConfirm
         ) { Task { await deleteProject() } }
+        .confirmDestructive(
+            L("Regenerate this project's link?"),
+            message: L("The old link stops working immediately."),
+            actionTitle: L("Regenerate"),
+            isPresented: $confirmRegenerate
+        ) { Task { await regenerateLink() } }
         .task { await load() }
         .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
             if let name = note.object as? String, name.hasPrefix("projects/") { Task { await load(silently: true) } }
         }
     }
 
+    // MARK: - Hero
+
+    /// The cover and the name come from the list's row at once, so the page
+    /// opens on its picture instead of a skeleton.
     @ViewBuilder
-    private func page(_ detail: ProjectDetail) -> some View {
-        NeonScroll(spacing: 14) {
+    private var hero: some View {
+        if let name = detail?.name ?? seed?.name {
+            let cover = detail?.resolvedCoverURL ?? (detail == nil ? seed?.resolvedCoverURL : nil)
+            let status = detail?.pipelineStatus ?? seed?.pipelineStatus ?? ""
+            let publish = detail?.publishState ?? seed?.publishState ?? ""
             HeroHeader(
-                detail.name,
-                subtitle: detail.clientName,
+                name,
+                subtitle: heroSubtitle,
                 eyebrow: L("Project"),
-                imageURL: detail.resolvedCoverURL
+                imageURL: cover,
+                symbol: "folder.fill",
+                tint: .neonBlueStrong,
+                height: 270
             ) {
                 HStack(spacing: 6) {
-                    StateBadge(localizedEnum("pipeline", detail.pipelineStatus), tone: .purple)
-                    BadgeView(text: localizedEnum("publish", detail.publishState), tone: publishTone(detail.publishState))
+                    if !status.isEmpty { ProjectStatusPill(status: status, onPhoto: cover != nil, live: true) }
+                    if !publish.isEmpty { ProjectPublishPill(state: publish, onPhoto: cover != nil) }
                 }
             }
-
-            if let cachedAt { OfflineBanner(savedAt: cachedAt) }
-
-            if api.side == .employee { liveStatusBanner(detail) }
-
-            publishRow(detail)
-            linkRow(detail)
-
-            FilterChips(selection: $section, options: DetailSection.allCases, inset: 16, title: { $0.label }, symbol: { $0.symbol })
-                .padding(.horizontal, -16)
-
-            sectionContent(detail)
-                .id(section)
-                .transition(.neonRise)
+        } else {
+            SkeletonBlock(height: 250, radius: NeonRadius.xxl)
+                .shimmer()
         }
-        .refreshable { await load() }
-        .animation(.easeOut(duration: 0.22), value: section)
+    }
+
+    private var heroSubtitle: String? {
+        let client = detail?.clientName ?? seed?.clientName ?? ""
+        let place = (detail?.location ?? seed?.location ?? "").trimmingCharacters(in: .whitespaces)
+        let parts = [client, place].filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    // MARK: - Page
+
+    @ViewBuilder
+    private func page(_ detail: ProjectDetail) -> some View {
+        if let cachedAt { OfflineBanner(savedAt: cachedAt) }
+
+        if api.side == .employee { liveStatusBanner(detail) }
+
+        clientPageCard(detail)
+            .id("link")
+
+        FilterChips(
+            selection: $section,
+            options: DetailSection.allCases,
+            inset: NeonSpace.gutter,
+            title: { $0.label },
+            symbol: { $0.symbol },
+            count: { sectionCount($0, detail) }
+        )
+        .padding(.horizontal, -NeonSpace.gutter)
+        .padding(.top, NeonSpace.xs)
+        .id("sections")
+
+        sectionContent(detail)
+            .id(section)
+            .transition(.neonRise)
+    }
+
+    /// A count beside a tab only where the page already knows it.
+    private func sectionCount(_ section: DetailSection, _ detail: ProjectDetail) -> Int? {
+        let count: Int
+        switch section {
+        case .gallery: count = detail.allImages.count
+        case .approvals: count = detail.count.approvals
+        case .comments: count = detail.count.comments
+        default: return nil
+        }
+        return count > 0 ? count : nil
     }
 
     @ViewBuilder
     private func sectionContent(_ detail: ProjectDetail) -> some View {
         switch section {
-        case .overview: ProjectOverviewContent(detail: detail)
-        case .gallery: ProjectGalleryView(projectId: detail.id, spaces: detail.spaces, onChanged: { Task { await load(silently: true) } })
+        case .overview:
+            ProjectOverviewContent(
+                detail: detail,
+                onEdit: { showEdit = true },
+                onOpenSection: { target in withNeonAnimation(NeonMotion.snappy) { section = target } }
+            )
+        case .gallery:
+            ProjectGalleryView(
+                projectId: detail.id,
+                spaces: detail.spaces,
+                coverImageUrl: detail.coverImageUrl,
+                onChanged: { Task { await load(silently: true) } }
+            )
         case .drawings: ProjectDrawingsSection(projectId: detail.id)
         case .boq: ProjectBoqSection(projectId: detail.id)
         case .pricing: ProjectPricingSection(projectId: detail.id)
@@ -165,76 +245,129 @@ struct ProjectDetailView: View {
         )
     }
 
+    // MARK: - The client's page: link, sharing, publishing
+
+    private func publishLine(_ state: String) -> String {
+        switch state {
+        case "PUBLISHED": return L("Live — the client can open this link.")
+        case "ARCHIVED": return L("Archived — hidden from the client link.")
+        default: return L("Not published — the client sees nothing yet.")
+        }
+    }
+
     @ViewBuilder
-    private func publishRow(_ detail: ProjectDetail) -> some View {
-        HStack(spacing: 8) {
+    private func clientPageCard(_ detail: ProjectDetail) -> some View {
+        SectionCard(
+            L("Client Page"),
+            subtitle: publishLine(detail.publishState),
+            symbol: "link",
+            hue: .purple
+        ) {
+            if let link = detail.clientLink {
+                linkCapsule(link)
+
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: NeonSpace.sm, alignment: .top), count: 3),
+                    spacing: NeonSpace.sm
+                ) {
+                    ProjectActionTile(title: L("Copy Link"), symbol: "doc.on.doc.fill", hue: .blue) {
+                        copy(link)
+                    }
+                    ProjectActionTile(title: L("Preview"), symbol: "safari.fill", hue: .indigo) {
+                        openURL(link)
+                    }
+                    ShareLink(item: link) {
+                        ProjectActionTileLabel(title: L("Share"), symbol: "square.and.arrow.up.fill", hue: .purple)
+                    }
+                    .buttonStyle(.pressable)
+                    ProjectActionTile(title: L("Send to Client"), symbol: "paperplane.fill", hue: .green, isBusy: sending == "sent_to_client") {
+                        Task { await send(kind: "sent_to_client") }
+                    }
+                    .disabled(sending != nil)
+                    ProjectActionTile(title: L("Send Update"), symbol: "bell.badge.fill", hue: .cyan, isBusy: sending == "sent_update") {
+                        Task { await send(kind: "sent_update") }
+                    }
+                    .disabled(sending != nil)
+                    ProjectActionTile(title: L("Regenerate"), symbol: "arrow.triangle.2.circlepath", hue: .orange, isBusy: regenerating) {
+                        Haptic.warning()
+                        confirmRegenerate = true
+                    }
+                }
+
+                NeonDivider()
+            }
+
+            publishControls(detail)
+        }
+    }
+
+    private func linkCapsule(_ link: URL) -> some View {
+        Button {
+            copy(link)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(NeonHue.purple.deep)
+                Text(verbatim: link.absoluteString)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Color.neonTextSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 4)
+                Image(systemName: "doc.on.doc")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(Color.neonTextTertiary)
+            }
+            // A web address reads left to right in either language.
+            .environment(\.layoutDirection, .leftToRight)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 38)
+            .background(Capsule().fill(Color.neonSurfaceSunken))
+            .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(Text(L("Copy Link")))
+        .accessibilityValue(Text(verbatim: link.absoluteString))
+    }
+
+    @ViewBuilder
+    private func publishControls(_ detail: ProjectDetail) -> some View {
+        HStack(spacing: NeonSpace.sm) {
             if detail.publishState != "PUBLISHED" {
-                NeonButton(L("Publish Project"), symbol: "checkmark.seal.fill", size: .small) {
+                NeonButton(L("Publish Project"), symbol: "checkmark.seal.fill", kind: .brand, size: .medium, fullWidth: true) {
                     await setPublish("PUBLISHED")
                 }
             } else {
-                NeonButton(L("Unpublish"), kind: .secondary, size: .small) {
+                NeonButton(L("Unpublish"), symbol: "eye.slash", kind: .secondary, size: .medium, fullWidth: true) {
                     await setPublish("DRAFT")
                 }
             }
             if detail.publishState != "ARCHIVED" {
                 NeonButton(
-                    L("Archive"), kind: .ghost, size: .small,
+                    L("Archive"), symbol: "archivebox", kind: .ghost, size: .medium,
                     confirm: L("Archive this project?"), confirmMessage: L("It will be hidden from the client link.")
                 ) {
                     await setPublish("ARCHIVED")
                 }
+                .fixedSize()
             }
-            Spacer()
         }
     }
 
-    @ViewBuilder
-    private func linkRow(_ detail: ProjectDetail) -> some View {
-        if let link = detail.clientLink {
-            NeonCard(padding: 10) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Text(link.absoluteString)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(Color.neonTextSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
-                    }
-                    FlowRow {
-                        NeonButton(L("Copy Link"), symbol: "doc.on.doc", kind: .secondary, size: .small) {
-                            UIPasteboard.general.string = link.absoluteString
-                            Haptic.soft()
-                            Toast.info(L("Copied"), detail: link.absoluteString)
-                        }
-                        ShareLink(item: link) {
-                            Label(L("Preview"), systemImage: "arrow.up.right.square")
-                        }
-                        .buttonStyle(.neon(.secondary, size: .small))
-                        NeonButton(L("Send to Client"), symbol: "paperplane.fill", kind: .tinted(.neonSuccessStrong), size: .small) {
-                            await send(kind: "sent_to_client")
-                        }
-                        NeonButton(L("Send Update"), symbol: "bell.badge.fill", kind: .tinted(.neonInfoStrong), size: .small) {
-                            await send(kind: "sent_update")
-                        }
-                        NeonButton(
-                            L("Regenerate"), symbol: "arrow.clockwise", kind: .ghost, size: .small,
-                            confirm: L("Regenerate this project's link?"),
-                            confirmMessage: L("The old link stops working immediately.")
-                        ) {
-                            await regenerateLink()
-                        }
-                    }
-                }
-            }
-        }
+    // MARK: - Actions
+
+    private func copy(_ link: URL) {
+        UIPasteboard.general.string = link.absoluteString
+        Haptic.soft()
+        Toast.info(L("Copied"), detail: link.absoluteString)
     }
 
     private func load(silently: Bool = false) async {
         do {
             let loaded = try await api.fetchProjectDetail(id: projectId)
-            withAnimation(.easeOut(duration: 0.3)) {
+            withNeonAnimation(NeonMotion.gentle) {
                 detail = loaded.value
                 cachedAt = loaded.cachedAt
             }
@@ -256,6 +389,8 @@ struct ProjectDetailView: View {
     }
 
     private func regenerateLink() async {
+        regenerating = true
+        defer { regenerating = false }
         do {
             try await api.regenerateProjectLink(id: projectId)
             Haptic.success()
@@ -268,6 +403,9 @@ struct ProjectDetailView: View {
     }
 
     private func send(kind: String) async {
+        guard sending == nil else { return }
+        sending = kind
+        defer { sending = nil }
         do {
             let outcome = try await api.sendProjectWhatsApp(id: projectId, kind: kind)
             if outcome?.ok == false { Toast.warning(outcome?.message ?? L("Nothing was sent")) }

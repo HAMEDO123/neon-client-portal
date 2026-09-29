@@ -1,17 +1,43 @@
 import SwiftUI
 
 // Fullscreen viewer: swipe between images, pinch to zoom, double-tap to
-// toggle zoom, drag to pan while zoomed.
+// toggle zoom, drag to pan while zoomed, tap to hide the chrome. Shared with
+// Chat, which passes photos only; the gallery adds before/after pairs,
+// hotspots, a strip of thumbnails and actions on the photo shown.
 struct ImageViewerItem: Identifiable {
     let id: String
     let url: URL?
     let caption: String?
+    /// The "before" half of a before/after pair.
+    var beforeURL: URL? = nil
+    var hotspots: [ImageViewerHotspot] = []
+}
+
+/// A hotspot on a photo, at a fraction (0…1) of its width and height.
+struct ImageViewerHotspot: Identifiable {
+    let id: String
+    let x: Double
+    let y: Double
+    let label: String
+    var category: String? = nil
+}
+
+/// Something to do with the photo on screen. The viewer closes first and the
+/// presenter acts once it has gone.
+struct ImageViewerAction: Identifiable {
+    let id: String
+    let title: String
+    let symbol: String
+    var isDestructive = false
+    let perform: (ImageViewerItem) -> Void
 }
 
 struct ImageViewerPayload: Identifiable {
     let id = UUID()
     let items: [ImageViewerItem]
     let startIndex: Int
+    var title: String? = nil
+    var actions: [ImageViewerAction] = []
 }
 
 struct ImageViewerView: View {
@@ -19,11 +45,16 @@ struct ImageViewerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var index: Int
+    @State private var chromeHidden = false
+    @State private var showBefore = false
+    @State private var showHotspots = true
 
     init(payload: ImageViewerPayload) {
         self.payload = payload
-        _index = State(initialValue: payload.startIndex)
+        _index = State(initialValue: min(max(payload.startIndex, 0), max(payload.items.count - 1, 0)))
     }
+
+    private var current: ImageViewerItem? { payload.items[safe: index] }
 
     var body: some View {
         ZStack {
@@ -31,52 +62,200 @@ struct ImageViewerView: View {
 
             TabView(selection: $index) {
                 ForEach(Array(payload.items.enumerated()), id: \.element.id) { i, item in
-                    ZoomableImageView(url: item.url)
-                        .tag(i)
+                    ZoomableImageView(
+                        url: i == index && showBefore ? (item.beforeURL ?? item.url) : item.url,
+                        hotspots: i == index && showBefore ? [] : (showHotspots ? item.hotspots : []),
+                        onTap: {
+                            withNeonAnimation(NeonMotion.quick) { chromeHidden.toggle() }
+                        }
+                    )
+                    .tag(i)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: payload.items.count > 1 ? .automatic : .never))
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .ignoresSafeArea()
 
-            VStack {
-                HStack {
-                    if payload.items.count > 1 {
-                        Text("\(index + 1) / \(payload.items.count)")
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.white.opacity(0.15), in: Capsule())
-                    }
-                    Spacer()
-                    Button {
-                        Haptic.tap()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(.white.opacity(0.15), in: Circle())
-                    }
-                    .buttonStyle(.pressable)
+            if !chromeHidden {
+                chrome
+                    .transition(.opacity)
+            }
+        }
+        .statusBarHidden(chromeHidden)
+        .onChange(of: index) { _ in
+            showBefore = false
+            Haptic.selection()
+        }
+        .animation(NeonMotion.resolved(NeonMotion.quick), value: index)
+    }
+
+    // MARK: - Chrome
+
+    private var chrome: some View {
+        VStack(spacing: 0) {
+            topBar
+            Spacer(minLength: 0)
+            bottomBar
+        }
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            IconButton("xmark", label: L("Close"), tint: .white, size: 40) {
+                dismiss()
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                if let title = payload.title, !title.isEmpty {
+                    DirText(title, font: .system(.subheadline, weight: .semibold), color: .white, fill: false, lineLimit: 1)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-                Spacer()
-
-                if let caption = payload.items[safe: index]?.caption, !caption.isEmpty {
-                    Text(caption)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 30)
-                        .transition(.opacity)
+                if payload.items.count > 1 {
+                    Text(L("%d of %d", index + 1, payload.items.count))
+                        .font(.system(.caption, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            Spacer(minLength: 8)
+            if let current, !current.hotspots.isEmpty, !showBefore {
+                IconButton(
+                    showHotspots ? "mappin.circle.fill" : "mappin.slash.circle",
+                    label: showHotspots ? L("Hide hotspots") : L("Show hotspots"),
+                    tint: .white,
+                    size: 40
+                ) {
+                    withNeonAnimation(NeonMotion.snappy) { showHotspots.toggle() }
                 }
             }
         }
-        .animation(.easeOut(duration: 0.2), value: index)
+        .padding(.horizontal, NeonSpace.gutter)
+        .padding(.top, 8)
+    }
+
+    private var bottomBar: some View {
+        VStack(spacing: 12) {
+            if let current, current.beforeURL != nil {
+                ViewerBeforeAfterSwitch(showBefore: $showBefore)
+            }
+
+            if let caption = current?.caption, !caption.isEmpty {
+                DirText(caption, font: .system(.footnote, weight: .medium), color: .white.opacity(0.9), lineLimit: 3)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .id(current?.id)
+                    .transition(.opacity)
+            }
+
+            if payload.items.count > 1 {
+                thumbnails
+            }
+
+            if !payload.actions.isEmpty, let current {
+                HStack(spacing: NeonSpace.sm) {
+                    ForEach(payload.actions) { action in
+                        Button {
+                            Haptic.tap()
+                            action.perform(current)
+                            dismiss()
+                        } label: {
+                            VStack(spacing: 5) {
+                                Image(systemName: action.symbol)
+                                    .font(.system(.body, weight: .semibold))
+                                Text(action.title)
+                                    .font(.system(.caption2, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .foregroundStyle(action.isDestructive ? Color.neonDanger : Color.white)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
+                            .environment(\.colorScheme, .dark)
+                            .contentShape(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
+                        }
+                        .buttonStyle(.pressable)
+                    }
+                }
+                .padding(.horizontal, NeonSpace.gutter)
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+            }
+        }
+        .padding(.bottom, 10)
+        .padding(.top, 24)
+        .background(
+            LinearGradient(colors: [.black.opacity(0), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        )
+    }
+
+    private var thumbnails: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(Array(payload.items.enumerated()), id: \.element.id) { i, item in
+                        Button {
+                            withNeonAnimation(NeonMotion.snappy) { index = i }
+                        } label: {
+                            RemoteImage(url: item.url, contentMode: .fill)
+                                .frame(width: i == index ? 52 : 42, height: 52)
+                                .clipShape(RoundedRectangle(cornerRadius: NeonRadius.xs, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: NeonRadius.xs, style: .continuous)
+                                        .strokeBorder(Color.white, lineWidth: i == index ? 2 : 0)
+                                )
+                                .opacity(i == index ? 1 : 0.55)
+                        }
+                        .buttonStyle(.pressable)
+                        .id(i)
+                        .accessibilityLabel(Text(L("%d of %d", i + 1, payload.items.count)))
+                    }
+                }
+                .padding(.horizontal, NeonSpace.gutter)
+            }
+            .onAppear { proxy.scrollTo(index, anchor: .center) }
+            .onChange(of: index) { newValue in
+                withNeonAnimation(NeonMotion.smooth) { proxy.scrollTo(newValue, anchor: .center) }
+            }
+        }
+        .frame(height: 56)
+    }
+}
+
+/// "Before | After" on the dark viewer: a frosted capsule with a sliding pill.
+private struct ViewerBeforeAfterSwitch: View {
+    @Binding var showBefore: Bool
+    @Namespace private var namespace
+
+    var body: some View {
+        HStack(spacing: 2) {
+            option(L("Before"), isOn: showBefore) { showBefore = true }
+            option(L("After"), isOn: !showBefore) { showBefore = false }
+        }
+        .padding(3)
+        .background(.ultraThinMaterial, in: Capsule())
+        .environment(\.colorScheme, .dark)
+    }
+
+    private func option(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            guard !isOn else { return }
+            Haptic.selection()
+            withNeonAnimation(NeonMotion.snappy) { action() }
+        } label: {
+            Text(title)
+                .font(.system(.footnote, weight: .semibold))
+                .foregroundStyle(isOn ? Color.neonInk : Color.white.opacity(0.85))
+                .padding(.horizontal, 18)
+                .frame(minHeight: 34)
+                .background {
+                    if isOn {
+                        Capsule().fill(Color.white)
+                            .matchedGeometryEffect(id: "pill", in: namespace)
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
 
@@ -88,6 +267,8 @@ extension Array {
 
 private struct ZoomableImageView: View {
     let url: URL?
+    var hotspots: [ImageViewerHotspot] = []
+    var onTap: () -> Void = {}
 
     @State private var scale: CGFloat = 1
     @State private var lastScale: CGFloat = 1
@@ -98,7 +279,7 @@ private struct ZoomableImageView: View {
         GeometryReader { geo in
             Group {
                 if let url {
-                    ZoomSource(url: url)
+                    ZoomSource(url: url, hotspots: hotspots)
                 } else {
                     Image(systemName: "photo")
                         .font(.system(size: 28))
@@ -110,7 +291,7 @@ private struct ZoomableImageView: View {
             .offset(offset)
             .gesture(magnification.simultaneously(with: scale > 1 ? panning : nil))
             .onTapGesture(count: 2) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                withNeonAnimation(NeonMotion.smooth) {
                     if scale > 1 {
                         reset()
                     } else {
@@ -119,7 +300,9 @@ private struct ZoomableImageView: View {
                     }
                 }
             }
+            .onTapGesture(count: 1) { onTap() }
         }
+        .onChange(of: url) { _ in reset() }
     }
 
     private var magnification: some Gesture {
@@ -130,7 +313,7 @@ private struct ZoomableImageView: View {
             .onEnded { _ in
                 lastScale = scale
                 if scale <= 1.02 {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { reset() }
+                    withNeonAnimation(NeonMotion.smooth) { reset() }
                 }
             }
     }
@@ -158,19 +341,41 @@ private struct ZoomableImageView: View {
 
 /// The full-screen picture: the largest size the server keeps (1600 wide),
 /// which stays sharp when zoomed on a phone without decoding the original.
+/// Hotspots are laid on the fitted picture itself, so they zoom with it.
 private struct ZoomSource: View {
     let url: URL
+    var hotspots: [ImageViewerHotspot] = []
     @State private var image: UIImage?
     @State private var failed = false
 
     var body: some View {
         Group {
             if let image = image ?? ImagePipeline.shared.cached(url, pixels: 1600) {
-                Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .overlay {
+                        if !hotspots.isEmpty {
+                            GeometryReader { geo in
+                                ForEach(Array(hotspots.enumerated()), id: \.element.id) { index, spot in
+                                    ViewerHotspotMarker(number: index + 1, spot: spot)
+                                        .position(x: geo.size.width * spot.x, y: geo.size.height * spot.y)
+                                }
+                            }
+                            // Percentages are measured from the photo's left edge, as the website places them.
+                            .environment(\.layoutDirection, .leftToRight)
+                            .transition(.opacity)
+                        }
+                    }
+                    .transition(.opacity)
             } else if failed {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 28))
-                    .foregroundStyle(.white.opacity(0.5))
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 28))
+                    Text(L("This photo couldn't be loaded."))
+                        .font(.neonSubtitle)
+                }
+                .foregroundStyle(.white.opacity(0.6))
             } else {
                 ProgressView().tint(.white)
             }
@@ -178,8 +383,34 @@ private struct ZoomSource: View {
         .task(id: url) {
             let loaded = await ImagePipeline.shared.image(url, pixels: 1600)
             guard !Task.isCancelled else { return }
-            image = loaded
-            failed = loaded == nil
+            withNeonAnimation(NeonMotion.gentle) {
+                image = loaded
+                failed = loaded == nil
+            }
         }
+    }
+}
+
+/// A hotspot on the full-screen photo: its numbered pin and its label.
+private struct ViewerHotspotMarker: View {
+    let number: Int
+    let spot: ImageViewerHotspot
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ProjectHotspotPin(number: number, category: spot.category, size: 22)
+            Text(verbatim: spot.label)
+                .font(.system(.caption2, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(.ultraThinMaterial, in: Capsule())
+                .environment(\.colorScheme, .dark)
+                .fixedSize()
+        }
+        // The pin, not the label, sits on the point.
+        .offset(y: 11)
+        .accessibilityElement(children: .combine)
     }
 }
