@@ -294,7 +294,10 @@ describe("one definition of each check, not twenty-five", () => {
     // same way finished work is approved rather than announced. An approval
     // that drifted onto the visitor's guard would let somebody sign off their
     // own visit, which is the one thing this shape exists to prevent.
-    const MANAGERS = new Set(["approveSiteVisit", "reopenSiteVisit"]);
+    // `assignSiteVisit` is here because it hands a visit to *somebody else* —
+    // the manager saying a client needs seeing. Scheduling one's own is the
+    // visitor's, and the two live in the same file.
+    const MANAGERS = new Set(["assignSiteVisit", "approveSiteVisit", "reopenSiteVisit"]);
 
     const actions = exportedActions(read("site-visit-actions.ts"));
     assert.ok(actions.length > 0, "site-visit-actions.ts has no exports — has it moved?");
