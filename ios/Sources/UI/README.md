@@ -2,8 +2,17 @@
 
 Everything a screen is built from lives in `ios/Sources/UI/`. Use it rather
 than hand-rolled paddings, colours and shadows, so every area looks and moves
-as one product: the web's glass cards on the lavender page, ink buttons,
-rounded display type, the cyan-purple-pink brand gradient.
+as one product — the owner's mockups (Home and Chat): a lavender-to-white
+page, white cards with large continuous corners, a hairline and a soft navy
+haze; pastel icon tiles holding a vivid glyph; big bold SF Pro figures; cool
+slate greys; blue, indigo and violet accents; capsule "View All ›" links;
+round white header buttons; a sky-to-violet hero; a floating tab bar.
+
+**See it:** a Debug build opens the gallery a screen at a time, no sign-in:
+`xcrun simctl launch <device> com.neonjo.staff -neonScreen kit` (then `kit-2`
+… `kit-12`; add `-app_language ar` for Arabic). 1–3 are Home, 4 is Chat, 5
+figures, 6 controls, 7 rows, 8 states, 9 forms, 10 charts, 11 loading, 12
+badges and every hue.
 
 **Don't add another `README.md` under `ios/Sources`.** XcodeGen copies `.md`
 files into the app as resources, and two files with one name stop the build
@@ -18,14 +27,52 @@ your area (`TaskBoardRow`, not `ListRow`).
 
 ## Rules of thumb
 
-- A screen is `NeonScroll { … }` (or a `List` with `.neonListStyle()`), with
-  `.refreshable`. Its blocks are `SectionHeader` + a `NeonCard`, a `CardList`,
-  a `StatGrid` or a chart.
-- A read's three states come from `LoadStateView`: skeleton, then `ErrorState`
-  with the server's sentence and Retry, then content under `OfflineBanner`
-  when it's a saved copy.
-- Text somebody wrote goes through `DirText` (and `ListRow`, `HeroHeader`,
-  `TimelineRow`, `PersonChip` do this for you). UI text goes through `L()`.
+- A screen is `NeonScroll(spacing: NeonSpace.stack) { … }` (or a `List` with
+  `.neonListStyle()`), with `.refreshable`. It already paints the page
+  (`NeonAmbient`); never set a background colour of your own on a page.
+- **A tab's root page has no navigation bar.** Hide it
+  (`.toolbar(.hidden, for: .navigationBar)`) and put a `ScreenHeader` first in
+  the scroll: the logo or a title on the leading side, round white
+  `IconButton`s (`size: NeonSize.circleButton`) on the trailing side. Pushed
+  detail pages keep the system bar and its back button.
+- **Blocks are cards, and a card carries its own heading.** Use a
+  `SectionCard` (icon tile, title, grey line, "View All ›") rather than a
+  `SectionHeader` floating above a `NeonCard`. `SectionHeader` stays for a
+  plain list (`CardList`, a run of `ListCardRow`s) where the rows are the cards.
+- **Cards stack 12 pt apart** (`NeonSpace.stack`), inside a 16 pt gutter; tiles
+  in a grid are 12 apart (8 when four to a row). Inside a card the padding is
+  `NeonSpace.card` (16).
+- **Which piece:** a headline number → `KPICard` in a `StatGrid` (four to a row
+  with `density: .compact`, two otherwise); where things stand →
+  `SegmentedProgress`; a list of people or conversations → `ListCardRow`s
+  (one card each); rows inside a card → `ListRow` with `NeonDivider`s; shortcuts
+  → `QuickActionGrid`; filters over a list → `PillFilterBar`; the top of Home →
+  `HeroCard`; the top of a detail page → `HeroHeader`; the main "add" →
+  `.floatingActionButton`.
+- **Colour comes in families.** Pick a `NeonHue` (`.blue`, `.purple`,
+  `.orange`, `.pink`, `.green`, `.cyan`, `.indigo`, `.amber`, `.red`, `.grey`)
+  and pass it; the component draws the pastel tile, the deep glyph and the
+  vivid bars from it. One hue per idea, the same on every screen (projects
+  blue, published purple, approvals orange, updates pink, money green).
+- A read's three states come from `LoadStateView`: skeleton (`SkeletonRows`,
+  `SkeletonCard`, `SkeletonKPICard`), then `ErrorState` with the server's
+  sentence and Retry, then content under `OfflineBanner` when it's a saved copy.
+  Nothing to show is an `EmptyState` (`card: true` on a page of cards).
+- Text somebody wrote goes through `DirText` (and `ListRow`, `ListCardRow`,
+  `HeroHeader`, `HeroCard`, `StoryAvatar`, `TimelineRow`, `PersonChip` do this
+  for you). UI text goes through `L()`, with its Arabic in the area's
+  `ar.lproj/<Area>.strings`.
+- **Right to left:** say leading and trailing, never left and right, and let
+  stacks mirror. Symbols that point use the `.forward`/`.backward` names
+  (`chevron.forward`). Anything drawn with a `Path` or a gradient's
+  `UnitPoint`s does not mirror by itself: add
+  `.flipsForRightToLeftLayoutDirection(true)` (the kit's charts, sparkline and
+  hero already do). Never flip a photo. Check every screen with
+  `-app_language ar`.
+- **Dynamic Type:** use the kit's fonts (text styles), not `.system(size:)`.
+  Where a row has no room to grow, cap it with `.dynamicTypeSize(...)` rather
+  than letting it truncate; `StatGrid` already drops to two to a row for
+  large text.
 - Actions are `NeonButton { await … }`: it shows its own spinner. Anything
   that can't be undone gets `confirm:` (or `confirmDestructive`, or
   `destructiveSwipe` in a list). Report the outcome with `Toast`.
@@ -36,7 +83,8 @@ your area (`TaskBoardRow`, not `ListRow`).
 - Motion comes from `NeonMotion` and the modifiers in `Motion.swift`. They all
   respect Reduce Motion, so don't call `withAnimation(.spring(...))` with
   numbers of your own. Use `withNeonAnimation`.
-- iOS 16 is the target. The kit already guards what needs iOS 16.4 or 17.
+- The app is light only (it forces `.light`). iOS 16 is the target; the kit
+  already guards what needs iOS 16.4 or 17.
 
 ---
 
@@ -44,16 +92,18 @@ your area (`TaskBoardRow`, not `ListRow`).
 
 | Kind | Names |
 |---|---|
-| Brand colours | `Color.neonBg`, `.neonBgSoft`, `.neonInk`, `.neonCyan`/`Strong`, `.neonPurple`/`Strong`, `.neonPink`/`Strong`, `.neonOrange`/`Strong` |
+| Page | `Color.neonBg` (cool near-white), `.neonBgSoft` (the lavender at the top), `LinearGradient.neonPage`. `NeonAmbient` paints them with two soft glows; `NeonScroll` and `.neonListStyle()` put it behind you. |
+| Brand colours | `.neonInk` (cool near-black), `.neonBlue`/`Strong`, `.neonIndigo`/`Strong`, `.neonPurple`/`Strong`, `.neonPink`/`Strong`, `.neonOrange`/`Strong`, `.neonAmber`/`Strong`, `.neonCyan`/`Strong`. `.neonAccent` is selection (a chosen pill, a pinned row, a link). |
 | Meaning | `.neonSuccess`/`Strong`, `.neonDanger`/`Strong`, `.neonWarning`/`Strong`, `.neonInfo`/`Strong`. Put text in the *Strong* one and fills in the plain one. |
-| Text | `.neonText`, `.neonTextSecondary`, `.neonTextTertiary`, `.neonTextFaint` |
-| Surfaces, lines | `.neonSurface`, `.neonSurfaceStrong`, `.neonSurfaceSunken`, `.neonLine`, `.neonLineStrong` |
-| Gradients | `LinearGradient.neonWordmark`, `.neonAmbient`, `.neonBrand`, `.neonInkHero`, `.neonGlass`, `.neonGlassStrong`, `.neonGlassEdge`, `.neonTint(color)` |
-| Palette | `NeonPalette.color(at: i)` for series and categories. `NeonPalette.color(for: name)` gives a person a stable colour. |
-| Spacing | `NeonSpace.xxs 2 · xs 4 · sm 8 · md 12 · lg 16 · xl 20 · xxl 24 · xxxl 32 · huge 48`, `.gutter 16` (screen margin), `.section 22` |
-| Radii | `NeonRadius.xs 8 · sm 12 · md 16 · lg 20 (cards) · xl 24 · xxl 30 (heroes, sheets)` |
-| Sizes | `NeonSize.touch 44 · field 50 · iconTile 38 · avatar 44` |
-| Type | `Font.neonLargeTitle`, `.neonTitle`, `.neonTitle2`, `.neonTitle3` (rounded), `.neonHeadline`, `.neonBody`, `.neonCallout`, `.neonSubheadline`, `.neonFootnote`, `.neonCaption`, `.neonOverline`, `.neonNumber`, `.neonNumberSmall` (rounded, monospaced digits). All scale with Dynamic Type. |
+| Hues | `NeonHue.blue … .grey`: `.color` (bars, dots, filled tiles), `.deep` (glyph on the pastel, text), `.pastel` (tile), `.wash` (a whole tile or note), `.gradient` / `.fill`. `NeonHue(someKitColor)` finds a colour's family. |
+| Text | `.neonText`, `.neonTextSecondary` (slate: labels, subtitles), `.neonTextTertiary` (times, meta), `.neonTextFaint` (chevrons, placeholders) |
+| Surfaces, lines | `.neonSurface`, `.neonSurfaceStrong`, `.neonSurfaceSunken`, `.neonLine`, `.neonLineStrong`, `.neonShadowTint` (every shadow's navy) |
+| Gradients | `LinearGradient.neonBrand` (sky → indigo → violet: hero, brand button), `.neonAccent` (selection, primary button), `.neonAction` (the floating button), `.neonWordmark`, `.neonAmbient`, `.neonInkHero`, `.neonGlass`, `.neonGlassStrong`, `.neonGlassEdge`, `.neonTint(color)`; `AngularGradient.neonStory` (story rings) |
+| Palette | `NeonPalette.color(at: i)` / `.hue(at: i)` for series and categories. `NeonPalette.color(for: name)` / `.hue(for: name)` give a person a stable colour. |
+| Spacing | `NeonSpace.xxs 2 · xs 4 · sm 8 · md 12 · lg 16 · xl 20 · xxl 24 · xxxl 32 · huge 48`, `.gutter 16` (screen margin), `.stack 12` (between cards), `.card 16` (inside a card), `.section 22` |
+| Radii | `NeonRadius.xs 8 · sm 12 · md 16 (tiles in a card, fields) · lg 22 (cards) · xl 26 (hero, tab bar) · xxl 30 (sheets)`, `NeonRadius.tile(size)` for an icon tile |
+| Sizes | `NeonSize.touch 44 · field 50 · iconTile 38 · iconTileLarge 40 · avatar 44 · circleButton 44 · fab 58` |
+| Type (SF Pro) | `Font.neonLargeTitle`, `.neonTitle`, `.neonTitle2`, `.neonTitle3`, `.neonHeadline`, `.neonBody`, `.neonCallout`, `.neonSubheadline`, `.neonFootnote`, `.neonCaption`, `.neonOverline`, `.neonNumber`, `.neonNumberSmall`; for the mockups' pieces `.neonDisplay` (a hero's name), `.neonKPI` (a KPI figure), `.neonCardTitle`, `.neonRowTitle`, `.neonLabel` (under a figure), `.neonSubtitle` (under a card title), `.neonMeta` (times). All scale with Dynamic Type. |
 | Elevation | `.neonShadow(.low / .card / .raised / .floating / .glow(color))` |
 | Motion | `NeonMotion.snappy` (selection), `.bouncy` (arrivals), `.smooth` (layout), `.gentle`, `.quick`, `.fill` (numbers, rings). `NeonMotion.stagger(i)`. `withNeonAnimation(.snappy) { … }` |
 | Transitions | `.transition(.neonPop / .neonRise / .neonSlideUp / .neonDrop)` |
@@ -62,13 +112,71 @@ your area (`TaskBoardRow`, not `ListRow`).
 
 ---
 
+## The page, top to bottom (the mockups' pieces)
+
+```swift
+NavigationStack {
+    NeonScroll(spacing: NeonSpace.stack) {
+        ScreenHeader.brand {                                   // or ScreenHeader(L("Chat"), leading: { … }) { … }
+            IconButton("magnifyingglass", label: L("Search"), size: NeonSize.circleButton) { … }
+            IconButton("bell", label: L("Alerts"), size: NeonSize.circleButton, dot: hasNew) { … }
+            AccountMenu()
+        }
+        HeroCard(name, eyebrow: greeting, eyebrowSymbol: "sun.max.fill", subtitle: dateLine,
+                 footnote: L("An overview of every client project delivery."),
+                 photo: .url(coverURL), action: { … }) { weather }  // accessory at the top trailing corner
+        StatGrid(columns: 4) {
+            KPICard(L("Total Projects"), value: 4, symbol: "folder.fill", hue: .blue,
+                    trend: .rising("+2", L("this month")), bars: history, density: .compact) { menuButtons }
+        }
+        SectionCard(L("Project Progress"), subtitle: L("Live status of all projects"),
+                    symbol: "square.stack.3d.up.fill", hue: .blue, action: { … }) {
+            SegmentedProgress([ProgressSegment(L("Planning"), value: 2, hue: .green), …])
+        }
+    }
+    .toolbar(.hidden, for: .navigationBar)
+}
+```
+
+| Piece | Use | File |
+|---|---|---|
+| `ScreenHeader(title, leading:, trailing:)`, `ScreenHeader.brand { … }` | A tab page's header instead of a nav bar. | Layout |
+| `NeonLogo(size:)` | The gradient "N" and NEON, for a header. | Layout |
+| `IconButton(symbol, label:, look:, size:, badge:, dot:)` | Round white button; `dot: true` for the red "something new". | Buttons |
+| `IconButtonLabel(symbol, …)` | The same look as the label of a `Menu` / `NavigationLink`: `Menu { … } label: { IconButtonLabel("ellipsis") }`. | Buttons |
+| `HeroCard(title, eyebrow:, eyebrowSymbol:, subtitle:, footnote:, photo: .url(u) / .image(i) / .none, action:) { accessory }` | Home's gradient greeting card; the photo melts in from the trailing side. | Hero |
+| `KPICard(title, value:, format:, symbol:, hue:, caption:, trend:, bars:, density:) { menu }` | A headline figure with tile, ⋮ menu, trend and mini bars. `text:` for a figure that isn't a number. | Stats |
+| `StatTrend.rising("+2", L("this month"))`, `.falling("−1", …)`, `.steady()` | The line under a figure; `.steady()` is "— No change" and makes a card's bars pale. | Stats |
+| `TrendLabel(trend)` | That line on its own, anywhere. | Stats |
+| `MiniBars(values, comparison:, labels:, hue:, muted:, height:)` | A few gradient bars; with `comparison` + `labels` it is the "This Month" chart. | Stats |
+| `Sparkline(values, hue:, height:)` | A small smoothed line with an area and an end dot. | Stats |
+| `SegmentedProgress(segments)` / `SegmentedProgressBar` / `ProgressLegend` | A whole split into coloured parts, with the dot legend under it. | Stats |
+| `SectionCard(title, subtitle:, symbol:, hue:, tileStyle:, action:) { … }` | A card with its own heading; `actionTitle: L("Edit"), actionChevron: false` for a plain link; `trailing: { PillMenu … }` for any control. | Cards |
+| `ViewAllButton(L("View All")) { … }` | The pale capsule link. | Cards |
+| `PillMenu(L("Revenue")) { Button … }` | A white capsule that opens a menu. | Controls |
+| `QuickActionGrid([QuickAction(L("New Project"), symbol: "plus", hue: .purple) { … }], columns: 3)` | Shortcut tiles; `columns: nil, inset: NeonSpace.card` is one sideways row inside a card (bleed it with `.padding(.horizontal, -NeonSpace.card)`). | Buttons |
+| `ListRow(title, subtitle:, leading: .image(i) / .thumbnail(url:) / …) { Text(time); CheckCircle(done) }` | A task row inside a card, dividers between. | Cards, Controls |
+| `CheckCircle(isDone)` | A task's tick: green disc or grey ring. | Controls |
+| `StoryAvatar(name:, url:, ring: .unseen / .seen / .none, online:, showsAdd:)` | The stories row. | People |
+| `OnlineDot(size:)` | "Here now", on anything. | People |
+| `PillFilterBar(selection:, options:, title:, count:)` | Filters over a list in one white capsule; red counts; scrolls when it doesn't fit. | Controls |
+| `ListCardRow(title, subtitle:, leading:, titleSymbol:, time:, count:, pinned:, muted:, badge:)` | A conversation / person / project on its own white card. | Layout |
+| `anyRow.rowCard(pinned:, highlighted:)` | The same card for a row of your own. | Layout |
+| `.floatingActionButton("square.and.pencil", label: …) { … }` | The round indigo-violet "add". | Buttons |
+| `NeonTabBar(selection:, items: [NeonTabItem(tab, title:, symbol:, badge:, dot:)])` | The floating tab bar with the lavender pill, for a shell that draws its own. | TabBar |
+
+`AvatarView(…, style: .solid)` draws white initials on the person's colour, as
+the chat list does; `.soft` (the default) is the quiet pastel one.
+
+---
+
 ## Surfaces and cards
 
 ```swift
 // Any view on a surface. The padding is yours.
 content.padding(16).neonSurface(.glass, radius: NeonRadius.lg)
-// Surfaces: .glass (default), .strong, .solid, .sunken, .outline,
-//           .tinted(color), .ink (white text), .brand (white text), .frosted (over photos)
+// Surfaces: .glass (default: the mockups' white card), .strong, .solid, .sunken, .outline,
+//           .tinted(color) (the hue's wash), .ink (white text), .brand (white text), .frosted (over photos)
 content.glassCard(radius: 18)          // old name for .neonSurface(.glass)
 
 NeonCard { … }                          // padded, full-width glass card, VStack(spacing: 12)
@@ -132,9 +240,10 @@ ListRow(name, leading: .avatar(url: url, name: name)) { Toggle("", isOn: $on).la
 KeyValueRow(L("Budget"), value: NeonFormat.money(48000), symbol: "banknote")
 KeyValueRow(L("Client"), value: client, userText: true, selectable: true)
 MetaLabel(L("Sep 30"), symbol: "calendar")               // a small symbol + a few words
-IconTile("folder", tint: .neonPurpleStrong, size: 38, style: .soft)   // .soft / .filled / .glass
+IconTile("folder.fill", hue: .blue, size: 40, style: .soft)          // .soft (pastel) / .filled (gradient, white glyph) / .glass
+IconTile("folder", tint: .neonPurpleStrong)                         // a kit colour is read as its hue
 SectionHeader(L("Reviews"), subtitle: "…", count: 3)
-SectionHeader(L("Projects"), actionTitle: L("See all")) { showAll() }
+SectionHeader(L("Projects"), actionTitle: L("View All")) { showAll() }     // the capsule link
 SectionHeader(L("Files")) { IconButton("plus", label: L("Add")) { … } }
 SectionLabel(L("Tomorrow"))                              // small uppercase label
 DetailCard(title: L("Next step"), symbol: "arrow.forward") { DirText(next) }
@@ -163,6 +272,7 @@ StageTrack(stages: projectStages.map { localizedEnum("stage", $0) }, current: in
 
 ```swift
 StatGrid {                                         // two per row, equal heights
+    // StatTile is the older name: it draws a KPICard (no menu, no bars) with its tint read as a hue.
     StatTile(L("Open tasks"), value: 42, symbol: "checklist", trend: StatTrend(text: "+6", tone: .success, up: true))
     StatTile(L("Payroll"), value: total, format: .money, symbol: "banknote", tint: .neonSuccessStrong)
     StatTile(L("On time"), value: 91, format: .percent, caption: L("last 30 days"))
@@ -191,11 +301,11 @@ grow in when they appear, mirror in Arabic, and show "No data yet" when empty.
 StateBadge(state: task.state)            // the board's states in the studio's words; IN_PROGRESS pulses
 StateBadge(L("Waiting"), tone: .orange, symbol: "hourglass")
 BadgeView(text: L("High"), tone: .pink, symbol: "flame.fill")   // small uppercase label
-CountBadge(unread)                       // nothing at zero, "99+" above 99
+CountBadge(unread)                       // red; nothing at zero, "99+" above 99. tone: .neutral for a plain count
 statusTone("APPROVED")                   // one tone per platform status word; taskStateTone for task states
-// BadgeTone: .cyan .purple .pink .orange .neutral .success .warning .danger .info (.background/.foreground/.color)
+// BadgeTone: .cyan .purple .pink .orange .blue .neutral .success .warning .danger .info (.background/.foreground/.color/.hue)
 
-AvatarView(url: url, name: name, size: 44, ring: false, online: true)
+AvatarView(url: url, name: name, size: 44, ring: false, online: true)          // style: .solid for the chat list
 AvatarStack(people.map { AvatarItem(id: $0.id, name: $0.name, url: $0.avatarURL) }, size: 28, limit: 4)
 PersonChip(name: name, url: url, subtitle: L("Designer"), onRemove: { … })
 RemoteImage(url: url, contentMode: .fill)  // fades in; branded shimmer while loading; fills its frame
@@ -205,8 +315,8 @@ RemoteImage(url: url, contentMode: .fill)  // fades in; branded shimmer while lo
 ## Buttons
 
 ```swift
-NeonButton(L("Save"), symbol: "checkmark") { await save() }        // .primary, large, full width
-NeonButton(L("Hand out"), kind: .brand) { … }                         // the one hero action on a screen
+NeonButton(L("Save"), symbol: "checkmark") { await save() }        // .primary (indigo), large, full width
+NeonButton(L("Hand out"), kind: .brand) { … }                         // sky → violet: the one hero action on a screen
 NeonButton(L("Cancel"), kind: .secondary, size: .medium) { dismiss() }
 NeonButton(L("Approve"), kind: .tinted(.neonSuccessStrong), size: .medium) { … }
 NeonButton(L("Delete"), symbol: "trash", kind: .destructive,
@@ -218,7 +328,7 @@ NeonButton(L("Later"), kind: .ghost, size: .small) { … }
 
 Button(…) { … }.buttonStyle(.neon(.secondary, size: .medium))   // the same look for ShareLink, PhotosPicker, NavigationLink
 
-IconButton("phone.fill", label: L("Call")) { … }                  // looks: .glass .filled .tinted .plain; badge: n
+IconButton("phone.fill", label: L("Call")) { … }                  // looks: .glass (white disc) .filled .tinted .plain; badge: n, dot: true
 screen.floatingActionButton(label: L("New task")) { showNew = true }    // gradient + at bottom trailing
 screen.floatingActionButton("plus", label: L("New"), title: L("New task"), isVisible: !isEmpty) { … }
 ```
@@ -226,7 +336,8 @@ screen.floatingActionButton("plus", label: L("New"), title: L("New task"), isVis
 ## Filters, segments, search
 
 ```swift
-FilterChips(selection: $filter, options: Filter.allCases, inset: 16,
+PillFilterBar(selection: $filter, options: Filter.allCases, title: { $0.label }, count: { counts[$0] })  // the list's main filter
+FilterChips(selection: $filter, options: Filter.allCases, inset: 16,         // separate chips, selected in indigo
             title: { $0.label }, symbol: { $0.symbol }, count: { counts[$0] })
     .padding(.horizontal, -16)                       // bleed to the screen edges inside a padded stack
 SegmentedPill(selection: $view, options: [.day, .week], title: { $0.label }, symbol: { _ in nil }, badge: { _ in nil })
@@ -288,10 +399,12 @@ view.confirmDestructive(L("Delete this drawing?"), message: …, actionTitle: L(
 view.confirmDestructive(item: $fileToDelete, title: { L("Delete %@?", $0.name) }, actionTitle: L("Delete")) { file in … }
 
 EmptyState(symbol: "tray", title: L("Nothing planned for today"), detail: hours,
-           actionTitle: L("Plan the day"), action: { … })          // the symbol gently floats
+           actionTitle: L("Plan the day"), action: { … }, hue: .indigo, card: true)   // a pastel tile that floats
 ErrorState(message: error) { await load() }
 OfflineBanner(savedAt: cachedAt)
-SkeletonRows(count: 4)                      // ListRow-shaped placeholders with shimmer
+SkeletonRows(count: 4)                      // ListCardRow-shaped placeholders with shimmer
+SkeletonCard(lines: 3)                      // a SectionCard loading
+SkeletonKPICard(compact: true)              // a KPICard loading
 realRow.skeleton(isLoading)                 // redacts a view of the real shape and shimmers it
 SkeletonBlock(width: 120, height: 12)       // build your own placeholder
 anything.shimmer()
@@ -312,8 +425,27 @@ withNeonAnimation(.snappy) { selection = x }
 
 - `BrandMark(size: 80)` is the app icon on a glass tile with a slow halo.
   `NeonWordmark(size: 40)` is "NEON" in the web's shining gradient.
-- `neonAmbientBackground(animated: true)` makes the page's colour blobs drift.
-  Use it on sign-in and heroes only. Lists keep them still.
+- `neonAmbientBackground(animated: true)` makes the page's glows drift.
+  Use it on sign-in only. Everything else keeps them still.
 - Kept from before, and unchanged in signature: `DirText(text, font:, color:, fill:, lineLimit:)`,
   `naturalDirection(text)`, `AccountMenu()`, `UploadMaker`, `CameraPicker`,
   `byteCount(n)`, `publishTone(state)`, `GlassCard`.
+
+---
+
+## What changed in the kit (for anyone migrating a screen)
+
+Every existing component kept its API. These now look different everywhere:
+
+- Page: `NeonAmbient` is the lavender-to-white page; cards (`.glass`) are near
+  opaque white with a navy haze; `NeonRadius.lg` is 22.
+- Type is SF Pro, not rounded; `neonInk` and the text greys are cool.
+- `NeonButton(.primary)` is indigo (was ink); `.brand` is sky → violet.
+- `StatTile` is drawn as a `KPICard` (its trend is a line under the label now).
+- `IconTile(tint:)` draws the hue's pastel tile; `IconButton(.glass)` is a white
+  disc (a dark frosted one when the glyph is white, as on a call).
+- `CountBadge` defaults to red; `Chip` and `FilterChips` select in indigo.
+- `SectionHeader`'s action is the "View All ›" capsule.
+- `EmptyState` has a pastel tile; `StatusNote` a wash of its tone;
+  `SkeletonRows` are row cards.
+- `neonOrange` is orange (#F97316); the old amber is `neonAmber`.

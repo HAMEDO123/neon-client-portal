@@ -13,6 +13,9 @@
 "New" = "جديد";
 "Online now" = "متصل الآن";
 "See more" = "عرض المزيد";
+"Pinned" = "مثبّتة";
+"Muted" = "مكتوم";
+"Not done" = "لم يُنجز";
 
 /* Controls */
 "Search" = "بحث";

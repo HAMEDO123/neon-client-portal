@@ -189,9 +189,10 @@ struct SkeletonRows: View {
                     Circle()
                         .fill(Color.neonInk.opacity(0.07))
                         .frame(width: 46, height: 46)
+                    // Capped rather than fixed widths, so a narrow phone never overflows.
                     VStack(alignment: .leading, spacing: 9) {
-                        SkeletonBlock(width: index.isMultiple(of: 2) ? 150 : 115, height: 13)
-                        SkeletonBlock(width: index.isMultiple(of: 2) ? 200 : 165, height: 10)
+                        SkeletonBlock(height: 13).frame(maxWidth: index.isMultiple(of: 2) ? 150 : 115)
+                        SkeletonBlock(height: 10).frame(maxWidth: index.isMultiple(of: 2) ? 200 : 165)
                     }
                     Spacer(minLength: 0)
                     SkeletonBlock(width: 42, height: 10)
@@ -215,8 +216,8 @@ struct SkeletonCard: View {
             HStack(spacing: 12) {
                 SkeletonBlock(width: NeonSize.iconTileLarge, height: NeonSize.iconTileLarge, radius: NeonRadius.tile(NeonSize.iconTileLarge))
                 VStack(alignment: .leading, spacing: 8) {
-                    SkeletonBlock(width: 140, height: 14)
-                    SkeletonBlock(width: 190, height: 10)
+                    SkeletonBlock(height: 14).frame(maxWidth: 140)
+                    SkeletonBlock(height: 10).frame(maxWidth: 190)
                 }
                 Spacer(minLength: 0)
                 SkeletonBlock(width: 78, height: 30, radius: 15)

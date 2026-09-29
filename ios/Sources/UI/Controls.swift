@@ -47,7 +47,7 @@ struct Chip: View {
             .background {
                 if isSelected {
                     Capsule().fill(tint == .neonAccent ? AnyShapeStyle(LinearGradient.neonAccent) : AnyShapeStyle(tint))
-                        .shadow(color: tint.opacity(0.28), radius: 8, x: 0, y: 4)
+                        .shadow(color: tint.opacity(0.26), radius: 4, x: 0, y: 2)
                 } else {
                     Capsule().fill(Color.white.opacity(0.94))
                         .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
@@ -138,7 +138,7 @@ struct FilterChips<Option: Hashable>: View {
                                     if selected {
                                         Capsule()
                                             .fill(tint == .neonAccent ? AnyShapeStyle(LinearGradient.neonAccent) : AnyShapeStyle(tint))
-                                            .shadow(color: tint.opacity(0.28), radius: 8, x: 0, y: 4)
+                                            .shadow(color: tint.opacity(0.26), radius: 4, x: 0, y: 2)
                                             .matchedGeometryEffect(id: "selection", in: namespace)
                                     } else {
                                         Capsule()
@@ -313,7 +313,7 @@ struct PillFilterBar<Option: Hashable>: View {
                 if selected {
                     Capsule()
                         .fill(LinearGradient.neonAccent)
-                        .shadow(color: Color.neonAccent.opacity(0.32), radius: 8, x: 0, y: 4)
+                        .shadow(color: Color.neonAccent.opacity(0.3), radius: 4, x: 0, y: 2)
                         .matchedGeometryEffect(id: "pill", in: namespace)
                 }
             }

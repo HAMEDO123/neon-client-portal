@@ -3,12 +3,12 @@ import SwiftUI
 import UIKit
 
 /// Every component of the kit, a screen at a time, so the design system can
-/// be checked in screenshots: `-neonScreen kit`, `kit-2` … `kit-10`. The
+/// be checked in screenshots: `-neonScreen kit`, `kit-2` … `kit-12`. The
 /// words and figures are samples, not studio data. Debug builds only.
 struct DesignKitGallery: View {
     var slice = 1
 
-    static let slices = 10
+    static let slices = 12
 
     var body: some View {
         NavigationStack {
@@ -40,6 +40,8 @@ struct DesignKitGallery: View {
         case 8: GalleryStates()
         case 9: GalleryForms()
         case 10: GalleryCharts()
+        case 11: GalleryLoading()
+        case 12: GalleryBadges()
         default: GalleryHomeUpper()
         }
     }
@@ -191,7 +193,7 @@ private struct GalleryQuickActions: View {
     }
 
     var body: some View {
-        SectionCard("Quick Actions", symbol: "bolt.fill", hue: .purple, tileStyle: .filled, actionTitle: "Edit", action: {}) {
+        SectionCard("Quick Actions", symbol: "bolt.fill", hue: .purple, tileStyle: .filled, actionTitle: "Edit", actionChevron: false, action: {}) {
             QuickActionGrid(actions, columns: nil, inset: NeonSpace.card)
                 .padding(.horizontal, -NeonSpace.card)
         }
@@ -379,30 +381,6 @@ private struct GalleryControls: View {
                 PillMenu("Revenue") { Button("Revenue") {} }
             }
         }
-
-        SectionCard("Badges and tiles", symbol: "tag.fill", hue: .pink) {
-            FlowRow {
-                StateBadge(state: "IN_PROGRESS")
-                StateBadge(state: "DONE")
-                BadgeView(text: "High", tone: .pink, symbol: "flame.fill")
-                BadgeView(text: "Client", tone: .blue)
-                CountBadge(3)
-                CountBadge(12, tone: .neutral)
-            }
-            HStack(spacing: 8) {
-                ForEach(NeonHue.allCases, id: \.self) { hue in
-                    IconTile("sparkles", hue: hue, size: 30)
-                }
-            }
-            HStack(spacing: 8) {
-                IconTile("folder.fill", hue: .blue, size: 40, style: .soft)
-                IconTile("folder.fill", hue: .blue, size: 40, style: .filled)
-                IconTile("folder.fill", hue: .blue, size: 40, style: .glass)
-                IconTile("clock.fill", tint: .neonOrangeStrong, size: 40)
-                CheckCircle(true)
-                CheckCircle(false)
-            }
-        }
     }
 }
 
@@ -455,15 +433,25 @@ private struct GalleryStates: View {
         EmptyState(symbol: "tray", title: "Nothing planned for today",
                    detail: "Plan the day and it appears here.", actionTitle: "Plan the day", action: {}, card: true)
 
+        EmptyState(symbol: "folder", title: "No projects yet", detail: "Create the first one and it shows here.", hue: .blue)
+
+        ErrorState(message: "The server could not be reached.") {}
+    }
+}
+
+// MARK: - 11 · Loading
+
+private struct GalleryLoading: View {
+    var body: some View {
+        StatGrid(columns: 4) {
+            ForEach(0..<4, id: \.self) { _ in SkeletonKPICard(compact: true) }
+        }
         HStack(spacing: NeonSpace.stack) {
             SkeletonKPICard()
             SkeletonKPICard()
         }
-
         SkeletonCard(lines: 2)
-        SkeletonRows(count: 2)
-
-        ErrorState(message: "The server could not be reached.") {}
+        SkeletonRows(count: 3)
     }
 }
 
@@ -489,6 +477,42 @@ private struct GalleryForms: View {
         }
 
         NeonButton("Hand out", symbol: "paperplane.fill") {}
+    }
+}
+
+// MARK: - 12 · Badges and tiles
+
+private struct GalleryBadges: View {
+    var body: some View {
+        SectionCard("Badges and tiles", symbol: "tag.fill", hue: .pink) {
+            FlowRow {
+                StateBadge(state: "IN_PROGRESS")
+                StateBadge(state: "DONE")
+                BadgeView(text: "High", tone: .pink, symbol: "flame.fill")
+                BadgeView(text: "Client", tone: .blue)
+                CountBadge(3)
+                CountBadge(12, tone: .neutral)
+            }
+            HStack(spacing: 8) {
+                IconTile("folder.fill", hue: .blue, size: 40, style: .soft)
+                IconTile("folder.fill", hue: .blue, size: 40, style: .filled)
+                IconTile("folder.fill", hue: .blue, size: 40, style: .glass)
+                IconTile("clock.fill", tint: .neonOrangeStrong, size: 40)
+                CheckCircle(true)
+                CheckCircle(false)
+            }
+        }
+
+        SectionCard("Every hue", subtitle: "Pastel tile, deep glyph, vivid bars", symbol: "paintpalette.fill", hue: .purple) {
+            ForEach(NeonHue.allCases, id: \.self) { hue in
+                HStack(spacing: 12) {
+                    IconTile("sparkles", hue: hue, size: 30)
+                    IconTile("sparkles", hue: hue, size: 30, style: .filled)
+                    MiniBars([2, 3, 4, 3, 5], hue: hue, height: 22, maxBarWidth: 10)
+                    Circle().fill(hue.color).frame(width: 10, height: 10)
+                }
+            }
+        }
     }
 }
 
@@ -526,45 +550,45 @@ enum GalleryArt {
             c.addLine(to: CGPoint(x: w, y: h)); c.addLine(to: CGPoint(x: 0, y: h)); c.fillPath()
             c.setFillColor(rgb(0x181A33).cgColor)
             c.fill(CGRect(x: 0, y: h * 0.84, width: w, height: h * 0.16))
-            // Lower storey with glass.
+            // Lower storey with glass, on the far side as in a real cover photo.
             c.setFillColor(rgb(0x23264A).cgColor)
-            c.fill(CGRect(x: w * 0.3, y: h * 0.6, width: w * 0.62, height: h * 0.25))
+            c.fill(CGRect(x: w * 0.5, y: h * 0.62, width: w * 0.46, height: h * 0.23))
             let glow = gradient([rgb(0xFFE0A0), rgb(0xF4A04E)], [0, 1])
-            for i in 0..<6 {
-                let rect = CGRect(x: w * 0.33 + CGFloat(i) * w * 0.095, y: h * 0.63, width: w * 0.08, height: h * 0.2)
+            for i in 0..<5 {
+                let rect = CGRect(x: w * 0.52 + CGFloat(i) * w * 0.085, y: h * 0.65, width: w * 0.07, height: h * 0.18)
                 c.saveGState(); c.clip(to: rect)
                 c.drawLinearGradient(glow, start: CGPoint(x: 0, y: rect.minY), end: CGPoint(x: 0, y: rect.maxY), options: [])
                 c.restoreGState()
             }
             // Cantilevered upper storey: white slab, wood soffit, lit glass.
             c.setFillColor(rgb(0x2A2D52).cgColor)
-            c.fill(CGRect(x: w * 0.42, y: h * 0.36, width: w * 0.58, height: h * 0.22))
+            c.fill(CGRect(x: w * 0.58, y: h * 0.4, width: w * 0.42, height: h * 0.2))
             c.setFillColor(rgb(0xEDEAF5).cgColor)
-            c.fill(CGRect(x: w * 0.4, y: h * 0.33, width: w * 0.6, height: h * 0.04))
-            c.fill(CGRect(x: w * 0.4, y: h * 0.575, width: w * 0.6, height: h * 0.03))
+            c.fill(CGRect(x: w * 0.55, y: h * 0.37, width: w * 0.45, height: h * 0.035))
+            c.fill(CGRect(x: w * 0.55, y: h * 0.595, width: w * 0.45, height: h * 0.028))
             c.setFillColor(rgb(0xA8744A).cgColor)
-            c.fill(CGRect(x: w * 0.43, y: h * 0.37, width: w * 0.57, height: h * 0.025))
-            for i in 0..<5 {
-                let rect = CGRect(x: w * 0.45 + CGFloat(i) * w * 0.11, y: h * 0.405, width: w * 0.095, height: h * 0.165)
+            c.fill(CGRect(x: w * 0.58, y: h * 0.405, width: w * 0.42, height: h * 0.022))
+            for i in 0..<4 {
+                let rect = CGRect(x: w * 0.6 + CGFloat(i) * w * 0.1, y: h * 0.44, width: w * 0.085, height: h * 0.145)
                 c.saveGState(); c.clip(to: rect)
                 c.drawLinearGradient(glow, start: CGPoint(x: 0, y: rect.minY), end: CGPoint(x: 0, y: rect.maxY), options: [])
                 c.restoreGState()
             }
-            // Light on the ground, then two palms.
+            // Light on the ground, then two palms behind the house.
             c.setFillColor(rgb(0xF6B26B, 0.22).cgColor)
-            c.fillEllipse(in: CGRect(x: w * 0.3, y: h * 0.82, width: w * 0.62, height: h * 0.08))
-            for (x, top) in [(w * 0.2, h * 0.3), (w * 0.95, h * 0.24)] {
+            c.fillEllipse(in: CGRect(x: w * 0.5, y: h * 0.83, width: w * 0.46, height: h * 0.07))
+            for (x, top) in [(w * 0.9, h * 0.22), (w * 0.44, h * 0.34)] {
                 c.setStrokeColor(rgb(0x14162B).cgColor)
-                c.setLineWidth(7)
+                c.setLineWidth(6)
                 c.move(to: CGPoint(x: x, y: h * 0.86))
-                c.addQuadCurve(to: CGPoint(x: x + 14, y: top), control: CGPoint(x: x - 18, y: h * 0.55))
+                c.addQuadCurve(to: CGPoint(x: x + 12, y: top), control: CGPoint(x: x - 16, y: h * 0.55))
                 c.strokePath()
                 c.setFillColor(rgb(0x14162B).cgColor)
                 for angle in stride(from: 0.0, to: Double.pi * 2, by: Double.pi / 4) {
-                    let tip = CGPoint(x: x + 14 + CGFloat(cos(angle)) * 62, y: top + CGFloat(sin(angle)) * 30 + 14)
-                    c.move(to: CGPoint(x: x + 14, y: top))
-                    c.addQuadCurve(to: tip, control: CGPoint(x: x + 14 + CGFloat(cos(angle)) * 30, y: top - 22))
-                    c.addQuadCurve(to: CGPoint(x: x + 14, y: top + 4), control: CGPoint(x: x + 14 + CGFloat(cos(angle)) * 26, y: top - 8))
+                    let tip = CGPoint(x: x + 12 + CGFloat(cos(angle)) * 52, y: top + CGFloat(sin(angle)) * 26 + 12)
+                    c.move(to: CGPoint(x: x + 12, y: top))
+                    c.addQuadCurve(to: tip, control: CGPoint(x: x + 12 + CGFloat(cos(angle)) * 26, y: top - 18))
+                    c.addQuadCurve(to: CGPoint(x: x + 12, y: top + 4), control: CGPoint(x: x + 12 + CGFloat(cos(angle)) * 22, y: top - 6))
                     c.fillPath()
                 }
             }

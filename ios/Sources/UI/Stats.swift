@@ -287,7 +287,13 @@ struct KPICard<MenuContent: View>: View {
         .onChange(of: value ?? 0) { count(to: $0) }
         .accessibilityElement(children: hasMenu ? .contain : .ignore)
         .accessibilityLabel(Text(title))
-        .accessibilityValue(Text([text ?? format.string(value ?? 0), trend.map { [$0.text, $0.detail ?? ""].joined(separator: " ") } ?? ""].joined(separator: ", ")))
+        .accessibilityValue(Text(spokenValue))
+    }
+
+    private var spokenValue: String {
+        let figure = text ?? format.string(value ?? 0)
+        guard let trend else { return figure }
+        return figure + ", " + [trend.text, trend.detail].compactMap { $0 }.joined(separator: " ")
     }
 
     private func count(to target: Double) {
@@ -533,6 +539,7 @@ struct ProgressBar: View {
                 Capsule().fill(Color.neonInk.opacity(0.07))
                 Capsule()
                     .fill(tint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(LinearGradient(colors: [.neonBlue, .neonIndigo, .neonPurple], startPoint: .leading, endPoint: .trailing)))
+                    .flipsForRightToLeftLayoutDirection(true)
                     .frame(width: max(height, proxy.size.width * amount))
                     .opacity(amount > 0.001 ? 1 : 0)
             }
@@ -801,6 +808,7 @@ struct SegmentedProgressBar: View {
                     ForEach(shown) { segment in
                         Capsule()
                             .fill(LinearGradient(colors: segment.band, startPoint: .leading, endPoint: .trailing))
+                            .flipsForRightToLeftLayoutDirection(true)
                             .frame(width: max(height, room * CGFloat(segment.value / max(total, 1))))
                     }
                 }

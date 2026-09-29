@@ -399,7 +399,7 @@ struct ListCardRow<Leading: View>: View {
         .padding(.horizontal, 14)
         .rowCard(pinned: pinned, highlighted: unread)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(pinned ? .isSelected : [])
+        .accessibilityValue(pinned ? Text(L("Pinned")) : Text(""))
     }
 }
 

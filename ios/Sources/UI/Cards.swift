@@ -546,11 +546,12 @@ extension SectionCard where Trailing == ViewAllButton {
         tileStyle: IconTileStyle = .soft,
         spacing: CGFloat = 14,
         actionTitle: String = L("View All"),
+        actionChevron: Bool = true,
         action: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
         self.init(title, subtitle: subtitle, symbol: symbol, hue: hue, tileStyle: tileStyle, spacing: spacing, content: content) {
-            ViewAllButton(actionTitle, action: action)
+            ViewAllButton(actionTitle, chevron: actionChevron, action: action)
         }
     }
 }
