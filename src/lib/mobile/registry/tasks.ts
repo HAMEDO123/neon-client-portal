@@ -12,6 +12,8 @@ import {
 } from "@/lib/mobile/rpc";
 import { mobileTaskBoard } from "@/lib/mobile/tasks-board";
 import { mobileProcess } from "@/lib/mobile/tasks-process";
+import { mobileTaskPeople } from "@/lib/mobile/tasks-people";
+import { PEOPLE_PERIODS } from "@/lib/mobile/tasks-people-rules";
 import { mobileWeekBoard } from "@/lib/mobile/tasks-week";
 import {
   createEmployee,
@@ -62,6 +64,12 @@ export const reads: ReadRegistry = {
   "tasks/board": guarded(requireAdmin, async () => mobileTaskBoard()),
   "tasks/week": guarded(requireAdmin, async (params) => mobileWeekBoard(optParam(params, "week"))),
   "tasks/process": guarded(requireAdmin, async () => mobileProcess()),
+  // Each person's share of the work they were given this week or month that
+  // is done — the Team segment. Behind requireAdmin, like /admin/tasks and
+  // /admin/analytics, whose figures it counts by.
+  "tasks/people": guarded(requireAdmin, async (params) =>
+    mobileTaskPeople(oneOf(optParam(params, "period") ?? "week", PEOPLE_PERIODS, "period"), optParam(params, "day"))
+  ),
 };
 
 export const actions: ActionRegistry = {
