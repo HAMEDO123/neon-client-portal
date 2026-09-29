@@ -14,25 +14,31 @@ struct EmployeeDetailView: View {
     @State private var showPasswordReset = false
 
     var body: some View {
-        NeonScroll {
-            LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
-                header(data)
+        ScrollViewReader { proxy in
+            NeonScroll {
+                LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
+                    header(data).id("profile")
 
-                DayPlanCard(
-                    employeeId: employeeId,
-                    name: data.employee.name,
-                    today: data.today,
-                    tomorrow: data.tomorrow,
-                    tomorrowLabel: data.tomorrowLabel,
-                    aiConfigured: data.aiConfigured,
-                    initialPlans: data.plans
-                )
+                    DayPlanCard(
+                        employeeId: employeeId,
+                        name: data.employee.name,
+                        today: data.today,
+                        tomorrow: data.tomorrow,
+                        tomorrowLabel: data.tomorrowLabel,
+                        aiConfigured: data.aiConfigured,
+                        initialPlans: data.plans
+                    )
+                    .id("day-plan")
 
-                salesCard(data.sales)
-                performanceCard(data.performance, days: data.performanceDays)
-                warningsCard(data)
-                accountAccessCard(data)
+                    salesCard(data.sales).id("sales")
+                    performanceCard(data.performance, days: data.performanceDays).id("performance")
+                    warningsCard(data).id("warnings")
+                    accountAccessCard(data).id("access")
+                }
             }
+            #if DEBUG
+            .debugScroll(proxy)
+            #endif
         }
         .refreshable {
             Haptic.tap()
@@ -61,6 +67,7 @@ struct EmployeeDetailView: View {
     private func header(_ data: TeamEmployeeResponse) -> some View {
         NeonCard {
             HStack(alignment: .top, spacing: 12) {
+                AvatarView(url: nil, name: data.employee.name, size: 52, style: .solid)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         DirText(data.employee.name, font: .neonTitle2, color: .neonInk)
@@ -108,7 +115,7 @@ struct EmployeeDetailView: View {
 
             if let playbook = data.employee.playbook, !playbook.isEmpty {
                 DetailCard(title: L("What they usually do"), symbol: "book") {
-                    DirText(playbook, font: .neonCallout, color: .neonInk.opacity(0.8))
+                    TeamPlaybookText(text: playbook)
                 }
             }
         }
@@ -128,8 +135,7 @@ struct EmployeeDetailView: View {
 
     @ViewBuilder
     private func salesCard(_ sales: TeamSales) -> some View {
-        NeonCard {
-            SectionHeader(L("Sales this month"), subtitle: sales.period)
+        SectionCard(L("Sales this month"), subtitle: sales.period, symbol: "chart.line.uptrend.xyaxis", hue: .green) {
             ProgressBar(progress: sales.target == 0 ? 1 : min(1, Double(sales.projects.count) / Double(sales.target)), tint: .neonSuccess)
             Text(salesLine(sales))
                 .font(.neonFootnote)
@@ -180,8 +186,7 @@ struct EmployeeDetailView: View {
 
     @ViewBuilder
     private func performanceCard(_ performance: TeamPerformance, days: Int) -> some View {
-        NeonCard {
-            SectionHeader(L("How the work is going"), subtitle: L("Last %d days, measured by what came out of the work.", days))
+        SectionCard(L("How the work is going"), subtitle: L("Last %d days, measured by what came out of the work.", days), symbol: "gauge.with.dots.needle.67percent", hue: .blue) {
             StatGrid {
                 performanceFigure(L("Delivered on time"), performance.onTime) { "\(Int($0))%" }
                 performanceFigure(L("Accepted first time"), performance.acceptedFirstTime) { "\(Int($0))%" }
@@ -233,8 +238,7 @@ struct EmployeeDetailView: View {
 
     @ViewBuilder
     private func accountAccessCard(_ data: TeamEmployeeResponse) -> some View {
-        NeonCard {
-            SectionHeader(L("Account access"))
+        SectionCard(L("Account access"), symbol: "lock.shield", hue: .indigo) {
             Text(L("Disabling takes effect on the employee's next request and stops all push to their devices. Their place on the task board is untouched."))
                 .font(.neonFootnote)
                 .foregroundStyle(Color.neonTextSecondary)
@@ -325,18 +329,7 @@ private struct TeamWarningsCard: View {
     @State private var removing: TeamWarning?
 
     var body: some View {
-        NeonCard {
-            HStack {
-                SectionHeader(L("Warnings"))
-                Spacer(minLength: 0)
-                HStack(spacing: 4) {
-                    ForEach(0..<limit, id: \.self) { index in
-                        Circle()
-                            .fill(index < warnings.count ? Color.neonOrangeStrong : Color.neonLine)
-                            .frame(width: 8, height: 8)
-                    }
-                }
-            }
+        SectionCard(L("Warnings"), symbol: "exclamationmark.triangle.fill", hue: .orange, content: {
             Text(L("%@ is told on their phone the moment you give one, and sees it until you remove it.", name))
                 .font(.neonFootnote)
                 .foregroundStyle(Color.neonTextSecondary)
@@ -389,7 +382,15 @@ private struct TeamWarningsCard: View {
                 }
                 .disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-        }
+        }, trailing: {
+            HStack(spacing: 4) {
+                ForEach(0..<limit, id: \.self) { index in
+                    Circle()
+                        .fill(index < warnings.count ? Color.neonOrangeStrong : Color.neonLine)
+                        .frame(width: 8, height: 8)
+                }
+            }
+        })
         .confirmDestructive(
             item: $removing,
             title: { _ in L("Remove this warning?") },
@@ -422,6 +423,60 @@ private struct TeamWarningsCard: View {
             Haptic.error()
             Toast.error(error)
         }
+    }
+}
+
+// MARK: - "What they usually do", broken into paragraphs and lists
+
+/// The web page hands over `playbook` as one string the manager typed —
+/// often several paragraphs and a dashed list run together. Read as a single
+/// `Text`, that prints as a wall of Arabic with no paragraph breaks at all.
+/// This groups it back into paragraphs and bullet runs before drawing it, so
+/// the same words the manager wrote are easier to actually read.
+private struct TeamPlaybookText: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(Self.blocks(of: text).enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .paragraph(let line):
+                    DirText(line, font: .neonCallout, color: .neonInk.opacity(0.85))
+                        .lineSpacing(3)
+                case .bullets(let lines):
+                    BulletList(lines: lines)
+                }
+            }
+        }
+    }
+
+    private enum Block {
+        case paragraph(String)
+        case bullets([String])
+    }
+
+    /// A line whose trimmed text starts with "-" or "•" joins the previous
+    /// bullet run; anything else is its own paragraph. Blank lines only end
+    /// whatever run they follow — they never become an empty paragraph.
+    private static func blocks(of text: String) -> [Block] {
+        var result: [Block] = []
+        var bulletRun: [String] = []
+        func flushBullets() {
+            if !bulletRun.isEmpty { result.append(.bullets(bulletRun)); bulletRun = [] }
+        }
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            if line.hasPrefix("-") || line.hasPrefix("•") {
+                let stripped = line.dropFirst().trimmingCharacters(in: .whitespaces)
+                bulletRun.append(stripped.isEmpty ? line : stripped)
+            } else {
+                flushBullets()
+                result.append(.paragraph(line))
+            }
+        }
+        flushBullets()
+        return result
     }
 }
 

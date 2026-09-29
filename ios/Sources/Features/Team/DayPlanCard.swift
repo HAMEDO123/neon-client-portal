@@ -41,17 +41,7 @@ struct DayPlanCard: View {
     private var puttable: Int { blocks.filter(\.keep).count }
 
     var body: some View {
-        NeonCard {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    SectionHeader(L("Plan %@'s day", name))
-                    Text(L("Built from their profile, your rules, and what is open on the board."))
-                        .font(.neonFootnote)
-                        .foregroundStyle(Color.neonTextSecondary)
-                }
-                Spacer(minLength: 0)
-            }
-
+        SectionCard(L("Plan %@'s day", name), subtitle: L("Built from their profile, your rules, and what is open on the board."), symbol: "calendar.badge.clock", hue: .indigo) {
             SegmentedPill(selection: $dayKey, options: [tomorrow, today], title: { $0 == today ? L("Today") : tomorrowLabel })
                 .onChange(of: dayKey) { _ in show(dayKey) }
 
