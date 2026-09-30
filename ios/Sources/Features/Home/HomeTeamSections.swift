@@ -22,6 +22,8 @@ struct HomeTeamMember: Identifiable {
 
     var online: Bool { now?.online ?? false }
     var kind: String? { day?.describeKind }
+    /// Their face from either read, or nil for initials.
+    var photo: URL? { facePhotoURL(now?.photo ?? day?.photo) }
     /// Only home/now knows whether the working day has begun; unknown reads
     /// as "it has", so nothing is hidden while that read is missing.
     var beforeWork: Bool { now?.beforeWork ?? false }
@@ -214,7 +216,7 @@ struct HomeTeamColumn: View {
                 Circle()
                     .strokeBorder(homeDayRing(member.kind, beforeWork: member.beforeWork), lineWidth: 2.5)
                     .frame(width: 56, height: 56)
-                AvatarView(url: resolvedMediaURL(member.now?.avatar), name: member.name, size: 46, online: member.online)
+                AvatarView(url: member.photo, name: member.name, size: 46, online: member.online)
             }
             .padding(.bottom, 1)
 
@@ -503,7 +505,13 @@ struct HomePressingPerson: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 HStack(spacing: 8) {
-                    Circle().fill(employeeFill(person.color)).frame(width: 8, height: 8)
+                    // Their face where they have one; their colour's dot
+                    // otherwise, as this list has always drawn them.
+                    if let photo = facePhotoURL(person.photo) {
+                        AvatarView(url: photo, name: person.name, size: 22)
+                    } else {
+                        Circle().fill(employeeFill(person.color)).frame(width: 8, height: 8)
+                    }
                     DirText(person.name, font: .neonRowTitle, fill: false, lineLimit: 1)
                 }
                 Spacer(minLength: 8)
