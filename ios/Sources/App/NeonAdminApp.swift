@@ -11,6 +11,8 @@ struct NeonAdminApp: App {
         // Renders, avatars and chat photos are public files that never change
         // under the same URL, so a generous cache makes scrolling back free.
         URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 512 * 1024 * 1024)
+        // The mockups' tab bar: unselected tabs in the kit's grey, not black.
+        UITabBar.appearance().unselectedItemTintColor = UIColor(Color.neonTextSecondary)
     }
 
     @ViewBuilder private var root: some View {

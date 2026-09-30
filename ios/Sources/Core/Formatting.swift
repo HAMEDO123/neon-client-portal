@@ -102,6 +102,12 @@ func formattedDayKey(_ key: String) -> String {
 func describeMinutes(_ minutes: Double) -> String {
     let total = Int(minutes.rounded())
     if total <= 0 { return L("no time left") }
+    // Past a day, hours stop being readable ("484h 54m"): say days.
+    if total >= 24 * 60 {
+        let days = total / (24 * 60)
+        let hours = (total % (24 * 60)) / 60
+        return hours == 0 ? L("%dd", days) : L("%dd %dh", days, hours)
+    }
     let hours = total / 60
     let rest = total % 60
     if hours == 0 { return L("%dm", rest) }

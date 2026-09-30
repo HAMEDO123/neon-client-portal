@@ -326,3 +326,5 @@
 "Signed in as the manager" = "مسجّل الدخول كمدير";
 "Signed in as %@" = "مسجّل الدخول باسم %@";
 "Delivery process" = "مراحل التسليم";
+"%dd" = "%d يوم";
+"%dd %dh" = "%d يوم %d س";
