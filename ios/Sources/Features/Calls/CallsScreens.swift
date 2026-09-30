@@ -9,6 +9,11 @@ import WebRTC
 /// fixtures: the real call views, drawn from fixed values with no network,
 /// no microphone and no camera (there is no picture in them — every tile
 /// shows its avatar, as a camera that is off does). Debug builds only.
+///
+/// `callkit-incoming` (and `-video`) ring CallKit's own incoming screen for a
+/// made-up call through CallKitCenter's fixture, which touches no stream and
+/// no server. Only an iPhone draws that screen; the simulator takes the call
+/// and ends it at once, and the fixture's page says so.
 enum CallsScreens {
     static let ids: [String] = [
         "call-prejoin-voice", "call-prejoin-video", "call-prejoin-blocked",
@@ -16,6 +21,7 @@ enum CallsScreens {
         "call-ringing", "call-connecting", "call-voice", "call-video-1to1", "call-group-grid", "call-group-speaker",
         "call-reconnecting", "call-notice", "call-people", "call-people-empty",
         "call-mini-voice", "call-mini-video", "call-mini-pip", "call-buttons",
+        "callkit-incoming", "callkit-incoming-video",
     ]
 
     @MainActor static func view(_ id: String) -> AnyView? {
@@ -107,6 +113,10 @@ enum CallsScreens {
             return AnyView(miniOverApp(CallMiniModel(title: "Sally", status: callDurationText(272), phase: .live, focus: focus, audioMuted: false)))
         case "call-buttons":
             return AnyView(buttonsFixture)
+        case "callkit-incoming":
+            return AnyView(CallKitRingFixture(title: "Sally", video: false))
+        case "callkit-incoming-video":
+            return AnyView(CallKitRingFixture(title: "Sally", video: true))
         default:
             return nil
         }
@@ -222,6 +232,49 @@ enum CallsScreens {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, NeonSpace.xs)
             }
+        }
+    }
+}
+
+/// A page that rings CallKit's incoming screen a moment after it opens, and
+/// says what became of the call. On an iPhone (a Debug build from Xcode) the
+/// ring arrives as the system's banner over this page, or full screen when
+/// locked. The simulator has no call screen: CallKit takes the call and iOS
+/// ends it at once, which the page then says.
+private struct CallKitRingFixture: View {
+    let title: String
+    let video: Bool
+    @State private var status: String?
+
+    var body: some View {
+        NeonScroll(spacing: NeonSpace.stack) {
+            SectionCard(
+                L("The phone's own call screen"), subtitle: L("How a NEON call rings on a closed or locked phone"),
+                symbol: "phone.arrow.down.left", hue: .green
+            ) {
+                VStack(alignment: .leading, spacing: NeonSpace.md) {
+                    Text(L("A made-up call from %@ rings on the phone's own call screen. Nothing is sent to the studio.", title))
+                        .font(.neonCallout)
+                        .foregroundStyle(Color.neonTextSecondary)
+                    if let status {
+                        Label(status, systemImage: "info.circle.fill")
+                            .font(.neonCallout)
+                            .foregroundStyle(Color.neonInk)
+                    }
+                    NeonButton(L("Ring again"), symbol: "phone.fill", kind: .secondary) { ring() }
+                }
+            }
+        }
+        .task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            ring()
+        }
+    }
+
+    private func ring() {
+        status = nil
+        CallKitCenter.shared.ringFixture(title: title, video: video) { text in
+            withNeonAnimation(.smooth) { status = text }
         }
     }
 }

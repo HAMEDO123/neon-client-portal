@@ -232,6 +232,17 @@ final class CallMicLevelMonitor: ObservableObject {
         levels = []
     }
 
+    /// Stops listening because the call is taking the microphone. Where
+    /// CallKit carries calls, the session is switched off too: CallKit
+    /// switches it on for the call itself, and Apple's advice is not to hand
+    /// it one an app has already activated.
+    func handOver() {
+        stop()
+        guard ownsSession, CallKitCenter.shared.routesCalls else { return }
+        ownsSession = false
+        try? AVAudioSession.sharedInstance().setActive(false)
+    }
+
     /// Stops, and gives the sound back to whatever was playing before —
     /// unless a call has taken the session over in the meantime.
     func release() {
