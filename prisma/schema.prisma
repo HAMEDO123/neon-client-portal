@@ -1015,6 +1015,11 @@ enum DevicePlatform {
 /// every reader unable to tell which kind of row it was holding without asking
 /// a discriminator column — and would let a half-filled row of either kind be
 /// written. Two shapes, two tables, one engine sending to both.
+enum DeviceTokenKind {
+  ALERT
+  VOIP
+}
+
 model DeviceToken {
   id         String   @id @default(cuid())
   employeeId String
@@ -1026,6 +1031,11 @@ model DeviceToken {
   token String @unique
 
   platform DevicePlatform @default(IOS)
+
+  /// ALERT is an ordinary notification token; VOIP is the PushKit token that
+  /// makes the phone ring for a call (CallKit). They are different tokens for
+  /// the same phone and are sent to under different APNs topics.
+  kind DeviceTokenKind @default(ALERT)
 
   /// The app's bundle id, sent to Apple as the `apns-topic`. Stored rather than
   /// taken from configuration so one server can feed more than one app, and so

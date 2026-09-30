@@ -44,6 +44,9 @@ export async function POST(request: Request) {
   const sandbox = body?.sandbox === true;
   const deviceName = typeof body?.deviceName === "string" ? body.deviceName.trim() : null;
   const appVersion = typeof body?.appVersion === "string" ? body.appVersion.trim() : null;
+  // "voip" is the PushKit token that makes the phone ring for a call; anything
+  // else is the ordinary notification token, as every build before sent.
+  const kind = body?.kind === "voip" ? "VOIP" : "ALERT";
 
   if (!token || !bundleId) {
     return NextResponse.json({ error: "A token and a bundle id are required." }, { status: 400 });
@@ -60,9 +63,10 @@ export async function POST(request: Request) {
   // stay retired because of failures it has already recovered from.
   const device = await prisma.deviceToken.upsert({
     where: { token },
-    create: { employeeId, token, bundleId, sandbox, deviceName, appVersion },
+    create: { employeeId, token, bundleId, sandbox, deviceName, appVersion, kind },
     update: {
       employeeId,
+      kind,
       bundleId,
       sandbox,
       deviceName,

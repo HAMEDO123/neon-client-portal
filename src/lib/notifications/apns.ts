@@ -125,7 +125,53 @@ export async function sendApns(target: ApnsTarget, payload: PushPayload): Promis
   });
 
   try {
-    return await request(host, target, settings, body, payload.tag);
+    return await request(host, target, settings, body, {
+      "apns-topic": target.bundleId,
+      "apns-push-type": "alert",
+      "apns-priority": "10",
+      "apns-expiration": String(Math.floor(Date.now() / 1000) + 60 * 60 * 12),
+      // Collapses an older notification of the same kind on the device rather
+      // than stacking duplicates — web push does the same through `tag`. Apple
+      // refuses the whole request if this exceeds 64 bytes, so it is cut rather
+      // than allowed to fail the send over a long type name.
+      "apns-collapse-id": payload.tag.slice(0, 64),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: null,
+      error: error instanceof Error ? error.message : String(error),
+      gone: false,
+    };
+  }
+}
+
+/**
+ * A call ringing a phone: a PushKit (VoIP) push, which wakes the app even when
+ * it is closed so it can hand the call to CallKit — the iPhone's own ringing
+ * screen. `data` is read by the app as it is; there is no alert.
+ *
+ * It expires with the ring: a phone that was off for a minute must not wake
+ * up to ring for a call that is long over.
+ */
+export async function sendVoip(
+  target: ApnsTarget,
+  data: Record<string, unknown>,
+  ringSeconds: number
+): Promise<ApnsResult> {
+  const settings = config();
+  if (!settings) {
+    return { ok: false, statusCode: null, error: "APNs is not configured", gone: false };
+  }
+
+  const host = target.sandbox ? SANDBOX_HOST : PRODUCTION_HOST;
+  try {
+    return await request(host, target, settings, JSON.stringify(data), {
+      "apns-topic": `${target.bundleId}.voip`,
+      "apns-push-type": "voip",
+      "apns-priority": "10",
+      "apns-expiration": String(Math.floor(Date.now() / 1000) + ringSeconds),
+    });
   } catch (error) {
     return {
       ok: false,
@@ -141,22 +187,14 @@ function request(
   target: ApnsTarget,
   settings: ApnsConfig,
   body: string,
-  collapseId: string
+  headers: Record<string, string>
 ): Promise<ApnsResult> {
   return new Promise((resolve) => {
     const stream = sessionFor(host).request({
       ":method": "POST",
       ":path": `/3/device/${target.token}`,
       authorization: `bearer ${authorizationToken(settings)}`,
-      "apns-topic": target.bundleId,
-      "apns-push-type": "alert",
-      "apns-priority": "10",
-      "apns-expiration": String(Math.floor(Date.now() / 1000) + 60 * 60 * 12),
-      // Collapses an older notification of the same kind on the device rather
-      // than stacking duplicates — web push does the same through `tag`. Apple
-      // refuses the whole request if this exceeds 64 bytes, so it is cut rather
-      // than allowed to fail the send over a long type name.
-      "apns-collapse-id": collapseId.slice(0, 64),
+      ...headers,
       "content-type": "application/json",
       "content-length": Buffer.byteLength(body),
     });
