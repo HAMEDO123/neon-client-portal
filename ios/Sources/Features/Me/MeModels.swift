@@ -122,6 +122,8 @@ struct ProfileEmployee: Decodable {
     let email: String?
     let phone: String?
     let employeeCode: String?
+    /// Their own face, or nil — `AvatarView` then draws initials, as it always did.
+    let photoUrl: String?
 }
 
 struct ProfileResponse: Decodable {

@@ -122,6 +122,7 @@ export const reads: ReadRegistry = {
         email: me.email,
         phone: me.phone,
         employeeCode: me.employeeCode,
+        photoUrl: me.photoUrl,
       },
       preferences,
       devices: devices.map((device) => ({

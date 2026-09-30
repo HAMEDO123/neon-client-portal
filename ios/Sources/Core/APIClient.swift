@@ -386,6 +386,18 @@ final class APIClient: ObservableObject {
         )
     }
 
+    /// The signed-in person's own face. `nil` takes it off again — the same
+    /// thing the website's Remove button does, and the state everybody starts
+    /// in, so there is no second call for it.
+    ///
+    /// Whose face it is comes from the token, never from anything sent here.
+    @discardableResult
+    func setMyPhoto(_ file: UploadFile?) async throws -> String? {
+        let data = try await postMultipart("me/photo", fields: [:], files: file.map { [$0] } ?? [])
+        struct Answer: Decodable { let photoUrl: String? }
+        return (try? JSONDecoder().decode(Answer.self, from: data))?.photoUrl
+    }
+
     func uploadCover(projectId: String, image: Data) async throws {
         try await postMultipart(
             "projects/\(projectId)/cover",

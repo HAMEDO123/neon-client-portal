@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// `/employee/profile`: who this is, what to be notified about, and which
@@ -15,6 +16,12 @@ struct ProfileRootView: View {
     @State private var refusedMessage: String?
     @State private var saving = false
     @State private var forgetting: ProfileDevice?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var savingPhoto = false
+    /// Set the moment it is saved, so the new face is on screen before the
+    /// next read comes back — a picture that appears only after a pull-to-
+    /// refresh reads as nothing having happened.
+    @State private var photoUrl: String??
 
     var body: some View {
         ScrollView {
@@ -56,18 +63,66 @@ struct ProfileRootView: View {
         .navigationTitle(L("Profile"))
         .neonAmbientBackground()
         .task { await load() }
+        .onChange(of: photoItem) { picked in
+            guard let picked else { return }
+            Task {
+                // Shrunk the way every other upload in the app is, through
+                // UploadMaker — the server squares it to 512 afterwards.
+                guard let file = await UploadMaker.photo(picked) else {
+                    errorMessage = L("That photo could not be read.")
+                    photoItem = nil
+                    return
+                }
+                await save(file)
+                photoItem = nil
+            }
+        }
         .confirmDestructive(item: $forgetting, title: { L("Forget %@?", $0.label) }, actionTitle: L("Forget device")) { device in
             Task { await forget(device) }
         }
     }
 
     private func identityCard(_ employee: ProfileEmployee, deviceCount: Int) -> some View {
-        NeonCard {
+        // What was just saved wins over what was last read.
+        let face = (photoUrl ?? employee.photoUrl).flatMap(URL.init(string:))
+
+        return NeonCard {
             HStack(spacing: 14) {
-                AvatarView(url: nil, name: employee.name, size: 56, style: .solid)
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    ZStack {
+                        AvatarView(url: face, name: employee.name, size: 56, style: .solid)
+                        // A camera over the face, so it reads as something to
+                        // tap rather than a picture of them.
+                        Circle()
+                            .fill(Color.black.opacity(savingPhoto ? 0.45 : 0.28))
+                            .frame(width: 22, height: 22)
+                            .overlay {
+                                if savingPhoto {
+                                    ProgressView().controlSize(.small).tint(.white)
+                                } else {
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(Color.white)
+                                }
+                            }
+                            .offset(x: 18, y: 18)
+                    }
+                }
+                .disabled(savingPhoto)
+
                 VStack(alignment: .leading, spacing: 2) {
                     DirText(employee.name, font: .neonTitle3)
                     DirText(employee.role ?? L("Employee"), font: .neonSubtitle, color: .neonTextSecondary)
+                    if face == nil {
+                        Text(L("Tap your picture to add a photo"))
+                            .font(.neonCaption)
+                            .foregroundStyle(Color.neonTextTertiary)
+                    } else {
+                        Button(L("Remove photo")) { Task { await save(nil) } }
+                            .font(.neonCaption)
+                            .foregroundStyle(Color.neonTextTertiary)
+                            .disabled(savingPhoto)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -78,6 +133,21 @@ struct ProfileRootView: View {
             profileLine(symbol: "iphone.gen3", hue: .cyan, value: L("%d device(s) receiving push", deviceCount))
         }
         .neonAppear()
+    }
+
+    /// Saves a face, or takes it off with `nil`.
+    private func save(_ file: UploadFile?) async {
+        savingPhoto = true
+        defer { savingPhoto = false }
+
+        do {
+            photoUrl = .some(try await api.setMyPhoto(file))
+            Haptic.tap()
+        } catch {
+            // The server says what to do about a file it cannot read; that
+            // sentence is more use than "upload failed".
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func profileLine(symbol: String, hue: NeonHue, value: String) -> some View {
