@@ -17,19 +17,20 @@ struct ProjectMaterialsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
-            SectionHeader(L("Materials"), count: materials?.count) {
-                IconButton("plus", label: L("Add material")) { showAdd = true }
-            }
+            pfSectionHeader(
+                L("Materials"), subtitle: headerSubtitle, section: .materials,
+                addTitle: L("Add Material"), showAdd: !(materials?.isEmpty ?? true)
+            ) { showAdd = true }
 
             LoadStateView(value: materials, error: errorMessage, cachedAt: cachedAt, retry: load) { rows in
                 if rows.isEmpty {
                     EmptyState(
-                        symbol: "paintpalette",
+                        symbol: PFSection.materials.symbol,
                         title: L("No materials yet"),
                         detail: L("Build the material and finish board."),
-                        actionTitle: L("Add material"),
+                        actionTitle: L("Add Material"),
                         action: { showAdd = true },
-                        hue: .pink,
+                        hue: PFSection.materials.hue,
                         card: true
                     )
                 } else {
@@ -57,20 +58,25 @@ struct ProjectMaterialsSection: View {
         }
     }
 
+    private var headerSubtitle: String {
+        guard let materials, !materials.isEmpty else { return L("The material and finish board") }
+        return L("%d materials", materials.count)
+    }
+
     private func materialCard(_ material: PFMaterial) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            RemoteImage(url: resolvedMediaURL(material.imageUrl), placeholderSymbol: "paintpalette")
+            RemoteImage(url: resolvedMediaURL(material.imageUrl), placeholderSymbol: PFSection.materials.symbol)
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                BadgeView(text: material.category, tone: .pink)
-                DirText(material.name, font: .system(size: 14, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
+                BadgeView(text: L(material.category), tone: .pink)
+                DirText(material.name, font: .neonRowTitle, color: .neonInk, fill: false, lineLimit: 1)
                 if let brand = material.brand, !brand.isEmpty {
-                    DirText(brand, font: .system(size: 12), color: .neonTextTertiary, fill: false, lineLimit: 1)
+                    DirText(brand, font: .neonSubtitle, color: .neonTextTertiary, fill: false, lineLimit: 1)
                 }
                 if let price = material.price {
-                    Text(NeonFormat.money(price)).font(.system(size: 12.5, weight: .semibold, design: .rounded)).foregroundStyle(Color.neonSuccessStrong)
+                    Text(NeonFormat.money(price)).font(.neonNumberSmall).foregroundStyle(Color.neonSuccessStrong)
                 }
             }
             .padding(10)
@@ -125,24 +131,28 @@ struct AddMaterialSheet: View {
     private var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
-        SheetScaffold(L("Add material"), symbol: "paintpalette", primaryTitle: L("Add Material"), isPrimaryEnabled: isValid) {
+        SheetScaffold(L("Add Material"), symbol: PFSection.materials.symbol, primaryTitle: L("Add Material"), isPrimaryEnabled: isValid) {
             await save()
         } content: {
-            FormSection {
-                MenuField(L("Category"), selection: $category, options: PFCategories.material, title: { $0 })
-                NeonTextField(L("Name"), text: $name, prompt: "Calacatta Gold Marble", isRequired: true)
+            FormSection(L("Item")) {
+                MenuField(L("Category"), selection: $category, options: PFCategories.material, title: { L($0) })
+                NeonTextField(L("Name"), text: $name, prompt: L("Calacatta Gold Marble"), isRequired: true)
+            }
+            FormSection(L("Details")) {
                 HStack(spacing: 12) {
-                    NeonTextField(L("Brand"), text: $brand)
-                    NeonTextField(L("Model"), text: $model)
+                    NeonTextField(L("Brand"), text: $brand, prompt: "")
+                    NeonTextField(L("Model"), text: $model, prompt: "")
                 }
                 HStack(spacing: 12) {
-                    NeonTextField(L("Color"), text: $color)
-                    NeonTextField(L("Finish"), text: $finish)
+                    NeonTextField(L("Color"), text: $color, prompt: "")
+                    NeonTextField(L("Finish"), text: $finish, prompt: "")
                 }
-                NeonTextField(L("Supplier"), text: $supplier)
-                NeonTextField(L("Estimated quantity"), text: $estimatedQty, prompt: "42 m²")
-                MoneyField(L("Price (optional)"), amount: $price)
-                NeonTextField(L("Used in (spaces)"), text: $relatedSpaces, prompt: "Living Room, Kitchen")
+                NeonTextField(L("Supplier"), text: $supplier, prompt: "")
+                NeonTextField(L("Estimated quantity"), text: $estimatedQty, prompt: L("42 m²"))
+            }
+            FormSection(L("Price & Photo")) {
+                MoneyField(L("Price"), amount: $price)
+                NeonTextField(L("Used in (spaces)"), text: $relatedSpaces, prompt: L("Living Room, Kitchen"))
                 ImagePickerField(label: L("Image"), file: $imageFile, previewData: $imagePreview)
                 if let error { ValidationMessage(error) }
             }

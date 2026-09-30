@@ -16,28 +16,27 @@ struct ProjectPricingSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
-            SectionHeader(L("Pricing"), count: response?.items.count) {
-                IconButton("plus", label: L("Add line item")) { showAdd = true }
-            }
+            pfSectionHeader(
+                L("Pricing"), subtitle: headerSubtitle, section: .pricing,
+                addTitle: L("Add Line Item"), showAdd: !(response?.items.isEmpty ?? true)
+            ) { showAdd = true }
 
             LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
-                if !data.showPricing {
-                    StatusNote(
-                        symbol: "eye.slash",
-                        tone: .warning,
-                        title: L("Pricing is currently hidden from the client"),
-                        detail: L("Enable “Show Execution Pricing” in the project's Overview when ready.")
-                    )
+                // Only worth a note once there's something to hide: a warning
+                // above an empty list read as two stacked cards about having
+                // nothing at all.
+                if !data.showPricing && !data.items.isEmpty {
+                    hiddenNote
                 }
 
                 if data.items.isEmpty {
                     EmptyState(
-                        symbol: "wallet.pass",
+                        symbol: PFSection.pricing.symbol,
                         title: L("No pricing yet"),
                         detail: L("Add cost breakdown line items."),
-                        actionTitle: L("Add line item"),
+                        actionTitle: L("Add Line Item"),
                         action: { showAdd = true },
-                        hue: .green,
+                        hue: PFSection.pricing.hue,
                         card: true
                     )
                 } else {
@@ -45,12 +44,14 @@ struct ProjectPricingSection: View {
                         ListRow(
                             item.label,
                             subtitle: item.description,
-                            leading: .icon("wallet.pass", tint: .neonSuccessStrong),
+                            leading: .icon(PFSection.pricing.symbol, tint: PFSection.pricing.hue.deep),
                             value: NeonFormat.money(item.amount),
-                            badge: item.isOptional ? L("Optional") : item.category,
+                            badge: item.isOptional ? L("Optional") : L(item.category),
                             badgeTone: item.isOptional ? .neutral : .cyan
                         ) {
-                            Button(role: .destructive) { toDelete = item } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                            IconButton("trash", label: L("Delete"), look: .plain, tint: .neonDangerStrong, size: NeonSize.touch) {
+                                toDelete = item
+                            }
                         }
                     }
                     .neonAppear()
@@ -60,13 +61,13 @@ struct ProjectPricingSection: View {
                     // whole tab exists to answer.
                     let includedCount = data.items.filter { !$0.isOptional }.count
                     HStack(spacing: 14) {
-                        IconTile("banknote.fill", hue: .green, size: NeonSize.iconTileLarge)
+                        IconTile(PFSection.pricing.symbol, hue: .green, size: NeonSize.iconTileLarge)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L("Total Project Cost"))
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.neonRowTitle)
                                 .foregroundStyle(Color.neonTextSecondary)
                             Text(L("%d line items", includedCount))
-                                .font(.system(size: 11.5))
+                                .font(.neonMeta)
                                 .foregroundStyle(Color.neonTextTertiary)
                         }
                         Spacer(minLength: 8)
@@ -91,6 +92,37 @@ struct ProjectPricingSection: View {
         }
     }
 
+    // The note used to send people to "the project's Overview", which only
+    // has a read-only visibility row — the switch is in Edit. It now acts
+    // instead of just describing where to look.
+    private var hiddenNote: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                IconTile("eye.slash", hue: .orange, size: 34, style: .glass)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L("Hidden from the client"))
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(Color.neonInk)
+                    Text(L("Only your team can see it until you show it to the client."))
+                        .font(.neonSubtitle)
+                        .foregroundStyle(Color.neonTextSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+            NeonButton(L("Show to Client"), kind: .tinted(.neonOrangeStrong), size: .small) {
+                await showToClient()
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: NeonRadius.md + 2, style: .continuous).fill(NeonHue.orange.wash))
+        .overlay(RoundedRectangle(cornerRadius: NeonRadius.md + 2, style: .continuous).strokeBorder(NeonHue.orange.color.opacity(0.18), lineWidth: 1))
+    }
+
+    private var headerSubtitle: String {
+        guard let response, !response.items.isEmpty else { return L("Cost breakdown line items") }
+        return L("%d line items · %@", response.items.count, NeonFormat.money(response.total))
+    }
+
     private func load() async {
         do {
             let loaded = try await api.fetchPricing(projectId: projectId)
@@ -99,6 +131,29 @@ struct ProjectPricingSection: View {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func showToClient() async {
+        do {
+            // The settings write is whole-record (every visibility flag,
+            // same as `EditProjectSheet`'s own save): read the other five
+            // first so flipping this one doesn't silently clear them.
+            let detail = try await api.fetchProjectDetail(id: projectId).value
+            try await api.updateProjectSettings(id: projectId, fields: [
+                "showPricing": true,
+                "showDetailedPricing": detail.showDetailedPricing,
+                "showBoqQuantities": detail.showBoqQuantities,
+                "showBoqPrices": detail.showBoqPrices,
+                "allowDownloads": detail.allowDownloads,
+                "watermarkEnabled": detail.watermarkEnabled,
+            ])
+            Haptic.success()
+            Toast.success(L("Now visible to the client"))
+            await load()
+        } catch {
+            Haptic.error()
+            Toast.error(error)
         }
     }
 
@@ -131,12 +186,12 @@ struct AddPricingSheet: View {
     private var isValid: Bool { !label.trimmingCharacters(in: .whitespaces).isEmpty && (amount ?? 0) > 0 }
 
     var body: some View {
-        SheetScaffold(L("Add line item"), symbol: "wallet.pass", primaryTitle: L("Add Line Item"), isPrimaryEnabled: isValid) {
+        SheetScaffold(L("Add Line Item"), symbol: PFSection.pricing.symbol, primaryTitle: L("Add Line Item"), isPrimaryEnabled: isValid) {
             await save()
         } content: {
             FormSection {
-                MenuField(L("Category"), selection: $category, options: PFCategories.pricing, title: { $0 })
-                NeonTextField(L("Label"), text: $label, prompt: "Interior Works", isRequired: true)
+                MenuField(L("Category"), selection: $category, options: PFCategories.pricing, title: { L($0) })
+                NeonTextField(L("Label"), text: $label, prompt: L("e.g. Kitchen joinery"), isRequired: true)
                 MoneyField(L("Amount"), amount: $amount, isRequired: true)
                 NeonTextEditor(L("Description"), text: $itemDescription, minLines: 2, maxLines: 5)
                 ToggleRow(L("Optional item"), detail: L("Shown separately, not in the total."), symbol: "circle.dashed", isOn: $isOptional)

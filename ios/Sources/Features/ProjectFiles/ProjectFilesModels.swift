@@ -138,11 +138,16 @@ enum PFCategories {
     static let pricing = ["Interior Works", "Electrical", "HVAC", "Joinery", "Furniture", "Other"]
 }
 
+// A milestone the client hasn't answered is asked, not yet answered — never
+// a verdict, and never worded or coloured like one (the platform-wide rule:
+// silence is never a verdict). It used to read "Pending Review" in warning
+// amber, which sounds like somebody is reviewing it and makes the client's
+// silence look like a problem.
 func approvalStatusLabel(_ status: String) -> String {
     switch status {
     case "APPROVED": return L("Approved")
     case "CHANGES_REQUESTED": return L("Changes Requested")
-    default: return L("Pending Review")
+    default: return L("Waiting for the client")
     }
 }
 
@@ -150,6 +155,6 @@ func approvalStatusTone(_ status: String) -> BadgeTone {
     switch status {
     case "APPROVED": return .success
     case "CHANGES_REQUESTED": return .orange
-    default: return .warning
+    default: return .info
     }
 }

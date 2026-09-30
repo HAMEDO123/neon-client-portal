@@ -17,19 +17,20 @@ struct ProjectBoqSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
-            SectionHeader(L("BOQ"), count: items?.count) {
-                IconButton("plus", label: L("Add item")) { showAdd = true }
-            }
+            pfSectionHeader(
+                L("BOQ"), subtitle: headerSubtitle, section: .boq,
+                addTitle: L("Add Item"), showAdd: !(items?.isEmpty ?? true)
+            ) { showAdd = true }
 
             LoadStateView(value: items, error: errorMessage, cachedAt: cachedAt, retry: load) { rows in
                 if rows.isEmpty {
                     EmptyState(
-                        symbol: "list.bullet.rectangle",
+                        symbol: PFSection.boq.symbol,
                         title: L("No BOQ items yet"),
                         detail: L("Add quantities and specifications."),
-                        actionTitle: L("Add item"),
+                        actionTitle: L("Add Item"),
                         action: { showAdd = true },
-                        hue: .orange,
+                        hue: PFSection.boq.hue,
                         card: true
                     )
                 } else {
@@ -38,12 +39,14 @@ struct ProjectBoqSection: View {
                             item.name,
                             subtitle: [item.specification, item.relatedSpace].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · "),
                             meta: L("%@ %@", NeonFormat.number(item.quantity, decimals: item.quantity.truncatingRemainder(dividingBy: 1) == 0 ? 0 : 2), item.unit),
-                            leading: item.imageUrl != nil ? .thumbnail(url: resolvedMediaURL(item.imageUrl)) : .icon("list.bullet.rectangle", tint: .neonOrangeStrong),
+                            leading: item.imageUrl != nil ? .thumbnail(url: resolvedMediaURL(item.imageUrl)) : .icon(PFSection.boq.symbol, tint: PFSection.boq.hue.deep),
                             value: item.unitPrice.map { NeonFormat.money($0) },
-                            badge: item.category,
+                            badge: L(item.category),
                             badgeTone: .orange
                         ) {
-                            Button(role: .destructive) { toDelete = item } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                            IconButton("trash", label: L("Delete"), look: .plain, tint: .neonDangerStrong, size: NeonSize.touch) {
+                                toDelete = item
+                            }
                         }
                     }
                     .neonAppear()
@@ -53,27 +56,29 @@ struct ProjectBoqSection: View {
                     // A real, honestly-scoped derived figure: only the lines
                     // that actually carry a unit price are counted, and the
                     // caption says so rather than implying a full estimate.
-                    let pricedLines = rows.compactMap { item in item.unitPrice.map { $0 * item.quantity } }
-                    if !pricedLines.isEmpty {
+                    // Drawn in money green, like Pricing's total — the kit
+                    // reserves that hue for a money figure, whatever section
+                    // it's totting up.
+                    if !pricedLines(rows).isEmpty {
                         HStack(spacing: 14) {
-                            IconTile("banknote.fill", hue: .orange, size: NeonSize.iconTileLarge)
+                            IconTile("banknote", hue: .green, size: NeonSize.iconTileLarge)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(L("Priced Items Subtotal"))
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.neonRowTitle)
                                     .foregroundStyle(Color.neonTextSecondary)
                                 Text(L("Only items with a unit price are counted."))
-                                    .font(.system(size: 11.5))
+                                    .font(.neonMeta)
                                     .foregroundStyle(Color.neonTextTertiary)
                             }
                             Spacer(minLength: 8)
-                            Text(NeonFormat.money(pricedLines.reduce(0, +)))
+                            Text(NeonFormat.money(pricedLines(rows).reduce(0, +)))
                                 .font(.neonNumber)
-                                .foregroundStyle(Color.neonOrangeStrong)
+                                .foregroundStyle(Color.neonSuccessStrong)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         }
                         .padding(16)
-                        .neonSurface(.tinted(.neonOrange), radius: NeonRadius.lg)
+                        .neonSurface(.tinted(.neonSuccess), radius: NeonRadius.lg)
                         .neonAppear(delay: 0.05)
                     }
                 }
@@ -86,6 +91,17 @@ struct ProjectBoqSection: View {
         .confirmDestructive(item: $toDelete, title: { L("Delete “%@”?", $0.name) }, actionTitle: L("Delete")) { item in
             Task { await delete(item) }
         }
+    }
+
+    private func pricedLines(_ rows: [PFBoqItem]) -> [Double] {
+        rows.compactMap { item in item.unitPrice.map { $0 * item.quantity } }
+    }
+
+    private var headerSubtitle: String {
+        guard let items, !items.isEmpty else { return L("Quantities and specifications") }
+        let priced = pricedLines(items)
+        guard !priced.isEmpty else { return L("%d lines", items.count) }
+        return L("%d lines · %@", items.count, NeonFormat.money(priced.reduce(0, +)))
     }
 
     private func load() async {
@@ -123,37 +139,58 @@ struct AddBoqSheet: View {
     @State private var unit = ""
     @State private var quantity: Double?
     @State private var unitPrice: Double?
-    @State private var relatedDrawing = ""
-    @State private var relatedSpace = ""
+    @State private var relatedDrawing: String?
+    @State private var relatedSpace: String?
     @State private var specification = ""
     @State private var imageFile: UploadFile?
     @State private var imagePreview: Data?
     @State private var error: String?
+    @State private var drawingOptions: [String] = []
+    @State private var spaceOptions: [String] = []
 
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty && !unit.trimmingCharacters(in: .whitespaces).isEmpty && (quantity ?? 0) > 0
     }
 
     var body: some View {
-        SheetScaffold(L("Add BOQ item"), symbol: "list.bullet.rectangle", primaryTitle: L("Add Item"), isPrimaryEnabled: isValid) {
+        SheetScaffold(L("Add BOQ Item"), symbol: PFSection.boq.symbol, primaryTitle: L("Add Item"), isPrimaryEnabled: isValid) {
             await save()
         } content: {
-            FormSection {
-                MenuField(L("Category"), selection: $category, options: PFCategories.boq, title: { $0 })
-                NeonTextField(L("Item name"), text: $name, prompt: "Porcelain Flooring", isRequired: true)
+            FormSection(L("Item")) {
+                MenuField(L("Category"), selection: $category, options: PFCategories.boq, title: { L($0) })
+                NeonTextField(L("Item name"), text: $name, prompt: L("Porcelain Flooring"), isRequired: true)
+            }
+            FormSection(L("Quantity & Price")) {
                 HStack(spacing: 12) {
                     NumberField(L("Quantity"), value: $quantity, decimals: 2, isRequired: true)
-                    NeonTextField(L("Unit"), text: $unit, prompt: "m²", isRequired: true)
+                    NeonTextField(L("Unit"), text: $unit, prompt: L("m²"), isRequired: true)
                 }
-                MoneyField(L("Unit price (optional)"), amount: $unitPrice)
-                NeonTextField(L("Related drawing"), text: $relatedDrawing, prompt: "A-102")
-                NeonTextField(L("Related space"), text: $relatedSpace, prompt: "Living Room")
+                MoneyField(L("Unit price"), amount: $unitPrice)
+            }
+            FormSection(L("Where It Goes")) {
+                MenuField(L("Related drawing"), selection: $relatedDrawing, options: drawingOptions, title: { $0 }, noneTitle: L("None"))
+                MenuField(L("Related space"), selection: $relatedSpace, options: spaceOptions, title: { $0 }, noneTitle: L("None"))
+            }
+            FormSection(L("Details")) {
                 NeonTextEditor(L("Specification"), text: $specification, minLines: 2, maxLines: 5)
-                ImagePickerField(label: L("Reference image (optional)"), file: $imageFile, previewData: $imagePreview)
+                ImagePickerField(label: L("Reference image"), file: $imageFile, previewData: $imagePreview)
                 if let error { ValidationMessage(error) }
             }
         }
         .neonSheet([.large])
+        .task { await loadOptions() }
+    }
+
+    // A typo in a free-text "A-102" quietly breaks the link to a drawing
+    // that's already on file; offering the project's own drawings and
+    // spaces to pick from can't misspell one.
+    private func loadOptions() async {
+        if let drawings = try? await api.fetchDrawings(projectId: projectId).value.drawings {
+            drawingOptions = drawings.map { $0.drawingNumber?.isEmpty == false ? $0.drawingNumber! : $0.name }
+        }
+        if let detail = try? await api.fetchProjectDetail(id: projectId).value {
+            spaceOptions = detail.spaces.map(\.name)
+        }
     }
 
     private func save() async {
@@ -161,7 +198,7 @@ struct AddBoqSheet: View {
             try await api.createBoqItem(
                 projectId: projectId, category: category, name: name, description: "",
                 specification: specification, unit: unit, quantity: quantity ?? 0, unitPrice: unitPrice,
-                relatedDrawing: relatedDrawing, relatedSpace: relatedSpace, notes: "", image: imageFile
+                relatedDrawing: relatedDrawing ?? "", relatedSpace: relatedSpace ?? "", notes: "", image: imageFile
             )
             dismiss()
             onSaved()

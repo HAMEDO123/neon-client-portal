@@ -7,6 +7,7 @@ struct ProjectDocumentsSection: View {
     let projectId: String
 
     @EnvironmentObject private var api: APIClient
+    @Environment(\.openURL) private var openURL
     @State private var documents: [PFDocument]?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
@@ -15,19 +16,20 @@ struct ProjectDocumentsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
-            SectionHeader(L("Documents"), count: documents?.count) {
-                IconButton("plus", label: L("Add document")) { showAdd = true }
-            }
+            pfSectionHeader(
+                L("Documents"), subtitle: headerSubtitle, section: .documents,
+                addTitle: L("Add Document"), showAdd: !(documents?.isEmpty ?? true)
+            ) { showAdd = true }
 
             LoadStateView(value: documents, error: errorMessage, cachedAt: cachedAt, retry: load) { items in
                 if items.isEmpty {
                     EmptyState(
-                        symbol: "folder",
+                        symbol: PFSection.documents.symbol,
                         title: L("No documents yet"),
                         detail: L("Upload contracts, reports, or specifications."),
-                        actionTitle: L("Add document"),
+                        actionTitle: L("Add Document"),
                         action: { showAdd = true },
-                        hue: .purple,
+                        hue: PFSection.documents.hue,
                         card: true
                     )
                 } else {
@@ -36,19 +38,20 @@ struct ProjectDocumentsSection: View {
                             doc.title,
                             subtitle: [doc.version, doc.fileType.uppercased()].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · "),
                             meta: doc.fileSize.map { byteCount($0) },
-                            leading: .icon("doc.richtext", tint: .neonPurpleStrong),
-                            badge: doc.category,
+                            leading: .icon(PFSection.documents.symbol, tint: PFSection.documents.hue.deep),
+                            badge: L(doc.category),
                             badgeTone: .purple
                         ) {
-                            HStack(spacing: 14) {
+                            HStack(spacing: 4) {
                                 if let url = resolvedMediaURL(doc.fileUrl) {
-                                    Link(destination: url) { Image(systemName: "arrow.up.forward.square") }
+                                    IconButton("arrow.up.forward.square", label: L("Open file"), look: .plain, tint: .neonTextSecondary, size: NeonSize.touch) {
+                                        openURL(url)
+                                    }
                                 }
-                                Button(role: .destructive) { toDelete = doc } label: {
-                                    Image(systemName: "trash").foregroundStyle(.red)
+                                IconButton("trash", label: L("Delete"), look: .plain, tint: .neonDangerStrong, size: NeonSize.touch) {
+                                    toDelete = doc
                                 }
                             }
-                            .font(.system(size: 15))
                         }
                     }
                     .neonAppear()
@@ -62,6 +65,11 @@ struct ProjectDocumentsSection: View {
         .confirmDestructive(item: $toDelete, title: { L("Delete “%@”?", $0.title) }, actionTitle: L("Delete")) { doc in
             Task { await delete(doc) }
         }
+    }
+
+    private var headerSubtitle: String {
+        guard let documents, !documents.isEmpty else { return L("Contracts, reports and specifications") }
+        return L("%d documents", documents.count)
     }
 
     private func load() async {
@@ -103,13 +111,13 @@ struct AddDocumentSheet: View {
     private var isValid: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty && file != nil }
 
     var body: some View {
-        SheetScaffold(L("Add document"), symbol: "folder.badge.plus", primaryTitle: L("Add Document"), isPrimaryEnabled: isValid) {
+        SheetScaffold(L("Add Document"), symbol: PFSection.documents.symbol, primaryTitle: L("Add Document"), isPrimaryEnabled: isValid) {
             await save()
         } content: {
             FormSection {
-                MenuField(L("Category"), selection: $category, options: PFCategories.document, title: { $0 })
-                NeonTextField(L("Title"), text: $title, prompt: "Design Contract", isRequired: true)
-                NeonTextField(L("Version"), text: $version, prompt: "v1")
+                MenuField(L("Category"), selection: $category, options: PFCategories.document, title: { L($0) })
+                NeonTextField(L("Title"), text: $title, prompt: L("Design Contract"), isRequired: true)
+                NeonTextField(L("Version"), text: $version, prompt: L("v1"))
                 FilePickerField(label: L("File"), file: $file)
                 if let error { ValidationMessage(error) }
             }

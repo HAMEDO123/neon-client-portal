@@ -1,5 +1,160 @@
 # projectfiles — redesign notes
 
+## Round 2 — critic pass on live screenshots
+
+Every screen kept its features, its server calls and its guard rails; this
+round changed the polish layer the critic actually judged.
+
+**Drawings** (highest-impact fix): the row used to spend its trailing slot on
+a repeated, uppercase "ARCHITECTURAL" badge plus three bare 15pt glyphs,
+leaving about 45pt for the title — which is what hyphenated "wateen" into
+"wa-/teen". The category moved out of the row entirely: the list now groups
+under `SectionLabel(L(category))` headers, with a `FilterChips` row (only
+when more than one category is actually present in the data — on this
+project's 7 all-Architectural drawings, it doesn't show at all, which is the
+right call, not a bug). The three trailing icons became one `Menu` behind a
+44pt `IconButtonLabel("ellipsis")`: Open file, Revision history, Upload new
+revision, Delete. Each row is `ListRow(...).rowCard()` (was a `ListRow`
+double-padded inside its own `.padding(10)` glass surface), gets a real photo
+`.thumbnail` for jpg/png/heic files (icon only for PDF/DWG), and the
+expanded revision history is its own `DetailCard` under the row rather than
+a hand-padded `VStack`. The title is capped at `.dynamicTypeSize(...(.xxLarge))`
+so it can't hyphenate again at an accessibility text size.
+
+**Every section's header** is now the same `SectionCard` pattern Gallery
+already uses — an `IconTile` in the section's hue, the title, a subtitle
+built from the real counts already on screen ("7 drawings · 0 revised",
+"5 lines · JOD 12,400", "2 waiting on the client" for approvals still asked,
+open/comment counts, …) — instead of a floating `SectionHeader` with a round
+"+". That "+" is now hidden while the list is empty (`showAdd` = "at least
+one row"), so an empty tab offers exactly one way in: the `EmptyState`'s own
+capsule. Comments keeps a custom trailing action instead of "Add": a
+`square.and.pencil` "Write to the client" button, itself hidden while the
+thread is empty for the same reason (issue 3 — a reply arrow on nothing to
+reply to, hard-coded `.left` regardless of layout direction).
+
+**One symbol and hue per section, defined once** (`PFSection` in
+`ProjectFilesShared.swift`) and read by the empty state, every row's leading
+icon and every sheet's header icon: Drawings `pencil.and.ruler`/cyan,
+Documents `doc.text`/purple, BOQ `list.number`/**amber** (was orange, which
+collided with Approvals — the kit's own example reserves orange for
+approvals), Pricing `banknote`/green, Materials `square.stack.3d.up`/pink,
+Furniture `sofa`/indigo, Approvals `checkmark.seal`/orange, Comments
+`bubble.left.and.bubble.right`/blue. The symbols match the immutable ones
+`ProjectDetailView.DetailSection.symbol` already draws on that tab's chip
+(Projects area, not touched) rather than asking that file to change. A money
+total (BOQ's subtotal, Pricing's total) still draws in green regardless of
+its section's hue — "money green" per the kit's own rule of thumb.
+
+**Arabic.** Every `MenuField` category list now reads `title: { L($0) }`
+instead of the raw English server value, `BadgeView` category badges route
+through `L()`, and every example placeholder that was a bare string literal
+now goes through `L()` too. ~30 category words (Architectural, Flooring,
+Marble, Interior Works, …) and every new UI string got an `ar.lproj`
+translation. `"%d line items"` also got a real `ProjectFiles.stringsdict`
+(Arabic zero/one/two/few/many/other) so 3–10 reads "بنود" and 11–99 reads
+"بندًا" instead of the flat "بند" every count used to get — verified against
+the actual compiled bundle with a throwaway `swiftc` harness (no simulator,
+no server) before landing it, since this codebase had never used a
+stringsdict before. See "Known limits" below for what this doesn't cover.
+
+**Pricing's note** used to send people to "the project's Overview" to
+"enable Show Execution Pricing" — Overview only has a read-only visibility
+row; the switch is in Edit. It's shortened to "Hidden from the client" and
+now carries its own `NeonButton("Show to Client")`, which reads the
+project's other five visibility flags first and writes all six back with
+`showPricing: true` (`updateProjectSettings` replaces the whole record —
+sending only one flag would have silently cleared the other five; caught
+this by reading `project-actions.ts` before wiring the button, not by
+guessing). It also only shows once there's a list to be a note above
+(`!items.isEmpty`), so an empty Pricing tab isn't two stacked "nothing here"
+cards.
+
+**BOQ's "Related drawing"/"Related space"** are now `MenuField`s over the
+project's own drawings and spaces (fetched in the add sheet) instead of free
+text — a typo in "A-102" used to quietly break the link to a drawing already
+on file.
+
+**The revision sheet** prefills the next label from the drawing's own
+revision (`nextRevisionLabel`: "R00" → "R01") instead of a hard-coded "R03"
+that could suggest skipping two revisions the drawing was never on. The
+field's hint says "Now on R00"; "What changed" got a real example instead of
+echoing its own label.
+
+**Comments' "Mark Resolved"** is relabelled "Mark as Addressed", and the
+result reads "Addressed · waiting on the client" in info tone rather than
+success-green "Resolved" — the studio can close its own side of a client's
+change request, but nothing here is the client's own sign-off, so it
+shouldn't read like one. (The server's `Comment` model has no
+`resolvedBy`/`resolvedAt` columns, so "who marked it and when" — part of the
+critic's suggested fix — isn't shown; adding those would be new schema, and
+Comments isn't one of the areas this pass is allowed to add server fields
+for. Noted below, not invented.)
+
+**Approvals'** unanswered state is `L("Waiting for the client")` in `.info`
+tone instead of "Pending Review" in warning amber — asked and not yet
+answered is not a problem to flag amber, and it shouldn't read as though
+somebody is actively reviewing it.
+
+**Touch targets and red noise.** Every bare trailing delete glyph
+(Documents, BOQ, Pricing, Approvals, Comments) is now
+`IconButton("trash", look: .plain, tint: .neonDangerStrong, size: NeonSize.touch)`
+— a real 44pt target instead of a ~22pt one, and the kit's danger colour
+instead of system `.red`. Drawings' delete moved into the row's `Menu`
+instead, so there's no separate trash glyph on that list at all.
+
+**Add-sheet forms.** BOQ, Furniture and Materials — the three with ten-plus
+ungrouped fields — are now split into titled `FormSection`s (Item; Quantity
+& Price; Where It Goes; Details, or the equivalent for each). Five fields
+that echoed their own label as a placeholder (Brand/Brand, Model/Model,
+Color, Finish, Supplier) now show no placeholder rather than a fake example.
+"(optional)" is gone from field labels that already carry a required-field
+asterisk on the fields that need one. Pricing's "Label" placeholder no
+longer repeats the category picker directly above it — it's a real example
+("e.g. Kitchen joinery") instead.
+
+**Casing.** Every add sheet's header, its `EmptyState` capsule and its
+primary button now agree on Title Case ("Add Drawing" everywhere, not "Add
+drawing" / "Add Drawing" split across the same sheet).
+
+**Fonts.** Hand-rolled `.system(size: 11/12/12.5/14/14.5/15)` sizes in
+Drawings, Comments, Materials and Furniture are now the kit's own text
+styles (`.neonRowTitle`, `.neonSubtitle`, `.neonMeta`, `.neonNumberSmall`),
+including dropping the `.rounded` design on a materials/furniture price.
+`ImagePickerField` (BOQ, Materials, Furniture) now wraps its control in
+`FormField` instead of drawing its own 13pt-medium label, so it matches
+every other field's label weight.
+
+### Known limits — flagged, not silently dropped
+
+- **English pluralization is out of reach from this area.** `L()`
+  (`Sources/Core/Localization.swift`) returns the raw key verbatim for
+  English and never consults a bundle at all, so an English `.stringsdict`
+  would never be read — "1 line items" is still what English shows.
+  Fixing that needs the shared localization pipeline itself, which is
+  outside `ios/Sources/Features/ProjectFiles/`. The Arabic side is properly
+  fixed and was verified against the compiled bundle (see above).
+- **`ios/Sources/UI/` (the kit) is the only thing I can't touch, and two
+  sub-asks needed it:**
+  - Issue 12's action-bar band and disabled-button contrast live in
+    `SheetScaffold`'s own `safeAreaInset` and `NeonButtonStyle`
+    (`Feedback.swift` / `Buttons.swift`) — the material band and the
+    disabled 42%-opacity rule are drawn once, for every sheet in the app, by
+    the kit. Skipped rather than forking a second, area-local sheet
+    scaffold that every other area's sheets wouldn't share.
+  - Issue 15's per-section header tile colour needs `SheetScaffold`/
+    `SheetHeader` to take a `hue`/`tint` they don't expose today (they
+    always draw `.neonPurpleStrong`). The rest of issue 15 — matching
+    casing across a sheet's header, capsule and button — is fixed; the
+    colour can't be without that kit change.
+- **BOQ's chip and Approvals' hue collision** was fixed on this area's side
+  (BOQ moved to amber everywhere it draws its own icon/empty state/
+  subtotal). The chip itself (`pencil.and.ruler`, `list.number`, … on each
+  tab's pill) is drawn by `ProjectDetailView.DetailSection.symbol` in the
+  Projects area, out of this area's files — this pass's symbols were chosen
+  to *agree* with what that file already draws, not to change it.
+
+
 Area: every project-file tab embedded by the Projects area's
 `ProjectDetailView` (their file, not touched here) — drawings, documents,
 BOQ, pricing, materials, furniture, approvals, comments. All eight already
