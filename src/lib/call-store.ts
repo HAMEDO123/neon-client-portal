@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { ringPhones, stopRinging } from "@/lib/notifications/call-push";
 import type { ChatViewer } from "@/lib/chat";
 import {
   adminChatUrl,
@@ -230,6 +231,18 @@ export async function startCall(viewer: ChatViewer, conversation: Conversation, 
     })
   );
 
+  // And the phones ring. Not awaited: a call that is already ringing on every
+  // open screen must not wait on Apple, and a push that fails must not undo
+  // it. The banner goes out above through the engine; this is what makes a
+  // locked phone behave like a telephone.
+  void ringPhones({
+    callId: call.id,
+    kind,
+    from: viewer.name,
+    fromKey: memberKeyOf(viewer),
+    memberKeys: members.map((member) => member.key),
+  }).catch(() => undefined);
+
   return { callId: call.id, joinedExisting: false };
 }
 
@@ -404,6 +417,22 @@ async function finish(
     data: { status: "ENDED", endedAt, endReason: reason },
   });
   if (claimed.count === 0) return;
+
+  // Every phone that was rung has to be told, and not out of politeness: iOS
+  // kills an app that takes a VoIP push and reports no call, so a phone woken
+  // for a call that is already over must still be allowed to close it. It is
+  // also what stops a pocket ringing for the rest of the ring window after
+  // somebody has hung up.
+  void stopRinging(
+    {
+      callId: call.id,
+      kind: call.kind,
+      from: call.startedByName,
+      fromKey: call.startedByKey,
+      memberKeys: call.participants.map((part) => part.memberKey),
+    },
+    reason
+  ).catch(() => undefined);
 
   const seconds =
     reason === "completed" && call.answeredAt ? Math.round((now - call.answeredAt.getTime()) / 1000) : null;

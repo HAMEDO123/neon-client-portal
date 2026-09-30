@@ -205,7 +205,13 @@ async function deliverApns(
   // push alone for months and still does wherever the app is not installed.
   if (!isApnsConfigured()) return { pushed: 0, failed: 0 };
 
-  const devices = await prisma.deviceToken.findMany({ where: { employeeId, active: true } });
+  // ALERT tokens only. A VoIP token is a different credential from a
+  // different Apple service: an ordinary push sent to one is refused, and the
+  // refusal counts against the token until a perfectly good one is retired.
+  // Calls reach VoIP tokens through lib/notifications/call-push.ts.
+  const devices = await prisma.deviceToken.findMany({
+    where: { employeeId, active: true, kind: "ALERT" },
+  });
   if (devices.length === 0) return { pushed: 0, failed: 0 };
 
   let pushed = 0;

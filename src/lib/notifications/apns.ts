@@ -20,6 +20,31 @@ const SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 // too often, so it is regenerated well inside both bounds.
 const TOKEN_TTL_MS = 45 * 60 * 1000;
 
+/**
+ * What a phone is told about a call, and the contract the app reads.
+ *
+ * Deliberately small and flat: it is handed to CallKit within milliseconds of
+ * arriving, before the app has a session, a network or anything else.
+ *
+ * There is no conversation in it, and that is deliberate. A conversation's
+ * slug is written from the reader's own side — in a chat between two people it
+ * is "the other one" — so a single slug in a payload sent to several phones is
+ * wrong for somebody by construction. The call id is the identifier; the app
+ * resolves the rest from the calls stream once it is awake.
+ */
+export type CallPushPayload = {
+  event: "incoming" | "ended";
+  callId: string;
+  /** AUDIO or VIDEO — CallKit needs to know before it draws anything. */
+  kind: string;
+  /** Who is calling, to show on the lock screen. */
+  from: string;
+  /** Their member key, so the app can match the call once it reconnects. */
+  fromKey: string;
+  /** Why it ended, on an `ended` event: completed, missed, declined. */
+  reason?: string;
+};
+
 export type ApnsTarget = {
   token: string;
   bundleId: string;
@@ -136,20 +161,67 @@ export async function sendApns(target: ApnsTarget, payload: PushPayload): Promis
   }
 }
 
+/**
+ * A call, pushed to a phone so it can ring.
+ *
+ * This is the only thing that makes a locked iPhone behave like a telephone:
+ * PushKit wakes the app whatever it was doing, and the app hands the call
+ * straight to CallKit. An ordinary alert push cannot do it — at best it draws
+ * a banner somebody has to notice and tap.
+ *
+ * Three things differ from an alert and all three are required:
+ *   - the topic is `<bundle>.voip`, not the bundle id,
+ *   - the push type is `voip`,
+ *   - there is no `aps.alert` at all. iOS draws nothing; the app does.
+ *
+ * It carries an obligation the caller cannot discharge: **iOS kills an app
+ * that accepts a VoIP push and does not report a call to CallKit.** So the
+ * `ended` event exists as well as `incoming` — a phone woken for a call that
+ * is already over must still be told, or it reports a call that never rings
+ * and is punished for it.
+ */
+export async function sendCallPush(target: ApnsTarget, call: CallPushPayload): Promise<ApnsResult> {
+  const settings = config();
+  if (!settings) {
+    return { ok: false, statusCode: null, error: "APNs is not configured", gone: false };
+  }
+
+  const host = target.sandbox ? SANDBOX_HOST : PRODUCTION_HOST;
+  const body = JSON.stringify(call);
+
+  try {
+    // Collapsed on the call, so a ring and its cancellation for the same call
+    // never queue up behind each other on a phone that was offline.
+    return await request(host, target, settings, body, `call-${call.callId}`, "voip", `${target.bundleId}.voip`);
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: null,
+      error: error instanceof Error ? error.message : String(error),
+      gone: false,
+    };
+  }
+}
+
 function request(
   host: string,
   target: ApnsTarget,
   settings: ApnsConfig,
   body: string,
-  collapseId: string
+  collapseId: string,
+  // A VoIP push differs from an alert in exactly two headers, so they are
+  // arguments rather than a second copy of this function. The topic matters:
+  // PushKit refuses anything not addressed to `<bundle>.voip`.
+  pushType: "alert" | "voip" = "alert",
+  topic?: string
 ): Promise<ApnsResult> {
   return new Promise((resolve) => {
     const stream = sessionFor(host).request({
       ":method": "POST",
       ":path": `/3/device/${target.token}`,
       authorization: `bearer ${authorizationToken(settings)}`,
-      "apns-topic": target.bundleId,
-      "apns-push-type": "alert",
+      "apns-topic": topic ?? target.bundleId,
+      "apns-push-type": pushType,
       "apns-priority": "10",
       "apns-expiration": String(Math.floor(Date.now() / 1000) + 60 * 60 * 12),
       // Collapses an older notification of the same kind on the device rather
