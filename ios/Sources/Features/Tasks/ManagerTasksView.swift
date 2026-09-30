@@ -176,7 +176,8 @@ struct TasksChatCardRow: View {
                             ForEach(card.assignments) { part in
                                 let name = part.employee?.name ?? "—"
                                 HStack(spacing: 6) {
-                                    TasksAvatar(name: name, hue: hues.hue(part.employeeId, name: name, color: part.employee?.color), size: 20)
+                                    TasksAvatar(name: name, hue: hues.hue(part.employeeId, name: name, color: part.employee?.color), size: 20,
+                                                photo: facePhotoURL(part.employee?.photoUrl))
                                     Text(verbatim: name)
                                         .font(.system(.caption, weight: .semibold))
                                         .foregroundStyle(Color.neonInk.opacity(0.8))

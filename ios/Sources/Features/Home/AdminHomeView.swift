@@ -170,9 +170,16 @@ struct AdminHomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
             // Work approved or sent back, an alert read, a project or a task
             // changed elsewhere: the counts and today's list are what moved.
-            guard let name = note.object as? String,
-                  ["home/", "projects/", "tasks/", "ops/"].contains(where: { name.hasPrefix($0) })
-            else { return }
+            guard let name = note.object as? String else { return }
+            // Somebody's face changed: every row of people here draws it.
+            if isFaceChange(name) {
+                Task { await loadNow() }
+                Task { await loadDay() }
+                Task { await loadToday() }
+                Task { await loadPulse() }
+                return
+            }
+            guard ["home/", "projects/", "tasks/", "ops/"].contains(where: { name.hasPrefix($0) }) else { return }
             Task { await loadOverview() }
             Task { await loadPulse() }
             if name.hasPrefix("tasks/") { Task { await loadToday() } }
@@ -193,7 +200,9 @@ struct AdminHomeView: View {
                 Haptic.tap()
                 HomeTabLink.open(HomeTabLink.more)
             } label: {
-                AvatarView(url: nil, name: "NEON", size: NeonSize.circleButton, ring: true)
+                // The manager's own face once they have set one (More → the
+                // top card); the studio's "N" until then.
+                AvatarView(url: facePhotoURL(api.myPhoto), name: "NEON", size: NeonSize.circleButton, ring: true)
                     .neonShadow(.low)
             }
             .buttonStyle(PressableStyle(scale: 0.88))

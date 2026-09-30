@@ -13,6 +13,9 @@ struct EmployeeDetailView: View {
     @State private var showEdit = false
     @State private var showPasswordReset = false
     @State private var playbookExpanded = false
+    /// The face just saved here, ahead of the next read — `.some(nil)` after
+    /// a removal.
+    @State private var savedPhoto: String??
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -79,6 +82,18 @@ struct EmployeeDetailView: View {
             HStack(spacing: 8) {
                 BadgeView(text: data.employee.active ? L("Active") : L("Disabled"), tone: data.employee.active ? .success : .neutral)
                 if data.employee.email == nil { BadgeView(text: L("No account"), tone: .warning) }
+            }
+        }
+        .heroLeading {
+            // Their face, which the manager can change here — the same
+            // control somebody uses on their own profile, writing through
+            // `team/employees/photo` (the website's own `setEmployeePhoto`,
+            // behind `requireAdmin`). They can still change it themselves.
+            FacePicker(name: data.employee.name, photo: facePhotoURL(savedPhoto ?? data.employee.photoUrl), size: 64) { file in
+                let url = try await api.setEmployeePhoto(employeeId: employeeId, file)
+                savedPhoto = .some(url)
+                // The manager's own row is the manager's own face everywhere.
+                if data.employee.accessRole == "MANAGER" { api.noteOwnPhoto(url) }
             }
         }
 
@@ -367,6 +382,8 @@ struct EmployeeDetailView: View {
                 response = loaded.value
                 cachedAt = loaded.cachedAt
                 errorMessage = nil
+                // The server's answer is the face from now on.
+                if loaded.cachedAt == nil { savedPhoto = nil }
             }
         } catch {
             if response == nil { errorMessage = error.localizedDescription }

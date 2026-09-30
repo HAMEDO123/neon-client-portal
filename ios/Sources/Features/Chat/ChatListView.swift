@@ -151,7 +151,16 @@ struct ChatListView: View {
             Task { await openFromNotification(webPath) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
-            guard let name = note.object as? String, name.hasPrefix("chat/groups/") else { return }
+            guard let name = note.object as? String else { return }
+            // Somebody's face changed: the conversations and the story rail
+            // both draw it (each upload has its own URL, so a re-read is all
+            // it takes).
+            if isFaceChange(name) {
+                Task { await load() }
+                Task { await loadStories() }
+                return
+            }
+            guard name.hasPrefix("chat/groups/") else { return }
             Task { await load() }
         }
         .sheet(isPresented: $showNewChat) {
@@ -270,6 +279,7 @@ struct ChatListView: View {
             isLoading: storiesLoading,
             myName: api.identity?.name ?? "",
             isManager: isManager,
+            myPhoto: facePhotoURL(api.myPhoto),
             people: railPeople,
             isOnline: isOnline,
             onOpen: openStories,

@@ -91,9 +91,13 @@ private struct SubmissionCard: View {
                         .font(.neonOverline)
                         .foregroundStyle(Color.neonTextFaint)
                     DirText(submission.name, font: .neonHeadline, fill: false)
-                    Text("\(submission.employee.name) · \(formattedISODate(submission.createdAt) ?? submission.createdAt)")
-                        .font(.neonFootnote)
-                        .foregroundStyle(Color.neonTextSecondary)
+                    // Who sent it, by face as well as by name.
+                    HStack(spacing: 6) {
+                        AvatarView(url: facePhotoURL(submission.employee.photoUrl), name: submission.employee.name, size: 20)
+                        Text("\(submission.employee.name) · \(formattedISODate(submission.createdAt) ?? submission.createdAt)")
+                            .font(.neonFootnote)
+                            .foregroundStyle(Color.neonTextSecondary)
+                    }
                 }
                 Spacer(minLength: 0)
             }

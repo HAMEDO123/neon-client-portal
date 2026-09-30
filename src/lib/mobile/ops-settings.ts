@@ -7,6 +7,7 @@ import { activeTransport, checkWhatsAppConnection } from "@/lib/whatsapp";
 import { getPushHealth, type PushHealth } from "@/lib/push-health";
 import { automationOn, runRules, type RuleRun } from "@/lib/notifications/automation-events";
 import type { Rule } from "@/lib/automation";
+import { facesFor, type Faces } from "@/lib/faces";
 
 // Gathers what admin/(dashboard)/settings reads, for the phone's registry
 // entries — every field is read through the same lib functions the page
@@ -34,6 +35,8 @@ export type OpsSettings = {
   automationRules: Rule[];
   automationSwitchedOn: boolean;
   pushHealth: PushHealth;
+  /** Employee id → photo, for the people in `pushHealth.devices` who have one. */
+  faces: Faces;
   managerPaired: boolean;
   managerDevices: number;
   whatsapp: {
@@ -87,6 +90,9 @@ export async function opsSettings(): Promise<OpsSettings> {
     automationRules: rules.map(toRule),
     automationSwitchedOn,
     pushHealth,
+    // Faces beside the push list rather than inside getPushHealth, which the
+    // website's settings page reads and draws no faces from.
+    faces: await facesFor(pushHealth.devices.map((device) => device.employeeId)),
     managerPaired: Boolean(managerId),
     managerDevices,
     whatsapp: {

@@ -140,6 +140,8 @@ struct AssignTeamMember: Decodable, Identifiable {
     let name: String
     let color: String?
     let role: String?
+    /// Their face, or nil for initials.
+    let photoUrl: String?
 }
 
 struct AssignTeamResponse: Decodable { let team: [AssignTeamMember] }

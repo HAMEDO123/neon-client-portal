@@ -77,6 +77,7 @@ export async function mobileProcess() {
       role: person.role,
       color: person.color,
       active: person.active,
+      photoUrl: person.photoUrl,
     })),
   };
 }

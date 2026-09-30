@@ -102,7 +102,7 @@ struct CallPeopleSheet: View {
     private func participantRow(_ part: CallParticipant) -> some View {
         let state = Self.state(part.state)
         return HStack(spacing: NeonSpace.md) {
-            ChatAvatar(url: nil, name: part.name, size: 40, color: part.color)
+            ChatAvatar(url: part.photoURL, name: part.name, size: 40, color: part.color)
             HStack(spacing: 6) {
                 DirText(part.name, font: .system(.callout, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
                 if part.memberKey == me {
@@ -188,7 +188,7 @@ struct CallPeopleSheet: View {
 
     private func addableRow(_ member: APIClient.CallMember) -> some View {
         HStack(spacing: NeonSpace.md) {
-            ChatAvatar(url: nil, name: member.name, size: 40, color: member.color)
+            ChatAvatar(url: facePhotoURL(member.photo), name: member.name, size: 40, color: member.color)
             DirText(member.name, font: .system(.callout, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if ringing.contains(member.key) {

@@ -132,6 +132,9 @@ struct AttendanceMonth: Decodable {
     /// `AttendanceRecord.id`, keyed by `"<employeeId>|<dayKey>"` — what the
     /// correction sheet hands `opsDeleteAttendance` for a day it has open.
     let recordIds: [String: String]
+    /// Employee id → their photo, only for people who have one; nil from a
+    /// server before faces.
+    let photos: [String: String]?
 
     func recordId(employeeId: String, dayKey: String) -> String? {
         recordIds["\(employeeId)|\(dayKey)"]
@@ -150,6 +153,8 @@ struct OpsRequests: Decodable {
         let id: String
         let name: String
         let role: String?
+        /// Their face, or nil for initials.
+        let photoUrl: String?
     }
 
     struct DailyReportEntry: Decodable {
@@ -160,7 +165,7 @@ struct OpsRequests: Decodable {
 }
 
 struct SupplyRequest: Decodable, Identifiable {
-    struct Employee: Decodable { let id: String; let name: String; let role: String? }
+    struct Employee: Decodable { let id: String; let name: String; let role: String?; let photoUrl: String? }
 
     let id: String
     let item: String
@@ -211,7 +216,7 @@ func supplyStatusIconTint(_ status: String) -> Color {
 // MARK: - Site visits
 
 struct SiteVisit: Decodable, Identifiable {
-    struct Employee: Decodable { let id: String; let name: String; let color: String }
+    struct Employee: Decodable { let id: String; let name: String; let color: String; let photoUrl: String? }
     struct Project: Decodable { let id: String; let name: String; let clientName: String? }
 
     let id: String
@@ -307,6 +312,8 @@ struct OpsSettings: Decodable {
     let automationRules: [AutomationRule]
     let automationSwitchedOn: Bool
     let pushHealth: PushHealth
+    /// Employee id → photo, for the push list's people; nil from an older server.
+    let faces: [String: String]?
     let managerPaired: Bool
     let managerDevices: Int
     let whatsapp: WhatsApp

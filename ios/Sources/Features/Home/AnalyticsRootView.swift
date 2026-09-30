@@ -236,7 +236,7 @@ private struct DayPersonCard: View {
         NeonCard {
             HStack(alignment: .top) {
                 HStack(spacing: 8) {
-                    AvatarView(url: nil, name: person.employee.name, size: 36)
+                    AvatarView(url: facePhotoURL(person.employee.photoUrl), name: person.employee.name, size: 36)
                     VStack(alignment: .leading, spacing: 2) {
                         DirText(person.employee.name, font: .neonHeadline, fill: false)
                         if let role = person.employee.role {
@@ -462,7 +462,7 @@ private struct EmployeeProgressCard: View {
         NeonCard {
             HStack(alignment: .top) {
                 HStack(spacing: 8) {
-                    AvatarView(url: nil, name: row.employee.name, size: 36)
+                    AvatarView(url: facePhotoURL(row.employee.photoUrl), name: row.employee.name, size: 36)
                     VStack(alignment: .leading, spacing: 2) {
                         DirText(row.employee.name, font: .neonHeadline, fill: false)
                         if let role = row.employee.role {

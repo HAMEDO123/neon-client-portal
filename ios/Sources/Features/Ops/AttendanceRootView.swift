@@ -39,7 +39,7 @@ struct AttendanceRootView: View {
                                 ListRow(
                                     row.name,
                                     subtitle: row.daysRecorded == 0 ? L("Nothing recorded") : daysRecordedLabel(row.daysRecorded),
-                                    leading: .avatar(url: nil, name: row.name),
+                                    leading: .avatar(url: facePhotoURL(month.photos?[row.employeeId]), name: row.name),
                                     value: row.hoursLate > 0 ? L("Late %@", describeMinutes(row.hoursLate * 60)) : nil,
                                     badge: row.active ? nil : L("Left the team"),
                                     badgeTone: .neutral,

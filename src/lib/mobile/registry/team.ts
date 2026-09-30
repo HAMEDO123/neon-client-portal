@@ -5,6 +5,7 @@ import {
   resetEmployeePassword,
   revokeEmployeeAccount,
   setEmployeeActive,
+  setEmployeePhoto,
   updateEmployeeAccount,
 } from "@/lib/actions/admin-employee-actions";
 import { giveWarning, removeWarning } from "@/lib/actions/warning-actions";
@@ -26,6 +27,7 @@ import { nextWorkingDay } from "@/lib/work-hours";
 import { getDayPlan } from "@/lib/day-plan-store";
 import { isAiConfigured } from "@/lib/ai/client";
 import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-queries";
+import { facesFor } from "@/lib/faces";
 import { bool, guarded, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 
 // The "team" area of the phone API: employees and payroll. See
@@ -56,6 +58,9 @@ export const reads: ReadRegistry = {
         phone: employee.phone,
         employeeCode: employee.employeeCode,
         active: employee.active,
+        // Their face, or null for initials on `color` (lib/faces.ts).
+        photoUrl: employee.photoUrl,
+        color: employee.color,
         // The manager's own row (paired to the attendance device) is listed
         // here but is not the team; the phone labels it and leaves it out of
         // the team count, which then agrees with Payroll.
@@ -109,6 +114,9 @@ export const reads: ReadRegistry = {
         phone: employee.phone,
         employeeCode: employee.employeeCode,
         active: employee.active,
+        photoUrl: employee.photoUrl,
+        color: employee.color,
+        accessRole: employee.accessRole,
         createdAt: employee.createdAt,
         lastLoginAt: employee.lastLoginAt,
         monthlySalesTarget: employee.monthlySalesTarget,
@@ -150,8 +158,11 @@ export const reads: ReadRegistry = {
     const employees = await prisma.employee.findMany({
       where: { active: true, accessRole: "EMPLOYEE" },
       orderBy: { order: "asc" },
-      select: { id: true, name: true, deviceUserId: true },
+      select: { id: true, name: true, deviceUserId: true, photoUrl: true },
     });
+    // Each payroll row's face, beside the row rather than in
+    // getPayrollForPeriod, which the website reads and draws no faces from.
+    const faces = await facesFor(rows.map((row) => row.employee.id));
 
     const totals = rows.reduce(
       (sum, row) => ({
@@ -169,7 +180,7 @@ export const reads: ReadRegistry = {
       thisMonth,
       isThisMonth,
       totals: { ...totals, team: rows.length },
-      rows,
+      rows: rows.map((row) => ({ ...row, employee: { ...row.employee, photoUrl: faces[row.employee.id] ?? null } })),
       employees,
       attendance: attendance.map((record) => ({
         id: record.id,
@@ -201,6 +212,18 @@ export const actions: ActionRegistry = {
     setEmployeeActive(str(input.args[0], "id"), bool(input.args[1])),
   "team/resetPassword": async (input) => resetEmployeePassword(str(input.args[0], "id"), input.form),
   "team/revokeAccount": async (input) => revokeEmployeeAccount(str(input.args[0], "id")),
+
+  // Somebody's face, set by the manager — the same `setEmployeePhoto` the
+  // PhotoPicker on /admin/employees/[id] calls, `requireAdmin` and all, so a
+  // team member's token is refused here however the request is written. The
+  // form's `photo` is the picture; no `photo` at all means "take it off".
+  // Answers with the new URL so the phone can draw it without a second read.
+  "team/employees/photo": async (input) => {
+    const id = str(input.args[0], "employeeId");
+    await setEmployeePhoto(id, input.form);
+    const row = await prisma.employee.findUnique({ where: { id }, select: { photoUrl: true } });
+    return { photoUrl: row?.photoUrl ?? null };
+  },
 
   "team/giveWarning": async (input) => giveWarning(str(input.args[0], "employeeId"), input.form),
   "team/removeWarning": async (input) =>

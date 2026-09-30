@@ -21,6 +21,7 @@ import { getTimezone } from "@/lib/settings";
 import { pendingSubmissions } from "@/lib/submissions";
 import { shiftDayKey, todayKey } from "@/lib/time";
 import { describeOutcome, type Outcome } from "@/lib/verification";
+import { facesFor } from "@/lib/faces";
 
 // What the manager's Home tab and the three screens beside it read — the
 // admin dashboard, Activity, Reviews and Analytics — as the phone reads them.
@@ -93,10 +94,10 @@ export async function homeDay() {
   const days = await dayBoard(today);
 
   // The board's rows carry a name; the colour is the one the rest of the
-  // admin draws the person in.
+  // admin draws the person in, and the photo their face (null: initials).
   const colours = await prisma.employee.findMany({
     where: { id: { in: days.map((day) => day.employeeId) } },
-    select: { id: true, color: true, role: true },
+    select: { id: true, color: true, role: true, photoUrl: true },
   });
   const byId = new Map(colours.map((row) => [row.id, row]));
 
@@ -104,6 +105,7 @@ export async function homeDay() {
     ...day,
     color: byId.get(day.employeeId)?.color ?? "cyan",
     role: byId.get(day.employeeId)?.role ?? null,
+    photo: byId.get(day.employeeId)?.photoUrl ?? null,
     attention: attentionScore(day),
     overloaded: overloaded(day),
     overBy: overBy(day),
@@ -128,6 +130,9 @@ export async function homeDay() {
 export async function homeAlerts() {
   const alerts = await recentAdminAlerts();
   const timezone = await getTimezone();
+  // Faces for whoever an alert is about, looked up rather than copied (see
+  // lib/faces.ts) — one query for the whole feed.
+  const faces = await facesFor(alerts.flatMap((alert) => (alert.employeeId ? [alert.employeeId] : [])));
 
   return {
     timezone,
@@ -140,7 +145,13 @@ export async function homeAlerts() {
       url: alert.url,
       entryId: alert.entryId,
       employeeId: alert.employeeId,
-      employee: alert.employee ? { name: alert.employee.name, color: alert.employee.color } : null,
+      employee: alert.employee
+        ? {
+            name: alert.employee.name,
+            color: alert.employee.color,
+            photoUrl: (alert.employeeId && faces[alert.employeeId]) || null,
+          }
+        : null,
       readAt: alert.readAt,
       createdAt: alert.createdAt,
     })),
@@ -220,6 +231,12 @@ export async function homeAnalytics(requestedPeriod: string | null, requestedDay
   const daily = await getDailyProgress(day);
   const rows = await getEmployeeProgress(period);
 
+  // Each person's face, for the rows below: one query for both lists.
+  const faces = await facesFor([
+    ...daily.map((person) => person.employee.id),
+    ...rows.map((row) => row.employee.id),
+  ]);
+
   const teamDay = sumCounts(daily.filter((person) => person.employee.active).map((person) => person.counts));
   const below = rows.filter((row) => row.shortfall && row.employee.active);
   const owing = below.filter((row) => !row.deduction);
@@ -240,7 +257,7 @@ export async function homeAnalytics(requestedPeriod: string | null, requestedDay
     penalty: PERFORMANCE_PENALTY,
     teamDay,
     daily: daily.map((person) => ({
-      employee: person.employee,
+      employee: { ...person.employee, photoUrl: faces[person.employee.id] ?? null },
       counts: person.counts,
       history: person.history,
       working: person.working,
@@ -260,6 +277,7 @@ export async function homeAnalytics(requestedPeriod: string | null, requestedDay
         role: row.employee.role,
         color: row.employee.color,
         active: row.employee.active,
+        photoUrl: faces[row.employee.id] ?? null,
       },
       counts: row.counts,
       progress: asPercent(row.progress),

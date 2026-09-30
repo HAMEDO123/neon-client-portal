@@ -570,7 +570,9 @@ struct ChatAuthorBadge: View {
                 IconTile("sparkles", hue: .purple, size: Self.size, style: .filled)
                     .clipShape(Circle())
             } else if let name {
-                ChatAvatar(url: nil, name: name, size: Self.size, color: palette.color(key: key, name: name))
+                // Their face where they have one (the room's palette has
+                // looked it up), else their initials on their colour.
+                ChatAvatar(url: palette.photo(key: key, name: name), name: name, size: Self.size, color: palette.color(key: key, name: name))
             } else {
                 Color.clear
             }

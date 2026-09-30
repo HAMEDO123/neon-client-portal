@@ -21,7 +21,7 @@ struct SettingsRootView: View {
                 .neonSurface(.solid, radius: NeonRadius.md)
 
                 LoadStateView(value: settings, error: errorMessage, cachedAt: cachedAt, retry: load) { settings in
-                    PushHealthCard(health: settings.pushHealth, managerPaired: settings.managerPaired, managerDevices: settings.managerDevices)
+                    PushHealthCard(health: settings.pushHealth, faces: settings.faces ?? [:], managerPaired: settings.managerPaired, managerDevices: settings.managerDevices)
                         .id("push")
                     WorkingDayCard(workHours: settings.workHours, dayLengthMinutes: settings.dayLengthMinutes, capacityMinutes: settings.capacityMinutes, onTimeUntil: settings.onTimeUntil, onSaved: load)
                         .id("workingday")
@@ -58,6 +58,8 @@ struct SettingsRootView: View {
 
 private struct PushHealthCard: View {
     let health: PushHealth
+    /// Employee id → photo, for the people listed.
+    var faces: [String: String] = [:]
     let managerPaired: Bool
     let managerDevices: Int
 
@@ -103,7 +105,7 @@ private struct PushHealthCard: View {
                         ListRow(
                             device.name,
                             meta: device.lastUsedAt.flatMap(shortTime),
-                            leading: .avatar(url: nil, name: device.name),
+                            leading: .avatar(url: facePhotoURL(faces[device.employeeId]), name: device.name),
                             value: L("%d devices", device.active)
                         )
                         if index < health.devices.count - 1 { NeonDivider() }

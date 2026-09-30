@@ -143,6 +143,15 @@ What the web's calls area does (`src/components/calls/*`, `src/lib/calls.ts`,
   on directly. The speaker button follows the route when it moves without a
   tap (the lock screen's audio button, a headset).
 
+## Faces
+- Every face on a call is the person's photo where they have one: the tiles
+  on the stage and in the floating window, a private call's face, the
+  incoming screen and who is already in, the people sheet and the people you
+  can add. The server looks each participant's `photo` up when a call is read
+  (`callsFor`, `addableToCall`); the app reads it (`CallParticipant.photo`,
+  optional). Group and pre-join faces come from the conversation list, as
+  before. Ringing (CallKit, PushKit) is untouched.
+
 ## The simulator has no camera
 - `LocalMedia.hasCamera` is false there; `openCallMedia` degrades to
   audio-only with `.noCamera` reported the same way a real refused camera

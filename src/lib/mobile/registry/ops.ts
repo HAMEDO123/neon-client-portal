@@ -47,7 +47,7 @@ export const reads: ReadRegistry = {
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
       take: 200,
       include: {
-        employee: { select: { id: true, name: true, role: true } },
+        employee: { select: { id: true, name: true, role: true, photoUrl: true } },
         // Same reason as the web card: `item` is a headline over these.
         lines: { orderBy: { position: "asc" } },
       },
@@ -58,7 +58,7 @@ export const reads: ReadRegistry = {
     const team = await prisma.employee.findMany({
       where: { active: true, accessRole: "EMPLOYEE" },
       orderBy: [{ order: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, role: true },
+      select: { id: true, name: true, role: true, photoUrl: true },
     });
     const reports = await prisma.dailyReport.findMany({
       where: { day: dayKeyToDate(today) },

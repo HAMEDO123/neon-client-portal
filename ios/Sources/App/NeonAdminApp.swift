@@ -159,6 +159,9 @@ struct AdminHome: View {
                 .tag(AdminTab.more)
         }
         .task { await pollUnread() }
+        // Who the manager is to the studio's screens: `/me` carries their own
+        // face, which Home, More and "My Story" draw.
+        .task { _ = try? await api.fetchMe() }
         .onReceive(PushCenter.shared.$pendingPath) { webPath in
             guard let webPath else { return }
             tab = PushRoute.adminTab(webPath)

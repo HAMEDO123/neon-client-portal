@@ -5,3 +5,7 @@
 
 "Your day" = "يومك";
 "%@, %d new" = "%@، %d جديد";
+
+/* The manager's own face, at the top of More */
+"Your photo shows in chat, calls and stories" = "صورتك تظهر في المحادثات والمكالمات والقصص";
+"There is no employee record for the manager to keep a photo on." = "لا يوجد سجل موظف للمدير لحفظ صورة عليه.";

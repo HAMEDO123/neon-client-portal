@@ -126,6 +126,15 @@ Everything below is implemented natively unless marked **NOT BUILT**.
   linking into the conversation (`ChatCardsLoader`, owned by the chat area —
   not edited here).
 
+## Faces
+- `TasksAvatar` lays a photo over its initials: the person chips over the
+  board and the week, a job's owner on the week board, the people on a chat
+  task card, the Team segment's cards and a person's page, and the process's
+  usual owners. `tasks/board`, `tasks/week` and `tasks/process` carry each
+  person's `photoUrl`; `tasks/people`'s `avatar` was already the photo (or the
+  initials picture, which `facePhotoURL` reads as none).
+- The whole tab re-reads when anybody's face changes.
+
 ## Known gaps / NOT BUILT
 - **Hand out a task** from the Tasks tab still opens the website (see above)
   — needs a native composer in the chat area, out of this area's file

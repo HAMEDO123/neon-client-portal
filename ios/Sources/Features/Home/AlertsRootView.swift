@@ -393,7 +393,7 @@ private struct AlertRow: View {
     @ViewBuilder private var leadingTile: some View {
         if let employee = alert.employee {
             ZStack(alignment: .bottomTrailing) {
-                AvatarView(url: nil, name: employee.name, size: NeonSize.avatar)
+                AvatarView(url: facePhotoURL(employee.photoUrl), name: employee.name, size: NeonSize.avatar)
                 IconTile(homeAlertSymbol(alert.type), hue: hue, size: 20, style: isUnread ? .filled : .soft)
             }
         } else {

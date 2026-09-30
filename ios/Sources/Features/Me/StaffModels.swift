@@ -11,6 +11,11 @@ struct Me: Decodable {
     let side: Side
     let id: String?
     let name: String
+    /// Their own face (the manager's too, from their own row), or nil.
+    let photoUrl: String?
+    /// False for a manager with no row to keep a photo on; nil from a server
+    /// older than faces.
+    let canSetPhoto: Bool?
     let badges: Badges?
     /// Pinned until the manager withdraws them — never dismissible in the app.
     let warnings: [StaffWarning]?

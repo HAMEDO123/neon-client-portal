@@ -73,6 +73,8 @@ struct HomePersonDay: Codable, Identifiable {
     let blocked: [BlockedRow]
     let color: String
     let role: String?
+    /// Their face, or nil for initials (`facePhotoURL`).
+    let photo: String?
     let attention: Int
     let overloaded: Bool
     let overBy: Int
@@ -134,6 +136,8 @@ struct HomeNowPerson: Codable, Identifiable {
     let name: String
     let color: String
     let avatar: String?
+    /// Their face (`Employee.photoUrl`), or nil for initials.
+    let photo: String?
     let online: Bool
     let now: HomeNowSlot?
     let next: HomeNowSlot?
@@ -151,6 +155,7 @@ struct HomeNow: Codable {
 struct HomeAlertEmployee: Codable {
     let name: String
     let color: String
+    let photoUrl: String?
 }
 
 struct HomeAlert: Codable, Identifiable {
@@ -178,6 +183,7 @@ struct SubmissionEmployee: Codable {
     let id: String
     let name: String
     let color: String
+    let photoUrl: String?
 }
 
 struct CriterionCheckRow: Codable, Identifiable {
@@ -243,6 +249,7 @@ struct DailyEmployee: Codable {
     let role: String?
     let color: String
     let active: Bool
+    let photoUrl: String?
 }
 
 struct DailyProgressRow: Codable, Identifiable {
@@ -288,6 +295,7 @@ struct PeriodEmployee: Codable {
     let role: String?
     let color: String
     let active: Bool
+    let photoUrl: String?
 }
 
 struct EmployeeProgressRow: Codable, Identifiable {
@@ -505,6 +513,7 @@ struct HomeReviewPerson: Codable, Identifiable {
     let id: String
     let name: String
     let color: String
+    let photoUrl: String?
 }
 
 struct HomeReviewQueue: Codable {
@@ -519,6 +528,8 @@ struct HomeTodayPerson: Codable {
     let id: String
     let name: String
     let color: String
+    /// Their face, or nil for initials.
+    let photoUrl: String?
 }
 
 /// One thing on today's calendar (`homeToday()` in home-today.ts): a board
