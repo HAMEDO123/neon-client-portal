@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { hasAdminSession } from "@/lib/session-token";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { avatarUrl } from "@/lib/avatar";
+import { facesFor } from "@/lib/faces";
 import { chatTaskSelect } from "@/lib/chat-task-select";
 import { chatMeetingSelect } from "@/lib/chat-meeting-select";
 import {
@@ -325,7 +326,7 @@ function notMine(viewer: ChatViewer) {
  * them, so what was said stays findable and its unread count can be cleared.
  */
 async function chatPartners(viewer: ChatViewer) {
-  const select = { id: true, name: true, color: true, role: true, active: true } as const;
+  const select = { id: true, name: true, color: true, role: true, active: true, photoUrl: true } as const;
 
   if (viewer.type === "ADMIN") {
     return prisma.employee.findMany({
@@ -417,6 +418,9 @@ export async function conversationsFor(viewer: ChatViewer): Promise<Conversation
   const now = new Date();
   const team = await getTeamChannel();
   const people = await chatPartners(viewer);
+  // The manager's face for the row that stands for them; null for the manager
+  // themselves, who has no such row in their own list.
+  const managerFace = viewer.type === "ADMIN" ? null : (await facesFor(["admin"])).admin ?? null;
   const groups = await groupsFor(viewer);
 
   const privateKeys =
@@ -491,7 +495,7 @@ export async function conversationsFor(viewer: ChatViewer): Promise<Conversation
             slug: person.id,
             title: person.name,
             subtitle: person.role,
-            avatar: avatarUrl(person.name, person.color),
+            avatar: person.photoUrl ?? avatarUrl(person.name, person.color),
             isGroup: false,
           },
           memberCount: null,
@@ -504,7 +508,9 @@ export async function conversationsFor(viewer: ChatViewer): Promise<Conversation
               slug: "manager",
               title: "Manager",
               subtitle: null,
-              avatar: avatarUrl("Manager", "ink"),
+              // The manager's own face, through the member key everything else
+              // uses; without one this is the initials picture it always was.
+              avatar: managerFace ?? avatarUrl("Manager", "ink"),
               isGroup: false,
             },
             memberCount: null,
@@ -516,7 +522,7 @@ export async function conversationsFor(viewer: ChatViewer): Promise<Conversation
               slug: person.id,
               title: person.name,
               subtitle: person.active ? person.role : "No longer on the team",
-              avatar: avatarUrl(person.name, person.color),
+              avatar: person.photoUrl ?? avatarUrl(person.name, person.color),
               isGroup: false,
             },
             memberCount: null,

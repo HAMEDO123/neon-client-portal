@@ -447,6 +447,11 @@ model Employee {
   role   String?
   // Accent used for this employee's column group on the board.
   color  String  @default("cyan")
+  // Their face. Null for anybody who has not been given one, which is every
+  // employee until somebody uploads one — `PersonAvatar` then draws initials
+  // on `color` as it always has, so a studio that never uses this looks
+  // exactly as it did.
+  photoUrl String?
   order  Int     @default(0)
   // Doubles as the account status: a disabled employee cannot sign in.
   active Boolean @default(true)

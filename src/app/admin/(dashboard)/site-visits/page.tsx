@@ -1,4 +1,5 @@
 import { MapPinned } from "lucide-react";
+import { PersonAvatar } from "@/components/chat/person-avatar";
 import { requireAdmin } from "@/lib/admin-guard";
 import { allSiteVisits, projectsForVisits, siteVisitKeepers } from "@/lib/site-visit-queries";
 import { getTimezone } from "@/lib/settings";
@@ -129,7 +130,15 @@ function Group({
                   {visit.title}
                 </p>
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/45">
-                  <span className="font-medium text-ink/60">{visit.employee.name}</span>
+                  <span className="inline-flex items-center gap-1.5 font-medium text-ink/60">
+                    <PersonAvatar
+                      name={visit.employee.name}
+                      photo={visit.employee.photoUrl}
+                      color={visit.employee.color}
+                      size={18}
+                    />
+                    {visit.employee.name}
+                  </span>
                   <span>
                     {visit.scheduledAt
                       ? `${formatDayIn(timezone, visit.scheduledAt)} · ${formatTimeIn(timezone, visit.scheduledAt)}`

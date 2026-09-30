@@ -11,6 +11,8 @@ import { SignOutButton } from "@/components/employee/sign-out-button";
 import { deviceLabel } from "@/lib/devices";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { getTimezone } from "@/lib/settings";
+import { PhotoPicker } from "@/components/employee/photo-picker";
+import { setMyPhoto } from "@/lib/actions/employee-actions";
 
 export default async function EmployeeProfilePage() {
   const employee = await requireEmployee();
@@ -34,6 +36,16 @@ export default async function EmployeeProfilePage() {
       <div>
         <h1 className="text-xl font-semibold text-ink">{employee.name}</h1>
         <p className="mt-1 text-sm text-ink/50">{employee.role ?? "Employee"}</p>
+      </div>
+
+      <div className="glass rounded-2xl p-4">
+        <PhotoPicker
+          name={employee.name}
+          photo={employee.photoUrl}
+          color={employee.color}
+          action={setMyPhoto}
+          hint="Your picture in chat, on task cards and in calls."
+        />
       </div>
 
       <div className="glass flex flex-col gap-3 rounded-2xl p-4">

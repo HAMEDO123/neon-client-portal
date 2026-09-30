@@ -15,7 +15,7 @@ import { dateToDayKey, dayKeyToDate, instantAt, shiftDayKey, todayKey } from "@/
 // the board, the portal and analytics share — never re-derived here. States
 // travel as the board's own words; the app only ever shows them.
 
-type Person = { id: string; name: string; color: string };
+type Person = { id: string; name: string; color: string; photoUrl: string | null };
 
 export async function homeToday() {
   const timezone = await getTimezone();
@@ -98,7 +98,7 @@ export async function homeToday() {
     (
       await prisma.employee.findMany({
         where: { id: { in: [...ids] } },
-        select: { id: true, name: true, color: true },
+        select: { id: true, name: true, color: true, photoUrl: true },
       })
     ).map((row) => [row.id, row])
   );

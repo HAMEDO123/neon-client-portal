@@ -1,5 +1,6 @@
 import type { MeetingMode, MeetingRsvp } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db";
+import { facesFor } from "@/lib/faces";
 import { messageSelect } from "@/lib/chat";
 import { chatMeetingSelect } from "@/lib/chat-meeting-select";
 import {
@@ -40,12 +41,21 @@ export async function meetingMembers(conversation: Conversation) {
       ...(conversation.kind === "direct" ? { id: conversation.employeeId } : {}),
     },
     orderBy: { order: "asc" },
-    select: { id: true, name: true, color: true },
+    select: { id: true, name: true, color: true, photoUrl: true },
   });
 
+  // The manager's own face through the same member key the rest of the
+  // platform uses; see lib/faces.ts.
+  const faces = await facesFor([MANAGER_MEMBER.key]);
+
   return [
-    { key: MANAGER_MEMBER.key, name: MANAGER_MEMBER.name, color: MANAGER_MEMBER.color as string | null },
-    ...employees.map((one) => ({ key: one.id, name: one.name, color: one.color })),
+    {
+      key: MANAGER_MEMBER.key,
+      name: MANAGER_MEMBER.name,
+      color: MANAGER_MEMBER.color as string | null,
+      photo: faces[MANAGER_MEMBER.key] ?? null,
+    },
+    ...employees.map((one) => ({ key: one.id, name: one.name, color: one.color, photo: one.photoUrl })),
   ];
 }
 

@@ -1,4 +1,5 @@
 import { ClipboardCheck } from "lucide-react";
+import { PersonAvatar } from "@/components/chat/person-avatar";
 import { pendingSubmissions } from "@/lib/submissions";
 import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
@@ -60,7 +61,13 @@ export default async function ReviewsPage() {
                   <h2 dir="auto" className="mt-0.5 text-base font-semibold text-ink">
                     {name}
                   </h2>
-                  <p className="mt-1 text-sm text-ink/55">
+                  <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-ink/55">
+                    <PersonAvatar
+                      name={submission.employee.name}
+                      photo={submission.employee.photoUrl}
+                      color={submission.employee.color}
+                      size={20}
+                    />
                     {submission.employee.name} · {formatDayIn(timezone, submission.createdAt)}{" "}
                     {formatTimeIn(timezone, submission.createdAt)}
                   </p>

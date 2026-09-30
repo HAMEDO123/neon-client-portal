@@ -15,6 +15,8 @@ export type SessionEmployee = {
   phone: string | null;
   employeeCode: string | null;
   color: string;
+  /** Their photo, or null — every screen falls back to initials on `color`. */
+  photoUrl: string | null;
   /** Whether this person may use the company WhatsApp — see requireWhatsAppAccess. */
   canReadWhatsApp: boolean;
   /** Whether this person may hand work out to the team — see requireTaskAssigner. */
@@ -40,6 +42,7 @@ export async function getSessionEmployee(): Promise<SessionEmployee | null> {
       phone: true,
       employeeCode: true,
       color: true,
+      photoUrl: true,
       canReadWhatsApp: true,
       canAssignTasks: true,
       canLogSiteVisits: true,

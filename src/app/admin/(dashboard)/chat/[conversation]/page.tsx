@@ -9,6 +9,7 @@ import {
   requireChatViewer,
 } from "@/lib/chat";
 import { taskMembers } from "@/lib/chat-task-store";
+import { facesFor, keysInMessages } from "@/lib/faces";
 import { defaultDue, mayCreateTasks } from "@/lib/chat-tasks";
 import { meetingMembers } from "@/lib/chat-meeting-store";
 import { defaultWhen, mayScheduleMeetings } from "@/lib/chat-meetings";
@@ -54,6 +55,16 @@ export default async function AdminConversationPage({
 
   // One after the other, like the other multi-query pages here.
   const messages = await listMessages(viewer, channel.id);
+  // Every face this screenful will draw, resolved once — see lib/faces.ts for
+  // why a photo is looked up rather than copied onto the rows. The people in
+  // the conversation are added to whoever has written: a first message from
+  // somebody arrives over the stream, and their face would otherwise wait for
+  // a reload.
+  const faces = await facesFor([
+    ...keysInMessages(messages),
+    "admin",
+    ...(conversation.kind === "direct" ? [conversation.employeeId] : []),
+  ]);
   const projects = await prisma.project.findMany({
     where: { publishState: { not: "ARCHIVED" } },
     orderBy: { updatedAt: "desc" },
@@ -79,7 +90,7 @@ export default async function AdminConversationPage({
     conversation.kind === "direct"
       ? await prisma.employee.findUnique({
           where: { id: conversation.employeeId },
-          select: { name: true, color: true },
+          select: { name: true, color: true, photoUrl: true },
         })
       : null;
   const personName = person?.name ?? channel.name;
@@ -127,6 +138,7 @@ export default async function AdminConversationPage({
         <ChatRoom
           variant="studio"
           initialMessages={messages}
+          faces={faces}
           viewerType="ADMIN"
           viewerId={null}
           viewerName={viewer.name}
@@ -150,7 +162,7 @@ export default async function AdminConversationPage({
               : {
                   name: personName,
                   subtitle: `Private · only you and ${personName}`,
-                  avatar: avatarUrl(personName, person?.color),
+                  avatar: person?.photoUrl ?? avatarUrl(personName, person?.color),
                   backHref: "/admin/chat",
                 }
           }

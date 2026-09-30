@@ -141,7 +141,7 @@ export const reads: ReadRegistry = {
     team: await prisma.employee.findMany({
       where: { active: true, accessRole: "EMPLOYEE" },
       orderBy: [{ order: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, color: true, role: true },
+      select: { id: true, name: true, color: true, role: true, photoUrl: true },
     }),
   })),
 

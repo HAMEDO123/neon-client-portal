@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck, UserPlus, Users } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { PersonAvatar } from "@/components/chat/person-avatar";
 import { createEmployeeAccount } from "@/lib/actions/admin-employee-actions";
 import { TextInput } from "@/components/admin/fields";
 import { SaveButton } from "@/components/admin/form-buttons";
@@ -79,6 +80,12 @@ export default async function AdminEmployeesPage() {
                   href={`/admin/employees/${employee.id}`}
                   className="glass flex items-center gap-3 rounded-2xl p-4"
                 >
+                  <PersonAvatar
+                    name={employee.name}
+                    photo={employee.photoUrl}
+                    color={employee.color}
+                    size={40}
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-ink">{employee.name}</p>
@@ -118,8 +125,18 @@ export default async function AdminEmployeesPage() {
                 {employees.map((employee) => (
                   <tr key={employee.id} className="border-t border-ink/6">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-ink">{employee.name}</p>
-                      {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
+                      <div className="flex items-center gap-2.5">
+                        <PersonAvatar
+                          name={employee.name}
+                          photo={employee.photoUrl}
+                          color={employee.color}
+                          size={30}
+                        />
+                        <div className="min-w-0">
+                          <p className="font-medium text-ink">{employee.name}</p>
+                          {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-ink/60">
                       {employee.email ?? <span className="text-ink/30">Board only — no login</span>}

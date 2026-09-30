@@ -8,6 +8,7 @@ import { managerEmployeeId } from "@/lib/manager-account";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { chatCopy, chatKey, chatPreview } from "@/lib/notifications/types";
 import { avatarUrl } from "@/lib/avatar";
+import { facesFor } from "@/lib/faces";
 import { saveFile } from "@/lib/storage";
 import type { ChatMessageKind } from "@/generated/prisma/enums";
 
@@ -37,16 +38,23 @@ function authorFields(viewer: ChatViewer) {
 }
 
 /**
- * The sender's face, as far as a notification can carry one: their initials on
- * their colour. Android and desktop draw it where WhatsApp puts a photo; an
- * iPhone draws the app's own icon on every web notification and ignores it.
+ * The sender's face, as far as a notification can carry one: their photo, else
+ * their initials on their colour. Android and desktop draw it where WhatsApp
+ * puts a photo; an iPhone draws the app's own icon on every web notification
+ * and ignores it.
  */
 async function senderIcon(sender: ChatViewer) {
   if (sender.type === "EMPLOYEE" && sender.id) {
-    const row = await prisma.employee.findUnique({ where: { id: sender.id }, select: { color: true } });
-    return avatarUrl(sender.name, row?.color);
+    const row = await prisma.employee.findUnique({
+      where: { id: sender.id },
+      select: { color: true, photoUrl: true },
+    });
+    return row?.photoUrl ?? avatarUrl(sender.name, row?.color);
   }
-  return avatarUrl(sender.name, "ink");
+
+  // The manager, who is a member key rather than a row everywhere else.
+  const faces = await facesFor(["admin"]);
+  return faces.admin ?? avatarUrl(sender.name, "ink");
 }
 
 /** Somebody to tell, and which portal their link belongs to. */

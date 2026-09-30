@@ -90,9 +90,9 @@ export async function homePulse() {
   const waiting = await prisma.taskSubmission.findMany({
     where: { status: "PENDING" },
     orderBy: { createdAt: "asc" },
-    select: { employee: { select: { id: true, name: true, color: true } } },
+    select: { employee: { select: { id: true, name: true, color: true, photoUrl: true } } },
   });
-  const people = new Map<string, { id: string; name: string; color: string }>();
+  const people = new Map<string, { id: string; name: string; color: string; photoUrl: string | null }>();
   for (const row of waiting) if (!people.has(row.employee.id)) people.set(row.employee.id, row.employee);
 
   return {

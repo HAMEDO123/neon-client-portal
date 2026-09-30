@@ -30,7 +30,7 @@ import { createChatTask } from "@/lib/actions/chat-task-actions";
 import { createChatMeeting } from "@/lib/actions/chat-meeting-actions";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { CallButtons } from "@/components/calls/call-buttons";
-import { PersonAvatar } from "@/components/chat/person-avatar";
+import { FacesProvider, PersonAvatar } from "@/components/chat/person-avatar";
 import { TaskCard } from "@/components/chat/task-card";
 import { TaskSheet, type TaskSetup } from "@/components/chat/task-sheet";
 import { MeetingCard } from "@/components/chat/meeting-card";
@@ -168,6 +168,7 @@ export function ChatRoom({
   meetingSetup = null,
   focusTaskId = null,
   focusMeetingId = null,
+  faces = {},
   variant = "phone",
 }: {
   initialMessages: Message[];
@@ -191,6 +192,8 @@ export function ChatRoom({
   taskSetup?: TaskSetup | null;
   /** Present only where this viewer may set meetings: who can be asked, and when one would start. */
   meetingSetup?: MeetingSetup | null;
+  /** Who has a photo, by member key — published to every face on the screen. */
+  faces?: Record<string, string | null>;
   /** A card to scroll to and point out, when a notification or the Tasks list opened the chat for it. */
   focusTaskId?: string | null;
   /** The same, for a meeting card a notification opened the chat for. */
@@ -559,6 +562,7 @@ export function ChatRoom({
   const pinnedIds = useMemo(() => new Set(pinned.map((one) => one.id)), [pinned]);
 
   return (
+    <FacesProvider faces={faces}>
     <div className="flex h-full flex-col bg-canvas">
       {header && (
         <ChatHeader
@@ -748,6 +752,7 @@ export function ChatRoom({
         />
       )}
     </div>
+    </FacesProvider>
   );
 }
 
@@ -944,6 +949,9 @@ function Bubble({
         {withFace && (
           <PersonAvatar
             name={message.authorName || "?"}
+            // The key a message carries: an employee id, or "admin" for the
+            // manager — the same keys lib/faces.ts answers to.
+            personKey={message.authorType === "ADMIN" ? "admin" : message.authorId}
             color={faceColour(message.authorName || "?")}
             size={32}
             className="mt-1 shrink-0"

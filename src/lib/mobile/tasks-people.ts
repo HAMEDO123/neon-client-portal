@@ -165,8 +165,9 @@ export async function mobileTaskPeople(period: PeoplePeriod, day: string | null,
       name: person.name,
       role: person.role,
       color: person.color,
-      // The studio's face for somebody with no photo: initials on their colour.
-      avatar: avatarUrl(person.name, person.color),
+      // Their photo, or the studio's face for somebody with no photo:
+      // initials on their colour.
+      avatar: person.photoUrl ?? avatarUrl(person.name, person.color),
       ...tallyWork(items),
       items,
     };

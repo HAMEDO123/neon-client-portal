@@ -280,7 +280,7 @@ export function MeetingSheet({
                     onClick={() => toggle(member.key)}
                     className={cn(chip(chosen), "pl-1")}
                   >
-                    <PersonAvatar name={member.name} color={member.color} size={24} />
+                    <PersonAvatar name={member.name} photo={member.photo} color={member.color} size={24} />
                     {member.name}
                     {chosen && <Check size={14} strokeWidth={2.75} aria-hidden />}
                   </button>
