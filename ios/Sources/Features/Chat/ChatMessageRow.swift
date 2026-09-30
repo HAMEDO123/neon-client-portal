@@ -188,10 +188,13 @@ struct ChatBubbleMeta: View {
             }
             Text(time).monospacedDigit()
             if let delivery {
+                // On my own indigo-to-violet bubble, read is solid white and
+                // on its way a paler white — green belongs on white bubbles
+                // and the list, not on violet.
                 ChatTicks(
                     delivery: delivery,
-                    tint: onDark ? .white.opacity(0.78) : Color.neonTextTertiary,
-                    readTint: onDark ? ChatTickPalette.read : ChatTickPalette.readOnLight
+                    tint: onDark ? .white.opacity(0.55) : Color.neonTextTertiary,
+                    readTint: onDark ? Color.white : ChatTickPalette.readOnLight
                 )
                 .padding(.leading, 1)
             }
@@ -231,13 +234,15 @@ struct ChatMessageRow: View {
     var onDiscard: (() -> Void)?
     var onMediaResize: (() -> Void)?
 
+    @Environment(\.chatRoomPalette) private var palette
+
     private var bubbleShape: ChatBubbleShape { ChatBubbleShape(mine: mine, tail: tail) }
     private var isAgent: Bool { message.authorType == "AGENT" }
 
     var body: some View {
         switch message.kind {
         case "CALL":
-            ChatCallLine(message: message)
+            ChatCallLine(message: message, mine: mine)
         case "TASK":
             if let card = message.task {
                 aligned(metaBelow: true, authorAbove: true) {
@@ -313,7 +318,7 @@ struct ChatMessageRow: View {
     private func aligned<Content: View>(metaBelow: Bool = false, authorAbove: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 6) {
             if inGroup && !mine {
-                ChatAuthorBadge(name: message.authorName, isAgent: isAgent)
+                ChatAuthorBadge(name: message.authorName, key: message.authorKey, isAgent: isAgent)
                     .opacity(showAuthor ? 1 : 0)
                     .accessibilityHidden(true)
             }
@@ -373,7 +378,7 @@ struct ChatMessageRow: View {
             Text(verbatim: name).lineLimit(1)
         }
         .font(.system(.caption, weight: .semibold))
-        .foregroundStyle(isAgent ? NeonHue.purple.deep : chatAuthorColor(name))
+        .foregroundStyle(isAgent ? NeonHue.purple.deep : palette.nameColor(key: message.authorKey, name: name))
     }
 
     private var bubbleFill: AnyShapeStyle {
@@ -394,16 +399,31 @@ struct ChatMessageRow: View {
         )
     }
 
-    private func projectTag(_ project: ChatMessage.ProjectTag) -> some View {
+    /// The project a message is filed under: a small capsule at the top of
+    /// the bubble — or, on a photo, over its top corner on frosted glass —
+    /// the same on either side of the conversation.
+    private func projectTag(_ project: ChatMessage.ProjectTag, onPhoto: Bool = false) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "folder.fill").font(.system(size: 10, weight: .semibold))
             Text(verbatim: project.name).lineLimit(1)
         }
         .font(.system(.caption2, weight: .semibold))
-        .foregroundStyle(mine ? Color.white : NeonHue.blue.deep)
+        .foregroundStyle(onPhoto ? Color.neonInk : (mine ? Color.white : NeonHue.blue.deep))
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(Capsule().fill(mine ? Color.white.opacity(0.2) : NeonHue.blue.wash))
+        .background {
+            if onPhoto {
+                Capsule().fill(.ultraThinMaterial)
+            } else {
+                Capsule().fill(mine ? Color.white.opacity(0.2) : NeonHue.blue.wash)
+            }
+        }
+        .overlay(
+            Capsule().strokeBorder(
+                onPhoto ? Color.white.opacity(0.6) : (mine ? Color.white.opacity(0.28) : Color.neonBlue.opacity(0.2)),
+                lineWidth: 0.75
+            )
+        )
         .accessibilityLabel(L("Project: %@", project.name))
     }
 
@@ -482,12 +502,16 @@ struct ChatMessageRow: View {
     private var photo: some View {
         let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
         VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
-            if let project = message.project {
-                projectTag(project)
-            }
             Button(action: openImage) {
                 ChatPhotoFrame(url: message.attachmentURL, local: outgoing?.localImage, onResize: onMediaResize)
                     .overlay { ChatPhotoShade() }
+                    .overlay(alignment: .topLeading) {
+                        if let project = message.project {
+                            projectTag(project, onPhoto: true)
+                                .padding(8)
+                                .allowsHitTesting(false)
+                        }
+                    }
                     .overlay(alignment: .bottomTrailing) {
                         ChatPhotoMeta(time: chatClock(message.createdAt), delivery: delivery, pinned: isPinned)
                     }
@@ -527,11 +551,16 @@ struct ChatMessageRow: View {
 
 // MARK: - Pieces of a message
 
-/// Who wrote a message in a group: their initials on their colour, or the
-/// assistant's sparkles. The same width on every row, so a run lines up.
+/// Who wrote a message in a group: their initials on the colour the studio
+/// gave them (the chat list's own face for them), or the assistant's
+/// sparkles. The same width on every row, so a run lines up.
 struct ChatAuthorBadge: View {
     let name: String?
+    /// Who they are — "admin" or the employee id — which their colour is kept under.
+    var key: String?
     var isAgent = false
+
+    @Environment(\.chatRoomPalette) private var palette
 
     static let size: CGFloat = 28
 
@@ -541,7 +570,7 @@ struct ChatAuthorBadge: View {
                 IconTile("sparkles", hue: .purple, size: Self.size, style: .filled)
                     .clipShape(Circle())
             } else if let name {
-                AvatarView(url: nil, name: name, size: Self.size, style: .solid)
+                ChatAvatar(url: nil, name: name, size: Self.size, color: palette.color(key: key, name: name))
             } else {
                 Color.clear
             }
@@ -623,6 +652,9 @@ struct ChatVoiceNoteView: View {
 
     @ObservedObject private var player = ChatVoicePlayer.shared
     @State private var levels: [CGFloat]?
+    /// How long the recording is, read from the file itself when the server
+    /// did not say.
+    @State private var fileSeconds: Double?
 
     private var url: URL? { message.attachmentURL }
     private var playing: Bool { url != nil && player.playingURL == url }
@@ -665,54 +697,65 @@ struct ChatVoiceNoteView: View {
                     track: mine ? Color.white.opacity(0.38) : Color.neonIndigo.opacity(0.2)
                 )
                 .frame(width: 150)
-                Text(timeText)
-                    .font(.system(.caption2, weight: .medium))
+                // "0:12" — nothing until the length is known, never a guess.
+                Text(timeText ?? "0:00")
+                    .font(.neonMeta)
                     .monospacedDigit()
                     .foregroundStyle(mine ? Color.white.opacity(0.85) : Color.neonTextSecondary)
+                    .opacity(timeText == nil ? 0 : 1)
             }
         }
         .task(id: message.attachmentUrl ?? outgoing?.id) { await loadShape() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L("Voice message"))
-        .accessibilityValue(timeText)
+        .accessibilityValue(timeText ?? "")
     }
 
-    private var timeText: String {
-        guard let seconds = message.durationSeconds else { return L("Voice message") }
+    private var seconds: Double? { message.durationSeconds ?? fileSeconds }
+
+    private var timeText: String? {
+        guard let seconds, seconds > 0 else { return nil }
         if playing { return chatDuration(seconds * player.progress) }
         return chatDuration(seconds)
     }
 
     private func loadShape() async {
         if let url {
-            if let cached = ChatVoiceNotes.shared.cachedShape(url.absoluteString) {
+            let key = url.absoluteString
+            if let cached = ChatVoiceNotes.shared.cachedShape(key) {
                 levels = cached
+                fileSeconds = ChatVoiceNotes.shared.cachedDuration(key)
                 return
             }
             let shape = await ChatVoiceNotes.shared.shape(for: url)
-            withAnimation(NeonMotion.resolved(NeonMotion.smooth)) { levels = shape }
+            withAnimation(NeonMotion.resolved(NeonMotion.smooth)) {
+                levels = shape
+                fileSeconds = ChatVoiceNotes.shared.cachedDuration(key)
+            }
         } else if let outgoing, case .voice(let file, _) = outgoing.payload {
             levels = await ChatVoiceNotes.shared.shape(of: file.data, key: outgoing.id)
+            fileSeconds = ChatVoiceNotes.shared.cachedDuration(outgoing.id)
         }
     }
 }
 
-/// A call's line across the conversation: what happened, who, when.
+/// A call's line across the conversation: what happened, who, when — said
+/// from the viewer's side. The server's `body` is its English summary for
+/// everybody at once ("Missed call"), so the words are built here from how
+/// the call ended: a call I made that nobody picked up is "No answer" from
+/// me, in grey; only a call I missed is red.
 struct ChatCallLine: View {
     let message: ChatMessage
+    /// I made the call (its message is written as the caller's).
+    var mine = false
 
     var body: some View {
-        let missed = message.call?.endReason == "missed"
-        let video = message.call?.kind == "VIDEO"
+        let look = self.look
         HStack(spacing: 8) {
-            IconTile(
-                missed ? (video ? "video.slash.fill" : "phone.down.fill") : (video ? "video.fill" : "phone.fill"),
-                hue: missed ? .red : .green,
-                size: 24
-            )
-            Text(verbatim: [message.body ?? L("Call"), message.authorName, chatClock(message.createdAt)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+            IconTile(look.symbol, hue: look.hue, size: 24)
+            Text(verbatim: [look.words, who, chatClock(message.createdAt)].filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.system(.footnote, weight: .medium))
-                .foregroundStyle(missed ? Color.neonDangerStrong : Color.neonTextSecondary)
+                .foregroundStyle(look.hue == .red ? Color.neonDangerStrong : Color.neonTextSecondary)
                 .lineLimit(2)
         }
         .padding(.leading, 5)
@@ -725,6 +768,43 @@ struct ChatCallLine: View {
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
     }
+
+    private var video: Bool { message.call?.kind == "VIDEO" }
+
+    /// Who called: me, the manager (in the app's language), or their name.
+    private var who: String {
+        if mine { return L("You") }
+        if message.authorType == "ADMIN" { return L("Manager") }
+        return message.authorName ?? ""
+    }
+
+    private var look: (words: String, symbol: String, hue: NeonHue) {
+        switch message.call?.endReason {
+        case "missed":
+            if mine {
+                return (L("No answer"), video ? "video.fill" : "phone.arrow.up.right.fill", .grey)
+            }
+            return (video ? L("Missed video call") : L("Missed call"), video ? "video.slash.fill" : "phone.down.fill", .red)
+        case "declined":
+            return (video ? L("Declined video call") : L("Declined call"), video ? "video.slash.fill" : "phone.down.fill", .grey)
+        case "completed":
+            let kind = video ? L("Video call ended") : L("Call ended")
+            let words = message.durationSeconds.map { "\(kind) · \(chatCallLength($0))" } ?? kind
+            return (words, video ? "video.fill" : "phone.fill", .green)
+        default:
+            // A line from before calls said how they ended: the server's own words.
+            return (message.body ?? L("Call"), video ? "video.fill" : "phone.fill", .green)
+        }
+    }
+}
+
+/// "0:45", "4:32", "1:02:05" — callDuration in lib/calls.ts.
+func chatCallLength(_ seconds: Double) -> String {
+    let total = max(0, Int(seconds.rounded()))
+    let hours = total / 3600
+    let minutes = (total % 3600) / 60
+    let rest = total % 60
+    return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, rest) : String(format: "%d:%02d", minutes, rest)
 }
 
 // MARK: - A grid of photos
@@ -746,6 +826,8 @@ struct ChatAlbumRow: View {
     let canDelete: (ChatMessage) -> Bool
     let onDelete: (ChatMessage) -> Void
 
+    @Environment(\.chatRoomPalette) private var palette
+
     private let gap: CGFloat = 3
     private var side: CGFloat { (ChatPhotoLayout.width - gap) / 2 }
 
@@ -753,7 +835,7 @@ struct ChatAlbumRow: View {
         let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
         HStack(alignment: .top, spacing: 6) {
             if inGroup && !mine {
-                ChatAuthorBadge(name: photos.first?.authorName)
+                ChatAuthorBadge(name: photos.first?.authorName, key: photos.first?.authorKey)
                     .opacity(showAuthor ? 1 : 0)
                     .accessibilityHidden(true)
             }
@@ -761,7 +843,7 @@ struct ChatAlbumRow: View {
                 if showAuthor && !mine, let name = photos.first?.authorName {
                     Text(verbatim: name)
                         .font(.system(.caption, weight: .semibold))
-                        .foregroundStyle(chatAuthorColor(name))
+                        .foregroundStyle(palette.nameColor(key: photos.first?.authorKey, name: name))
                         .padding(.leading, ChatBubbleShape.tailWidth + 4)
                 }
                 VStack(spacing: gap) {

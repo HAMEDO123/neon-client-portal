@@ -22,6 +22,7 @@ struct ChatTaskCardView: View {
 
     @EnvironmentObject private var api: APIClient
     @Environment(\.openURL) private var openURL
+    @Environment(\.chatRoomPalette) private var palette
     @State private var commentDraft = ""
     @State private var sendingComment = false
     @State private var reviewNote = ""
@@ -30,13 +31,15 @@ struct ChatTaskCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
-                IconTile("checklist", hue: .purple, size: 34, style: .filled)
+                IconTile("checklist", hue: .purple, size: 34)
+                // The label and the title start on the same side, whatever
+                // language the title is in.
                 VStack(alignment: .leading, spacing: 3) {
                     Text(L("TASK"))
                         .font(.neonOverline)
                         .tracking(0.6)
                         .foregroundStyle(NeonHue.purple.deep)
-                    DirText(card.title, font: .neonCardTitle)
+                    DirText(card.title, font: .neonCardTitle, fill: false)
                 }
             }
 
@@ -44,15 +47,21 @@ struct ChatTaskCardView: View {
                 DirText(description, font: .neonSubheadline, color: .neonTextSecondary)
             }
 
-            FlowRow(spacing: 6) {
-                StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
-                           symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
-                if let priority = priorityLabel(card.priority) {
-                    StateBadge(priority, tone: statusTone(card.priority ?? ""), symbol: card.priority == "HIGH" ? "flame.fill" : "arrow.down")
+            // With one person on the card, their own badge below says where
+            // it stands; the card's overall one would only repeat it.
+            if card.assignments.count != 1 || priorityLabel(card.priority) != nil {
+                FlowRow(spacing: 6) {
+                    if card.assignments.count != 1 {
+                        StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
+                                   symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
+                    }
+                    if let priority = priorityLabel(card.priority) {
+                        StateBadge(priority, tone: statusTone(card.priority ?? ""), symbol: card.priority == "HIGH" ? "flame.fill" : "arrow.down")
+                    }
                 }
             }
 
-            if let due = formattedISODate(card.dueAt) {
+            if let due = chatCardDate(card.dueAt) {
                 MetaLabel(L("Due %@", due), symbol: card.isOverdue ? "exclamationmark.circle.fill" : "clock",
                           tint: card.isOverdue ? .neonDangerStrong : .neonTextSecondary)
             }
@@ -106,7 +115,8 @@ struct ChatTaskCardView: View {
     private func assignmentRow(_ part: TaskCard.Assignment) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                AvatarView(url: nil, name: part.employee?.name ?? "—", size: 26, style: .solid)
+                ChatAvatar(url: nil, name: part.employee?.name ?? "—", size: 26,
+                           color: part.employee?.color ?? palette.color(key: part.employeeId, name: part.employee?.name))
                 DirText(part.employee?.name ?? "—", font: .system(.subheadline, weight: .semibold), fill: false, lineLimit: 1)
                 Spacer(minLength: 4)
                 StateBadge(cardStateLabel(part.state), tone: taskStateTone(part.state),
@@ -166,14 +176,19 @@ struct ChatTaskCardView: View {
         VStack(alignment: .leading, spacing: 8) {
             if !card.comments.isEmpty {
                 ForEach(card.comments) { comment in
+                    let key = chatAuthorKey(authorType: comment.authorType, authorId: comment.authorId)
+                    let name = comment.authorType == "ADMIN" ? L("Manager") : comment.authorName
                     HStack(alignment: .top, spacing: 8) {
-                        AvatarView(url: nil, name: comment.authorName, size: 22, style: .solid)
+                        ChatAvatar(url: nil, name: name, size: 22, color: palette.color(key: key, name: comment.authorName))
+                        // What they wrote sits under their name, on the same
+                        // side, rather than across the card in its own direction.
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(verbatim: comment.authorName)
+                            Text(verbatim: name)
                                 .font(.system(.caption, weight: .semibold))
-                                .foregroundStyle(chatAuthorColor(comment.authorName))
-                            DirText(comment.body, font: .system(.footnote), color: .neonText)
+                                .foregroundStyle(palette.nameColor(key: key, name: comment.authorName))
+                            DirText(comment.body, font: .system(.footnote), color: .neonText, fill: false)
                         }
+                        Spacer(minLength: 0)
                     }
                     .transition(.neonRise)
                 }
@@ -264,6 +279,7 @@ struct ChatMeetingCardView: View {
     let onChanged: () -> Void
 
     @EnvironmentObject private var api: APIClient
+    @Environment(\.chatRoomPalette) private var palette
     @State private var confirmCancel = false
     @State private var cancelling = false
 
@@ -306,7 +322,7 @@ struct ChatMeetingCardView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                if let starts = formattedISODate(meeting.startsAt) {
+                if let starts = chatCardDate(meeting.startsAt) {
                     MetaLabel(meeting.durationMinutes.map { L("%@ · %d min", starts, $0) } ?? starts, symbol: "clock", tint: .neonTextSecondary)
                 }
                 MetaLabel(
@@ -336,7 +352,8 @@ struct ChatMeetingCardView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(meeting.attendees) { person in
                         HStack(spacing: 8) {
-                            AvatarView(url: nil, name: chatMemberName(key: person.memberKey, name: person.name), size: 24, style: .solid)
+                            ChatAvatar(url: nil, name: chatMemberName(key: person.memberKey, name: person.name), size: 24,
+                                       color: palette.color(key: person.memberKey, name: person.name))
                             DirText(chatMemberName(key: person.memberKey, name: person.name), font: .system(.subheadline, weight: .medium), fill: false, lineLimit: 1)
                             Spacer(minLength: 4)
                             StateBadge(rsvpLabel(person.rsvp), tone: rsvpTone(person.rsvp), symbol: rsvpSymbol(person.rsvp))
@@ -427,6 +444,18 @@ struct ChatMeetingCardView: View {
             }
         }
     }
+}
+
+/// When a card is due or a meeting starts: "Wed, Sep 16 · 7:00 PM", with
+/// the year only when it is not this one.
+func chatCardDate(_ iso: String?) -> String? {
+    guard let date = parseISODate(iso) else { return nil }
+    let locale = AppLanguage.current.locale
+    let sameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
+    var day = Date.FormatStyle(locale: locale).weekday(.abbreviated).month(.abbreviated).day()
+    if !sameYear { day = day.year() }
+    let time = date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale))
+    return "\(date.formatted(day)) · \(time)"
 }
 
 /// What a meeting answer looks like: yes in green, no in red, and not yet in

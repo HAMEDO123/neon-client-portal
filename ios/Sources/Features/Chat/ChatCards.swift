@@ -6,7 +6,8 @@ import SwiftUI
 /// which never marks anything read.
 ///
 /// `/chat/messages` returns at most the last 200 messages of a conversation,
-/// so a card older than that is not here; the screens say so.
+/// so a card older than that is not here; `truncated` says when that
+/// actually happened, and the screens say so only then.
 @MainActor
 final class ChatCardsLoader: ObservableObject {
     struct Item: Identifiable {
@@ -20,22 +21,32 @@ final class ChatCardsLoader: ObservableObject {
     @Published private(set) var cachedAt: Date?
     @Published private(set) var errorMessage: String?
     @Published private(set) var loaded = false
+    /// Some conversation has more than the 200 messages read, so cards
+    /// older than those may be missing.
+    @Published private(set) var truncated = false
+    /// The team's conversation as the server names it, where a meeting set
+    /// from the Meetings page is posted.
+    @Published private(set) var teamTitle: String?
+
+    static let messagesRead = 200
 
     func load(_ api: APIClient) async {
         do {
             let conversations = try await api.fetchConversations()
             var found: [Item] = []
             var oldestCache = conversations.cachedAt
+            var cut = false
 
             await withTaskGroup(of: (ConversationSummary, Loaded<[ChatMessage]>?).self) { group in
                 for conversation in conversations.value.conversations {
                     group.addTask { @MainActor in
-                        (conversation, try? await api.fetchMessages(conversation: conversation.slug, take: 200))
+                        (conversation, try? await api.fetchMessages(conversation: conversation.slug, take: ChatCardsLoader.messagesRead))
                     }
                 }
                 for await (conversation, loaded) in group {
                     guard let loaded else { continue }
                     if let at = loaded.cachedAt { oldestCache = min(oldestCache ?? at, at) }
+                    if loaded.value.count >= ChatCardsLoader.messagesRead { cut = true }
                     for message in loaded.value where message.task != nil || message.meeting != nil {
                         found.append(Item(conversation: conversation, message: message))
                     }
@@ -47,6 +58,8 @@ final class ChatCardsLoader: ObservableObject {
             meetings = found.filter { $0.message.meeting != nil }
                 .sorted { ($0.message.meeting?.startsAt ?? "") < ($1.message.meeting?.startsAt ?? "") }
             cachedAt = oldestCache
+            truncated = cut
+            teamTitle = conversations.value.conversations.first { $0.slug == "team" }?.title
             errorMessage = nil
             loaded = true
         } catch {
@@ -103,7 +116,7 @@ struct ChatTaskRow: View {
                         StateBadge(cardStateLabel(card.overall), tone: taskStateTone(card.overall),
                                    symbol: StateBadge.symbol(for: card.overall), pulsing: card.overall == "IN_PROGRESS")
                         MetaLabel(item.conversation.title, symbol: item.conversation.isGroup ? "person.3.fill" : "bubble.left.fill")
-                        if let due = formattedISODate(card.dueAt) {
+                        if let due = chatCardDate(card.dueAt) {
                             MetaLabel(L("Due %@", due), symbol: card.isOverdue ? "exclamationmark.circle.fill" : "clock",
                                       tint: card.isOverdue ? .neonDangerStrong : .neonTextTertiary)
                         }
@@ -115,7 +128,7 @@ struct ChatTaskRow: View {
                     FlowRow(spacing: 6) {
                         ForEach(card.assignments) { part in
                             HStack(spacing: 5) {
-                                AvatarView(url: nil, name: part.employee?.name ?? "—", size: 20, style: .solid)
+                                ChatAvatar(url: nil, name: part.employee?.name ?? "—", size: 20, color: part.employee?.color)
                                 Text(verbatim: part.employee?.name ?? "—")
                                     .font(.system(.caption, weight: .semibold))
                                     .foregroundStyle(Color.neonInk.opacity(0.85))
@@ -154,40 +167,45 @@ func cardStateLabel(_ state: String) -> String {
 
 /// Every meeting card from every conversation this person is in: what is
 /// coming up (with Join from ten minutes before, and Answer while they have
-/// not), then what has passed. Pushed from the chat list and More.
+/// not), then what has passed. Pushed from the chat list and More, so it keeps
+/// the system bar and its back button, and no account menu.
 struct MeetingsView: View {
     @EnvironmentObject var api: APIClient
     @StateObject private var cards = ChatCardsLoader()
     @State private var showCompose = false
 
+    /// Only the manager sets meetings (lib/chat-meetings.ts).
+    private var isAdmin: Bool { api.identity?.side == .admin }
+
     var body: some View {
         ScrollViewReader { proxy in
             NeonScroll(spacing: NeonSpace.stack) {
-                // Only the manager sets meetings (lib/chat-meetings.ts).
-                // Set from the team's own chat, exactly where the web's + →
-                // Meeting lives — the same native sheet a conversation's own
-                // + button opens.
-                if api.identity?.side == .admin {
-                    NeonButton(L("Set a meeting"), symbol: "calendar.badge.plus", kind: .brand) {
-                        showCompose = true
-                    }
-                    .neonAppear()
-                }
-
                 if let cachedAt = cards.cachedAt { OfflineBanner(savedAt: cachedAt) }
 
                 if !cards.loaded, let error = cards.errorMessage {
                     ErrorState(message: error) { await cards.load(api) }
                 } else if !cards.loaded {
-                    SkeletonRows(count: 3)
+                    SkeletonCard(lines: 3)
+                    SkeletonRows(count: 2)
                 } else {
-                    SectionHeader(L("Coming up"), count: upcoming.isEmpty ? nil : upcoming.count)
-                        .padding(.top, 4)
-                        .id("coming-up")
                     if upcoming.isEmpty {
-                        EmptyState(symbol: "calendar", title: L("No meetings coming up"),
-                                   detail: L("Meetings set from a chat appear here."), hue: .cyan, card: true)
+                        SectionCard(L("Coming up"), subtitle: L("Meetings from every chat you're in"), symbol: "calendar", hue: .cyan) {
+                            EmptyState(
+                                symbol: "calendar.badge.clock",
+                                title: L("No meetings coming up"),
+                                // The manager has the button right here; the team
+                                // is asked from a chat.
+                                detail: isAdmin ? L("Set one here, or from any chat with + → Meeting.") : L("Meetings set from a chat appear here."),
+                                hue: .cyan
+                            )
+                            .padding(.vertical, -12)
+                        }
+                        .id("coming-up")
+                        .neonAppear()
                     } else {
+                        SectionHeader(L("Coming up"), count: upcoming.count)
+                            .padding(.top, 4)
+                            .id("coming-up")
                         ForEach(Array(upcoming.enumerated()), id: \.element.id) { index, item in
                             row(item).staggered(index)
                         }
@@ -199,22 +217,37 @@ struct MeetingsView: View {
                             .id("earlier")
                         ForEach(past) { row($0) }
                     }
+
+                    // Said only when a chat really is longer than what was read.
+                    if cards.truncated {
+                        StatusNote(
+                            symbol: "info.circle.fill", tone: .info,
+                            title: L("Older meetings may not be listed"),
+                            detail: L("Meetings from the last 200 messages of each chat.")
+                        )
+                        .padding(.top, 4)
+                    }
                 }
 
-                Text(L("Meetings from the last 200 messages of each chat."))
-                    .font(.neonMeta)
-                    .foregroundStyle(Color.neonTextTertiary)
-                    .padding(.top, 4)
+                Color.clear.frame(height: isAdmin ? NeonSize.fab : 0)
                     .debugScroll(proxy)
             }
         }
         .refreshable { await cards.load(api) }
         .navigationTitle(L("Meetings"))
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountMenu() } }
         .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
+        // Set from the team's own chat, exactly where the web's + → Meeting
+        // lives — the same native sheet a conversation's own + opens, which
+        // says where the meeting will be posted.
+        .floatingActionButton("calendar.badge.plus", label: L("Set a meeting"), isVisible: isAdmin) {
+            showCompose = true
+        }
         .task { await cards.load(api) }
         .sheet(isPresented: $showCompose) {
-            ChatMeetingComposeSheet(conversationSlug: "team") {
+            ChatMeetingComposeSheet(
+                conversationSlug: "team",
+                postedIn: cards.teamTitle.map { L("Posted in %@", $0) } ?? L("Posted in the team chat")
+            ) {
                 Task { await cards.load(api) }
             }
         }
@@ -266,7 +299,7 @@ private struct MeetingRow: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    if let starts = formattedISODate(meeting.startsAt) {
+                    if let starts = chatCardDate(meeting.startsAt) {
                         MetaLabel(meeting.durationMinutes.map { L("%@ · %d min", starts, $0) } ?? starts, symbol: "clock")
                     }
                     MetaLabel(

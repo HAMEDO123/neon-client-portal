@@ -27,9 +27,13 @@ enum ChatRoomScreens {
         case "chat-room-search":
             return debugPushed(ChatRoomView(route: team, startsSearching: true))
         case "chat-room-direct":
-            return debugPushed(DebugAsync(load: { try await firstConversation { !$0.isGroup } }) { ChatRoomView(route: ChatRoute($0)) })
+            return debugPushed(ChatRoomDebugLoad(missing: L("No private chat on the server to open")) {
+                try await firstConversation { !$0.isGroup }
+            })
         case "chat-room-group":
-            return debugPushed(DebugAsync(load: { try await firstConversation { $0.isCustomGroup } }) { ChatRoomView(route: ChatRoute($0)) })
+            return debugPushed(ChatRoomDebugLoad(missing: L("No group on the server to open")) {
+                try await firstConversation { $0.isCustomGroup }
+            })
         case "chat-room-cards":
             return debugPushed(ChatRoomCardsPreview())
         case "chat-meetings":
@@ -47,6 +51,44 @@ enum ChatRoomScreens {
 
     @MainActor private static func firstConversation(_ matching: (ConversationSummary) -> Bool) async throws -> ConversationSummary? {
         try await APIClient.shared.fetchConversations().value.conversations.first(where: matching)
+    }
+}
+
+/// A conversation that has to be found on the server first. When there is
+/// none (or the read fails), it says so on the app's own page with a warning
+/// tile — so a missing fixture is plain in a screenshot and never passes for
+/// one of the app's screens.
+private struct ChatRoomDebugLoad: View {
+    let missing: String
+    let load: @MainActor () async throws -> ConversationSummary?
+
+    @State private var found: ConversationSummary?
+    @State private var failure: String?
+
+    var body: some View {
+        Group {
+            if let found {
+                ChatRoomView(route: ChatRoute(found))
+            } else if let failure {
+                NeonScroll {
+                    EmptyState(symbol: "exclamationmark.triangle", title: missing, detail: failure, hue: .orange, card: true)
+                        .padding(.top, 80)
+                }
+            } else {
+                NeonScroll { ChatRoomSkeleton() }
+            }
+        }
+        .task {
+            do {
+                if let conversation = try await load() {
+                    found = conversation
+                } else {
+                    failure = L("Nothing on the server to open this with.")
+                }
+            } catch {
+                failure = error.localizedDescription
+            }
+        }
     }
 }
 
@@ -92,6 +134,7 @@ private struct ChatRoomCardsPreview: View {
         .background { ChatRoomWallpaper().ignoresSafeArea() }
         .navigationTitle(L("Chat"))
         .navigationBarTitleDisplayMode(.inline)
+        .chatRoomPalette()
         .task { await cards.load(api) }
     }
 }

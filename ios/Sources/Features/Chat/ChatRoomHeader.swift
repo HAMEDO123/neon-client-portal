@@ -6,7 +6,7 @@ enum ChatRoomStatus: Equatable {
     case typing(String)
     /// The other person has the app or the website open right now.
     case online
-    /// Last seen, the group's people, or the list's own subtitle.
+    /// Last seen, how many are in the group, or the list's own subtitle.
     case line(String)
     /// A way in: "Group info".
     case hint(String)
@@ -19,8 +19,10 @@ enum ChatRoomStatus: Equatable {
 struct ChatRoomHeader<Trailing: View>: View {
     let title: String
     let avatarURL: URL?
-    /// The team, or a group with no picture: the studio's own mark.
+    /// The team: the studio's own mark.
     let studioMark: Bool
+    /// A group: without a photo of its own, a group glyph on its colour.
+    var isGroup = false
     let online: Bool
     let status: ChatRoomStatus?
     var onOpenInfo: (() -> Void)?
@@ -29,15 +31,7 @@ struct ChatRoomHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.backward")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.neonInk)
-                    .frame(width: 26, height: NeonSize.touch)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableStyle(scale: 0.82))
-            .accessibilityLabel(L("Back"))
+            IconButton("chevron.backward", label: L("Back"), size: NeonSize.circleButton, action: onBack)
 
             if let onOpenInfo {
                 Button {
@@ -59,7 +53,7 @@ struct ChatRoomHeader<Trailing: View>: View {
             }
             .layoutPriority(1)
         }
-        .padding(.leading, 8)
+        .padding(.leading, NeonSpace.gutter - 4)
         .padding(.trailing, NeonSpace.gutter - 4)
         .padding(.vertical, 4)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -71,7 +65,15 @@ struct ChatRoomHeader<Trailing: View>: View {
                 if studioMark {
                     ChatStudioMark(size: 40)
                 } else {
-                    AvatarView(url: avatarURL, name: title, size: 40, online: online, style: .solid)
+                    // The chat list's own face for this conversation, so a
+                    // person wears the same colour in both.
+                    ChatAvatar(
+                        url: isGroup && ChatFace.isStudioIcon(avatarURL) ? nil : avatarURL,
+                        name: title,
+                        size: 40,
+                        online: online,
+                        isGroup: isGroup
+                    )
                 }
             }
             .animation(NeonMotion.resolved(NeonMotion.bouncy), value: online)
@@ -110,7 +112,7 @@ struct ChatRoomHeader<Trailing: View>: View {
                 .foregroundStyle(Color.neonSuccessStrong)
                 .transition(.opacity.combined(with: .offset(y: 4)))
             case .line(let text):
-                DirText(text, font: .system(.caption, weight: .medium), color: .neonTextSecondary, fill: false, lineLimit: 1)
+                DirText(text, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 1)
                     .transition(.opacity.combined(with: .offset(y: 4)))
             case .hint(let text):
                 Text(text)
@@ -120,7 +122,7 @@ struct ChatRoomHeader<Trailing: View>: View {
                 EmptyView()
             }
         }
-        .font(.system(.caption, weight: .medium))
+        .font(.neonSubtitle)
         .lineLimit(1)
         .minimumScaleFactor(0.85)
         .animation(NeonMotion.resolved(NeonMotion.snappy), value: status)
