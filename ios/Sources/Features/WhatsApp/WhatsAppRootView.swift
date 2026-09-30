@@ -128,10 +128,23 @@ private struct WhatsAppChatRow: View {
         ListCardRow(
             chat.displayName,
             subtitle: whatsAppPreview(chat.lastMessage),
-            leading: chat.isGroup ? .icon("person.2.fill", tint: .neonSuccessStrong) : .avatar(url: nil, name: chat.displayName),
+            leading: leading,
             time: whatsAppTimeLabel(chat.timestamp, timeZone: timeZone),
             count: chat.unreadCount
         )
+    }
+
+    /// A contact with no saved name shows its own phone number as its
+    /// "name" — which is exactly what `AvatarView.initials` cannot draw
+    /// initials from (it takes the first letter of the first two words,
+    /// and a number's first two "words" are "+" and a digit). Rather than
+    /// a broken "+7" avatar, a nameless contact gets a plain person glyph.
+    private var leading: RowLeading {
+        if chat.isGroup { return .icon("person.2.fill", tint: .neonSuccessStrong) }
+        if whatsAppNameLooksLikePhoneNumber(chat.displayName) {
+            return .icon("person.fill", tint: NeonPalette.color(for: chat.number ?? chat.displayName))
+        }
+        return .avatar(url: nil, name: chat.displayName)
     }
 }
 

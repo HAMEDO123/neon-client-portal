@@ -44,6 +44,57 @@ struct AttendanceOverview: Decodable {
 /// one place that refuses to sync on it.
 let attendanceMaxDriftSeconds = 600
 
+/// "%d days recorded", with English's own singular. The finer Arabic
+/// plurals (two/few/many) would need real `.stringsdict` support in the
+/// shared localisation layer (`Core/Localization.swift`), which is outside
+/// this area's files — `L()` there resolves one flat key to one string, with
+/// no plural-category lookup of its own. This at least stops the visible
+/// "1 days recorded" mismatch and gives Arabic a dedicated singular phrase;
+/// two, few and many all read as the "other" form in both languages for now.
+func daysRecordedLabel(_ count: Int) -> String {
+    count == 1 ? L("%d day recorded", count) : L("%d days recorded", count)
+}
+
+/// The weekday and day, no year — for a page that is already scoped to one
+/// month, so a bare "17" would lose the weekday and a full date would
+/// repeat a year the reader already knows.
+func formattedWeekdayDay(_ dayKey: String) -> String {
+    guard let date = parseISODate("\(dayKey)T00:00:00.000Z") else { return dayKey }
+    var style = Date.FormatStyle(date: .omitted, time: .omitted, locale: AppLanguage.current.locale)
+        .weekday(.abbreviated)
+        .day()
+    style.timeZone = TimeZone(identifier: "UTC")!
+    return date.formatted(style)
+}
+
+/// "Yesterday 7:13 PM" / "7:13 PM" today / "Sep 12 7:13 PM" beyond that —
+/// never the full date-with-year `formattedISODate` gives, which wraps a
+/// name + meta line onto two lines in a card no wider than a phone.
+func relativeDayTime(_ iso: String?) -> String? {
+    guard let date = parseISODate(iso) else { return nil }
+    let locale = AppLanguage.current.locale
+    let time = date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale))
+    let calendar = Calendar.current
+    if calendar.isDateInToday(date) { return time }
+    if calendar.isDateInYesterday(date) { return "\(L("Yesterday")) \(time)" }
+    let dateOnly = date.formatted(Date.FormatStyle(date: .omitted, time: .omitted, locale: locale).month(.abbreviated).day())
+    return "\(dateOnly) \(time)"
+}
+
+/// One recorded day's verdict, as a badge — never "On time" for a day the
+/// data cannot actually support. A device row is measured; a manual row at
+/// zero delay is only ever a stand-in for a number nobody measured, so it
+/// reads as exactly that rather than borrowing the device's own word for
+/// punctuality.
+func attendanceBadge(_ entry: AttendanceMonth.Entry) -> (text: String, tone: BadgeTone) {
+    var parts: [String] = []
+    if entry.delayHours > 0 { parts.append(L("Late %@", describeMinutes(entry.delayHours * 60))) }
+    if let early = entry.earlyHours, early > 0 { parts.append(L("Left early %@", describeMinutes(early * 60))) }
+    if !parts.isEmpty { return (parts.joined(separator: " · "), .warning) }
+    if entry.source == "MANUAL" { return (L("Set by hand · no lateness"), .neutral) }
+    return (L("On time"), .success)
+}
+
 struct AttendanceMonth: Decodable {
     struct Day: Decodable {
         let dayKey: String
@@ -141,6 +192,19 @@ func supplyStatusTone(_ status: String) -> BadgeTone {
     case "REJECTED": return .neutral
     case "PURCHASED": return .cyan
     default: return .neutral
+    }
+}
+
+/// The same status colour as `supplyStatusTone`, for the Decided list's
+/// leading tile — so it carries the orange `shippingbox.fill` tile the
+/// pending card uses instead of a plain `ListRow` with no leading mark at
+/// all, and the two lists read as the same kind of thing.
+func supplyStatusIconTint(_ status: String) -> Color {
+    switch status {
+    case "PENDING": return .neonWarningStrong
+    case "APPROVED": return .neonSuccessStrong
+    case "PURCHASED": return .neonCyanStrong
+    default: return .neonTextFaint
     }
 }
 
@@ -335,11 +399,4 @@ func minutesOfTime(_ time: String) -> Int? {
     let parts = time.split(separator: ":").compactMap { Int($0) }
     guard parts.count == 2 else { return nil }
     return parts[0] * 60 + parts[1]
-}
-
-/// Computed rather than a stored global, so it re-reads L() on every call —
-/// a `let` at file scope evaluates once and would freeze at whichever
-/// language was current the first time this file was touched.
-func workingDayNames() -> [String] {
-    [L("Sunday"), L("Monday"), L("Tuesday"), L("Wednesday"), L("Thursday"), L("Friday"), L("Saturday")]
 }

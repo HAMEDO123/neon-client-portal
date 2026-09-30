@@ -26,16 +26,23 @@ private struct ManagerSiteVisitsView: View {
     @State private var visits: [SiteVisit]?
     @State private var errorMessage: String?
     @State private var cachedAt: Date?
+    @State private var showWhoLogs = false
 
     var body: some View {
         ScrollViewReader { proxy in
             NeonScroll {
                 LoadStateView(value: visits, error: errorMessage, cachedAt: cachedAt, retry: load) { visits in
                     if visits.isEmpty {
+                        // Says why it's empty — only somebody ticked "Logs
+                        // site visits" on their own page can plan one — and
+                        // offers the one place that changes: the team list,
+                        // where that tick lives on each person's page.
                         EmptyState(
                             symbol: "mappin.and.ellipse",
                             title: L("No site visits yet"),
-                            detail: L("When somebody schedules a visit, it appears here with what they planned to do — and afterwards, what came of it."),
+                            detail: L("Only people with “Logs site visits” ticked on their page can plan one."),
+                            actionTitle: L("Choose who logs visits"),
+                            action: { showWhoLogs = true },
                             hue: .indigo,
                             card: true
                         )
@@ -61,6 +68,7 @@ private struct ManagerSiteVisitsView: View {
         .refreshable { await load() }
         .navigationTitle(L("Site visits"))
         .neonAmbientBackground()
+        .navigationDestination(isPresented: $showWhoLogs) { EmployeesRootView() }
         .task { await load() }
     }
 
@@ -116,7 +124,14 @@ private struct VisitReadRow: View {
                     if let project = visit.project { MetaLabel(project.name, symbol: "folder") }
                 }
                 Spacer()
-                BadgeView(text: siteVisitStateLabel(visit.state), tone: siteVisitStateTone(visit.state))
+                // An owed visit is still `state == "PLANNED"` underneath, so
+                // the raw label read "Planned" here — disagreeing with the
+                // group's own "Not written up yet" heading right above it.
+                if siteVisitAwaitingReport(visit) {
+                    BadgeView(text: L("Not written up yet"), tone: .orange)
+                } else {
+                    BadgeView(text: siteVisitStateLabel(visit.state), tone: siteVisitStateTone(visit.state))
+                }
             }
             if let purpose = visit.purpose {
                 KeyValueRow(L("Planned to"), value: purpose, userText: true)

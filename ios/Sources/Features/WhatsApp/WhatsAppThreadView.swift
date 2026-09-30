@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 /// One WhatsApp conversation — reads and polls `whatsapp/messages` the way
 /// the portal's `Thread` component does, with its two rules kept exactly:
@@ -37,8 +38,17 @@ struct WhatsAppThreadView: View {
                                     .padding(.top, 40)
                             }
                             ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
-                                WhatsAppBubble(message: message, showAuthor: chat.isGroup && !message.fromMe, timeZone: timeZone)
-                                    .id(index)
+                                let dayKey = whatsAppDayKey(message.timestamp, timeZone: timeZone)
+                                let previousDayKey = index > 0 ? whatsAppDayKey(messages[index - 1].timestamp, timeZone: timeZone) : nil
+                                if !dayKey.isEmpty, dayKey != previousDayKey {
+                                    WhatsAppDayPill(text: whatsAppDayPillLabel(message.timestamp, timeZone: timeZone))
+                                }
+                                WhatsAppBubble(
+                                    message: message,
+                                    showAuthor: showsAuthor(at: index, in: messages),
+                                    timeZone: timeZone
+                                )
+                                .id(index)
                             }
                             ForEach(pending) { one in
                                 WhatsAppPendingBubble(text: one.text)
@@ -49,7 +59,7 @@ struct WhatsAppThreadView: View {
                         } else {
                             VStack(spacing: 10) {
                                 ProgressView()
-                                Text(L("Reading the conversation…")).font(.system(size: 12)).foregroundStyle(Color.neonTextTertiary)
+                                Text(L("Reading the conversation…")).font(.neonFootnote).foregroundStyle(Color.neonTextTertiary)
                             }
                             .padding(.top, 60)
                         }
@@ -67,7 +77,7 @@ struct WhatsAppThreadView: View {
 
             composer
         }
-        .background(Color.neonBg.ignoresSafeArea())
+        .neonAmbientBackground()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -78,9 +88,9 @@ struct WhatsAppThreadView: View {
                         AvatarView(url: nil, name: chat.displayName, size: 30)
                     }
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(chat.displayName).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                        Text(chat.displayName).font(.neonSubheadline.weight(.semibold)).lineLimit(1)
                         Text(chat.isGroup ? L("Group") : (chat.number ?? ""))
-                            .font(.system(size: 11))
+                            .font(.neonCaption)
                             .foregroundStyle(Color.neonInk.opacity(0.5))
                     }
                 }
@@ -94,12 +104,13 @@ struct WhatsAppThreadView: View {
     private var composer: some View {
         VStack(spacing: 6) {
             if chat.isGroup {
-                Text(L("Reading only in a group. WhatsApp is hard on a linked session that posts into groups, so the studio's number answers people rather than groups."))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.neonTextTertiary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 14)
+                StatusNote(
+                    symbol: "lock.fill",
+                    tone: .info,
+                    title: L("Groups are read-only here — reply from the phone.")
+                )
+                .padding(.horizontal, NeonSpace.gutter)
+                .padding(.vertical, NeonSpace.sm)
             } else {
                 if let sendError {
                     HStack {
@@ -144,6 +155,18 @@ struct WhatsAppThreadView: View {
 
     private var canSend: Bool {
         !sending && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // MARK: Layout
+
+    /// The first message of a run from one group member wears their label;
+    /// the rest of the run doesn't repeat it — the same "grouped by author"
+    /// shape `ChatMessageRow` draws for the studio's own group rooms.
+    private func showsAuthor(at index: Int, in messages: [WhatsAppMessage]) -> Bool {
+        guard chat.isGroup, !messages[index].fromMe else { return false }
+        guard index > 0 else { return true }
+        let previous = messages[index - 1]
+        return previous.fromMe || previous.author != messages[index].author
     }
 
     // MARK: Reading
@@ -238,11 +261,10 @@ private struct WhatsAppBubble: View {
             if message.fromMe { Spacer(minLength: 44) }
 
             VStack(alignment: .leading, spacing: 4) {
-                if showAuthor, let author = message.author {
-                    Text(verbatim: author.replacingOccurrences(of: "@.*$", with: "", options: .regularExpression))
-                        .font(.system(size: 10, weight: .bold))
-                        .textCase(.uppercase)
-                        .opacity(0.6)
+                if showAuthor {
+                    Text(whatsAppGroupAuthorLabel(message.author))
+                        .font(.neonCaption.weight(.semibold))
+                        .foregroundStyle(NeonPalette.color(for: message.author ?? message.id ?? ""))
                 }
 
                 if message.hasMedia, let id = message.id {
@@ -255,19 +277,19 @@ private struct WhatsAppBubble: View {
                     }
                 }
 
-                if !message.body.isEmpty {
-                    DirText(message.body, font: .system(size: 15), color: message.fromMe ? .white : .neonInk, fill: false)
-                } else if !message.hasMedia {
+                if !message.body.isEmpty, !bodyIsAttachmentTitle {
+                    WhatsAppMessageText(text: message.body, color: message.fromMe ? .white : .neonInk)
+                } else if message.body.isEmpty, !message.hasMedia {
                     Text(whatsAppKindLabel(message.type))
                         .italic()
-                        .font(.system(size: 14))
+                        .font(.neonSubheadline)
                         .foregroundStyle(message.fromMe ? Color.white.opacity(0.7) : Color.neonInk.opacity(0.6))
                 }
 
-                let time = whatsAppTimeLabel(message.timestamp, timeZone: timeZone)
+                let time = whatsAppBubbleClockLabel(message.timestamp, timeZone: timeZone)
                 if !time.isEmpty {
                     Text(time)
-                        .font(.system(size: 10))
+                        .font(.neonMeta)
                         .foregroundStyle(message.fromMe ? Color.white.opacity(0.7) : Color.neonInk.opacity(0.4))
                 }
             }
@@ -286,6 +308,69 @@ private struct WhatsAppBubble: View {
             if !message.fromMe { Spacer(minLength: 44) }
         }
     }
+
+    /// A document's own filename becomes the attachment row's title (see
+    /// `WhatsAppAttachmentRow`) — it must not also print again underneath
+    /// as a second, unlabelled line of plain body text.
+    private var bodyIsAttachmentTitle: Bool {
+        message.hasMedia && message.type == "document" && !message.body.isEmpty
+    }
+}
+
+/// The centred capsule between two days' worth of bubbles, in place of every
+/// bubble carrying its own full date.
+private struct WhatsAppDayPill: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.neonCaption)
+            .foregroundStyle(Color.neonTextSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(Color.white.opacity(0.85)))
+            .neonShadow(.low)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+    }
+}
+
+/// A message's own words, in the kit's body type rather than a hand-picked
+/// point size, with a plain http(s) link picked out and made tappable —
+/// where `DirText` only ever draws plain, unlinked text.
+private struct WhatsAppMessageText: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        let direction = naturalDirection(text) ?? AppLanguage.current.layoutDirection
+        Text(attributed)
+            .font(.neonBody)
+            .tint(.neonAccent)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .environment(\.layoutDirection, direction)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var attributed: AttributedString {
+        var result = AttributedString(text)
+        result.foregroundColor = color
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return result }
+        let full = NSRange(text.startIndex..., in: text)
+        for match in detector.matches(in: text, range: full) {
+            guard
+                let url = match.url,
+                let stringRange = Range(match.range, in: text),
+                let lower = AttributedString.Index(stringRange.lowerBound, within: result),
+                let upper = AttributedString.Index(stringRange.upperBound, within: result)
+            else { continue }
+            result[lower..<upper].link = url
+            result[lower..<upper].foregroundColor = .neonAccent
+            result[lower..<upper].underlineStyle = .single
+        }
+        return result
+    }
 }
 
 private struct WhatsAppPendingBubble: View {
@@ -295,10 +380,10 @@ private struct WhatsAppPendingBubble: View {
         HStack {
             Spacer(minLength: 44)
             VStack(alignment: .trailing, spacing: 4) {
-                DirText(text, font: .system(size: 15), color: .white, fill: false)
+                DirText(text, font: .neonBody, color: .white, fill: false)
                 HStack(spacing: 4) {
                     ProgressView().scaleEffect(0.6).tint(.white)
-                    Text(L("Sending…")).font(.system(size: 10)).foregroundStyle(.white.opacity(0.85))
+                    Text(L("Sending…")).font(.neonMeta).foregroundStyle(.white.opacity(0.85))
                 }
             }
             .padding(.horizontal, 12)

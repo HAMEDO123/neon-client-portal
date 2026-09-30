@@ -92,3 +92,7 @@
 "Message" = "الرسالة";
 "Send test" = "إرسال الاختبار";
 "Test message from the NEON app." = "رسالة تجريبية من تطبيق نيون.";
+
+/* Round 2: critic fixes */
+"Group member" = "عضو في المجموعة";
+"Groups are read-only here — reply from the phone." = "المجموعات للقراءة فقط هنا — الرد من الهاتف.";

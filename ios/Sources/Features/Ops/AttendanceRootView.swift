@@ -21,24 +21,12 @@ struct AttendanceRootView: View {
     var body: some View {
         ScrollViewReader { proxy in
             NeonScroll {
-                LoadStateView(value: overview, error: overviewError, cachedAt: overviewCachedAt, retry: loadOverview) { overview in
-                    DeviceStatusCard(overview: overview)
-                        .neonAppear()
-                    AttendanceConsoleCard()
-                        .neonAppear(delay: 0.03)
-                    DeviceUsersCard(overview: overview, onChanged: { await loadOverview() })
-                        .neonAppear(delay: 0.06)
-                    PairingCard(overview: overview, onChanged: { await loadOverview() })
-                        .neonAppear(delay: 0.09)
-                    WipeLogCard(canReach: overview.canReach)
-                        .neonAppear(delay: 0.12)
-                }
-
-                SectionHeader(L("Recorded this month")) {
-                    MonthNav(monthKey: monthKey ?? month?.thisMonth ?? "", onPrevious: { shiftMonth(-1) }, onNext: { shiftMonth(1) })
-                }
-                .id("month")
-                Text(L("An empty cell means nothing was recorded — not that somebody was absent."))
+                // The month is what the owner opens this page for, and it is
+                // already loaded — so it leads, ahead of the device read,
+                // which is slow and times out when the reader is unplugged.
+                SectionHeader(L("Recorded")) { monthControl }
+                    .id("month")
+                Text(L("A person with no days here had nothing recorded — not that they were absent."))
                     .font(.neonFootnote)
                     .foregroundStyle(Color.neonTextTertiary)
 
@@ -50,9 +38,9 @@ struct AttendanceRootView: View {
                             NavigationLink(value: AttendancePersonRoute(row: row, monthKey: month.monthKey)) {
                                 ListRow(
                                     row.name,
-                                    subtitle: row.daysRecorded == 0 ? L("Nothing recorded") : L("%d days recorded", row.daysRecorded),
-                                    leading: .icon("person.fill", tint: NeonPalette.color(for: row.name)),
-                                    value: row.hoursLate > 0 ? describeMinutes(row.hoursLate * 60) : nil,
+                                    subtitle: row.daysRecorded == 0 ? L("Nothing recorded") : daysRecordedLabel(row.daysRecorded),
+                                    leading: .avatar(url: nil, name: row.name),
+                                    value: row.hoursLate > 0 ? L("Late %@", describeMinutes(row.hoursLate * 60)) : nil,
                                     badge: row.active ? nil : L("Left the team"),
                                     badgeTone: .neutral,
                                     chevron: true
@@ -61,6 +49,33 @@ struct AttendanceRootView: View {
                             .buttonStyle(.pressableCard)
                         }
                     }
+                }
+
+                // The device below the month: a slow or unplugged reader now
+                // costs one skeleton card here, never the top of the page.
+                LoadStateView(
+                    value: overview, error: overviewError, cachedAt: overviewCachedAt, retry: loadOverview,
+                    placeholder: {
+                        SkeletonCard(lines: 2)
+                        MetaLabel(L("Asking the device…"), symbol: "touchid")
+                    }
+                ) { overview in
+                    DeviceStatusCard(overview: overview)
+                        .neonAppear()
+                    AttendanceConsoleCard()
+                        .neonAppear(delay: 0.03)
+                    NavigationLink(value: AttendanceDeviceRoute()) {
+                        ListRow(
+                            L("The device"),
+                            subtitle: overview.device.map { "\($0.ip):\($0.port) · \(L("%d enrolled", overview.users.count))" }
+                                ?? L("No device configured"),
+                            leading: .icon("externaldrive.badge.person.crop", tint: .neonIndigoStrong),
+                            chevron: true
+                        )
+                    }
+                    .buttonStyle(.pressableCard)
+                    .neonSurface(.solid, radius: NeonRadius.md)
+                    .neonAppear(delay: 0.06)
                 }
             }
             .debugScroll(proxy)
@@ -76,8 +91,31 @@ struct AttendanceRootView: View {
                 onChanged: { await loadMonth() }
             )
         }
+        .navigationDestination(for: AttendanceDeviceRoute.self) { _ in
+            if let overview {
+                AttendanceDeviceDetail(overview: overview, onChanged: { await loadOverview() })
+            }
+        }
         .neonAmbientBackground()
         .task { await loadAll() }
+    }
+
+    /// "‹ September 2026 ›" with ≥44pt hit areas either side, in place of
+    /// bare 12pt chevrons — and a header title that no longer says "this
+    /// month" once you've paged away from it.
+    private var monthControl: some View {
+        HStack(spacing: 2) {
+            IconButton("chevron.backward", label: L("Previous month"), look: .plain, size: 20) { shiftMonth(-1) }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            Text(monthLabel(monthKey ?? month?.thisMonth ?? ""))
+                .font(.neonCallout)
+                .monospacedDigit()
+                .frame(minWidth: 84)
+            IconButton("chevron.forward", label: L("Next month"), look: .plain, size: 20) { shiftMonth(1) }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
     }
 
     private func loadAll() async {
@@ -128,6 +166,35 @@ struct AttendancePersonRoute: Hashable {
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.row.employeeId == rhs.row.employeeId && lhs.monthKey == rhs.monthKey }
     func hash(into hasher: inout Hasher) { hasher.combine(row.employeeId); hasher.combine(monthKey) }
+}
+
+/// A marker route (there's only ever one device) to the pushed page that
+/// holds the enrolled-people, pairing and wipe-the-log cards — the
+/// device-admin cards that don't belong in the everyday scroll, one of
+/// which (Wipe) is destructive.
+struct AttendanceDeviceRoute: Hashable {}
+
+/// The device's own page: who is enrolled on it, how the team is paired to
+/// it, and the one place that can wipe its log. Reached from the root by
+/// its own `ListCardRow`, so a destructive card is never part of the scroll
+/// somebody opens every day just to see who was in on time.
+private struct AttendanceDeviceDetail: View {
+    let overview: AttendanceOverview
+    let onChanged: () async -> Void
+
+    var body: some View {
+        NeonScroll {
+            DeviceUsersCard(overview: overview, onChanged: onChanged)
+                .neonAppear()
+            PairingCard(overview: overview, onChanged: onChanged)
+                .neonAppear(delay: 0.03)
+            WipeLogCard(canReach: overview.canReach)
+                .neonAppear(delay: 0.06)
+        }
+        .navigationTitle(L("The device"))
+        .navigationBarTitleDisplayMode(.inline)
+        .neonAmbientBackground()
+    }
 }
 
 // MARK: - Device status
@@ -499,26 +566,6 @@ private struct WipeLogCard: View {
 
 // MARK: - Month navigation and drill-down
 
-private struct MonthNav: View {
-    let monthKey: String
-    let onPrevious: () -> Void
-    let onNext: () -> Void
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Button { onPrevious() } label: { Image(systemName: "chevron.backward") }
-            Text(label).font(.neonCallout).monospacedDigit().frame(minWidth: 84)
-            Button { onNext() } label: { Image(systemName: "chevron.forward") }
-        }
-        .foregroundStyle(Color.neonInk.opacity(0.7))
-        .buttonStyle(.pressable)
-    }
-
-    private var label: String {
-        monthLabel(monthKey)
-    }
-}
-
 /// "September 2026" from a "YYYY-MM" key — `monthLabel` in attendance-month.ts.
 private func monthLabel(_ monthKey: String) -> String {
     let parts = monthKey.split(separator: "-").compactMap { Int($0) }
@@ -550,41 +597,76 @@ struct AttendancePersonDetail: View {
     @State private var correcting: RecordedDay?
     @State private var addingDayKey: String?
 
+    /// Manual entries at zero delay are a stand-in the manager typed, not a
+    /// measured day — "Days recorded" shouldn't read as though the device
+    /// vouched for all of them without saying so.
+    private var handSetCount: Int {
+        row.cells.compactMap { $0 }.filter { $0.source == "MANUAL" && $0.delayHours == 0 && ($0.earlyHours ?? 0) == 0 }.count
+    }
+
     var body: some View {
         NeonScroll {
             StatGrid {
-                StatTile(L("Days recorded"), value: Double(row.daysRecorded), symbol: "calendar")
-                StatTile(L("Hours late"), value: row.hoursLate, format: .decimal(2), symbol: "hourglass", tint: row.hoursLate > 0 ? .neonWarningStrong : .neonSuccessStrong)
+                StatTile(
+                    L("Days recorded"), value: Double(row.daysRecorded), symbol: "calendar",
+                    caption: handSetCount > 0 ? L("%d set by hand", handSetCount) : nil
+                )
+                // Same format the month list uses (`describeMinutes`), not a
+                // decimal — one number format for the same figure everywhere.
+                StatTile(
+                    L("Late"), text: row.hoursLate > 0 ? describeMinutes(row.hoursLate * 60) : L("On time"),
+                    symbol: "hourglass", tint: row.hoursLate > 0 ? .neonWarningStrong : .neonSuccessStrong
+                )
             }
 
             let recorded = zip(days, row.cells).compactMap { day, entry in entry.map { RecordedDay(day: day, entry: $0) } }
             if recorded.isEmpty {
-                EmptyState(symbol: "calendar.badge.clock", title: L("Nothing recorded this month"), detail: L("An empty day means nothing was recorded — not that they were absent."))
+                EmptyState(
+                    symbol: "calendar.badge.clock",
+                    title: L("Nothing recorded this month"),
+                    detail: L("An empty day means nothing was recorded — not that they were absent."),
+                    actionTitle: L("Correct a day"),
+                    action: { beginCorrection() }
+                )
             } else {
                 CardList(recorded) { entry in
+                    let badge = attendanceBadge(entry.entry)
                     Button {
                         Haptic.selection()
                         correcting = entry
                     } label: {
                         ListRow(
-                            formattedDayKey(entry.day.dayKey),
+                            // The weekday and day only: the page is already
+                            // scoped to one month, so the year just crowded
+                            // out the date and wrapped it to two lines.
+                            formattedWeekdayDay(entry.day.dayKey),
                             subtitle: entry.entry.note,
-                            leading: .icon(entry.day.worked ? "calendar" : "calendar.badge.exclamationmark", tint: entry.day.worked ? .neonCyanStrong : .neonTextFaint),
-                            value: attendanceSummary(entry.entry),
-                            badge: entry.entry.source == "MANUAL" ? L("Manual") : nil,
-                            badgeTone: .neutral,
+                            meta: entry.entry.clockedOut == false ? L("no clock-out") : nil,
+                            leading: .icon(
+                                entry.day.worked ? "calendar" : "calendar.badge.exclamationmark",
+                                tint: leadingTint(for: badge.tone, worked: entry.day.worked)
+                            ),
+                            badge: badge.text,
+                            badgeTone: badge.tone,
                             chevron: true
                         )
                     }
                     .buttonStyle(.pressableCard)
                 }
+
+                // Discoverable next to the list, not only as a lone glyph in
+                // the nav bar.
+                Button { beginCorrection() } label: {
+                    Label(L("Correct a day"), systemImage: "square.and.pencil")
+                }
+                .buttonStyle(.neon(.secondary, size: .medium))
             }
         }
         .navigationTitle(row.name)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                IconButton("plus", label: L("Correct a day")) {
-                    addingDayKey = days.first(where: { $0.isToday })?.dayKey ?? days.last?.dayKey ?? monthKey
+                Button { beginCorrection() } label: {
+                    Label(L("Correct a day"), systemImage: "square.and.pencil")
                 }
             }
         }
@@ -608,6 +690,10 @@ struct AttendancePersonDetail: View {
         }
         .neonAmbientBackground()
     }
+
+    private func beginCorrection() {
+        addingDayKey = days.first(where: { $0.isToday })?.dayKey ?? days.last?.dayKey ?? monthKey
+    }
 }
 
 private struct IdentifiedDayKey: Identifiable {
@@ -616,14 +702,13 @@ private struct IdentifiedDayKey: Identifiable {
     init(_ value: String) { self.value = value }
 }
 
-/// A recorded day as the admin page reads it: late in, early out, or neither.
-/// No clock-out is said as exactly that — the device cannot tell a short day
-/// from a missed scan, so it is never read as "stayed to the end".
-private func attendanceSummary(_ entry: AttendanceMonth.Entry) -> String {
-    var parts: [String] = []
-    if entry.delayHours > 0 { parts.append(L("Late %@", describeMinutes(entry.delayHours * 60))) }
-    if let early = entry.earlyHours, early > 0 { parts.append(L("Left early %@", describeMinutes(early * 60))) }
-    if parts.isEmpty { parts.append(L("On time")) }
-    if entry.clockedOut == false { parts.append(L("no clock-out")) }
-    return parts.joined(separator: " · ")
+/// The leading tile's tint, matched to the same status the trailing badge
+/// gives, so the column scans without reading every badge.
+private func leadingTint(for tone: BadgeTone, worked: Bool) -> Color {
+    guard worked else { return .neonTextFaint }
+    switch tone {
+    case .warning: return .neonWarningStrong
+    case .neutral: return .neonTextFaint
+    default: return .neonSuccessStrong
+    }
 }

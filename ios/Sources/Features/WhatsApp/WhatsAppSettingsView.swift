@@ -45,7 +45,7 @@ struct WhatsAppSettingsView: View {
         let connected = line.link?.status == "connected"
         SectionCard(L("WhatsApp"), symbol: "message.fill", hue: .green) {
             if connected {
-                Label(line.link?.phoneNumber.map { "+\($0)" } ?? L("This number is linked"), systemImage: "iphone")
+                Label(line.link?.phoneNumber.map(formattedWhatsAppNumber) ?? L("This number is linked"), systemImage: "iphone")
                     .font(.neonSubheadline)
                     .foregroundStyle(Color.neonTextSecondary)
             } else {
@@ -65,7 +65,7 @@ struct WhatsAppSettingsView: View {
 
             if connected {
                 NeonButton(
-                    L("Unlink"), symbol: "link.badge.minus", kind: .secondary, size: .medium,
+                    L("Unlink"), symbol: "iphone.slash", kind: .tinted(.neonDangerStrong), size: .medium,
                     confirm: L("Unlink this number?"),
                     confirmMessage: L("Messages will stop going out until it is linked again.")
                 ) {
@@ -86,25 +86,39 @@ struct WhatsAppSettingsView: View {
     private func transportCard(_ line: WhatsAppLineResponse) -> some View {
         SectionCard(L("Sending"), symbol: "paperplane.fill", hue: .blue) {
             if line.transport != "none" {
-                KeyValueRow(
-                    L("Transport"),
-                    value: line.transport == "cloud" ? L("Official Cloud API") : L("Session worker (whatsapp-web.js)"),
-                    symbol: "antenna.radiowaves.left.and.right"
-                )
-                if let id = line.cloudPhoneNumberId {
-                    KeyValueRow(L("Phone number ID"), value: id, symbol: "number")
-                }
-                if let url = line.workerUrl {
-                    KeyValueRow(L("Worker"), value: url, symbol: "server.rack")
-                }
                 if let number = line.connection?.number {
-                    KeyValueRow(line.transport == "cloud" ? L("Sends from") : L("Line"), value: number, symbol: "phone")
+                    KeyValueRow(
+                        L("Sends from"),
+                        value: formattedWhatsAppNumber(number),
+                        symbol: "phone"
+                    )
                 }
                 KeyValueRow(
                     L("Status"),
-                    value: line.connection?.detail ?? L("Unknown"),
+                    value: line.connection?.ok == true ? L("Sending normally") : L("Not reaching WhatsApp"),
                     symbol: line.connection?.ok == true ? "checkmark.circle" : "exclamationmark.circle"
                 )
+                DisclosureGroup(L("Technical details")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        KeyValueRow(
+                            L("Transport"),
+                            value: line.transport == "cloud" ? L("Official Cloud API") : L("Session worker (whatsapp-web.js)"),
+                            symbol: "antenna.radiowaves.left.and.right"
+                        )
+                        if let id = line.cloudPhoneNumberId {
+                            KeyValueRow(L("Phone number ID"), value: id, symbol: "number")
+                        }
+                        if let url = line.workerUrl {
+                            KeyValueRow(L("Worker"), value: url, symbol: "server.rack")
+                        }
+                        if let lineId = line.lineId {
+                            KeyValueRow(L("Line"), value: lineId, symbol: "number")
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                .font(.neonSubheadline)
+                .tint(Color.neonTextSecondary)
             } else {
                 Text(L("No transport is configured yet — the Cloud API or the session worker's keys still need to be added."))
                     .font(.neonSubheadline)
@@ -117,9 +131,9 @@ struct WhatsAppSettingsView: View {
 
     @ViewBuilder
     private func testCard(_ line: WhatsAppLineResponse) -> some View {
-        SectionCard(L("Send a test"), symbol: "paperplane.fill", hue: .purple) {
+        SectionCard(L("Send a test"), symbol: "checkmark.message.fill", hue: .purple) {
             NeonTextField(L("Send a test to"), text: $testPhone, prompt: "962790000000", symbol: "phone", keyboard: .phonePad, leftToRight: true)
-            NeonTextField(L("Message"), text: $testText, symbol: "text.bubble")
+            NeonTextEditor(L("Message"), text: $testText, minLines: 2, maxLines: 4)
             NeonButton(L("Send test"), symbol: "paperplane.fill", kind: .secondary, size: .medium) {
                 await sendTest()
             }
@@ -256,7 +270,10 @@ struct WhatsAppSettingsView: View {
 
 private func transportBadgeText(_ line: WhatsAppLineResponse) -> String {
     if line.transport == "none" { return L("Not configured") }
-    return line.connection?.ok == true ? (line.transport == "cloud" ? L("Cloud API") : L("Session worker")) : L("Unreachable")
+    // "Connected", not "Working" — the latter already means "in progress"
+    // elsewhere in the app (Home's task state), and L() has no per-screen
+    // sense of a key, so reusing it here would show that meaning instead.
+    return line.connection?.ok == true ? L("Connected") : L("Unreachable")
 }
 
 private func transportBadgeTone(_ line: WhatsAppLineResponse) -> BadgeTone {
