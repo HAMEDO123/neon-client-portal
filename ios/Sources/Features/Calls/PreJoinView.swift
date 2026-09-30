@@ -419,7 +419,7 @@ struct PreJoinView: View {
                     handedOver = true
                     // The call takes the microphone from here: stop listening
                     // first, leaving the session for the call to use.
-                    meter.stop()
+                    meter.handOver()
                     await onConfirm(media, micTrack, cameraOn ? cameraTrack : nil, !micOn || micTrack == nil, problem)
                 }
             )
