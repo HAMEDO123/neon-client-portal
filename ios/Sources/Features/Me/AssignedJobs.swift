@@ -15,27 +15,25 @@ struct JobRoute: Hashable {
 struct JobRow: View {
     let job: MyAssignedJob
 
-    private var tone: BadgeTone { taskStateTone(job.state) }
-
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             IconTile("shippingbox.fill", hue: .purple, size: 38)
 
             VStack(alignment: .leading, spacing: 5) {
-                DirText(job.title, font: .system(.callout, weight: .semibold))
-                Text(L("From the manager"))
+                // `fill: false` so the block hugs the leading edge instead of
+                // stretching to the chevron's edge — with `fill: true` (the
+                // default) an Arabic title sits flush against the chevron
+                // while the rest of the card sits at the leading edge.
+                DirText(job.title, font: .neonRowTitle, fill: false)
+                Text(L("Handed out directly"))
                     .font(.neonCaption)
                     .foregroundStyle(Color.neonTextTertiary)
 
                 FlowRow {
-                    BadgeView(text: taskStateLabel(job.state), tone: tone)
-                    if let priority = priorityLabel(job.priority) {
-                        BadgeView(text: priority, tone: job.priority == "HIGH" ? .pink : .neutral)
-                    }
+                    meStateBadge(job.state)
+                    priorityChip(job.priority)
                 }
-                Label(when, systemImage: "calendar")
-                    .font(.neonCaption)
-                    .foregroundStyle(Color.neonTextTertiary)
+                MetaLabel(jobDateRange(startKey: job.startKey, endKey: job.endKey), symbol: "calendar")
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.forward")
@@ -44,12 +42,6 @@ struct JobRow: View {
                 .padding(.top, 8)
         }
         .padding(.vertical, 4)
-    }
-
-    private var when: String {
-        let from = formattedDayKey(job.startKey)
-        let to = formattedDayKey(job.endKey)
-        return job.startKey == job.endKey ? from : "\(from) – \(to)"
     }
 }
 
@@ -96,7 +88,7 @@ struct JobDetailView: View {
                 ProofSheet(
                     targetId: job.id,
                     title: job.title,
-                    subtitle: L("From the manager"),
+                    subtitle: L("Handed out directly"),
                     acceptance: linesOf(job.acceptance)
                 ) {
                     justSubmitted = true
@@ -114,28 +106,18 @@ struct JobDetailView: View {
     private func header(_ job: MyAssignedJob) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                BadgeView(text: L("From the manager"), tone: .neutral, symbol: "shippingbox.fill")
+                BadgeView(text: L("Handed out directly"), tone: .neutral, symbol: "shippingbox.fill")
                 Spacer()
             }
             DirText(job.title, font: .neonTitle2)
             FlowRow {
-                BadgeView(text: taskStateLabel(job.state), tone: taskStateTone(job.state))
-                if let priority = priorityLabel(job.priority) {
-                    BadgeView(text: priority, tone: job.priority == "HIGH" ? .pink : .neutral)
-                }
+                meStateBadge(job.state)
+                priorityChip(job.priority)
             }
-            Label(when(job), systemImage: "calendar")
-                .font(.neonFootnote)
-                .foregroundStyle(Color.neonTextSecondary)
+            MetaLabel(jobDateRange(startKey: job.startKey, endKey: job.endKey), symbol: "calendar", tint: .neonTextSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .neonAppear()
-    }
-
-    private func when(_ job: MyAssignedJob) -> String {
-        let from = formattedDayKey(job.startKey)
-        let to = formattedDayKey(job.endKey)
-        return job.startKey == job.endKey ? from : "\(from) – \(to)"
     }
 
     @ViewBuilder
@@ -159,7 +141,7 @@ struct JobDetailView: View {
                 .disabled(cachedAt != nil)
 
                 if job.state == "IN_PROGRESS" {
-                    NeonButton(L("Put back to pending"), symbol: "arrow.uturn.backward", kind: .secondary) {
+                    NeonButton(L("Not started yet"), symbol: "arrow.uturn.backward", kind: .secondary) {
                         await move(to: "TODO")
                     }
                     .disabled(cachedAt != nil)

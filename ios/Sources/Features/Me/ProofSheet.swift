@@ -20,6 +20,11 @@ struct ProofTarget: Identifiable {
 ///
 /// What to photograph sits above the camera, because telling somebody what to
 /// photograph after they have photographed something is advice too late.
+///
+/// Built on `SheetScaffold`, ending in `.neonSheet` here rather than at every
+/// call site — a sheet doesn't inherit the app's language direction, so
+/// without it this is the one sheet in the app that stayed left-to-right in
+/// Arabic, whichever of its four presentation sites opened it.
 struct ProofSheet: View {
     /// A board cell's id, or a chat job's assignment id — the server finds which.
     let targetId: String
@@ -41,98 +46,72 @@ struct ProofSheet: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        DirText(title, font: .system(size: 20, weight: .bold, design: .rounded))
-                        if let subtitle { DirText(subtitle, font: .system(size: 13), color: .neonInk.opacity(0.55)) }
-                    }
+        SheetScaffold(
+            L("Send proof"),
+            subtitle: subtitle,
+            symbol: "camera.fill",
+            primaryTitle: L("Send"),
+            isPrimaryEnabled: file != nil && !sending
+        ) {
+            await send()
+        } content: {
+            DirText(title, font: .neonCardTitle)
 
-                    if !evidence.isEmpty {
-                        DetailCard(title: L("Proof to send"), symbol: "camera") { BulletList(lines: evidence) }
-                    }
-                    if !acceptance.isEmpty {
-                        DetailCard(title: L("It will be checked against"), symbol: "checkmark.circle") { BulletList(lines: acceptance) }
-                    }
-
-                    picked
-
-                    HStack(spacing: 10) {
-                        if CameraPicker.isAvailable {
-                            sourceButton(L("Camera"), symbol: "camera.fill", hue: .purple) { showCamera = true }
-                        }
-                        PhotosPicker(selection: $photoItem, matching: .images) {
-                            sourceLabel(L("Photos"), symbol: "photo.on.rectangle", hue: .blue)
-                        }
-                        .buttonStyle(.pressable)
-                        sourceButton(L("File"), symbol: "doc.fill", hue: .orange) { showFiles = true }
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L("Note for the manager (optional)"))
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color.neonInk.opacity(0.6))
-                        TextField(L("What should the manager know?"), text: $note, axis: .vertical)
-                            .lineLimit(3...6)
-                            .padding(12)
-                            .background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.neonInk.opacity(0.1)))
-                            .environment(\.layoutDirection, naturalDirection(note) ?? AppLanguage.current.layoutDirection)
-                    }
-
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
-
-                    Text(L("Sending puts this in the manager's review. It is marked done only when they approve it."))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.neonInk.opacity(0.5))
-                }
-                .padding(16)
+            if !evidence.isEmpty {
+                DetailCard(title: L("Proof to send"), symbol: "camera") { BulletList(lines: evidence) }
             }
-            .neonAmbientBackground()
-            .navigationTitle(L("Send proof"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L("Cancel")) { dismiss() }.disabled(sending)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task { await send() }
-                    } label: {
-                        if sending { ProgressView() } else { Text(L("Send")).bold() }
-                    }
-                    .disabled(file == nil || sending)
-                }
+            if !acceptance.isEmpty {
+                DetailCard(title: L("It will be checked against"), symbol: "checkmark.circle") { BulletList(lines: acceptance) }
             }
-            .interactiveDismissDisabled(sending)
-            .onChange(of: photoItem) { item in
-                guard let item else { return }
-                Task {
-                    if let made = await UploadMaker.photo(item) {
-                        set(made)
-                    } else {
-                        errorMessage = L("That photo could not be read.")
-                    }
+
+            picked
+
+            HStack(spacing: 10) {
+                if CameraPicker.isAvailable {
+                    sourceButton(L("Camera"), symbol: "camera.fill", hue: .purple) { showCamera = true }
                 }
-            }
-            .fullScreenCover(isPresented: $showCamera) {
-                CameraPicker { image in
-                    if let made = UploadMaker.photo(image) { set(made) }
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    sourceLabel(L("Photos"), symbol: "photo.on.rectangle", hue: .blue)
                 }
-                .ignoresSafeArea()
+                .buttonStyle(.pressable)
+                sourceButton(L("File"), symbol: "doc.fill", hue: .orange) { showFiles = true }
             }
-            .fileImporter(isPresented: $showFiles, allowedContentTypes: UploadMaker.documentTypes) { result in
-                guard case .success(let url) = result else { return }
-                if let made = UploadMaker.file(url, field: "photo") {
+
+            NeonTextEditor(L("Note for the manager"), text: $note, minLines: 3, maxLines: 6)
+
+            if let errorMessage {
+                ValidationMessage(errorMessage)
+            }
+
+            Text(L("Sending puts this in the manager's review. It is marked done only when they approve it."))
+                .font(.neonFootnote)
+                .foregroundStyle(Color.neonTextTertiary)
+        }
+        .neonSheet([.large])
+        .interactiveDismissDisabled(sending)
+        .onChange(of: photoItem) { item in
+            guard let item else { return }
+            Task {
+                if let made = await UploadMaker.photo(item) {
                     set(made)
                 } else {
-                    errorMessage = L("That file could not be read.")
+                    errorMessage = L("That photo could not be read.")
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { image in
+                if let made = UploadMaker.photo(image) { set(made) }
+            }
+            .ignoresSafeArea()
+            .neonLanguage()
+        }
+        .fileImporter(isPresented: $showFiles, allowedContentTypes: UploadMaker.documentTypes) { result in
+            guard case .success(let url) = result else { return }
+            if let made = UploadMaker.file(url, field: "photo") {
+                set(made)
+            } else {
+                errorMessage = L("That file could not be read.")
             }
         }
     }

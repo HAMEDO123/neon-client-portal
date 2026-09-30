@@ -30,12 +30,12 @@ struct MyChatJobsSection: View {
                             NavigationLink(value: ChatRoute(item.conversation)) {
                                 VStack(alignment: .leading, spacing: 6) {
                                     HStack(alignment: .top) {
-                                        DirText(card.title, font: .system(.callout, weight: .semibold))
+                                        DirText(card.title, font: .system(.callout, weight: .semibold), fill: false)
                                         Spacer(minLength: 8)
                                         BadgeView(text: cardStateLabel(part.state), tone: taskStateTone(part.state))
                                     }
                                     if let description = card.description, !description.isEmpty {
-                                        DirText(description, font: .neonSubtitle, color: .neonTextSecondary)
+                                        DirText(description, font: .neonSubtitle, color: .neonTextSecondary, fill: false)
                                     }
                                     HStack(spacing: 6) {
                                         Image(systemName: "bubble.left")

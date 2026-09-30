@@ -5,6 +5,11 @@ import SwiftUI
 /// so the app and the web say the same thing, including the refusals: an
 /// empty day says nothing is planned, never that somebody is idle.
 struct TodayView: View {
+    /// Where a chat notification opened from the Alerts sheet lands, since a
+    /// sheet has no tab bar of its own to switch — the app shell wires this to
+    /// its own Chat tab, the same way it already does for `EmployeeMoreView`.
+    var openChat: () -> Void = {}
+
     @EnvironmentObject var api: APIClient
     @EnvironmentObject var store: StaffStore
     @State private var day: TodayResponse?
@@ -38,7 +43,7 @@ struct TodayView: View {
                         if day.tasks.isEmpty {
                             EmptyState(
                                 symbol: "calendar",
-                                title: L("Nothing is scheduled on today"),
+                                title: L("Nothing planned for today"),
                                 hue: .indigo,
                                 card: true
                             )
@@ -91,8 +96,24 @@ struct TodayView: View {
             }
             .neonAmbientBackground()
             .sheet(isPresented: $showAlerts) {
-                NavigationStack { NotificationsView() }
-                    .neonSheet([.large])
+                // A sheet, unlike the pushed Alerts page under More, has no
+                // back button of its own — and a chat notification whose link
+                // can't be resolved needs somewhere to land, since there is no
+                // tab bar to switch inside a sheet either.
+                NavigationStack {
+                    NotificationsView(openChat: {
+                        showAlerts = false
+                        openChat()
+                    })
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            IconButton("xmark", label: L("Close"), size: NeonSize.circleButton) {
+                                showAlerts = false
+                            }
+                        }
+                    }
+                }
+                .neonSheet([.large])
             }
         }
         .task { await load() }
@@ -366,14 +387,12 @@ struct TodayTaskRow: View {
             IconTile(taskRowGlyph(task.state), hue: tone.hue, size: 38)
 
             VStack(alignment: .leading, spacing: 4) {
-                DirText(task.task.name, font: .system(.callout, weight: .semibold))
-                DirText(task.project.name, font: .neonSubtitle, color: .neonTextSecondary)
+                DirText(task.task.name, font: .neonRowTitle, fill: false)
+                DirText(task.project.name, font: .neonSubtitle, color: .neonTextSecondary, fill: false)
 
                 FlowRow {
-                    BadgeView(text: taskStateLabel(task.state), tone: tone)
-                    if let priority = priorityLabel(task.priority) {
-                        BadgeView(text: priority, tone: task.priority == "HIGH" ? .pink : .neutral)
-                    }
+                    meStateBadge(task.state)
+                    priorityChip(task.priority)
                     if !task.waitingOn.isEmpty {
                         BadgeView(text: L("Waiting"), tone: .orange)
                     }
@@ -426,14 +445,12 @@ struct TaskRow: View {
             IconTile(taskRowGlyph(task.state), hue: tone.hue, size: 38)
 
             VStack(alignment: .leading, spacing: 5) {
-                DirText(task.task.name, font: .system(.callout, weight: .semibold))
-                DirText(task.project.name, font: .neonSubtitle, color: .neonTextSecondary)
+                DirText(task.task.name, font: .neonRowTitle, fill: false)
+                DirText(task.project.name, font: .neonSubtitle, color: .neonTextSecondary, fill: false)
 
                 FlowRow {
-                    BadgeView(text: taskStateLabel(task.state), tone: tone)
-                    if let priority = priorityLabel(task.priority) {
-                        BadgeView(text: priority, tone: task.priority == "HIGH" ? .pink : .neutral)
-                    }
+                    meStateBadge(task.state)
+                    priorityChip(task.priority)
                     if !task.waitingOn.isEmpty {
                         BadgeView(text: L("Waiting"), tone: .orange)
                     }

@@ -12,6 +12,7 @@ struct ProfileRootView: View {
     @State private var preferences: ProfilePreferences?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
+    @State private var refusedMessage: String?
     @State private var saving = false
     @State private var forgetting: ProfileDevice?
 
@@ -28,13 +29,18 @@ struct ProfileRootView: View {
                     if !data.devices.isEmpty { devicesCard(data.devices) }
 
                     Text(L("Times shown in %@", data.timezone.replacingOccurrences(of: "_", with: " ")))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.neonInk.opacity(0.35))
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextTertiary)
                         .frame(maxWidth: .infinity, alignment: .center)
 
-                    NeonButton(L("Sign Out"), symbol: "rectangle.portrait.and.arrow.right", kind: .secondary, confirm: L("Sign out of NEON?")) {
-                        api.logout()
-                    }
+                    // Not a second Sign Out — More already carries the one
+                    // action a person takes here, and duplicating it only
+                    // invites signing out from the wrong screen by habit.
+                } else if let refusedMessage {
+                    // A permanent refusal ("that is not available to you") —
+                    // Retry can never succeed against it, so this reads as a
+                    // boundary instead of a broken Retry button.
+                    EmptyState(symbol: "lock.fill", title: L("This page is for the team"), detail: refusedMessage, hue: .grey, card: true)
                 } else if let errorMessage {
                     ErrorState(message: errorMessage) { await load() }
                 } else {
@@ -77,7 +83,7 @@ struct ProfileRootView: View {
     private func profileLine(symbol: String, hue: NeonHue, value: String) -> some View {
         HStack(spacing: 10) {
             IconTile(symbol, hue: hue, size: 28)
-            Text(value).font(.system(.subheadline)).foregroundStyle(Color.neonInk.opacity(0.82))
+            Text(value).font(.neonSubtitle).foregroundStyle(Color.neonInk.opacity(0.82))
             Spacer()
         }
     }
@@ -89,7 +95,7 @@ struct ProfileRootView: View {
             ToggleRow(L("Send to my devices"), detail: L("Turn off to keep notifications in-app only"), symbol: "iphone.radiowaves.left.and.right", isOn: preferences.pushEnabled)
             NeonDivider()
             ToggleRow(L("Team messages"), detail: L("When someone writes in the team chat"), symbol: "bubble.left.and.bubble.right", isOn: preferences.chatMessages)
-            ToggleRow(L("Task assigned"), detail: L("When an admin gives you a new task"), symbol: "tray.and.arrow.down", isOn: preferences.taskAssigned)
+            ToggleRow(L("Task assigned"), detail: L("When somebody hands you work"), symbol: "tray.and.arrow.down", isOn: preferences.taskAssigned)
             ToggleRow(L("Task updated"), detail: L("When one of your tasks changes"), symbol: "pencil", isOn: preferences.taskUpdated)
             ToggleRow(L("Today's schedule"), detail: L("A morning summary of today's work"), symbol: "sun.max", isOn: preferences.todaySchedule)
             ToggleRow(L("Tomorrow's schedule"), detail: L("The afternoon summary of tomorrow"), symbol: "sunset", isOn: preferences.tomorrowSchedule)
@@ -107,8 +113,8 @@ struct ProfileRootView: View {
         NeonCard {
             SectionLabel(L("Your devices"))
             Text(L("Only these receive your notifications. Turn one off to keep it quiet without switching push off everywhere."))
-                .font(.system(size: 12))
-                .foregroundStyle(Color.neonInk.opacity(0.45))
+                .font(.neonSubtitle)
+                .foregroundStyle(Color.neonTextSecondary)
 
             VStack(spacing: 8) {
                 ForEach(devices) { device in
@@ -123,7 +129,7 @@ struct ProfileRootView: View {
             IconTile("iphone.gen3", hue: device.active ? .green : .grey, size: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(device.label).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Text(device.label).font(.neonSubtitle).lineLimit(1)
                 Text(device.active ? L("Receiving") : L("Muted"))
                     .font(.neonCaption)
                     .foregroundStyle(Color.neonTextTertiary)
@@ -137,10 +143,11 @@ struct ProfileRootView: View {
             .labelsHidden()
             .tint(.neonSuccessStrong)
 
-            Button {
+            // A 44 pt touch target with a spoken label, not a bare 13 pt
+            // glyph beside a Toggle — the two controls were nearly
+            // indistinguishable by touch before this.
+            IconButton("trash", label: L("Forget device"), look: .plain, tint: .neonTextFaint, size: NeonSize.touch) {
                 forgetting = device
-            } label: {
-                Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Color.neonTextFaint)
             }
         }
         .padding(10)
@@ -156,6 +163,9 @@ struct ProfileRootView: View {
             preferences = loaded.value.preferences
             cachedAt = loaded.cachedAt
             errorMessage = nil
+            refusedMessage = nil
+        } catch APIError.refused(let message) {
+            if data == nil { refusedMessage = message }
         } catch {
             if data == nil { errorMessage = error.localizedDescription }
         }

@@ -48,7 +48,10 @@ struct NotificationsView: View {
             }
             .navigationTitle(L("Alerts"))
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                // .topBarTrailing, not .topBarLeading: pushed from More, that
+                // corner is the back button's; a sheet's own Close (added by
+                // whoever presents it) sits on the leading side instead.
+                ToolbarItem(placement: .topBarTrailing) {
                     if unread > 0 && cachedAt == nil {
                         Button(L("Mark all read")) { Task { await markAll() } }
                             .font(.system(size: 14, weight: .medium))
@@ -86,10 +89,16 @@ struct NotificationsView: View {
 
     private func open(_ item: StaffNotification) async {
         Haptic.tap()
+        // Navigate first: marking read, then reloading the list, then
+        // refreshing the tab badge used to run before the row would open at
+        // all, so a tap felt like it did nothing for as long as three round
+        // trips took. None of that changes what the tap opens.
         if item.readAt == nil, cachedAt == nil {
-            try? await api.markNotificationsRead(id: item.id)
-            await load()
-            await store.refresh()
+            Task {
+                try? await api.markNotificationsRead(id: item.id)
+                await load()
+                await store.refresh()
+            }
         }
 
         // A board task's own id, when the row carries one, beats parsing the

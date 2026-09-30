@@ -16,25 +16,36 @@ struct AssignRootView: View {
     @State private var creating = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: NeonSpace.stack) {
-                if let cachedAt { OfflineBanner(savedAt: cachedAt) }
+        NeonScroll(spacing: NeonSpace.stack) {
+            if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
-                if let week {
-                    weekHeader(week)
+            if let week {
+                weekHeader(week)
 
-                    if week.tasks.isEmpty {
-                        EmptyState(
-                            symbol: "shippingbox",
-                            title: L("Nothing handed out this week"),
-                            actionTitle: L("Hand out a job"),
-                            action: { creating = true },
-                            hue: .purple,
-                            card: true
-                        )
-                    } else {
-                        VStack(spacing: NeonSpace.sm) {
-                            ForEach(Array(week.tasks.enumerated()), id: \.element.id) { index, job in
+                if week.tasks.isEmpty {
+                    EmptyState(
+                        symbol: "shippingbox",
+                        title: L("Nothing handed out this week"),
+                        actionTitle: L("Hand out a job"),
+                        action: { creating = true },
+                        hue: .purple,
+                        card: true
+                    )
+                } else {
+                    SectionHeader(L("This week"), count: week.tasks.count) { EmptyView() }
+                    VStack(spacing: NeonSpace.sm) {
+                        ForEach(Array(week.tasks.enumerated()), id: \.element.id) { index, job in
+                            // A colleague can rewrite or delete a job the manager
+                            // has already approved from here — so once it is
+                            // SUBMITTED or DONE, tapping only opens it to read,
+                            // never the edit form.
+                            if job.state == "SUBMITTED" || job.state == "DONE" {
+                                NavigationLink(value: JobRoute(id: job.id)) {
+                                    assignedJobRow(job)
+                                }
+                                .buttonStyle(.pressableCard)
+                                .staggered(index)
+                            } else {
                                 Button {
                                     Haptic.tap()
                                     editing = job
@@ -46,22 +57,19 @@ struct AssignRootView: View {
                             }
                         }
                     }
-                } else if let errorMessage {
-                    ErrorState(message: errorMessage) { await load() }
-                } else {
-                    SkeletonRows(count: 4)
                 }
+            } else if let errorMessage {
+                ErrorState(message: errorMessage) { await load() }
+            } else {
+                SkeletonRows(count: 4)
             }
-            .padding(NeonSpace.gutter)
-            .padding(.bottom, 70)
         }
         .refreshable {
             Haptic.tap()
             await load()
         }
-        .navigationTitle(L("Assign"))
-        .neonAmbientBackground()
-        .floatingActionButton(label: L("New task")) {
+        .navigationTitle(L("Hand out work"))
+        .floatingActionButton("plus", label: L("Hand out a job")) {
             Haptic.tap()
             creating = true
         }
@@ -81,45 +89,51 @@ struct AssignRootView: View {
 
     private func weekHeader(_ week: AssignWeekResponse) -> some View {
         HStack {
-            IconButton("chevron.backward", label: L("Previous week"), size: 36) {
+            IconButton("chevron.backward", label: L("Previous week"), size: NeonSize.circleButton) {
+                Haptic.selection()
                 weekOffset -= 1
             }
 
             Spacer()
-            VStack(spacing: 2) {
-                Text(week.weekLabel).font(.system(.subheadline, weight: .semibold))
+            VStack(spacing: 4) {
+                Text(week.weekLabel).font(.neonCardTitle)
                 if weekOffset != 0 {
-                    Button(L("This week")) {
-                        Haptic.selection()
+                    ViewAllButton(L("This week"), chevron: false) {
                         withNeonAnimation(.snappy) { weekOffset = 0 }
                     }
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.neonCyanStrong)
                 } else {
-                    Color.clear.frame(height: 14)
+                    // Keeps the header's height steady whether the link is
+                    // showing or not, so nothing else on the page shifts.
+                    Color.clear.frame(height: 30)
                 }
             }
             Spacer()
 
-            IconButton("chevron.forward", label: L("Next week"), size: 36) {
+            IconButton("chevron.forward", label: L("Next week"), size: NeonSize.circleButton) {
+                Haptic.selection()
                 weekOffset += 1
             }
         }
-        .padding(.horizontal, 4)
     }
 
     private func assignedJobRow(_ job: MyAssignedJob) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(url: nil, name: name(for: job.employeeId), size: 40)
+            AvatarView(url: nil, name: name(for: job.employeeId), size: 40, style: .solid)
             VStack(alignment: .leading, spacing: 5) {
-                DirText(job.title, font: .system(.callout, weight: .semibold))
+                // `fill: false`, so the title hugs the leading edge instead of
+                // stretching to sit flush against the trailing chevron in
+                // Arabic — only the reading direction should flip, not which
+                // edge the block sits on.
+                DirText(job.title, font: .neonRowTitle, fill: false)
                 Text(name(for: job.employeeId))
                     .font(.neonCaption)
                     .foregroundStyle(Color.neonTextTertiary)
+                MetaLabel(jobDateRange(startKey: job.startKey, endKey: job.endKey), symbol: "calendar")
                 FlowRow {
-                    BadgeView(text: taskStateLabel(job.state), tone: taskStateTone(job.state))
-                    if let priority = priorityLabel(job.priority) {
-                        BadgeView(text: priority, tone: job.priority == "HIGH" ? .pink : .neutral)
+                    meStateBadge(job.state)
+                    priorityChip(job.priority)
+                    if jobHasNoAcceptance(job) {
+                        BadgeView(text: L("No finish line written"), tone: .warning, symbol: "exclamationmark.triangle.fill")
                     }
                 }
             }
@@ -192,7 +206,7 @@ private struct AssignJobFormSheet: View {
 
     var body: some View {
         SheetScaffold(
-            job == nil ? L("New task") : L("Edit task"),
+            job == nil ? L("New job") : L("Edit job"),
             symbol: "shippingbox",
             primaryTitle: job == nil ? L("Hand out") : L("Save"),
             isPrimaryEnabled: !title.trimmingCharacters(in: .whitespaces).isEmpty && employeeId != nil
@@ -222,11 +236,11 @@ private struct AssignJobFormSheet: View {
             }
 
             if let errorMessage {
-                Text(errorMessage).font(.footnote).foregroundStyle(.red)
+                ValidationMessage(errorMessage)
             }
 
             if let job {
-                NeonButton(L("Delete this task"), symbol: "trash", kind: .destructive, isLoading: deleting, confirm: L("Delete this task?")) {
+                NeonButton(L("Delete this job"), symbol: "trash", kind: .destructive, isLoading: deleting, confirm: L("Delete this job?")) {
                     await delete(job)
                 }
             }
