@@ -214,6 +214,8 @@ struct TeamPayrollEmployeeInfo: Decodable, Identifiable {
     let role: String?
     let salaryAmount: Double?
     let payBasis: String
+    /// Their face, or nil for initials.
+    let photoUrl: String?
 }
 
 struct TeamPayrollBreakdown: Decodable {
@@ -238,6 +240,7 @@ struct TeamPayrollEmployee: Decodable, Identifiable {
     let id: String
     let name: String
     let deviceUserId: String?
+    let photoUrl: String?
 }
 
 struct TeamAttendanceRecord: Decodable, Identifiable {

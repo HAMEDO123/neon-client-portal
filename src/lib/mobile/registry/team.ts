@@ -27,6 +27,7 @@ import { nextWorkingDay } from "@/lib/work-hours";
 import { getDayPlan } from "@/lib/day-plan-store";
 import { isAiConfigured } from "@/lib/ai/client";
 import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-queries";
+import { facesFor } from "@/lib/faces";
 import { bool, guarded, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 
 // The "team" area of the phone API: employees and payroll. See
@@ -157,8 +158,11 @@ export const reads: ReadRegistry = {
     const employees = await prisma.employee.findMany({
       where: { active: true, accessRole: "EMPLOYEE" },
       orderBy: { order: "asc" },
-      select: { id: true, name: true, deviceUserId: true },
+      select: { id: true, name: true, deviceUserId: true, photoUrl: true },
     });
+    // Each payroll row's face, beside the row rather than in
+    // getPayrollForPeriod, which the website reads and draws no faces from.
+    const faces = await facesFor(rows.map((row) => row.employee.id));
 
     const totals = rows.reduce(
       (sum, row) => ({
@@ -176,7 +180,7 @@ export const reads: ReadRegistry = {
       thisMonth,
       isThisMonth,
       totals: { ...totals, team: rows.length },
-      rows,
+      rows: rows.map((row) => ({ ...row, employee: { ...row.employee, photoUrl: faces[row.employee.id] ?? null } })),
       employees,
       attendance: attendance.map((record) => ({
         id: record.id,

@@ -5,6 +5,7 @@ import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
 import { buildMonth, monthBounds, monthKeyFor, type Month, type MonthEntry } from "@/lib/attendance-month";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { dateToDayKey, dayKeyToDate, todayKey } from "@/lib/time";
+import { facesFor, type Faces } from "@/lib/faces";
 
 // Gathers what the admin/(dashboard)/attendance page reads, for the phone's
 // registry entries. Every function here calls exactly the same lib queries the
@@ -72,6 +73,12 @@ export type AttendanceMonthResponse = Month & {
    * to hand `deleteAttendance` when it wants to remove a day it has open.
    */
   recordIds: Record<string, string>;
+  /**
+   * Employee id → photo, for the rows' faces (only people who have one).
+   * Beside the rows for the same reason as `recordIds`: attendance-month.ts
+   * is pure and knows nothing of photos.
+   */
+  photos: Faces;
 };
 
 export async function attendanceMonthFor(askedMonth: string | null): Promise<AttendanceMonthResponse> {
@@ -128,5 +135,6 @@ export async function attendanceMonthFor(askedMonth: string | null): Promise<Att
   }
 
   const month = buildMonth({ monthKey, hours: workHours, todayKey: todayKey(timezone), people, entries });
-  return { ...month, thisMonth, recordIds };
+  const photos = await facesFor(people.map((person) => person.id));
+  return { ...month, thisMonth, recordIds, photos };
 }
