@@ -1,0 +1,32 @@
+/* Insights area (Alerts, Reviews, Analytics) — only strings whose English
+   text is new or changed in this round. Everything unchanged from before
+   still resolves from Home.strings (the Home area's own table); L() checks
+   every table, so there is no need to repeat a key that already resolves. */
+
+/* Alerts */
+"Alerts" = "التنبيهات";
+"%@ sent proof for review" = "وصل إثبات من %@ لمراجعتك";
+"Waiting for you" = "بانتظارك";
+"All" = "الكل";
+"Tasks" = "المهام";
+"Reports" = "التقارير";
+"Today" = "اليوم";
+"Yesterday" = "أمس";
+
+/* Reviews */
+"Proof your team sent, waiting for your decision." = "إثباتات أرسلها فريقك، بانتظار قرارك.";
+"When someone sends proof for a task, it waits here for you to approve or send back." = "عندما يرسل أحدهم إثباتًا لمهمة، ينتظر هنا موافقتك أو إعادتك له.";
+
+/* Analytics */
+"%d people · %@" = "%d أشخاص · %@";
+"Below %d%% costs %@, and the employee is told why." = "أقل من %d%% يكلّف %@، ويُخبَر الموظف بالسبب.";
+"vs last month" = "مقابل الشهر الماضي";
+"of %d people" = "من أصل %d أشخاص";
+"Deducted" = "مخصوم";
+"of %d owed" = "من أصل %d مستحق";
+"Applying this takes %@ off each of their salaries for the period and sends them a notification with the numbers behind it. Running it twice changes nothing." = "تطبيق هذا يخصم %@ من راتب كل واحد منهم لهذه الفترة، ويرسل لهم إشعارًا بالأرقام. تكراره مرتين لا يغيّر شيئًا.";
+"Overdue now" = "متأخر حاليًا";
+"Finished on time" = "أُنجز في الوقت";
+"Too few to tell" = "عدد قليل جدًا للحكم";
+"−%@ deducted" = "−%@ مخصوم";
+"Next month" = "الشهر التالي";
