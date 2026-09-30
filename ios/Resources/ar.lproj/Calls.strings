@@ -129,3 +129,8 @@
 "How a NEON call rings on a closed or locked phone" = "كيف ترنّ مكالمة NEON والتطبيق مغلق أو الهاتف مقفل";
 "A made-up call from %@ rings on the phone's own call screen. Nothing is sent to the studio." = "مكالمة تجريبية من %@ ترنّ على شاشة المكالمات في الهاتف. لا يُرسَل شيء إلى الاستوديو.";
 "Ring again" = "رنّ مرة أخرى";
+"Ringing on the phone's own call screen." = "يرنّ الآن على شاشة المكالمات في الهاتف.";
+"CallKit would not ring it: %@" = "رفضت شاشة المكالمات في الهاتف هذه المكالمة: %@";
+"Answered. It ends by itself in a moment." = "تم الرد. ستنتهي المكالمة وحدها بعد لحظات.";
+"Ended at once by the phone: it has no call screen to show it on. The simulator has none; open this on an iPhone." = "أنهاها الهاتف فورًا: لا توجد عليه شاشة مكالمات لعرضها. المحاكي لا يملك واحدة؛ افتح هذه الصفحة على آيفون.";
+"Declined." = "تم الرفض.";

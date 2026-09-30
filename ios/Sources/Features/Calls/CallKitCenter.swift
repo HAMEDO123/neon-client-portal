@@ -52,6 +52,8 @@ final class CallKitCenter: NSObject {
         let video: Bool
         let incoming: Bool
         let reportedAt = Date()
+        /// When CallKit took the report — it can take a second to answer.
+        var acceptedAt: Date?
         var debug = false
         /// Answered (an incoming call), or started (an outgoing one).
         var answered = false
@@ -67,6 +69,10 @@ final class CallKitCenter: NSObject {
         weak var session: CallSession?
         var watchers: Set<AnyCancellable> = []
         var timeout: Task<Void, Never>?
+        #if DEBUG
+        /// What the debug fixture's page says happened to its call.
+        var fixtureNote: ((String) -> Void)?
+        #endif
 
         var ringing: Bool { incoming && !answered }
 
@@ -148,6 +154,7 @@ final class CallKitCenter: NSObject {
 
     private func reported(_ uuid: UUID, error: Error?, refusal: CXCallEndedReason?) {
         guard let entry = entries[uuid] else { return }
+        noteFixture(entry, error.map { L("CallKit would not ring it: %@", $0.localizedDescription) } ?? L("Ringing on the phone's own call screen."))
         if error != nil {
             // Not rung: Do Not Disturb, or a call CallKit will not put beside
             // the one going on. The app's own ringing takes it from here.
@@ -155,6 +162,7 @@ final class CallKitCenter: NSObject {
             finish(entry)
             return
         }
+        entry.acceptedAt = Date()
         if let refusal { end(entry, refusal) }
     }
 
@@ -402,6 +410,7 @@ final class CallKitCenter: NSObject {
         // the sound on while the join is still on its way.
         action.fulfill()
         if entry.debug {
+            noteFixture(entry, L("Answered. It ends by itself in a moment."))
             endFixtureSoon(entry)
             return
         }
@@ -435,6 +444,14 @@ final class CallKitCenter: NSObject {
         }
         let session = entry.session
         finish(entry)
+        if entry.ringing {
+            // Ended by the phone itself as soon as it was reported: iOS shows
+            // an incoming call by opening its own call screen, which the
+            // simulator does not have.
+            noteFixture(entry, entry.acceptedAt.map { Date().timeIntervalSince($0) < 1 } ?? true
+                ? L("Ended at once by the phone: it has no call screen to show it on. The simulator has none; open this on an iPhone.")
+                : L("Declined."))
+        }
         if !entry.debug, let callId = entry.callId {
             let center = CallCenter.shared
             if let live = session ?? center.session, live.callId == callId {
@@ -474,13 +491,20 @@ final class CallKitCenter: NSObject {
 
     // MARK: - The debug router's fixture
 
+    private func noteFixture(_ entry: Entry, _ text: @autoclosure () -> String) {
+        #if DEBUG
+        entry.fixtureNote?(text())
+        #endif
+    }
+
     #if DEBUG
     /// CallKit's incoming screen for a made-up call (`callkit-incoming`):
     /// no stream, no server. Answering shows the answered screen for a
-    /// moment, then ends it.
-    func ringFixture(title: String, video: Bool) {
+    /// moment, then ends it. `note` hears what became of it.
+    func ringFixture(title: String, video: Bool, note: @escaping (String) -> Void) {
         let entry = Entry(callId: nil, title: title, video: video, incoming: true)
         entry.debug = true
+        entry.fixtureNote = note
         entries[entry.uuid] = entry
         entry.timeout = ringTimeout(entry)
         let uuid = entry.uuid

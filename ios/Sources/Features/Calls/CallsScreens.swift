@@ -235,12 +235,15 @@ enum CallsScreens {
     }
 }
 
-/// A page that rings CallKit's incoming screen a moment after it opens: in
-/// the simulator it arrives as the banner over this page (full screen on a
-/// locked one).
+/// A page that rings CallKit's incoming screen a moment after it opens, and
+/// says what became of the call. On an iPhone (a Debug build from Xcode) the
+/// ring arrives as the system's banner over this page, or full screen when
+/// locked. The simulator has no call screen: CallKit takes the call and iOS
+/// ends it at once, which the page then says.
 private struct CallKitRingFixture: View {
     let title: String
     let video: Bool
+    @State private var status: String?
 
     var body: some View {
         NeonScroll(spacing: NeonSpace.stack) {
@@ -252,15 +255,25 @@ private struct CallKitRingFixture: View {
                     Text(L("A made-up call from %@ rings on the phone's own call screen. Nothing is sent to the studio.", title))
                         .font(.neonCallout)
                         .foregroundStyle(Color.neonTextSecondary)
-                    NeonButton(L("Ring again"), symbol: "phone.fill", kind: .secondary) {
-                        CallKitCenter.shared.ringFixture(title: title, video: video)
+                    if let status {
+                        Label(status, systemImage: "info.circle.fill")
+                            .font(.neonCallout)
+                            .foregroundStyle(Color.neonInk)
                     }
+                    NeonButton(L("Ring again"), symbol: "phone.fill", kind: .secondary) { ring() }
                 }
             }
         }
         .task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
-            CallKitCenter.shared.ringFixture(title: title, video: video)
+            ring()
+        }
+    }
+
+    private func ring() {
+        status = nil
+        CallKitCenter.shared.ringFixture(title: title, video: video) { text in
+            withNeonAnimation(.smooth) { status = text }
         }
     }
 }
