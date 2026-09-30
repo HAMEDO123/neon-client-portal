@@ -107,13 +107,16 @@ struct ShareUpload {
 }
 
 final class ShareAPI {
-    private let token: String
     // The studio's own PC serves the platform, through a Cloudflare tunnel.
-    private let baseURL = URL(string: "https://clients.neonjo.com/api/mobile")!
+    static let studio = URL(string: "https://clients.neonjo.com/api/mobile")!
+
+    private let token: String
+    private let baseURL: URL
     private let session: URLSession
 
-    init(token: String) {
+    init(token: String, baseURL: URL = ShareAPI.studio) {
         self.token = token
+        self.baseURL = baseURL
         // Nothing of the studio's is left on disk by the extension: no cookies,
         // no cached answers.
         let config = URLSessionConfiguration.ephemeral

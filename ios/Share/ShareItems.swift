@@ -107,12 +107,15 @@ enum ShareInbox {
 
         for item in inputItems {
             for provider in item.attachments ?? [] {
-                if isFile(provider) {
+                if has(provider, .movie) || has(provider, .image) {
                     files.append(provider)
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
-                          let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL {
+                } else if let content = contentType(provider), UTType(content)?.conforms(to: .text) != true {
+                    // A document: its own bytes are registered, whatever else is.
+                    files.append(provider)
+                } else if has(provider, .url), let url = await loadURL(provider, type: .url) {
+                    // A web link is text; a link to a file on this phone is that file.
                     if url.isFileURL { files.append(provider) } else { addText(url.absoluteString) }
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                } else if has(provider, .plainText) {
                     let loaded = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier)
                     if let string = loaded as? String {
                         addText(string)
@@ -123,9 +126,9 @@ enum ShareInbox {
                     } else if let url = loaded as? URL, url.isFileURL {
                         files.append(provider)
                     }
-                } else if provider.registeredTypeIdentifiers.contains(where: { UTType($0)?.conforms(to: .data) == true }) {
-                    // A file of some other kind of text (a web page, a JSON
-                    // file): listed, so the refusal is said rather than silent.
+                } else if contentType(provider) != nil {
+                    // Some other kind of text (a web page, a contact card):
+                    // listed, so the refusal is said rather than silent.
                     files.append(provider)
                 }
             }
@@ -140,42 +143,73 @@ enum ShareInbox {
         let kept = Array(files.prefix(maxItems))
         expecting(kept.count)
         for provider in kept {
-            if let item = await loadFile(provider) { onItem(item) }
+            onItem(await loadFile(provider))
         }
         return (texts.joined(separator: "\n"), files.count - kept.count)
     }
 
-    /// A photo, a video or a document, as opposed to text or a web link.
-    private static func isFile(_ provider: NSItemProvider) -> Bool {
-        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) { return true }
-        if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) { return true }
-        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) { return true }
-        // Text and web links are data too, and are handled as what they are.
-        return provider.registeredTypeIdentifiers.contains { id in
-            guard let type = UTType(id) else { return false }
-            return type.conforms(to: .data) && !type.conforms(to: .text) && !type.conforms(to: .url)
+    /// Whether any type the provider registered is `type`. Not
+    /// `hasItemConformingToTypeIdentifier`, which also answers yes the other
+    /// way round: a provider of a web link "has" a file URL by it, since a
+    /// file URL is a kind of URL.
+    private static func has(_ provider: NSItemProvider, _ type: UTType) -> Bool {
+        provider.registeredTypeIdentifiers.contains { UTType($0)?.conforms(to: type) == true }
+    }
+
+    /// The first type a provider registered that is the thing itself rather
+    /// than a link to it. An extension the phone has no type for (".dwg" on
+    /// many iPhones) is registered as a dynamic type, which conforms to
+    /// nothing — it is still the file's content.
+    private static func contentType(_ provider: NSItemProvider, conformingTo wanted: UTType? = nil) -> String? {
+        provider.registeredTypeIdentifiers.first { id in
+            guard let type = UTType(id) else { return wanted == nil }
+            if let wanted { return type.conforms(to: wanted) }
+            return !type.conforms(to: .url)
         }
     }
 
-    private static func loadFile(_ provider: NSItemProvider) async -> ShareItem? {
+    /// A link, as the object it is. Asked for as an item instead, an app's
+    /// NSURL arrives as the bytes of an archived property list.
+    private static func loadURL(_ provider: NSItemProvider, type: UTType) async -> URL? {
+        if provider.canLoadObject(ofClass: NSURL.self) {
+            let url: URL? = await withCheckedContinuation { continuation in
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in continuation.resume(returning: url) }
+            }
+            if let url, type != .fileURL || url.isFileURL { return url }
+        }
+        let loaded = try? await provider.loadItem(forTypeIdentifier: type.identifier)
+        if let url = loaded as? URL { return url }
+        if let data = loaded as? Data, !data.starts(with: Array("bplist".utf8)),
+           let string = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+            return URL(string: string)
+        }
+        return nil
+    }
+
+    private static func loadFile(_ provider: NSItemProvider) async -> ShareItem {
         let kind: ShareItem.Kind
-        let typeID: String
-        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+        let typeID: String?
+        if has(provider, .movie) {
             kind = .video
-            typeID = UTType.movie.identifier
-        } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            typeID = contentType(provider, conformingTo: .movie)
+        } else if has(provider, .image) {
             kind = .photo
-            typeID = UTType.image.identifier
+            typeID = contentType(provider, conformingTo: .image)
         } else {
             kind = .file
-            typeID = provider.registeredTypeIdentifiers.first { id in
-                guard let type = UTType(id) else { return false }
-                return type.conforms(to: .data) || type.conforms(to: .package)
-            } ?? provider.registeredTypeIdentifiers.first ?? UTType.data.identifier
+            typeID = contentType(provider)
         }
 
-        guard let url = await copyFile(provider, typeID: typeID) else {
-            let name = provider.suggestedName ?? L("An attachment")
+        // What it is called where it came from: the name the app suggested,
+        // else the file's own. The copy the system hands over is often
+        // called something generic ("PDF document.pdf").
+        var original = provider.suggestedName
+        if original?.isEmpty != false, has(provider, .fileURL) {
+            original = await loadURL(provider, type: .fileURL)?.lastPathComponent
+        }
+
+        guard let url = await copyFile(provider, typeID: typeID, name: original) else {
+            let name = original ?? L("An attachment")
             let nowhere = folder.appendingPathComponent(UUID().uuidString, isDirectory: true).appendingPathComponent(name)
             return ShareItem(kind: kind, url: nowhere, name: name, bytes: 0, refusal: ShareError.unreadable(name).errorDescription)
         }
@@ -218,26 +252,31 @@ enum ShareInbox {
 
     /// The provider's file, moved into our folder under its own name. The
     /// system deletes its copy when the handler returns, so it is moved there
-    /// and then.
-    private static func copyFile(_ provider: NSItemProvider, typeID: String) async -> URL? {
-        let suggested = provider.suggestedName
+    /// and then. With no content type registered, only a file URL, the file
+    /// is copied from where it is.
+    private static func copyFile(_ provider: NSItemProvider, typeID: String?, name: String?) async -> URL? {
         let destinationFolder = folder.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
 
-        func place(_ source: URL) -> URL? {
-            let name = fileName(suggested: suggested, source: source)
-            let destination = destinationFolder.appendingPathComponent(name)
-            do {
-                try FileManager.default.moveItem(at: source, to: destination)
-            } catch {
-                do { try FileManager.default.copyItem(at: source, to: destination) } catch { return nil }
-            }
-            return destination
+        func copy(from url: URL) -> URL? {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            let destination = destinationFolder.appendingPathComponent(fileName(suggested: name, source: url))
+            return (try? FileManager.default.copyItem(at: url, to: destination)) != nil ? destination : nil
+        }
+
+        guard let typeID else {
+            guard let url = await loadURL(provider, type: .fileURL), url.isFileURL else { return nil }
+            return copy(from: url)
         }
 
         let moved: URL? = await withCheckedContinuation { continuation in
             _ = provider.loadFileRepresentation(forTypeIdentifier: typeID) { url, _ in
-                continuation.resume(returning: url.flatMap(place))
+                continuation.resume(returning: url.flatMap { source in
+                    let destination = destinationFolder.appendingPathComponent(fileName(suggested: name, source: source))
+                    if (try? FileManager.default.moveItem(at: source, to: destination)) != nil { return destination }
+                    return (try? FileManager.default.copyItem(at: source, to: destination)) != nil ? destination : nil
+                })
             }
         }
         if let moved { return moved }
@@ -245,17 +284,12 @@ enum ShareInbox {
         // Some apps hand over an object rather than a file: a URL to a file of
         // their own, the bytes, or a picture.
         guard let loaded = try? await provider.loadItem(forTypeIdentifier: typeID) else { return nil }
-        if let url = loaded as? URL, url.isFileURL {
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            let destination = destinationFolder.appendingPathComponent(fileName(suggested: suggested, source: url))
-            return (try? FileManager.default.copyItem(at: url, to: destination)) != nil ? destination : nil
-        }
+        if let url = loaded as? URL, url.isFileURL { return copy(from: url) }
         let ext = UTType(typeID)?.preferredFilenameExtension ?? "dat"
         var data = loaded as? Data
         if data == nil, let image = loaded as? UIImage { data = image.jpegData(compressionQuality: 0.95) }
         guard let data else { return nil }
-        let base = suggested.map { ($0 as NSString).deletingPathExtension } ?? "Attachment"
+        let base = name.map { ($0 as NSString).deletingPathExtension } ?? "Attachment"
         let destination = destinationFolder.appendingPathComponent(data.isJPEG ? "\(base).jpg" : "\(base).\(ext)")
         return (try? data.write(to: destination)) != nil ? destination : nil
     }

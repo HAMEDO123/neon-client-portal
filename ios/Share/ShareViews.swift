@@ -43,7 +43,6 @@ struct ShareSignedOutView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .multilineTextAlignment(.center)
-                ShareCapsuleButton(title: L("Close"), kind: .secondary, action: onClose)
             }
             .padding(NeonSpace.xxl)
             .neonSurface(.strong, radius: NeonRadius.xl)

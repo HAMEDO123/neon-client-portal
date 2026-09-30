@@ -50,15 +50,16 @@ final class ShareModel: ObservableObject {
 
     init(context: NSExtensionContext?, token: String?) {
         self.context = context
-        api = token.map(ShareAPI.init(token:))
+        api = token.map { ShareAPI(token: $0) }
         stage = token == nil ? .signedOut : .picking
     }
 
     #if DEBUG
-    /// A screen with no session and no network, for looking at it.
-    init(preview stage: Stage) {
+    /// A screen with no session and no network, for looking at it — or, given
+    /// an `api`, one that sends somewhere other than the studio, for testing.
+    init(preview stage: Stage, api: ShareAPI? = nil) {
         context = nil
-        api = nil
+        self.api = api
         self.stage = stage
     }
     #endif
