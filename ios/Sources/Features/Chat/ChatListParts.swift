@@ -128,7 +128,8 @@ struct ChatStudioMark: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(Color.white, lineWidth: max(1.5, size * 0.04)))
+        // A hairline, so the white disc stays a disc on the lavender page.
+        .overlay(Circle().strokeBorder(Color.neonLine, lineWidth: 1))
         .neonShadow(.low)
         .accessibilityLabel(Text(verbatim: "NEON"))
     }
@@ -233,7 +234,7 @@ struct ChatListPreview: Equatable {
         guard let last = conversation.last else {
             prefix = nil
             if conversation.isGroup, let count = conversation.memberCount {
-                text = L("%d members", count)
+                text = ChatCount.members(count)
             } else {
                 text = conversation.subtitle ?? L("No messages yet")
             }
@@ -303,7 +304,7 @@ struct ChatConversationCard: View {
                             .transition(.neonPop)
                             .accessibilityLabel(L("Pinned"))
                     }
-                    if let streak = conversation.streak, streak.count > 0 {
+                    if let streak = conversation.streak, streak.count >= ChatStreakBadge.shownFrom {
                         ChatStreakBadge(streak: streak)
                     }
                     if conversation.favorite {
@@ -314,7 +315,7 @@ struct ChatConversationCard: View {
                             .accessibilityLabel(L("Favorite"))
                     }
                     Spacer(minLength: 6)
-                    if let time = shortTime(conversation.last?.createdAt) {
+                    if let time = chatListTime(conversation.last?.createdAt) {
                         Text(time)
                             .font(.system(.footnote, weight: unread ? .semibold : .regular))
                             .foregroundStyle(unread ? Color.neonAccent : Color.neonTextTertiary)
@@ -384,29 +385,26 @@ struct ChatListPreviewText: View {
     }
 }
 
-/// 🔥 12, and ⏳ when today still needs a message from both.
+/// Days in a row, in the kit's badge language: a flame and the count, and a
+/// clock instead of the flame while today still needs a message from both.
+/// Shown from three days: a day or two is every recent chat, and it would
+/// only compete with the name.
 struct ChatStreakBadge: View {
     let streak: ChatStreak
 
+    static let shownFrom = 3
+
     var body: some View {
-        HStack(spacing: 2) {
-            Text(verbatim: "🔥")
-            Text(NeonFormat.integer(streak.count))
-                .font(.system(.caption, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(NeonHue.orange.deep)
-            if streak.atRisk { Text(verbatim: "⏳") }
-        }
-        .font(.system(.caption2))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Capsule().fill(NeonHue.orange.wash))
-        .overlay(Capsule().strokeBorder(NeonHue.orange.color.opacity(0.18), lineWidth: 1))
+        BadgeView(
+            text: NeonFormat.integer(streak.count),
+            tone: streak.atRisk ? .warning : .orange,
+            symbol: streak.atRisk ? "clock.fill" : "flame.fill"
+        )
+        .monospacedDigit()
         .fixedSize()
-        .accessibilityElement()
-        .accessibilityLabel(streak.atRisk
-            ? L("%d-day streak, write today to keep it", streak.count)
-            : L("%d-day streak", streak.count))
+        .accessibilityElement(children: .ignore)
+        // "5-day streak"; Arabic takes its plural forms from ChatList.stringsdict.
+        .accessibilityLabel(ChatCount.streak(streak.count, atRisk: streak.atRisk))
     }
 }
 
@@ -447,14 +445,20 @@ struct ChatListTaskCard: View {
                     StateBadge(cardStateLabel(item.overall), tone: taskStateTone(item.overall),
                                symbol: StateBadge.symbol(for: item.overall), pulsing: item.overall == "IN_PROGRESS")
                     ForEach(item.assignments) { part in
+                        // Where this person's part stands, as a symbol on the
+                        // state's own wash — never a green dot, which is "online".
+                        let tone = taskStateTone(part.state)
                         HStack(spacing: 5) {
-                            Circle().fill(taskStateTone(part.state).color).frame(width: 7, height: 7)
-                            DirText(part.employee?.name ?? "—", font: .system(.caption, weight: .medium),
-                                    color: .neonInk.opacity(0.8), fill: false, lineLimit: 1)
+                            Image(systemName: Self.partSymbol(part.state))
+                                .font(.system(.caption2, weight: .bold))
+                                .foregroundStyle(tone.hue.deep)
+                            DirText(part.employee?.name ?? "—", font: .system(.caption, weight: .semibold),
+                                    color: .neonInk.opacity(0.85), fill: false, lineLimit: 1)
                         }
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.neonSurfaceSunken))
+                        .background(Capsule().fill(tone.hue.wash))
+                        .overlay(Capsule().strokeBorder(tone.hue.color.opacity(0.16), lineWidth: 1))
                         .accessibilityElement(children: .combine)
                         .accessibilityValue(cardStateLabel(part.state))
                     }
@@ -480,12 +484,75 @@ struct ChatListTaskCard: View {
         }
     }
 
+    /// A finished card has no due date worth reading: the badge already says Done.
     @ViewBuilder
     private var dueLabel: some View {
-        if let due = formattedISODate(item.dueAt) {
-            MetaLabel(L("Due %@", due), symbol: "clock", tint: overdue ? .neonDangerStrong : .neonTextTertiary)
+        if item.overall != "DONE", let due = parseISODate(item.dueAt) {
+            MetaLabel(L("Due %@", chatDueText(due)), symbol: overdue ? "exclamationmark.circle.fill" : "clock",
+                      tint: overdue ? .neonDangerStrong : .neonTextTertiary)
         }
     }
+
+    /// StateBadge's symbols, with a half-filled circle for work under way.
+    static func partSymbol(_ state: String) -> String {
+        StateBadge.symbol(for: state) ?? (state == "IN_PROGRESS" ? "circle.lefthalf.filled" : "circle")
+    }
+}
+
+// MARK: - Counts and dates
+
+/// A count with its noun. English picks "1 view" or "3 views" by the key;
+/// Arabic reads every form (one, two, 3–10, 11–99, 100…) from
+/// ChatList.stringsdict, which holds both keys. `%lld` keys, so that a plain
+/// `%d` entry in another table can never answer first.
+///
+/// Formatted in the app's own language: `L(_:_:)` formats with no locale,
+/// and a stringsdict then picks its form by English rules (one / other), so
+/// Arabic would read «3 مشاهدة» instead of «3 مشاهدات».
+enum ChatCount {
+    static func views(_ n: Int) -> String { plural(n == 1 ? "%lld view" : "%lld views", n) }
+    static func people(_ n: Int) -> String { plural(n == 1 ? "%lld person" : "%lld people", n) }
+    static func members(_ n: Int) -> String { plural(n == 1 ? "%lld member" : "%lld members", n) }
+    static func streak(_ n: Int, atRisk: Bool) -> String {
+        plural(atRisk ? "%lld-day streak, write today to keep it" : "%lld-day streak", n)
+    }
+
+    private static func plural(_ key: String, _ n: Int) -> String {
+        String(format: L(key), locale: AppLanguage.current.locale, n)
+    }
+}
+
+/// When a conversation last moved, as short as it can be said: the time
+/// today, "Yesterday", the weekday within the week, "Sep 10" within the
+/// year, and the year only before that — never a numeric date, which a
+/// Jordanian reader takes day-first and an English phone writes month-first.
+func chatListTime(_ iso: String?, now: Date = Date()) -> String? {
+    guard let date = parseISODate(iso) else { return nil }
+    let calendar = Calendar.current
+    let locale = AppLanguage.current.locale
+    if calendar.isDateInToday(date) {
+        return date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale))
+    }
+    if calendar.isDateInYesterday(date) { return L("Yesterday") }
+    let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+    if days > 0, days < 7 {
+        return date.formatted(Date.FormatStyle(locale: locale).weekday(.wide))
+    }
+    if calendar.isDate(date, equalTo: now, toGranularity: .year) {
+        return date.formatted(Date.FormatStyle(locale: locale).month(.abbreviated).day())
+    }
+    return date.formatted(Date.FormatStyle(locale: locale).year().month(.abbreviated).day())
+}
+
+/// A due moment, short: "Sep 16, 7 PM" (minutes only when there are some,
+/// the year only when it is not this one).
+func chatDueText(_ date: Date, now: Date = Date()) -> String {
+    let calendar = Calendar.current
+    var style = Date.FormatStyle(locale: AppLanguage.current.locale).month(.abbreviated).day()
+    if !calendar.isDate(date, equalTo: now, toGranularity: .year) { style = style.year() }
+    style = style.hour(.defaultDigits(amPM: .abbreviated))
+    if calendar.component(.minute, from: date) != 0 { style = style.minute() }
+    return date.formatted(style)
 }
 
 // MARK: - The filters, on one line where they fit

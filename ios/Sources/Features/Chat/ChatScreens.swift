@@ -25,12 +25,9 @@ enum ChatScreens {
         case "chat-list-favorites": return AnyView(ChatListView(initialFilter: .favorites))
         case "chat-list-search": return AnyView(ChatListView(startsSearching: true))
         case "chat-new": return AnyView(ChatScreensSide { isManager, _ in ChatNewConversationSheet(isManager: isManager) { _ in } })
-        case "chat-group-new":
-            return AnyView(ChatScreensAsync(load: { api in try await api.fetchChatPeople() }) { people in
-                NavigationStack {
-                    ChatGroupForm(people: people.filter { $0.id != "manager" }) { _ in }
-                }
-            })
+        // The manager's header button opens it on its own; from New chat it
+        // is the same form pushed, with a back button.
+        case "chat-group-new": return AnyView(ChatNewGroupSheet { _ in })
         case "chat-group-info":
             return AnyView(ChatScreensAsync(load: { api in
                 try await api.fetchConversations().value.conversations.first(where: \.isCustomGroup)?.slug

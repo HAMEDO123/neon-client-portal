@@ -25,6 +25,7 @@ struct ChatListView: View {
     @State private var searching: Bool
     @State private var query = ""
     @State private var showNewChat = false
+    @State private var showNewGroup = false
     @State private var showComposer = false
     @State private var showMeetings = false
     @State private var confirmSignOut = false
@@ -115,7 +116,7 @@ struct ChatListView: View {
                 #endif
             }
             .toolbar(.hidden, for: .navigationBar)
-            .floatingActionButton("square.and.pencil", label: isManager ? L("New group or chat") : L("New chat"), isVisible: !searching) {
+            .floatingActionButton("square.and.pencil", label: L("New chat"), isVisible: !searching) {
                 showNewChat = true
             }
             .navigationDestination(for: ChatRoute.self) { route in
@@ -159,6 +160,12 @@ struct ChatListView: View {
                 Task { await load() }
             }
         }
+        .sheet(isPresented: $showNewGroup) {
+            ChatNewGroupSheet(onlineIds: onlineIds) { route in
+                path = [route]
+                Task { await load() }
+            }
+        }
         .sheet(isPresented: $showComposer) {
             ChatStoryComposer { Task { await loadStories() } }
         }
@@ -183,8 +190,15 @@ struct ChatListView: View {
 
     // MARK: - Header
 
+    /// "Chat", as the mockup and the tab say; in Arabic the plural
+    /// «المحادثات» — a list of conversations, where the shared "Chat" key
+    /// reads «المحادثة», one conversation.
+    private var title: String {
+        AppLanguage.current == .arabic ? L("Chats") : L("Chat")
+    }
+
     private var header: some View {
-        ScreenHeader(L("Chat"), leading: { ChatStudioMark(size: NeonSize.circleButton + 4) }) {
+        ScreenHeader(title, leading: { ChatStudioMark(size: NeonSize.circleButton + 4) }) {
             IconButton(
                 searching ? "xmark" : "magnifyingglass",
                 label: searching ? L("Close search") : L("Search"),
@@ -198,8 +212,16 @@ struct ChatListView: View {
                 }
                 searchFocused = searching
             }
-            IconButton("person.badge.plus", label: isManager ? L("New group or chat") : L("New chat"), size: NeonSize.circleButton) {
-                showNewChat = true
+            // The floating button starts a chat; this one does the other
+            // thing each side makes: a group (the manager), a story (the team).
+            if isManager {
+                IconButton("person.badge.plus", label: L("New group"), size: NeonSize.circleButton) {
+                    showNewGroup = true
+                }
+            } else {
+                IconButton("camera", label: L("Add to your story"), size: NeonSize.circleButton) {
+                    showComposer = true
+                }
             }
             moreMenu
         }
@@ -210,15 +232,13 @@ struct ChatListView: View {
             if let identity = api.identity {
                 Section(identity.side == .admin ? L("Manager") : identity.name) {}
             }
-            Button {
-                showComposer = true
-            } label: {
-                Label(L("Add to your story"), systemImage: "plus.circle")
-            }
-            Button {
-                showNewChat = true
-            } label: {
-                Label(isManager ? L("New group or chat") : L("New chat"), systemImage: "square.and.pencil")
+            if isManager {
+                // The team has this one in the header.
+                Button {
+                    showComposer = true
+                } label: {
+                    Label(L("Add to your story"), systemImage: "plus.circle")
+                }
             }
             Button {
                 showMeetings = true
@@ -260,11 +280,12 @@ struct ChatListView: View {
         )
     }
 
-    /// Everybody whose person or group has no live story, in the list's own
-    /// order — the rail's plain faces after the rings.
+    /// Whoever is here right now and has no live story, in the list's own
+    /// order — the rail's faces after the rings. Everybody else is already a
+    /// card just below, so the rail does not repeat them.
     private var railPeople: [ConversationSummary] {
         let authors = Set((stories?.others ?? []).map { slug(forAuthor: $0.authorKey) })
-        return (conversations ?? []).filter { !authors.contains($0.slug) }
+        return (conversations ?? []).filter { !$0.isGroup && $0.online == true && !authors.contains($0.slug) }
     }
 
     /// The conversation a story's author is at the other end of: the manager
@@ -327,6 +348,7 @@ struct ChatListView: View {
             if shown.isEmpty {
                 emptyState(hasAny: !conversations.isEmpty)
                     .neonListRow()
+                    .chatListStill()
             } else {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, conversation in
                     Button {
@@ -413,7 +435,7 @@ struct ChatListView: View {
             case .groups:
                 if isManager {
                     EmptyState(symbol: "person.3", title: L("No groups yet"), detail: L("Make one for a project or a team."),
-                               actionTitle: L("New group"), action: { showNewChat = true }, hue: .purple, card: true)
+                               actionTitle: L("New group"), action: { showNewGroup = true }, hue: .purple, card: true)
                 } else {
                     EmptyState(symbol: "person.3", title: L("No groups yet"), detail: L("Groups the manager adds you to appear here."),
                                hue: .purple, card: true)
@@ -441,6 +463,7 @@ struct ChatListView: View {
                     card: true
                 )
                 .neonListRow()
+                .chatListStill()
             } else {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
                     Button {
@@ -557,6 +580,17 @@ struct ChatListView: View {
             return (order[a.slug] ?? 0) < (order[b.slug] ?? 0)
         }
         withNeonAnimation(NeonMotion.smooth) { conversations = list }
+    }
+}
+
+private extension View {
+    /// An empty state inside the List, drawn settled. The kit's EmptyState
+    /// fades in and floats its tile on a forever-repeating animation, both
+    /// started as it appears; a List row starts them in one pass, and the
+    /// fade was caught up in the repeat — the card sat half-faded or blank.
+    /// With no animation in the row it is simply there, fully drawn.
+    func chatListStill() -> some View {
+        transaction { $0.animation = nil }
     }
 }
 

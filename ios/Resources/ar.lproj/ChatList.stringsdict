@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%lld view</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا مشاهدات</string>
+			<key>one</key>
+			<string>مشاهدة واحدة</string>
+			<key>two</key>
+			<string>مشاهدتان</string>
+			<key>few</key>
+			<string>%lld مشاهدات</string>
+			<key>many</key>
+			<string>%lld مشاهدة</string>
+			<key>other</key>
+			<string>%lld مشاهدة</string>
+		</dict>
+	</dict>
+	<key>%lld views</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا مشاهدات</string>
+			<key>one</key>
+			<string>مشاهدة واحدة</string>
+			<key>two</key>
+			<string>مشاهدتان</string>
+			<key>few</key>
+			<string>%lld مشاهدات</string>
+			<key>many</key>
+			<string>%lld مشاهدة</string>
+			<key>other</key>
+			<string>%lld مشاهدة</string>
+		</dict>
+	</dict>
+	<key>%lld person</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا أحد</string>
+			<key>one</key>
+			<string>شخص واحد</string>
+			<key>two</key>
+			<string>شخصان</string>
+			<key>few</key>
+			<string>%lld أشخاص</string>
+			<key>many</key>
+			<string>%lld شخصًا</string>
+			<key>other</key>
+			<string>%lld شخص</string>
+		</dict>
+	</dict>
+	<key>%lld people</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا أحد</string>
+			<key>one</key>
+			<string>شخص واحد</string>
+			<key>two</key>
+			<string>شخصان</string>
+			<key>few</key>
+			<string>%lld أشخاص</string>
+			<key>many</key>
+			<string>%lld شخصًا</string>
+			<key>other</key>
+			<string>%lld شخص</string>
+		</dict>
+	</dict>
+	<key>%lld member</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا أعضاء</string>
+			<key>one</key>
+			<string>عضو واحد</string>
+			<key>two</key>
+			<string>عضوان</string>
+			<key>few</key>
+			<string>%lld أعضاء</string>
+			<key>many</key>
+			<string>%lld عضوًا</string>
+			<key>other</key>
+			<string>%lld عضو</string>
+		</dict>
+	</dict>
+	<key>%lld members</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا أعضاء</string>
+			<key>one</key>
+			<string>عضو واحد</string>
+			<key>two</key>
+			<string>عضوان</string>
+			<key>few</key>
+			<string>%lld أعضاء</string>
+			<key>many</key>
+			<string>%lld عضوًا</string>
+			<key>other</key>
+			<string>%lld عضو</string>
+		</dict>
+	</dict>
+	<key>%lld-day streak</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا سلسلة</string>
+			<key>one</key>
+			<string>سلسلة يوم واحد</string>
+			<key>two</key>
+			<string>سلسلة يومين</string>
+			<key>few</key>
+			<string>سلسلة %lld أيام</string>
+			<key>many</key>
+			<string>سلسلة %lld يومًا</string>
+			<key>other</key>
+			<string>سلسلة %lld يوم</string>
+		</dict>
+	</dict>
+	<key>%lld-day streak, write today to keep it</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا سلسلة بعد</string>
+			<key>one</key>
+			<string>سلسلة يوم واحد، اكتبوا اليوم لتحافظوا عليها</string>
+			<key>two</key>
+			<string>سلسلة يومين، اكتبوا اليوم لتحافظوا عليها</string>
+			<key>few</key>
+			<string>سلسلة %lld أيام، اكتبوا اليوم لتحافظوا عليها</string>
+			<key>many</key>
+			<string>سلسلة %lld يومًا، اكتبوا اليوم لتحافظوا عليها</string>
+			<key>other</key>
+			<string>سلسلة %lld يوم، اكتبوا اليوم لتحافظوا عليها</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

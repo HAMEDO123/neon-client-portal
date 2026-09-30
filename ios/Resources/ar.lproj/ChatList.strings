@@ -1,13 +1,9 @@
 /* Chat list: the conversations, the stories and people row, the story viewer, and the group sheets. */
+/* Counts with plural forms ("%lld views", "%lld people", "%lld members", streaks) are in ChatList.stringsdict. */
 
 "%d chosen" = "تم اختيار %d";
-"%d members" = "%d عضو";
 "%d of %d" = "%d من %d";
-"%d people" = "%d شخص";
 "%d unread" = "%d غير مقروءة";
-"%d views" = "%d مشاهدة";
-"%d-day streak" = "سلسلة %d يوم";
-"%d-day streak, write today to keep it" = "سلسلة %d يوم، اكتبوا اليوم لتحافظوا عليها";
 "Add" = "إضافة";
 "Add %d" = "إضافة %d";
 "Add a caption (optional)" = "أضف تعليقًا (اختياري)";
@@ -15,20 +11,21 @@
 "Add members" = "إضافة أعضاء";
 "Add to Favorites" = "إضافة إلى المفضلة";
 "Add to your story" = "أضف إلى قصتك";
+"Back" = "رجوع";
 "Caption" = "تعليق";
 "Change photo" = "تغيير الصورة";
+"Chats" = "المحادثات";
 "Close search" = "إغلاق البحث";
-"Create group" = "إنشاء المجموعة";
 "Create group with %d" = "إنشاء المجموعة (%d)";
 "Delete group" = "حذف المجموعة";
+"Delete story" = "حذف القصة";
 "Delete this group?" = "حذف هذه المجموعة؟";
 "Delete this story?" = "حذف هذه القصة؟";
-"Everyone at the studio sees it for 24 hours." = "يراها كل من في الاستوديو لمدة 24 ساعة.";
+"e.g. Villa project" = "مثلًا: مشروع الفيلا";
 "Everyone at the studio who is not in it yet" = "كل من في الاستوديو وليس فيها بعد";
 "Everyone is already in" = "الجميع موجودون بالفعل";
 "Favorite" = "مفضلة";
 "Favorites" = "المفضلة";
-"Group" = "المجموعة";
 "Group created" = "أُنشئت المجموعة";
 "Group deleted" = "حُذفت المجموعة";
 "Group info" = "معلومات المجموعة";
@@ -50,9 +47,9 @@
 "My Story" = "قصتي";
 "Name" = "الاسم";
 "Name it, add a photo, pick who is in" = "سمّها، أضف صورة، واختر أعضاءها";
+"Name the group" = "سمِّ المجموعة";
 "New chat" = "محادثة جديدة";
 "New group" = "مجموعة جديدة";
-"New group or chat" = "مجموعة أو محادثة جديدة";
 "New story" = "قصة جديدة";
 "No favorites yet" = "لا توجد مفضلة بعد";
 "No groups yet" = "لا توجد مجموعات بعد";
@@ -64,11 +61,13 @@
 "No tasks yet" = "لا مهام بعد";
 "Nothing in your chats matches “%@”." = "لا شيء في محادثاتك يطابق «%@».";
 "Nothing unread." = "لا رسائل غير مقروءة.";
+"Only you see who viewed yours." = "وحدك ترى من شاهد قصتك.";
 "Opens the chat" = "يفتح المحادثة";
 "Photo library" = "مكتبة الصور";
 "Photo updated" = "تم تحديث الصورة";
 "Pick a photo or a video up to a minute" = "اختر صورة أو فيديو حتى دقيقة";
 "Pick at least one person" = "اختر شخصًا واحدًا على الأقل";
+"Pick people to add" = "اختر من تريد إضافتهم";
 "Pin" = "تثبيت";
 "Preparing the video…" = "جارٍ تجهيز الفيديو…";
 "Remove %@ from the group?" = "إزالة %@ من المجموعة؟";
@@ -82,13 +81,13 @@
 "Shared to your story" = "تمت المشاركة في قصتك";
 "Shows who has seen it" = "يعرض من شاهدها";
 "Start a chat" = "ابدأ محادثة";
-"Stories disappear by themselves after 24 hours. Only you see who viewed yours." = "تختفي القصص وحدها بعد 24 ساعة. وحدك ترى من شاهد قصتك.";
 "Story deleted" = "حُذفت القصة";
 "Swipe a chat, or hold it, to add it to Favorites." = "اسحب محادثة أو اضغط عليها مطولًا لإضافتها إلى المفضلة.";
 "Take a photo or a video" = "التقط صورة أو فيديو";
 "Tasks handed out in a chat appear here, with where each one stands." = "المهام التي تُسند في المحادثات تظهر هنا، مع حالة كل منها.";
 "That video could not be read." = "تعذّرت قراءة هذا الفيديو.";
 "The manager is in every group." = "المدير عضو في كل مجموعة.";
+"The studio sees it for 24 hours" = "يراها الاستوديو لمدة 24 ساعة";
 "This story could not be loaded." = "تعذّر تحميل هذه القصة.";
 "Unfavorite" = "إزالة من المفضلة";
 "Unmute" = "إلغاء الكتم";
@@ -97,7 +96,7 @@
 "Unread" = "غير مقروءة";
 "Video" = "فيديو";
 "Whoever opens it appears here, with when they saw it." = "كل من يفتحها يظهر هنا، مع وقت مشاهدته لها.";
+"Yesterday" = "أمس";
 "You're all caught up" = "لا جديد عليك";
 "You're offline. Try again when connected." = "أنت غير متصل. حاول مرة أخرى عند الاتصال.";
 "Your story" = "قصتك";
-"e.g. Villa project" = "مثلًا: مشروع الفيلا";

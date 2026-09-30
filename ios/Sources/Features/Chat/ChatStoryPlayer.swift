@@ -149,11 +149,23 @@ struct ChatStoryPlayer: View {
             if story.isVideo, let player {
                 ChatStoryVideoLayer(player: player).ignoresSafeArea()
             } else if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
+                ZStack {
+                    // The bands a fitted photo leaves are the same photo,
+                    // filled, blurred and dimmed — not dead black.
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .blur(radius: 40)
+                        .overlay(Color.black.opacity(0.35))
+                        .clipped()
+                        .accessibilityHidden(true)
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .ignoresSafeArea()
             } else if mediaFailed {
                 VStack(spacing: NeonSpace.md) {
                     IconTile("exclamationmark.triangle.fill", hue: .orange, size: 56, style: .filled)
@@ -232,9 +244,7 @@ struct ChatStoryPlayer: View {
                 .shadow(color: .black.opacity(0.35), radius: 4)
             }
             Spacer(minLength: 8)
-            if isMine {
-                storyButton("trash", label: L("Delete")) { confirmDelete = true }
-            }
+            // Close stands alone up here; deleting lives in the ⋯ at the foot.
             storyButton("xmark", label: L("Close")) { close() }
         }
     }
@@ -252,14 +262,21 @@ struct ChatStoryPlayer: View {
                     .id(story?.id)
             }
             if isMine, let story {
-                Button {
-                    Haptic.tap()
-                    viewersFor = ViewersTarget(id: story.id)
-                } label: {
-                    footerCapsule(symbol: "eye.fill", title: L("%d views", story.viewCount ?? 0), trailing: "chevron.up")
+                HStack(spacing: NeonSpace.md) {
+                    // Balances the ⋯, so the views capsule stays in the middle.
+                    Color.clear.frame(width: 38, height: 38)
+                    Spacer(minLength: 0)
+                    Button {
+                        Haptic.tap()
+                        viewersFor = ViewersTarget(id: story.id)
+                    } label: {
+                        footerCapsule(symbol: "eye.fill", title: ChatCount.views(story.viewCount ?? 0), trailing: "chevron.up")
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.94))
+                    .accessibilityHint(L("Shows who has seen it"))
+                    Spacer(minLength: 0)
+                    moreMenu
                 }
-                .buttonStyle(PressableStyle(scale: 0.94))
-                .accessibilityHint(L("Shows who has seen it"))
             } else if let ring, let onMessage {
                 Button {
                     Haptic.tap()
@@ -292,6 +309,21 @@ struct ChatStoryPlayer: View {
         .background(Capsule().fill(.ultraThinMaterial))
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
         .environment(\.colorScheme, .dark)
+    }
+
+    /// The author's other actions, away from Close so a slip of the thumb
+    /// cannot reach them; deleting still asks first.
+    private var moreMenu: some View {
+        Menu {
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
+                Label(L("Delete story"), systemImage: "trash")
+            }
+        } label: {
+            IconButtonLabel("ellipsis", tint: .white, size: 38)
+        }
+        .accessibilityLabel(L("More"))
     }
 
     private func storyButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
