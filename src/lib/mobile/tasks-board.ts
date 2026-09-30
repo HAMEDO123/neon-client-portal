@@ -4,6 +4,7 @@ import { getTimezone } from "@/lib/settings";
 import { dayKeyIn, todayKey, tomorrowKey, wallClockIn } from "@/lib/time";
 import { planForProjects } from "@/lib/stage-deadlines";
 import { assignedTasksForWeek } from "@/lib/assigned-tasks";
+import { facesFor } from "@/lib/faces";
 
 // The manager's project board, for the phone.
 //
@@ -133,13 +134,17 @@ export async function mobileTaskBoard() {
   const jobsAwaitingReview = await prisma.assignedTask.count({ where: { state: "SUBMITTED" } });
   const awaitingReview = cells.filter((cell) => cell.state === "SUBMITTED").length + jobsAwaitingReview;
 
+  const faces = await facesFor(board.team.map((person) => person.id));
+
   return {
     timezone,
     todayKey: today,
     tomorrowKey: tomorrow,
     sections: board.sections,
     steps,
-    team: board.team,
+    // The board's own team, with each face beside it — looked up rather than
+    // added to getTaskBoard, which the website reads and has no use for it.
+    team: board.team.map((person) => ({ ...person, photoUrl: faces[person.id] ?? null })),
     sectionTeam: board.sectionTeam,
     rows,
     stats,

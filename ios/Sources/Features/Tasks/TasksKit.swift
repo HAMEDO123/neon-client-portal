@@ -101,14 +101,18 @@ private func tasksDotColor(_ hue: NeonHue) -> Color { hue == .grey ? hue.gradien
 
 // MARK: - Faces
 
-/// A person's initials on their board colour (`tasksPersonHue`): solid with
-/// white initials on cards and rows, the quiet pastel in a chip.
+/// A person's photo, or their initials on their board colour
+/// (`tasksPersonHue`): solid with white initials on cards and rows, the quiet
+/// pastel in a chip. The photo is laid over the initials, so a face that
+/// never loads leaves them showing.
 struct TasksAvatar: View {
     let name: String
     let hue: NeonHue
     var size: CGFloat = NeonSize.avatar
     var solid = true
     var ring = false
+    /// Their face (`facePhotoURL`), or nil for the initials.
+    var photo: URL? = nil
 
     var body: some View {
         Text(AvatarView.initials(name, size: size))
@@ -119,6 +123,13 @@ struct TasksAvatar: View {
                 Circle().fill(solid
                     ? LinearGradient(colors: [hue.color, hue.deep], startPoint: .topLeading, endPoint: .bottomTrailing)
                     : LinearGradient(colors: [hue.wash, hue.pastel], startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+            .overlay {
+                if let photo {
+                    PipelineImage(url: photo, points: size)
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
+                }
             }
             .overlay {
                 if ring { Circle().strokeBorder(Color.white, lineWidth: max(1.5, size * 0.05)) }
@@ -133,10 +144,11 @@ struct TasksPersonChip: View {
     let name: String
     let hue: NeonHue
     var isSelected = false
+    var photo: URL? = nil
 
     var body: some View {
         HStack(spacing: 7) {
-            TasksAvatar(name: name, hue: hue, size: 24, solid: isSelected)
+            TasksAvatar(name: name, hue: hue, size: 24, solid: isSelected, photo: photo)
             DirText(name, font: .system(.footnote, weight: .semibold), color: isSelected ? hue.deep : .neonInk, fill: false, lineLimit: 1)
         }
         .padding(.leading, 4)
@@ -241,7 +253,7 @@ struct TasksPersonFilter: View {
                             withNeonAnimation(NeonMotion.snappy) { selection = selected ? nil : person.id }
                             withAnimation(NeonMotion.smooth) { proxy.scrollTo(person.id, anchor: .center) }
                         } label: {
-                            TasksPersonChip(name: person.name, hue: hues.hue(person), isSelected: selected)
+                            TasksPersonChip(name: person.name, hue: hues.hue(person), isSelected: selected, photo: facePhotoURL(person.photoUrl))
                                 .frame(minHeight: 36)
                         }
                         .buttonStyle(PressableStyle(scale: 0.95))

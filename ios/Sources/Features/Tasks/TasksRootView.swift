@@ -69,13 +69,17 @@ struct TasksRootView: View {
             await weekStore.load(api)
         }
         .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
-            guard let name = note.object as? String, name.hasPrefix("tasks/") else { return }
+            // A task moved — or somebody's face changed, which every chip,
+            // job row and person card here draws.
+            guard let name = note.object as? String, name.hasPrefix("tasks/") || isFaceChange(name) else { return }
             Task {
                 await boardStore.load(api)
                 await weekStore.load(api)
                 // Read once the Team segment has been opened; until then it
                 // loads itself when it first appears.
                 if peopleStore.loaded { await peopleStore.load(api) }
+                // The chat's cards draw the people on them too.
+                if isFaceChange(name), chatCards.loaded { await chatCards.load(api) }
             }
         }
     }

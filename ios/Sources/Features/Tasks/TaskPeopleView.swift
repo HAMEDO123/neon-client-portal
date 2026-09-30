@@ -221,7 +221,7 @@ struct TaskPeopleCard: View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 12) {
-                    TasksAvatar(name: person.name, hue: hue, size: 48)
+                    TasksAvatar(name: person.name, hue: hue, size: 48, photo: facePhotoURL(person.avatar))
                     VStack(alignment: .leading, spacing: 3) {
                         DirText(person.name, font: .system(.body, weight: .bold), fill: false, lineLimit: 1)
                         if let role = person.role, !role.isEmpty {
@@ -398,7 +398,7 @@ struct TaskPeopleDetailView: View {
     private func header(_ person: TaskPeopleMember, data: TaskPeopleResponse, hue: NeonHue) -> some View {
         VStack(spacing: 16) {
             HStack(spacing: 14) {
-                TasksAvatar(name: person.name, hue: hue, size: 60, ring: true)
+                TasksAvatar(name: person.name, hue: hue, size: 60, ring: true, photo: facePhotoURL(person.avatar))
                 VStack(alignment: .leading, spacing: 4) {
                     DirText(person.name, font: .neonTitle2, fill: false, lineLimit: 2)
                         .accessibilityAddTraits(.isHeader)

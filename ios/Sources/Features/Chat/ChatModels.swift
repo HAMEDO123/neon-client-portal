@@ -247,7 +247,9 @@ struct TaskCard: Decodable, Equatable {
         let employee: Who?
         let submissions: [Submission]?
 
-        struct Who: Decodable, Equatable { let name: String; let color: String? }
+        /// Their face is `photoUrl` (nil for initials; absent from a server
+        /// before faces).
+        struct Who: Decodable, Equatable { let name: String; let color: String?; let photoUrl: String? }
         struct Submission: Decodable, Equatable {
             let id: String
             let imageUrl: String?
