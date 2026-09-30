@@ -66,34 +66,20 @@ struct EmployeesRootView: View {
     }
 
     /// The team at a glance, above the list — real counts off what just
-    /// loaded, never a figure invented for the sake of a fuller-looking row.
-    ///
-    /// "Team" here can read one higher than Payroll's own count: this read
-    /// has no `accessRole` filter (unlike `team/payroll`'s, which asks only
-    /// for `accessRole: "EMPLOYEE"`), so it counts the manager's own
-    /// device-pairing row alongside the team. Fixing that at the root — so
-    /// the two screens count exactly the same people — needs a change to
-    /// the server read in `src/lib/mobile/registry/team.ts`, outside this
-    /// area's editable files (see `ios/redesign/team.md`). Nothing here can
-    /// tell that row apart from a real board-only employee (there is no
-    /// `accessRole` in this response to test), so rather than leave the
-    /// mismatch unexplained, the caption below says honestly why the two
-    /// screens can disagree by one, instead of a silent, unexplained gap
-    /// the manager would otherwise have to puzzle out on their own.
+    /// loaded. The manager's own row (paired to the attendance device) is
+    /// not the team, so it is left out here, as Payroll leaves it out.
     @ViewBuilder
     private func teamSummary(_ employees: [TeamEmployeeSummary]) -> some View {
-        let active = employees.filter { $0.hasAccount && $0.active }.count
-        let warned = employees.filter { $0.warningCount > 0 }.count
-        let noAccount = employees.filter { !$0.hasAccount }.count
+        let team = employees.filter { !$0.isManager }
+        let active = team.filter { $0.hasAccount && $0.active }.count
+        let warned = team.filter { $0.warningCount > 0 }.count
+        let noAccount = team.filter { !$0.hasAccount }.count
         StatGrid(columns: 4) {
-            KPICard(L("Team"), value: Double(employees.count), symbol: "person.2.fill", hue: .blue, density: .compact) { EmptyView() }
+            KPICard(L("Team"), value: Double(team.count), symbol: "person.2.fill", hue: .blue, density: .compact) { EmptyView() }
             KPICard(L("Active"), value: Double(active), symbol: "checkmark.seal.fill", hue: .green, density: .compact) { EmptyView() }
             KPICard(L("Warnings"), value: Double(warned), symbol: "exclamationmark.triangle.fill", hue: .orange, density: .compact) { EmptyView() }
             KPICard(L("No login"), value: Double(noAccount), symbol: "person.crop.circle.badge.questionmark", hue: .grey, density: .compact) { EmptyView() }
         }
-        Text(L("\"Team\" here includes your own device-pairing account if you have one. Payroll never counts that row, so the two totals can differ by one."))
-            .font(.neonCaption)
-            .foregroundStyle(Color.neonTextTertiary)
     }
 
     private func filtered(_ employees: [TeamEmployeeSummary]) -> [TeamEmployeeSummary] {
@@ -144,6 +130,7 @@ private struct EmployeeSummaryRow: View {
     /// row is noise the same way a smoke alarm going off every morning would
     /// be. At most one shown, worst first.
     private var exceptionBadge: (text: String, tone: BadgeTone)? {
+        if employee.isManager { return (L("You · manager"), .purple) }
         if !employee.hasAccount { return (L("No login"), .warning) }
         if !employee.active { return (L("Disabled"), .neutral) }
         if employee.warningCount > 0 { return (L("%d/%d warnings", employee.warningCount, warningLimit), .warning) }

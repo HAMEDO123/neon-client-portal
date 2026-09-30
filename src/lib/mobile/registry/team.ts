@@ -56,6 +56,10 @@ export const reads: ReadRegistry = {
         phone: employee.phone,
         employeeCode: employee.employeeCode,
         active: employee.active,
+        // The manager's own row (paired to the attendance device) is listed
+        // here but is not the team; the phone labels it and leaves it out of
+        // the team count, which then agrees with Payroll.
+        accessRole: employee.accessRole,
         lastLoginAt: employee.lastLoginAt,
         monthlySalesTarget: employee.monthlySalesTarget,
         taskCount: employee._count.tasks,

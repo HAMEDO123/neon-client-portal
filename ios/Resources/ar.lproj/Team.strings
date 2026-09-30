@@ -22,7 +22,6 @@
 "%d device" = "%d جهاز";
 "%d devices" = "%d أجهزة";
 "No login" = "بلا تسجيل دخول";
-"\"Team\" here includes your own device-pairing account if you have one. Payroll never counts that row, so the two totals can differ by one." = "«الفريق» هنا يشمل حساب ربط جهازك أنت إن وُجد. الرواتب لا يحتسب هذا الصف أبداً، لذلك قد يختلف المجموعان بمقدار واحد.";
 
 /* Create employee sheet */
 "They sign in at the employee portal and see only their own tasks." = "يسجّلون الدخول من بوابة الموظفين ويرون مهامهم فقط.";
@@ -239,3 +238,5 @@
 "Save amount" = "حفظ المبلغ";
 "Updated" = "تم التحديث";
 "%@ · %@" = "%@ · %@";
+
+"You · manager" = "أنت · المدير";

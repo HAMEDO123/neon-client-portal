@@ -20,6 +20,9 @@ struct TeamEmployeeSummary: Decodable, Identifiable {
     let phone: String?
     let employeeCode: String?
     let active: Bool
+    /// "MANAGER" for the manager's own row (there to pair the attendance
+    /// device); nil from a server older than this field.
+    let accessRole: String?
     let lastLoginAt: String?
     let monthlySalesTarget: Int
     let taskCount: Int
@@ -29,6 +32,8 @@ struct TeamEmployeeSummary: Decodable, Identifiable {
 
     /// Someone on the board with no login at all — not the same as disabled.
     var hasAccount: Bool { email != nil }
+    /// The manager's own row: listed, but not counted as the team.
+    var isManager: Bool { accessRole == "MANAGER" }
 }
 
 // MARK: - One employee (team/employee)

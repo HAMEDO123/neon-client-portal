@@ -147,30 +147,14 @@ caption rather than the two screens agreeing outright.
    `@db.Date` column is actually stored in — the day is shown, never a
    clock-face time invented by converting UTC midnight into Amman's. Both
    attendance rows and the "View All" sheet's day headings use it.
-4. **Team counts disagree (Employees 5, Payroll 4).** Confirmed against
-   `src/lib/mobile/registry/team.ts`: `team/employees` reads
-   `prisma.employee.findMany()` with no `where` at all, while `team/payroll`
-   reads `where: { active: true, accessRole: "EMPLOYEE" }` — so Employees
-   alone includes the manager's own `accessRole: "MANAGER"` device-pairing
-   row. **This cannot be fixed from the iOS files alone**: `accessRole`
-   isn't part of what `team/employees` sends back
-   (`TeamEmployeeSummary` in `TeamModels.swift` has no such field), so
-   nothing on the phone can tell that row apart from a real board-only
-   employee with no login — the two look identical in the payload. Making
-   the counts actually agree needs a one-line filter added to
-   `team/employees`'s own Prisma query in `team.ts`, which is a server file
-   this pass is not allowed to touch (see "Rules" in the task this note
-   answers). Given that, `EmployeesRootView.teamSummary` now says so
-   honestly, in a footnote under the KPI row: *"'Team' here includes your
-   own device-pairing account if you have one. Payroll never counts that
-   row, so the two totals can differ by one."* — an explained, expected
-   difference of at most one, rather than a silent inconsistency the
-   manager has to puzzle out for themselves. (The critique also noted a
-   *second*, smaller mismatch bundled into this same issue — a device count
-   that includes dead subscriptions on Employees but not on the employee's
-   own page — which has the same root cause, a server-side aggregate that
-   doesn't filter on `active`, and is left with the same explanation rather
-   than a guessed correction.)
+4. **Team counts disagree (Employees 5, Payroll 4).** Fixed after this pass
+   by the orchestrator: `team/employees` now also sends `accessRole`, the
+   Employees KPIs count only the team (as Payroll does), and the manager's
+   own device-pairing row carries a "You · manager" badge instead of being
+   counted. The interim footnote explaining the difference is gone. (The
+   smaller device-count mismatch — dead subscriptions counted on Employees —
+   is still a server aggregate that doesn't filter on `active`.)
+
 5. **A delay sheet pre-filled with a chargeable hour.** `RecordAttendanceSheet`
    starts `delayHours` at `nil` (was `1`), the `NumberField` takes whole
    hours only (`decimals: 0`, matching the studio's round-up rule), the
