@@ -243,3 +243,34 @@ struct TeamReceipt: Decodable, Identifiable {
     let rawAmount: Double?
     let countedAmount: Double?
 }
+
+// MARK: - Shared formatting for this area
+
+/// `data.periodLabel`/`sales.period` arrive as the server's own en-US
+/// `Intl.DateTimeFormat` text, so an Arabic reader would see "September 2026"
+/// in English regardless of the in-app language. Both screens instead format
+/// the raw "YYYY-MM" key on the device, in the app's own language.
+func teamMonthYearLabel(_ period: String) -> String {
+    let parts = period.split(separator: "-").compactMap { Int($0) }
+    guard parts.count == 2 else { return period }
+    var components = DateComponents()
+    components.year = parts[0]
+    components.month = parts[1]
+    components.day = 1
+    guard let date = Calendar(identifier: .gregorian).date(from: components) else { return period }
+    let formatter = DateFormatter()
+    formatter.locale = AppLanguage.current.locale
+    formatter.dateFormat = "MMMM yyyy"
+    return formatter.string(from: date)
+}
+
+/// The app has no stringsdict pipeline (`L()` only reads `.strings` tables,
+/// and returns the English key untouched rather than consulting one — see
+/// `Core/Localization.swift`), so a true Arabic zero/one/two/few/many/other
+/// plural needs a change there, outside this area's files. This picks
+/// between a singular and a plural *key*, each translated in
+/// `Team.strings` — enough to stop "2 device" and "400 notification sent" in
+/// English, and a step better than one fixed Arabic string for every count.
+func teamPlural(_ n: Int, one: String, other: String) -> String {
+    L(n == 1 ? one : other, n)
+}

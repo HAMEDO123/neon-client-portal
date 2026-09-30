@@ -42,25 +42,29 @@ struct DayPlanCard: View {
 
     var body: some View {
         SectionCard(L("Plan %@'s day", name), subtitle: L("Built from their profile, your rules, and what is open on the board."), symbol: "calendar.badge.clock", hue: .indigo) {
-            SegmentedPill(selection: $dayKey, options: [tomorrow, today], title: { $0 == today ? L("Today") : tomorrowLabel })
+            // Reading order first, tomorrow second — tomorrow stays the one
+            // selected by default (`dayKey`'s own initial value, unchanged).
+            SegmentedPill(selection: $dayKey, options: [today, tomorrow], title: { $0 == today ? L("Today") : tomorrowLabel })
                 .onChange(of: dayKey) { _ in show(dayKey) }
 
             if !aiConfigured {
                 StatusNote(symbol: "exclamationmark.circle", tone: .warning, title: L("Planning is unavailable"), detail: L("The server needs an assistant key set."))
             }
 
-            HStack(spacing: 10) {
-                NeonButton(plan != nil ? L("Generate again") : L("Generate %@'s plan", dayName), symbol: "sparkles", kind: .secondary, size: .medium, fullWidth: false, isLoading: working) {
-                    await generate()
-                }
-                .disabled(!aiConfigured || working)
+            // The card's one hero action — `.brand`, full width, per the
+            // README's "the one hero action on a screen" rule. It can't share
+            // a row with Save changes once it's full width, so that one
+            // drops to its own line under it instead.
+            NeonButton(plan != nil ? L("Generate again") : L("Generate %@'s plan", dayName), symbol: "sparkles", kind: .brand, size: .medium, fullWidth: true, isLoading: working) {
+                await generate()
+            }
+            .disabled(!aiConfigured || working)
 
-                if !blocks.isEmpty {
-                    NeonButton(L("Save changes"), kind: .secondary, size: .medium, fullWidth: false, isLoading: working) {
-                        await save()
-                    }
-                    .disabled(!dirty || working)
+            if !blocks.isEmpty {
+                NeonButton(L("Save changes"), kind: .secondary, size: .medium, isLoading: working) {
+                    await save()
                 }
+                .disabled(!dirty || working)
             }
 
             if let errorMessage {
