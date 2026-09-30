@@ -10,14 +10,31 @@ import SwiftUI
 /// the same things.
 let chatReactionSet = ["👍", "❤️", "😂", "🙏", "👀", "✅"]
 
-/// The four canned replies over the composer, in the words the platform
-/// already uses for a 👍 reaction — agreeing with a tap and a reply mean the
-/// same thing here.
-let chatQuickReplies: [(symbol: String, text: String)] = [
-    ("hand.thumbsup.fill", "👍 Got it"),
-    ("checkmark.circle.fill", "✅ On it"),
-    ("calendar", "📅 Will update"),
-    ("lightbulb.fill", "💡 Need review"),
+/// One canned reply over the composer: drawn as a chip with its glyph, sent
+/// as the website sends it — its emoji, then its words — in the words of the
+/// app's language, so an Arabic room is answered in Arabic.
+struct ChatQuickReply: Identifiable {
+    let emoji: String
+    let symbol: String
+    let hue: NeonHue
+    /// The English words, which are also the key of their translation.
+    let words: String
+
+    var id: String { words }
+    var title: String { L(words) }
+    var text: String { "\(emoji) \(title)" }
+}
+
+/// The four answers a team gives all day (quick-replies.tsx), in the words
+/// the platform already uses for a 👍 reaction — agreeing with a tap and a
+/// reply mean the same thing here. They are the team's answers to the
+/// manager, as on the website's studio side, so the manager is not offered
+/// them (and nothing here reads as approving work: that is the task card's).
+let chatQuickReplies: [ChatQuickReply] = [
+    ChatQuickReply(emoji: "👍", symbol: "hand.thumbsup.fill", hue: .blue, words: "Got it"),
+    ChatQuickReply(emoji: "✅", symbol: "checkmark.circle.fill", hue: .green, words: "On it"),
+    ChatQuickReply(emoji: "📅", symbol: "calendar", hue: .orange, words: "Will update"),
+    ChatQuickReply(emoji: "💡", symbol: "lightbulb.fill", hue: .amber, words: "Need review"),
 ]
 
 /// One emoji's tally under a message: how many, and whether the viewer is one
@@ -100,6 +117,8 @@ struct ChatPinnedStrip: View {
     let onOpen: (String) -> Void
     let onUnpin: (String) -> Void
 
+    @Environment(\.chatRoomPalette) private var palette
+
     var body: some View {
         if !pinned.isEmpty {
             HStack(spacing: 10) {
@@ -119,7 +138,7 @@ struct ChatPinnedStrip: View {
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(item.authorName)
                                         .font(.system(.caption2, weight: .semibold))
-                                        .foregroundStyle(chatAuthorColor(item.authorName))
+                                        .foregroundStyle(palette.nameColor(key: nil, name: item.authorName))
                                         .lineLimit(1)
                                     DirText(pinnedPreview(item), font: .system(.footnote), color: .neonText, fill: false, lineLimit: 1)
                                 }

@@ -215,6 +215,9 @@ final class ChatVoiceNotes {
 
     private let files = NSCache<NSURL, NSData>()
     private var shapes: [String: [CGFloat]] = [:]
+    /// Each note's length in seconds, read from the same file as its shape —
+    /// for a note the server sent without `durationSeconds`.
+    private var durations: [String: Double] = [:]
     private var inFlight: [URL: Task<Data?, Never>] = [:]
 
     private init() {
@@ -222,6 +225,9 @@ final class ChatVoiceNotes {
     }
 
     func cachedShape(_ key: String) -> [CGFloat]? { shapes[key] }
+
+    /// How long a note is, once its shape has been read.
+    func cachedDuration(_ key: String) -> Double? { durations[key] }
 
     /// The recording's bytes, fetched at most once at a time.
     func data(for url: URL) async -> Data? {
@@ -256,15 +262,19 @@ final class ChatVoiceNotes {
     /// The same, for a recording this phone already holds (one still sending).
     func shape(of data: Data, key: String) async -> [CGFloat]? {
         if let cached = shapes[key] { return cached }
-        let levels = await Task.detached(priority: .utility) { ChatVoiceNotes.analyse(data) }.value
-        if let levels {
-            if shapes.count > 300 { shapes.removeAll() }
-            shapes[key] = levels
+        let read = await Task.detached(priority: .utility) { ChatVoiceNotes.analyse(data) }.value
+        if let read {
+            if shapes.count > 300 {
+                shapes.removeAll()
+                durations.removeAll()
+            }
+            shapes[key] = read.levels
+            if read.seconds > 0 { durations[key] = read.seconds }
         }
-        return levels
+        return read?.levels
     }
 
-    nonisolated private static func analyse(_ data: Data) -> [CGFloat]? {
+    nonisolated private static func analyse(_ data: Data) -> (levels: [CGFloat], seconds: Double)? {
         // AVAudioFile reads from a file, so the bytes go to one for a moment.
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("wave-\(UUID().uuidString).m4a")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -275,6 +285,8 @@ final class ChatVoiceNotes {
               (try? file.read(into: buffer)) != nil,
               let samples = buffer.floatChannelData?[0]
         else { return nil }
+        let rate = file.processingFormat.sampleRate
+        let seconds = rate > 0 ? Double(file.length) / rate : 0
         let count = Int(buffer.frameLength)
         guard count > bars else { return nil }
         let size = count / bars
@@ -294,9 +306,9 @@ final class ChatVoiceNotes {
             levels.append(CGFloat(sqrt(sum / Float(max(1, taken)))))
         }
         let loudest = levels.max() ?? 0
-        guard loudest > 0 else { return Array(repeating: 0, count: bars) }
+        guard loudest > 0 else { return (Array(repeating: 0, count: bars), seconds) }
         // Square-rooted so quiet speech still shows as speech.
-        return levels.map { sqrt($0 / loudest) }
+        return (levels.map { sqrt($0 / loudest) }, seconds)
     }
 }
 

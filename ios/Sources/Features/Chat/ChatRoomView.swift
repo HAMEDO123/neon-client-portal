@@ -8,7 +8,8 @@ import SwiftUI
 ///
 /// - its own header (ChatRoomHeader.swift) in place of the system bar, so
 ///   nothing floats over the messages: picture, name, and under it typing…,
-///   online now, when they were last here, or who is in the group;
+///   online now, when they were last here, or how many are in the group and
+///   how many of them are here;
 /// - my own messages carry WhatsApp's ticks (ChatReceipts.swift);
 /// - photos are drawn without a bubble, four or more in a row as a grid
 ///   (ChatPhotos.swift, ChatMessageRow.swift);
@@ -51,6 +52,9 @@ struct ChatRoomView: View {
     /// The conversation is drawn once it has settled at its newest message,
     /// so opening it never shows a jump from the top.
     @State private var revealed = false
+    /// When it was drawn: photos arriving in the first moments after that
+    /// still hold it at the newest, whatever the tracker has measured so far.
+    @State private var revealedAt: Date?
     /// Counts what I send, so my own bubble rises in as it is written — and
     /// only then: the server's copy replacing it later is a swap, not an arrival.
     @State private var sentCount = 0
@@ -108,6 +112,7 @@ struct ChatRoomView: View {
                 taggableProjects: taggableProjects,
                 onTag: { taggedProjectId = $0 },
                 canHandOut: api.identity?.side == .admin && route.slug != "manager",
+                showsQuickReplies: api.identity != nil && api.identity?.side != .admin,
                 onCamera: { showCamera = true },
                 onPhotos: { showPhotos = true },
                 onFiles: { showFiles = true },
@@ -124,6 +129,7 @@ struct ChatRoomView: View {
         .background(ChatRoomSwipeBack().frame(width: 0, height: 0))
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .chatRoomPalette()
         .sheet(isPresented: $showGroupInfo) {
             ChatGroupInfoSheet(slug: route.slug) { name, avatar in
                 groupTitle = name
@@ -196,7 +202,8 @@ struct ChatRoomView: View {
                 ChatRoomHeader(
                     title: headerTitle,
                     avatarURL: resolvedMediaURL(headerAvatar),
-                    studioMark: route.isGroup && headerAvatar == nil,
+                    studioMark: route.slug == "team",
+                    isGroup: route.isGroup,
                     online: otherIsHere,
                     status: status(now: context.date),
                     onOpenInfo: isCustomGroup ? { showGroupInfo = true } : nil,
@@ -228,38 +235,54 @@ struct ChatRoomView: View {
 
     @ViewBuilder
     private var headerButtons: some View {
-        if route.slug == "team", api.identity?.side == .admin {
-            IconButton("sparkles", label: L("Ask the assistant"), tint: .neonPurpleStrong, size: 36) {
-                showAssistant = true
-            }
-        }
-        IconButton(searching ? "xmark" : "magnifyingglass", label: searching ? L("Close search") : L("Search"), size: 36) {
-            withNeonAnimation {
-                searching.toggle()
-                if !searching { searchQuery = "" }
-            }
-        }
+        // The calls area's buttons, on a white capsule as tall as the kit's
+        // round header buttons.
         CallButtons(slug: route.slug, title: route.title)
-            .padding(.horizontal, 1)
-            .frame(minHeight: 36)
+            .padding(.horizontal, 4)
+            .frame(minHeight: NeonSize.circleButton)
             .background(Capsule().fill(Color.white.opacity(0.96)))
             .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1))
             .neonShadow(.low)
+        if searching {
+            IconButton("xmark", label: L("Close search"), size: NeonSize.circleButton) { toggleSearch() }
+        } else if hasAssistant {
+            // Search and the assistant share one button, so the name keeps its room.
+            Menu {
+                Button { toggleSearch() } label: { Label(L("Search"), systemImage: "magnifyingglass") }
+                Button { showAssistant = true } label: { Label(L("Ask the assistant"), systemImage: "sparkles") }
+            } label: {
+                IconButtonLabel("ellipsis")
+            }
+            .accessibilityLabel(L("More"))
+        } else {
+            IconButton("magnifyingglass", label: L("Search"), size: NeonSize.circleButton) { toggleSearch() }
+        }
+    }
+
+    /// The manager's assistant lives in the team's conversation.
+    private var hasAssistant: Bool { route.slug == "team" && api.identity?.side == .admin }
+
+    private func toggleSearch() {
+        withNeonAnimation {
+            searching.toggle()
+            if !searching { searchQuery = "" }
+        }
     }
 
     /// The line under the name: who is writing, then — in a private chat —
-    /// whether they are here or when they last were; in a group, who is in it.
+    /// whether they are here or when they last were; in a group, how many
+    /// people and how many are here.
     private func status(now: Date) -> ChatRoomStatus? {
         if let typing = chatTypingLine(store.typing, isGroup: route.isGroup) { return .typing(typing) }
         if route.isGroup {
-            // Who is here right now first, then everybody else, then me.
-            let members = store.people.members.enumerated().sorted { a, b in
-                let hereA = a.element.online == true, hereB = b.element.online == true
-                return hereA != hereB ? hereA : a.offset < b.offset
-            }
-            let names = members.map { chatMemberName(key: $0.element.key, name: $0.element.name) }
-            if !names.isEmpty {
-                return .line((names + [L("You")]).joined(separator: AppLanguage.current == .arabic ? "، " : ", "))
+            // How many are in it, me included, and how many of them are here
+            // right now (me too, once anybody else is) — a count rather than a
+            // list of names that the buttons beside it would cut short.
+            let members = store.people.members
+            if !members.isEmpty {
+                let everybody = members.count + 1
+                let here = members.filter { $0.online == true }.count
+                return .line(here > 0 ? L("%d people · %d here", everybody, here + 1) : L("%d people", everybody))
             }
             if isCustomGroup { return .hint(L("Group info")) }
         } else {
@@ -342,12 +365,22 @@ struct ChatRoomView: View {
                 .onPreferenceChange(ChatViewportKey.self) { scroll.setViewport($0) }
                 .onPreferenceChange(ChatScrollBottomKey.self) { scroll.setContentBottom($0) }
                 .scrollDismissesKeyboard(.interactively)
-                // Messages melt away at the edges instead of being cut off.
+                .modifier(ChatOpensAtNewest())
+                // Messages melt away under the header and above the composer
+                // instead of being sliced through a line of text.
                 .mask {
                     VStack(spacing: 0) {
-                        LinearGradient(colors: [.black.opacity(0), .black], startPoint: .top, endPoint: .bottom).frame(height: 14)
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black.opacity(0), location: 0),
+                                .init(color: .black.opacity(0.35), location: 0.45),
+                                .init(color: .black, location: 1),
+                            ],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                        .frame(height: 30)
                         Color.black
-                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 8)
+                        LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 10)
                     }
                 }
                 .opacity(revealed ? 1 : 0)
@@ -379,7 +412,10 @@ struct ChatRoomView: View {
             .onChange(of: store.messages != nil) { loaded in
                 guard loaded else { return }
                 // A moment for the first jump to the newest to land.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { revealed = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    revealed = true
+                    revealedAt = Date()
+                }
             }
             .onChange(of: store.messages?.last?.id) { _ in
                 guard !searching else { return }
@@ -554,11 +590,21 @@ struct ChatRoomView: View {
         }
     }
 
-    /// A photo is about to change height as it arrives: stay at the bottom if
-    /// that is where the reader was.
+    /// A photo has just changed height as it arrived: stay at the newest if
+    /// that is where the reader was — or if the conversation is still
+    /// settling there after opening, before the tracker has measured it. The
+    /// jump waits for the new height to be laid out (a jump in the same
+    /// moment lands on the old bottom, a photo's growth short of the newest).
     private func keepBottom(_ proxy: ScrollViewProxy) {
-        guard scroll.nearBottom, !searching else { return }
+        guard !searching, scroll.nearBottom || isSettling else { return }
         DispatchQueue.main.async { proxy.scrollTo("bottom", anchor: .bottom) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo("bottom", anchor: .bottom) }
+    }
+
+    /// Just opened: not drawn yet, or drawn within the last two seconds.
+    private var isSettling: Bool {
+        guard let revealedAt else { return true }
+        return Date().timeIntervalSince(revealedAt) < 2
     }
 
     /// The ticks on one of my messages. The manager's exchanges with the
@@ -695,6 +741,21 @@ final class ChatScrollTracker: ObservableObject {
 private struct ChatScrollBottomKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// Opens at the newest message where the system can say so itself (iOS 17
+/// and later) — only for where it starts: when something arrives later, the
+/// room decides (a reader scrolled up stays where they are).
+private struct ChatOpensAtNewest: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.defaultScrollAnchor(.bottom, for: .initialOffset)
+        } else if #available(iOS 17.0, *) {
+            content.defaultScrollAnchor(.bottom)
+        } else {
+            content
+        }
+    }
 }
 
 private struct ChatViewportKey: PreferenceKey {

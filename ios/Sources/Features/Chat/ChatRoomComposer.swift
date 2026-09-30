@@ -19,6 +19,9 @@ struct ChatRoomComposer: View {
     /// The manager, anywhere but their own private chat with the assistant:
     /// + offers a task and a meeting.
     let canHandOut: Bool
+    /// The team's canned answers — for the team, not the manager they answer
+    /// (the website shows them on its studio side only).
+    let showsQuickReplies: Bool
     let onCamera: () -> Void
     let onPhotos: () -> Void
     let onFiles: () -> Void
@@ -41,7 +44,7 @@ struct ChatRoomComposer: View {
                 recordingRow
                     .transition(.neonRise)
             } else {
-                if draftIsEmpty {
+                if draftIsEmpty, showsQuickReplies {
                     quickReplies
                         .transition(.opacity.combined(with: .offset(y: 8)))
                 }
@@ -176,26 +179,38 @@ struct ChatRoomComposer: View {
     private var quickReplies: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(chatQuickReplies, id: \.text) { reply in
+                ForEach(chatQuickReplies) { reply in
                     Button { onQuickReply(reply.text) } label: {
-                        // The text carries its own emoji, as the website sends it.
-                        Text(verbatim: reply.text)
-                            .font(.system(.footnote, weight: .semibold))
-                            .foregroundStyle(Color.neonInk.opacity(0.85))
-                            .padding(.horizontal, 13)
-                            .frame(minHeight: 32)
-                            .background(Capsule().fill(Color.white.opacity(0.96)))
-                            .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
-                            .neonShadow(.low)
-                            .contentShape(Capsule())
+                        // The kit's chip, with the reply's glyph in its own
+                        // colour — the words go out with the website's emoji.
+                        HStack(spacing: 6) {
+                            Image(systemName: reply.symbol)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(reply.hue.deep)
+                            Text(reply.title)
+                                .lineLimit(1)
+                        }
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(Color.neonInk.opacity(0.82))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .background(Capsule().fill(Color.white.opacity(0.96)))
+                        .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
+                        .neonShadow(.low)
+                        // A 44-point target around a 36-point chip.
+                        .padding(.vertical, (NeonSize.touch - 36) / 2)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(PressableStyle(scale: 0.92))
                     .disabled(isOffline)
+                    .accessibilityLabel(reply.title)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            // Inset like the page, bled to the screen's edges, so the row reads
+            // as one that scrolls rather than one that was cut off.
+            .padding(.horizontal, NeonSpace.gutter)
         }
+        .padding(.vertical, -4)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 

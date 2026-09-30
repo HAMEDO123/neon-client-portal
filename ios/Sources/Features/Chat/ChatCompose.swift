@@ -17,7 +17,13 @@ struct ChatTaskComposeSheet: View {
     @State private var description = ""
     @State private var priority: String? = "MEDIUM"
     @State private var assignees: Set<TaskMember> = []
-    @State private var due = Date().addingTimeInterval(3600)
+    /// Opens on defaultDue in lib/chat-tasks.ts — the end of today's working
+    /// day while an hour of it is left, else the end of the next one — from
+    /// the studio's own hours once Settings has said them.
+    @State private var due = ChatWorkingDay.standard.defaultDue()
+    /// What the form proposed, so the studio's hours arriving can move a
+    /// date nobody has touched, and never one somebody chose.
+    @State private var proposedDue: Date?
     @State private var members: [TaskMember] = []
     @State private var loadingMembers = true
     @State private var loadError: String?
@@ -36,7 +42,7 @@ struct ChatTaskComposeSheet: View {
             await create()
         } content: {
             FormSection(L("Task")) {
-                NeonTextField(L("Title"), text: $title, symbol: "textformat", isRequired: true)
+                NeonTextField(L("Title"), text: $title, prompt: L("e.g. Kitchen elevations"), symbol: "textformat", isRequired: true)
                 NeonTextEditor(L("Details"), text: $description, minLines: 3, maxLines: 8, limit: 4000)
                 MenuField(L("Priority"), selection: $priority, options: ["LOW", "MEDIUM", "HIGH"], title: { localizedEnum("priority", $0) })
                 DateField(L("Due"), date: $due, components: [.date, .hourAndMinute], in: Date()...Date.distantFuture)
@@ -72,6 +78,15 @@ struct ChatTaskComposeSheet: View {
         }
         .neonSheet([.large])
         .task { await loadMembers() }
+        .task {
+            proposedDue = due
+            let day = await ChatWorkingDay.studio(api)
+            let studioDue = day.defaultDue()
+            if due == proposedDue {
+                due = studioDue
+                proposedDue = studioDue
+            }
+        }
         .photosPicker(isPresented: $showPhotos, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { item in
             guard let item else { return }
@@ -167,6 +182,9 @@ private struct PickedAttachmentRow: View {
 
 struct ChatMeetingComposeSheet: View {
     let conversationSlug: String
+    /// Where the meeting lands, said under the title when that is not the
+    /// chat the sheet was opened from (the Meetings page posts to the team).
+    var postedIn: String?
     var onCreated: () -> Void = {}
 
     private static let durations = [15, 30, 45, 60, 90, 120]
@@ -179,7 +197,10 @@ struct ChatMeetingComposeSheet: View {
     @State private var mode: String? = "ONLINE"
     @State private var place = ""
     @State private var attendees: Set<MeetingMember> = []
-    @State private var when = roundedUpcomingHalfHour()
+    /// defaultWhen in lib/chat-meetings.ts: the next half hour inside the
+    /// working day, else the start of the next working day.
+    @State private var when = ChatWorkingDay.standard.defaultMeetingStart()
+    @State private var proposedWhen: Date?
     @State private var duration: Int? = 30
     @State private var remind: Int? = 10
     @State private var members: [MeetingMember] = []
@@ -188,25 +209,16 @@ struct ChatMeetingComposeSheet: View {
 
     var body: some View {
         SheetScaffold(
-            L("Set a meeting"), subtitle: L("Everybody asked is told, and reminded before it starts"), symbol: "calendar.badge.plus",
-            primaryTitle: L("Set meeting"), isPrimaryEnabled: isValid
+            L("Set a meeting"), subtitle: postedIn ?? L("Everybody asked is told, and reminded before it starts"), symbol: "calendar.badge.plus",
+            primaryTitle: L("Set a meeting"), isPrimaryEnabled: isValid
         ) {
             await create()
         } content: {
             FormSection(L("Meeting")) {
-                NeonTextField(L("Title"), text: $title, symbol: "textformat", isRequired: true)
+                NeonTextField(L("Title"), text: $title, prompt: L("e.g. Villa review with the client"), symbol: "textformat", isRequired: true)
                 NeonTextEditor(L("Agenda"), text: $agenda, minLines: 2, maxLines: 6, limit: 4000)
-                MenuField(L("Where"), selection: $mode,
-                          options: ["ONLINE", "IN_PERSON"], title: { $0 == "ONLINE" ? L("Online") : L("In person") })
-                if mode == "IN_PERSON" {
-                    NeonTextField(L("Place"), text: $place, symbol: "mappin.and.ellipse")
-                }
                 DateField(L("Starts"), date: $when, components: [.date, .hourAndMinute], in: Date()...Date.distantFuture)
-                MenuField(L("Duration"), selection: $duration, options: Self.durations, title: { L("%d min", $0) })
-                MenuField(L("Remind"), selection: $remind, options: Self.reminders,
-                          title: { $0 == 0 ? L("At the time") : L("%d min before", $0) })
-            }
-            FormSection(L("Attendees")) {
+                // Who is asked matters most after when, so it comes next.
                 if loadingMembers {
                     SkeletonRows(count: 2)
                 } else if members.isEmpty {
@@ -215,10 +227,27 @@ struct ChatMeetingComposeSheet: View {
                     SelectField(L("People"), selection: $attendees, options: members, title: \.name, isRequired: true)
                 }
                 if let loadError { ValidationMessage(loadError) }
+                MenuField(L("Where"), selection: $mode,
+                          options: ["ONLINE", "IN_PERSON"], title: { $0 == "ONLINE" ? L("Online") : L("In person") })
+                if mode == "IN_PERSON" {
+                    NeonTextField(L("Place"), text: $place, symbol: "mappin.and.ellipse")
+                }
+                MenuField(L("Duration"), selection: $duration, options: Self.durations, title: { L("%d min", $0) })
+                MenuField(L("Remind"), selection: $remind, options: Self.reminders,
+                          title: { $0 == 0 ? L("At the time") : L("%d min before", $0) })
             }
         }
         .neonSheet([.large])
         .task { await loadMembers() }
+        .task {
+            proposedWhen = when
+            let day = await ChatWorkingDay.studio(api)
+            let studioStart = day.defaultMeetingStart()
+            if when == proposedWhen {
+                when = studioStart
+                proposedWhen = studioStart
+            }
+        }
     }
 
     private var isValid: Bool {
@@ -260,11 +289,78 @@ struct ChatMeetingComposeSheet: View {
     }
 }
 
-/// Rounds up to the next half hour, the same default the web's form opens on.
-private func roundedUpcomingHalfHour() -> Date {
-    let now = Date().timeIntervalSinceReferenceDate
-    let half: TimeInterval = 30 * 60
-    return Date(timeIntervalSinceReferenceDate: (now / half).rounded(.up) * half)
+/// The studio's working day as the task and meeting forms need it: which
+/// weekdays are worked and when the day starts and ends — the same values
+/// Settings edits (ops/settings's workHours). Times are the device's wall
+/// clock, as everything the forms send is (timeKey, NeonFormat.dayKey).
+struct ChatWorkingDay {
+    /// JavaScript weekdays, 0 for Sunday, as lib/work-hours.ts keeps them.
+    let days: Set<Int>
+    /// Minutes since midnight.
+    let start: Int
+    let end: Int
+
+    /// DEFAULT_WORK_HOURS in lib/work-hours.ts — Sunday to Thursday,
+    /// 11:00–19:00 — for the moment before Settings has answered, or if it
+    /// cannot be read.
+    static let standard = ChatWorkingDay(days: [0, 1, 2, 3, 4], start: 11 * 60, end: 19 * 60)
+
+    /// The studio's own hours from Settings, else the platform's standard ones.
+    @MainActor static func studio(_ api: APIClient) async -> ChatWorkingDay {
+        guard let hours = try? await api.opsSettings().value.workHours,
+              let start = minutes(hours.start), let end = minutes(hours.end), end > start
+        else { return standard }
+        return ChatWorkingDay(days: Set(hours.days), start: start, end: end)
+    }
+
+    /// "HH:MM" as minutes since midnight (minutesOf in lib/work-hours.ts).
+    private static func minutes(_ time: String) -> Int? {
+        let parts = time.trimmingCharacters(in: .whitespaces).split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 2, (0..<24).contains(parts[0]), (0..<60).contains(parts[1]) else { return nil }
+        return parts[0] * 60 + parts[1]
+    }
+
+    private var calendar: Calendar { .current }
+
+    private func isWorkingDay(_ day: Date) -> Bool {
+        days.contains(calendar.component(.weekday, from: day) - 1)
+    }
+
+    private func at(_ minutes: Int, on day: Date) -> Date {
+        let midnight = calendar.startOfDay(for: day)
+        return calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: midnight) ?? midnight
+    }
+
+    /// nextWorkingDay: the first worked day after this one (tomorrow if none is).
+    private func nextWorkingDay(after day: Date) -> Date {
+        let midnight = calendar.startOfDay(for: day)
+        for offset in 1...14 {
+            if let candidate = calendar.date(byAdding: .day, value: offset, to: midnight), isWorkingDay(candidate) {
+                return candidate
+            }
+        }
+        return calendar.date(byAdding: .day, value: 1, to: midnight) ?? midnight
+    }
+
+    /// defaultDue in lib/chat-tasks.ts: the end of today's working day while
+    /// at least an hour of it is left, otherwise the end of the next one.
+    func defaultDue(now: Date = Date()) -> Date {
+        let endToday = at(end, on: now)
+        if isWorkingDay(now), endToday.timeIntervalSince(now) >= 60 * 60 { return endToday }
+        return at(end, on: nextWorkingDay(after: now))
+    }
+
+    /// defaultWhen in lib/chat-meetings.ts: the next half hour (never before
+    /// the day starts) when a 30-minute meeting still fits in today's working
+    /// day, otherwise the start of the next working day.
+    func defaultMeetingStart(now: Date = Date()) -> Date {
+        let half: TimeInterval = 30 * 60
+        let rounded = Date(timeIntervalSinceReferenceDate: (now.timeIntervalSinceReferenceDate / half).rounded(.up) * half)
+        let startToday = at(start, on: now)
+        let soonest = max(rounded, startToday)
+        if isWorkingDay(now), soonest.addingTimeInterval(half) <= at(end, on: now) { return soonest }
+        return at(start, on: nextWorkingDay(after: now))
+    }
 }
 
 /// The manager's "Ask the assistant" — a question, written into this
@@ -275,36 +371,41 @@ struct ChatAssistantSheet: View {
     @EnvironmentObject var api: APIClient
     @Environment(\.dismiss) private var dismiss
     @State private var question = ""
-    @State private var asking = false
+
+    /// The website's own suggestions (assistant-panel.tsx), which fill the box
+    /// rather than sending, so they can be read and changed first.
+    private static let suggestions = ["What did the team report today?", "Anything I should follow up on?"]
+
+    private var trimmed: String { question.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            SheetHeader(L("Ask the assistant"), subtitle: L("Answers only you can see, in this chat"), symbol: "sparkles") { dismiss() }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    NeonTextEditor(L("Question"), text: $question, minLines: 3, maxLines: 8, limit: 2000)
-                    StatusNote(
-                        symbol: "eye.slash.fill", tone: .purple,
-                        title: L("Only you see this"),
-                        detail: L("The question and its answer appear in this chat marked \"Only you\". Nobody else sees them.")
-                    )
-                    NeonButton(L("Ask"), symbol: "sparkles", kind: .brand, isLoading: asking) { await ask() }
-                        .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        SheetScaffold(
+            L("Ask the assistant"),
+            subtitle: L("Only you see the question and its answer, marked “Only you” in this chat"),
+            symbol: "sparkles",
+            primaryTitle: L("Ask"),
+            isPrimaryEnabled: !trimmed.isEmpty
+        ) {
+            await ask()
+        } content: {
+            FormSection {
+                NeonTextEditor(L("Question"), text: $question, prompt: L("Ask about anything the team has said…"),
+                               minLines: 3, maxLines: 8, limit: 2000)
+                FlowRow(spacing: 8) {
+                    ForEach(Self.suggestions, id: \.self) { suggestion in
+                        Chip(L(suggestion), symbol: "sparkles", isSelected: question == L(suggestion)) {
+                            question = L(suggestion)
+                        }
+                    }
                 }
-                .padding(.horizontal, NeonSpace.gutter)
-                .padding(.bottom, NeonSpace.xxl)
             }
-            .scrollDismissesKeyboard(.interactively)
         }
-        .background(NeonAmbient().ignoresSafeArea())
         .neonSheet([.medium, .large])
     }
 
     private func ask() async {
-        asking = true
-        defer { asking = false }
         do {
-            try await api.askChatAssistant(question: question.trimmingCharacters(in: .whitespacesAndNewlines))
+            try await api.askChatAssistant(question: trimmed)
             Haptic.success()
             dismiss()
         } catch {

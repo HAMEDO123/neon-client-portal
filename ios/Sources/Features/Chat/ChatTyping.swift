@@ -23,12 +23,6 @@ func chatMemberName(key: String, name: String) -> String {
     key == "admin" ? L("Manager") : name
 }
 
-/// The colour a person's name wears over their messages in a group — the
-/// same family their initials avatar is drawn in, so the two read as one.
-func chatAuthorColor(_ name: String) -> Color {
-    NeonPalette.hue(for: name).deep
-}
-
 /// The bubble at the foot of the conversation: three dots rising and falling
 /// in turn, with the writers' names above it in a group. Still dots under
 /// Reduce Motion.
@@ -36,12 +30,14 @@ struct ChatTypingBubble: View {
     let typers: [ChatPeopleSnapshot.Typing]
     let isGroup: Bool
 
+    @Environment(\.chatRoomPalette) private var palette
+
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
             // In a group, the same column as everybody else's bubbles, under
             // the (first) writer's initials.
             if isGroup {
-                ChatAuthorBadge(name: typers.first.map { chatMemberName(key: $0.memberKey, name: $0.name) })
+                ChatAuthorBadge(name: typers.first.map { chatMemberName(key: $0.memberKey, name: $0.name) }, key: typers.first?.memberKey)
             }
             bubble
         }
@@ -55,7 +51,7 @@ struct ChatTypingBubble: View {
             if isGroup {
                 Text(verbatim: typers.map { chatMemberName(key: $0.memberKey, name: $0.name) }.joined(separator: AppLanguage.current == .arabic ? "، " : ", "))
                     .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(typers.count == 1 ? chatAuthorColor(typers[0].name) : Color.neonAccent)
+                    .foregroundStyle(typers.count == 1 ? palette.nameColor(key: typers[0].memberKey, name: typers[0].name) : Color.neonAccent)
                     .lineLimit(1)
                     .padding(.leading, ChatBubbleShape.tailWidth + 6)
             }

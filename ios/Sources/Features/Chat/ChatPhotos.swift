@@ -119,8 +119,8 @@ struct ChatPhotoImage: View {
 struct ChatPhotoFrame: View {
     let url: URL?
     var local: UIImage?
-    /// Called just before the photo changes height, so the conversation can
-    /// stay at the bottom if that is where it was.
+    /// Called as the photo takes its own height, so the conversation can
+    /// stay at the newest if that is where it was (it waits for the layout).
     var onResize: (() -> Void)?
 
     @State private var aspect: CGFloat?
@@ -141,8 +141,8 @@ struct ChatPhotoFrame: View {
             guard image.size.height > 0 else { return }
             let learned = image.size.width / image.size.height
             guard ChatPhotoLayout.height(aspect: learned) != ChatPhotoLayout.height(aspect: aspect) else { return }
-            onResize?()
             aspect = learned
+            onResize?()
         }
         .frame(width: ChatPhotoLayout.width, height: ChatPhotoLayout.height(aspect: aspect))
     }
