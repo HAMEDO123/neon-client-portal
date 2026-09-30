@@ -30,6 +30,10 @@ struct HomeSearchView: View {
     @State private var query = ""
     @State private var conversations: [ConversationSummary]?
     @State private var conversationsError: String?
+    @FocusState private var searching: Bool
+
+    /// What the empty screen offers before anything is typed.
+    private let suggested = 4
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -47,16 +51,10 @@ struct HomeSearchView: View {
 
     var body: some View {
         NeonScroll(spacing: NeonSpace.stack) {
-            SearchField(text: $query, prompt: L("Projects, people, chats"))
+            HomeSearchBox(text: $query, prompt: L("Projects, people, chats"), focused: $searching)
 
             if trimmed.isEmpty {
-                SectionCard(L("Search the studio"), symbol: "magnifyingglass", hue: .indigo) {
-                    Text(L("Projects by name, client or place; the team by name or role; your conversations by name."))
-                        .font(.neonLabel)
-                        .foregroundStyle(Color.neonTextSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .neonAppear()
+                suggestions
             } else {
                 results
             }
@@ -64,6 +62,36 @@ struct HomeSearchView: View {
         .navigationTitle(L("Search"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadConversations() }
+        .task {
+            // Opened to type into: the keyboard comes up once the push has
+            // settled (focus set during the push itself is dropped).
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            searching = true
+        }
+    }
+
+    /// Before anything is typed: the latest projects and the team, straight
+    /// from what Home already holds, so the common case is one tap.
+    @ViewBuilder
+    private var suggestions: some View {
+        if projects.isEmpty && people.isEmpty {
+            EmptyState(
+                symbol: "magnifyingglass",
+                title: L("Search the studio"),
+                detail: L("Projects by name, client or place; the team by name or role; your conversations by name."),
+                hue: .indigo,
+                card: true
+            )
+        } else {
+            if !projects.isEmpty {
+                SectionHeader(L("Projects"), subtitle: L("Most recently updated first"))
+                projectRows(Array(projects.prefix(suggested)))
+            }
+            if !people.isEmpty {
+                SectionHeader(L("People"))
+                peopleRows(people)
+            }
+        }
     }
 
     @ViewBuilder
@@ -74,46 +102,12 @@ struct HomeSearchView: View {
 
         if !projectHits.isEmpty {
             SectionHeader(L("Projects"), count: projectHits.count)
-            VStack(spacing: NeonSpace.sm) {
-                ForEach(Array(projectHits.enumerated()), id: \.element.id) { index, project in
-                    Button {
-                        Haptic.tap()
-                        onOpen(.project(project.id))
-                    } label: {
-                        ListCardRow(
-                            project.name,
-                            subtitle: project.location.map { "\(project.clientName) · \($0)" } ?? project.clientName,
-                            leading: (project.coverImageUrl ?? "").isEmpty
-                                ? .icon("folder.fill", tint: .neonBlueStrong)
-                                : .thumbnail(url: resolvedMediaURL(project.coverImageUrl)),
-                            badge: HomePipeline.label(project.pipelineStatus),
-                            badgeTone: statusTone(project.pipelineStatus)
-                        )
-                    }
-                    .buttonStyle(.pressableCard)
-                    .staggered(index)
-                }
-            }
+            projectRows(projectHits)
         }
 
         if !peopleHits.isEmpty {
             SectionHeader(L("People"), count: peopleHits.count)
-            VStack(spacing: NeonSpace.sm) {
-                ForEach(Array(peopleHits.enumerated()), id: \.element.id) { index, person in
-                    Button {
-                        Haptic.tap()
-                        onOpen(.employee(person.id))
-                    } label: {
-                        ListCardRow(
-                            person.name,
-                            subtitle: person.role,
-                            leading: .avatar(url: nil, name: person.name, online: person.online)
-                        )
-                    }
-                    .buttonStyle(.pressableCard)
-                    .staggered(index)
-                }
-            }
+            peopleRows(peopleHits)
         }
 
         if !chatHits.isEmpty {
@@ -152,6 +146,46 @@ struct HomeSearchView: View {
         }
     }
 
+    private func projectRows(_ list: [HomeProject]) -> some View {
+        VStack(spacing: NeonSpace.sm) {
+            ForEach(Array(list.enumerated()), id: \.element.id) { index, project in
+                Button {
+                    Haptic.tap()
+                    onOpen(.project(project.id))
+                } label: {
+                    ListCardRow(
+                        project.name,
+                        subtitle: project.location.map { "\(project.clientName) · \($0)" } ?? project.clientName,
+                        leading: .thumbnail(url: resolvedMediaURL(project.coverImageUrl)),
+                        badge: HomePipeline.label(project.pipelineStatus),
+                        badgeTone: statusTone(project.pipelineStatus)
+                    )
+                }
+                .buttonStyle(.pressableCard)
+                .staggered(index)
+            }
+        }
+    }
+
+    private func peopleRows(_ list: [HomeSearchPerson]) -> some View {
+        VStack(spacing: NeonSpace.sm) {
+            ForEach(Array(list.enumerated()), id: \.element.id) { index, person in
+                Button {
+                    Haptic.tap()
+                    onOpen(.employee(person.id))
+                } label: {
+                    ListCardRow(
+                        person.name,
+                        subtitle: person.role,
+                        leading: .avatar(url: nil, name: person.name, online: person.online)
+                    )
+                }
+                .buttonStyle(.pressableCard)
+                .staggered(index)
+            }
+        }
+    }
+
     private func loadConversations() async {
         do {
             conversations = try await api.fetchConversations().value.conversations
@@ -159,5 +193,55 @@ struct HomeSearchView: View {
         } catch {
             conversationsError = error.localizedDescription
         }
+    }
+}
+
+/// The kit's search capsule (`SearchField`: same size, fill, hairline, focus
+/// ring and clear button, from the same tokens), with a focus binding so the
+/// search screen can open with the keyboard up. The kit's own field keeps its
+/// focus private; go back to it once it takes a binding.
+struct HomeSearchBox: View {
+    @Binding var text: String
+    var prompt: String
+    var focused: FocusState<Bool>.Binding
+
+    var body: some View {
+        let isFocused = focused.wrappedValue
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(isFocused ? Color.neonAccent : Color.neonTextTertiary)
+            TextField("", text: $text, prompt: Text(prompt).foregroundColor(Color.neonTextTertiary))
+                .font(.system(size: 15))
+                .foregroundStyle(Color.neonInk)
+                .focused(focused)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+            if !text.isEmpty {
+                Button {
+                    Haptic.tap()
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.neonTextFaint)
+                }
+                .buttonStyle(.plain)
+                .transition(.neonPop)
+                .accessibilityLabel(L("Clear"))
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 46)
+        .background(Capsule().fill(Color.white.opacity(isFocused ? 1 : 0.94)))
+        .overlay(
+            Capsule()
+                .strokeBorder(isFocused ? Color.neonAccent.opacity(0.5) : Color.neonLine, lineWidth: isFocused ? 1.5 : 1)
+        )
+        .shadow(color: isFocused ? Color.neonAccent.opacity(0.14) : Color.neonShadowTint.opacity(0.06), radius: 10, x: 0, y: 4)
+        .animation(NeonMotion.quick, value: isFocused)
+        .animation(NeonMotion.snappy, value: text.isEmpty)
+        .contentShape(Rectangle())
+        .onTapGesture { focused.wrappedValue = true }
     }
 }

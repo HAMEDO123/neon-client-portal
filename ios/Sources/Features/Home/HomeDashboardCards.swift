@@ -9,42 +9,58 @@ import SwiftUI
 
 struct HomeKPIRow: View {
     let stats: DashboardStats
+    let projects: [HomeProject]
     let pulse: HomePulse?
-    let onOpenProjects: () -> Void
-    let onNewProject: () -> Void
+    let onTotal: () -> Void
+    let onPublished: () -> Void
+    let onApprovals: () -> Void
+    let onUpdated: () -> Void
 
     var body: some View {
+        // Each card opens what it counts; there is no ⋮ menu, because four
+        // menus offering the same one action were four ways to say nothing.
         StatGrid(columns: 4) {
-            KPICard(
-                L("Total Projects"), value: Double(stats.total), symbol: "folder.fill", hue: .blue,
-                trend: projectsTrend, bars: pulse.map { $0.projects.monthEnds.map(Double.init) }, density: .compact
-            ) {
-                Button(L("Open projects"), systemImage: "folder", action: onOpenProjects)
-                Button(L("New Project"), systemImage: "plus", action: onNewProject)
+            card(hint: L("Opens the projects"), action: onTotal) {
+                KPICard(
+                    L("Total Projects"), value: Double(stats.total), symbol: "folder.fill", hue: .blue,
+                    trend: projectsTrend, bars: pulse.map { $0.projects.monthEnds.map(Double.init) }, density: .compact
+                )
             }
             // Nothing records when a project was published, so this figure has
-            // no trend: only what it is out of.
-            KPICard(
-                L("Published"), value: Double(stats.published), symbol: "checkmark.seal.fill", hue: .purple,
-                caption: L("of %d projects", stats.total), density: .compact
-            ) {
-                Button(L("Open projects"), systemImage: "folder", action: onOpenProjects)
+            // no trend or history: only what it is out of.
+            card(hint: L("Lists the published projects"), action: onPublished) {
+                KPICard(
+                    L("Published"), value: Double(stats.published), symbol: "checkmark.seal.fill", hue: .purple,
+                    caption: L("of %d", stats.total), density: .compact
+                )
             }
-            KPICard(
-                L("Pending Approvals"), value: Double(stats.pendingApprovals), symbol: "clock.fill", hue: .orange,
-                trend: approvalsTrend, bars: pulse.map { $0.approvals.weekEnds.map(Double.init) }, density: .compact
-            ) {
-                Button(L("Open projects"), systemImage: "folder", action: onOpenProjects)
+            card(hint: L("Opens the projects"), action: onApprovals) {
+                KPICard(
+                    L("Pending Approvals"), value: Double(stats.pendingApprovals), symbol: "clock.fill", hue: .orange,
+                    trend: approvalsTrend, bars: pulse.map { $0.approvals.weekEnds.map(Double.init) }, density: .compact
+                )
             }
-            // `updatedAt` keeps only a project's latest edit, so there is no
-            // honest history of this one either.
-            KPICard(
-                L("Updated This Week"), value: Double(stats.recentlyUpdated), symbol: "chart.line.uptrend.xyaxis", hue: .pink,
-                caption: L("in the last 7 days"), density: .compact
-            ) {
-                Button(L("Open projects"), systemImage: "folder", action: onOpenProjects)
+            // `updatedAt` keeps only a project's latest edit, so the bars are
+            // where each of these projects was last touched — the same seven
+            // days the server counts, so they add up to the figure.
+            card(hint: L("Lists the projects updated in the last 7 days"), action: onUpdated) {
+                KPICard(
+                    L("Updated This Week"), value: Double(stats.recentlyUpdated), symbol: "chart.line.uptrend.xyaxis", hue: .pink,
+                    bars: homeUpdatedBars(projects), density: .compact
+                )
             }
         }
+    }
+
+    private func card<Card: View>(hint: String, action: @escaping () -> Void, @ViewBuilder content: () -> Card) -> some View {
+        Button {
+            Haptic.tap()
+            action()
+        } label: {
+            content()
+        }
+        .buttonStyle(.pressableCard)
+        .accessibilityHint(Text(hint))
     }
 
     private var projectsTrend: StatTrend? {
@@ -65,6 +81,20 @@ struct HomeKPIRow: View {
     }
 }
 
+/// How many projects were last edited in each of the last seven 24-hour
+/// windows, oldest first — the rolling week `getDashboardStats` counts
+/// "Updated This Week" over, so the bars add up to that figure.
+func homeUpdatedBars(_ projects: [HomeProject], now: Date = Date()) -> [Double] {
+    var bars = Array(repeating: 0.0, count: 7)
+    for project in projects {
+        guard let updated = parseISODate(project.updatedAt) else { continue }
+        let age = now.timeIntervalSince(updated)
+        guard age < 7 * 86_400 else { continue }
+        bars[6 - min(6, max(0, Int(age / 86_400)))] += 1
+    }
+    return bars
+}
+
 // MARK: - Project Progress
 
 /// The platform's pipeline statuses in the website's order and words
@@ -83,6 +113,20 @@ enum HomePipeline {
         let translated = L(key)
         if translated != key { return translated }
         return english[status] ?? status.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    /// A label short enough for one line of the legend under the bar, where
+    /// four statuses share the card's width. Only the long ones differ.
+    private static let englishShort: [String: String] = [
+        "INTERNAL_REVIEW": "Internal", "SENT_TO_CLIENT": "Sent", "CLIENT_REVIEWING": "In review",
+        "CHANGES_REQUESTED": "Changes",
+    ]
+
+    static func shortLabel(_ status: String) -> String {
+        let key = "pipeline.short.\(status)"
+        let translated = L(key)
+        if translated != key { return translated }
+        return englishShort[status] ?? label(status)
     }
 
     static func hue(_ status: String) -> NeonHue {
@@ -109,7 +153,7 @@ struct HomeProgressCard: View {
         let known = HomePipeline.order.filter { (counts[$0] ?? 0) > 0 }
         let unknown = counts.keys.filter { !HomePipeline.order.contains($0) }.sorted()
         return (known + unknown).map { status in
-            ProgressSegment(HomePipeline.label(status), value: Double(counts[status] ?? 0), hue: HomePipeline.hue(status), id: status)
+            ProgressSegment(HomePipeline.shortLabel(status), value: Double(counts[status] ?? 0), hue: HomePipeline.hue(status), id: status)
         }
     }
 
@@ -134,9 +178,10 @@ struct HomeProgressCard: View {
     }
 }
 
-/// The key under a segmented bar — the kit's `ProgressLegend` look, but in a
-/// grid that wraps, because the pipeline has up to nine statuses and a
-/// single row only has room for four. The figures count up.
+/// The key under a segmented bar — the kit's `ProgressLegend` look, with the
+/// figures counting up. Up to four statuses share one row, spread from the
+/// card's leading edge to its trailing one, one line each; more wrap into a
+/// grid of three, because the pipeline has up to nine.
 struct HomeLegend: View {
     let segments: [ProgressSegment]
 
@@ -145,32 +190,44 @@ struct HomeLegend: View {
     }
 
     var body: some View {
-        let columns = segments.count <= 4 ? max(segments.count, 1) : 3
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: NeonSpace.xs, alignment: .topLeading), count: columns),
-            alignment: .leading,
-            spacing: NeonSpace.md
-        ) {
-            ForEach(segments) { segment in
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(segment.hue == .grey ? segment.hue.gradient[1] : segment.hue.color)
-                            .frame(width: 8, height: 8)
-                        HomeCountUp(value: Int(segment.value), font: .system(.headline, weight: .bold))
-                    }
-                    Text(segment.label)
-                        .font(.neonSubtitle)
-                        .foregroundStyle(Color.neonTextSecondary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.leading, 14)
+        if segments.count <= 4 {
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    if index > 0 { Spacer(minLength: NeonSpace.sm) }
+                    item(segment)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
+                if segments.count == 1 { Spacer(minLength: 0) }
+            }
+        } else {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: NeonSpace.xs, alignment: .topLeading), count: 3),
+                alignment: .leading,
+                spacing: NeonSpace.md
+            ) {
+                ForEach(segments) { segment in
+                    item(segment)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
+    }
+
+    private func item(_ segment: ProgressSegment) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(segment.hue == .grey ? segment.hue.gradient[1] : segment.hue.color)
+                    .frame(width: 8, height: 8)
+                HomeCountUp(value: Int(segment.value), font: .system(.headline, weight: .bold))
+            }
+            Text(segment.label)
+                .font(.neonSubtitle)
+                .foregroundStyle(Color.neonTextSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.leading, 14)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -342,7 +399,8 @@ struct HomeLegendDot: View {
 // MARK: - Waiting on the manager
 
 /// The mockup's "Client Reviews" card, holding what really waits: work the
-/// team sent with proof, for the manager to approve or send back.
+/// team sent with proof, for the manager to approve or send back. Not a
+/// star — nothing here is a client's rating.
 struct HomeReviewsCard: View {
     let count: Int?
     let people: [HomeReviewPerson]
@@ -353,38 +411,52 @@ struct HomeReviewsCard: View {
             Haptic.tap()
             onOpen()
         } label: {
-            HomeHalfCard(L("Reviews"), symbol: "star.fill", hue: .amber) {
+            HomeHalfCard(L("Proof to check"), symbol: "checkmark.seal.fill", hue: .orange) {
                 VStack(alignment: .leading, spacing: 2) {
                     if let count {
-                        HomeCountUp(value: count, font: .neonTitle)
+                        HomeCountUp(value: count, font: homeHalfCardFigure)
                     } else {
                         SkeletonBlock(width: 30, height: 26, radius: 8).shimmer()
                     }
-                    Text(L("Reviews waiting"))
-                        .font(.neonLabel)
+                    Text(L("Awaiting your approval"))
+                        .font(.neonMeta)
                         .foregroundStyle(Color.neonTextSecondary)
                         .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 6) {
-                    if people.isEmpty {
-                        Text(count == 0 ? L("Nothing waiting") : " ")
-                            .font(.neonMeta)
-                            .foregroundStyle(Color.neonTextTertiary)
-                            .lineLimit(1)
-                    } else {
+                    if count == 0 {
+                        HStack(spacing: 5) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(.footnote, weight: .semibold))
+                                .foregroundStyle(Color.neonSuccess)
+                            Text(L("All checked"))
+                                .font(.system(.footnote, weight: .semibold))
+                                .foregroundStyle(Color.neonSuccessStrong)
+                                .lineLimit(1)
+                        }
+                    } else if !people.isEmpty {
                         AvatarStack(people.map { AvatarItem(id: $0.id, name: $0.name) }, size: 28, limit: 4)
                     }
                     Spacer(minLength: 4)
-                    IconButtonLabel("chevron.forward", look: .tinted, tint: .neonPurpleStrong, size: 32)
+                    IconButtonLabel("chevron.forward", look: .tinted, tint: .neonOrangeStrong, size: 32)
                 }
             }
         }
         .buttonStyle(.pressableCard)
-        .accessibilityLabel(Text(L("Reviews waiting")))
-        .accessibilityValue(Text(count.map { NeonFormat.integer($0) } ?? ""))
+        .accessibilityLabel(Text(L("Proof to check")))
+        .accessibilityValue(Text(count.map { $0 == 0 ? L("All checked") : NeonFormat.integer($0) } ?? ""))
         .neonAppear()
     }
+}
+
+/// The figure in both half cards, so the two sit on one baseline.
+private let homeHalfCardFigure = Font.neonTitle
+
+/// "1 open request", "3 open requests": the label under a figure agrees with it.
+func homeCountLabel(_ count: Int?, one: String, other: String) -> String {
+    count == 1 ? one : other
 }
 
 /// The rest of what is waiting on the manager: unread alerts and supply
@@ -396,11 +468,13 @@ struct HomeNeedsYouCard: View {
     let onRequests: () -> Void
 
     var body: some View {
-        HomeHalfCard(L("Needs you"), symbol: "bell.badge.fill", hue: .pink) {
+        HomeHalfCard(L("Needs you"), symbol: "tray.full.fill", hue: .indigo) {
             VStack(spacing: 0) {
-                row(L("Unread alerts"), count: alerts, symbol: "bell.fill", hue: .pink, action: onAlerts)
+                row(homeCountLabel(alerts, one: L("Unread alert"), other: L("Unread alerts")),
+                    count: alerts, symbol: "bell.fill", hue: .pink, action: onAlerts)
                 NeonDivider().padding(.vertical, 2)
-                row(L("Open requests"), count: requests, symbol: "shippingbox.fill", hue: .orange, action: onRequests)
+                row(homeCountLabel(requests, one: L("Open request"), other: L("Open requests")),
+                    count: requests, symbol: "shippingbox.fill", hue: .orange, action: onRequests)
             }
         }
         .neonAppear(delay: 0.05)
@@ -415,9 +489,9 @@ struct HomeNeedsYouCard: View {
                 IconTile(symbol, hue: hue, size: 28, style: (count ?? 0) > 0 ? .filled : .soft)
                 VStack(alignment: .leading, spacing: 0) {
                     if let count {
-                        HomeCountUp(value: count, font: .system(.title3, weight: .bold))
+                        HomeCountUp(value: count, font: homeHalfCardFigure)
                     } else {
-                        SkeletonBlock(width: 22, height: 18, radius: 6).shimmer()
+                        SkeletonBlock(width: 22, height: 22, radius: 6).shimmer()
                     }
                     Text(title)
                         .font(.neonMeta)
@@ -430,7 +504,7 @@ struct HomeNeedsYouCard: View {
                     .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(Color.neonTextFaint)
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressable)
@@ -483,9 +557,10 @@ struct HomeQuickActionsCard: View {
     let actions: [QuickAction]
 
     var body: some View {
+        // Every action in view, four to a row (kit-3's grid form): a
+        // sideways row hid half of them behind the card's edge.
         SectionCard(L("Quick Actions"), symbol: "bolt.fill", hue: .purple, tileStyle: .filled) {
-            QuickActionGrid(actions, columns: nil, inset: NeonSpace.card)
-                .padding(.horizontal, -NeonSpace.card)
+            QuickActionGrid(actions, columns: 4)
         }
         .neonAppear()
     }

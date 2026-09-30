@@ -13,6 +13,7 @@ enum HomeRoute: Hashable {
     case meetings
     case today
     case search
+    case projectList(HomeProjectFilter)
     case chat(ChatRoute)
 }
 
@@ -31,10 +32,11 @@ enum HomeTabLink {
 }
 
 /// The manager's Home tab, laid out as the owner's mockup: the NEON header,
-/// the greeting card, the studio's four figures, where every project stands,
-/// today's work, this month by week, what is waiting on the manager, quick
-/// actions — then who is on what right now, the team's day (silence shown as
-/// silence, never as a verdict) and every project.
+/// the greeting card, the studio's four figures, where every project stands
+/// and the projects themselves, today's work, this month by week, what is
+/// waiting on the manager, quick actions — then the team: who is on what
+/// right now and how their day is going (silence shown as silence, never as
+/// a verdict).
 struct AdminHomeView: View {
     @EnvironmentObject var api: APIClient
     @State private var path: [HomeRoute] = []
@@ -70,6 +72,15 @@ struct AdminHomeView: View {
 
                     figures.id("kpis")
 
+                    if let overview {
+                        HomeProjectsCard(
+                            projects: overview.projects,
+                            onProject: { path.append(.project($0)) },
+                            onViewAll: { HomeTabLink.open(HomeTabLink.projects) }
+                        )
+                        .id("projects")
+                    }
+
                     HomeTodayCard(
                         today: today,
                         error: todayError,
@@ -87,35 +98,29 @@ struct AdminHomeView: View {
                     HomeQuickActionsCard(actions: quickActions)
                         .id("actions")
 
-                    HomeRightNowCard(
+                    // "Right now" and "The day" as one card: the team is listed
+                    // once, each person with what they are on and how their day
+                    // is going. `-neonScroll day` lands on its lower half.
+                    HomeTeamCard(
                         now: now,
-                        error: nowError,
-                        retry: loadNow,
+                        nowError: nowError,
+                        day: day,
+                        dayError: dayError,
+                        timezone: day?.timezone ?? pulse?.timezone ?? today?.timezone,
+                        retryNow: loadNow,
+                        retryDay: loadDay,
                         onPerson: { path.append(.employee($0)) }
                     )
                     .id("now")
-
-                    HomeDayCard(
-                        day: day,
-                        error: dayError,
-                        retry: loadDay,
-                        onPerson: { path.append(.employee($0)) }
-                    )
-                    .id("day")
-
-                    if let overview {
-                        HomeProjectsCard(
-                            projects: overview.projects,
-                            onProject: { path.append(.project($0)) },
-                            onViewAll: { HomeTabLink.open(HomeTabLink.projects) }
-                        )
-                        .id("projects")
-                    }
                 }
                 .refreshable {
                     Haptic.tap()
                     await load()
                 }
+                // Home has no navigation bar to soften the top edge, so cards
+                // scrolling up would run straight under the clock and the
+                // Dynamic Island.
+                .overlay(alignment: .top) { HomeStatusBarFade() }
                 .debugScroll(proxy)
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -214,9 +219,12 @@ struct AdminHomeView: View {
         .animation(NeonMotion.smooth, value: firstName)
     }
 
-    /// The most recently updated project that has a cover: the studio's own work.
+    /// The studio's own work: the most recently updated published project
+    /// with a cover (what clients already see), else any project with one,
+    /// else the kit's own illustration.
     private var coverPhoto: HeroPhoto {
-        guard let cover = overview?.projects.first(where: { ($0.coverImageUrl ?? "").isEmpty == false })?.coverImageUrl else {
+        let covered = (overview?.projects ?? []).filter { ($0.coverImageUrl ?? "").isEmpty == false }
+        guard let cover = (covered.first(where: { $0.publishState == "PUBLISHED" }) ?? covered.first)?.coverImageUrl else {
             return .none
         }
         return .url(resolvedMediaURL(cover))
@@ -229,9 +237,14 @@ struct AdminHomeView: View {
         if let overview {
             HomeKPIRow(
                 stats: overview.stats,
+                projects: overview.projects,
                 pulse: pulse,
-                onOpenProjects: { HomeTabLink.open(HomeTabLink.projects) },
-                onNewProject: { showNewProject = true }
+                onTotal: { HomeTabLink.open(HomeTabLink.projects) },
+                onPublished: { path.append(.projectList(.published)) },
+                // Approvals live on each project's own Approvals tab; there is
+                // no list of them across projects to open instead.
+                onApprovals: { HomeTabLink.open(HomeTabLink.projects) },
+                onUpdated: { path.append(.projectList(.updated)) }
             )
             HomeProgressCard(projects: overview.projects) {
                 HomeTabLink.open(HomeTabLink.projects)
@@ -314,6 +327,8 @@ struct AdminHomeView: View {
                 people: homeSearchPeople(now: now, day: day),
                 onOpen: { path.append($0) }
             )
+        case .projectList(let filter):
+            HomeProjectListView(filter: filter, projects: overview?.projects ?? []) { path.append(.project($0)) }
         case .chat(let route): ChatRoomView(route: route)
         }
     }
@@ -420,4 +435,48 @@ func homeLongDate(_ date: Date) -> String {
     var style = Date.FormatStyle(date: .omitted, time: .omitted, locale: AppLanguage.current.locale)
     style = style.weekday(.wide).day().month(.wide)
     return date.formatted(style)
+}
+
+/// A soft band of the page's own background under the status bar. Home hides
+/// the navigation bar (a tab's root page has none), so nothing else stops a
+/// card's text running into the clock and the Dynamic Island as the page
+/// scrolls. The band is the very same `NeonAmbient` the page is painted
+/// with, laid over the whole screen exactly as the page's is, so it can't
+/// show as a stripe; it is solid over the status bar and fades out just
+/// below it.
+///
+/// The height comes from the window: a reader that ignores the safe area
+/// (as this one must, to line up with the page) is told its inset is zero.
+struct HomeStatusBarFade: View {
+    var body: some View {
+        let top = homeWindowTopInset()
+        NeonAmbient()
+            .mask(alignment: .top) {
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.72),
+                        .init(color: .black.opacity(0), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: top + NeonSpace.lg)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// How far the status bar (and the Dynamic Island) reach down the screen.
+@MainActor
+func homeWindowTopInset() -> CGFloat {
+    let windows = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap(\.windows)
+    let key = windows.first(where: \.isKeyWindow) ?? windows.first
+    let inset = key?.safeAreaInsets.top ?? 0
+    // Before the window has its insets (the first pass), assume a notched phone.
+    return inset > 0 ? inset : 47
 }
