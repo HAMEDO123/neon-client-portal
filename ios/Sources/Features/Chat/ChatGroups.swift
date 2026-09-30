@@ -34,7 +34,12 @@ struct ChatNewConversationSheet: View {
                         VStack(alignment: .leading, spacing: NeonSpace.stack) {
                             if isManager {
                                 NavigationLink {
-                                    ChatGroupForm(people: (people ?? []).filter { $0.id != "manager" }, onlineIds: onlineIds) { route in
+                                    ChatGroupForm(
+                                        people: people,
+                                        onlineIds: onlineIds,
+                                        showsBack: true,
+                                        onClose: { dismiss() }
+                                    ) { route in
                                         open(route)
                                     }
                                 } label: {
@@ -67,8 +72,13 @@ struct ChatNewConversationSheet: View {
                                             Haptic.tap()
                                             open(ChatRoute(slug: person.id, title: person.name, subtitle: person.role, avatar: person.avatar, isGroup: false))
                                         } label: {
+                                            // The whole row opens the chat, so the
+                                            // trailing side is a plain chevron, not
+                                            // a tile that looks like its own button.
                                             ChatPersonRow(person: person, online: onlineIds.contains(person.id)) {
-                                                IconTile("bubble.left.fill", hue: .indigo, size: 34)
+                                                Image(systemName: "chevron.forward")
+                                                    .font(.system(.footnote, weight: .semibold))
+                                                    .foregroundStyle(Color.neonTextFaint)
                                             }
                                         }
                                         .buttonStyle(.pressable)
@@ -199,11 +209,17 @@ private struct ChatPeoplePicker: View {
 // MARK: - A group's photo
 
 /// The round photo a group is shown with, and the picker that changes it.
+/// A group being made has no colour yet — its colour comes from its name,
+/// and would change with every letter typed — so until a photo is picked it
+/// is the kit's soft group tile in a dashed circle, waiting for one. No story
+/// ring: that ring means "a story you have not seen" everywhere else.
 private struct ChatGroupPhotoPicker: View {
     let image: UIImage?
     let currentURL: URL?
     let name: String
     var size: CGFloat = 104
+    /// Not made yet: the empty face is a placeholder, not the group's colour.
+    var isNew = false
     let onPick: (UIImage) -> Void
 
     @State private var item: PhotosPickerItem?
@@ -217,14 +233,24 @@ private struct ChatGroupPhotoPicker: View {
                             .frame(width: size, height: size)
                             .clipShape(Circle())
                             .transition(.neonPop)
+                    } else if isNew {
+                        IconTile("person.3.fill", hue: .indigo, size: size, style: .soft)
+                            .clipShape(Circle())
+                            .overlay(Circle().strokeBorder(Color.neonLineStrong, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
                     } else {
                         ChatAvatar(url: ChatFace.isStudioIcon(currentURL) ? nil : currentURL,
-                                   name: name.isEmpty ? "?" : name, size: size, isGroup: true)
+                                   name: name, size: size, isGroup: true)
                     }
                 }
                 .padding(4)
-                .background(Circle().strokeBorder(AngularGradient.neonStory, lineWidth: 3))
-                .neonShadow(.card)
+                .background {
+                    // A new group's circle stands on the page; an existing
+                    // one sits on the info sheet's gradient in a white ring.
+                    if !(isNew && image == nil) {
+                        Circle().strokeBorder(Color.white.opacity(isNew ? 1 : 0.7), lineWidth: 3)
+                    }
+                }
+                .neonShadow(isNew && image == nil ? .none : .card)
                 Image(systemName: "camera.fill")
                     .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(.white)
@@ -252,74 +278,123 @@ private struct ChatGroupPhotoPicker: View {
 
 // MARK: - Making a group
 
+/// Name, photo and people for a new group — the same sheet language as New
+/// chat and Add members: the kit's header (with a way back when it was pushed
+/// from New chat), the fields, and the button pinned at the foot, which says
+/// what is still missing until the group can be made.
 struct ChatGroupForm: View {
-    let people: [ChatPerson]
+    /// Everybody who can be put in it; nil reads them here (opened straight
+    /// from the list's header rather than from New chat).
+    var people: [ChatPerson]?
     var onlineIds: Set<String> = []
+    /// Pushed inside New chat: a back button beside the header.
+    var showsBack = false
+    /// Closes the whole sheet; nil closes whatever holds this form.
+    var onClose: (() -> Void)?
     let onCreated: (ChatRoute) -> Void
 
     @EnvironmentObject private var api: APIClient
+    @Environment(\.dismiss) private var dismiss
+    @State private var loaded: [ChatPerson]?
+    @State private var problem: String?
     @State private var name = ""
     @State private var photo: UIImage?
     @State private var selected: Set<String> = []
     @State private var attempts = 0
 
-    private var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !selected.isEmpty }
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var isValid: Bool { !trimmedName.isEmpty && !selected.isEmpty }
+    /// The manager is in every group already, so never offered.
+    private var candidates: [ChatPerson]? { (people ?? loaded)?.filter { $0.id != "manager" } }
+
+    /// The button's words: what is missing, or what it will do.
+    private var buttonTitle: String {
+        if trimmedName.isEmpty { return L("Name the group") }
+        if selected.isEmpty { return L("Pick at least one person") }
+        return L("Create group with %d", selected.count)
+    }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: NeonSpace.lg) {
-                    VStack(spacing: 8) {
-                        ChatGroupPhotoPicker(image: photo, currentURL: nil, name: name) { picked in
-                            withNeonAnimation(NeonMotion.bouncy) { photo = picked }
+        VStack(spacing: 0) {
+            header
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: NeonSpace.lg) {
+                        VStack(spacing: 8) {
+                            ChatGroupPhotoPicker(image: photo, currentURL: nil, name: name, isNew: true) { picked in
+                                withNeonAnimation(NeonMotion.bouncy) { photo = picked }
+                            }
+                            Text(photo == nil ? L("Add a photo") : L("Change photo"))
+                                .font(.system(.footnote, weight: .semibold))
+                                .foregroundStyle(Color.neonAccent)
                         }
-                        Text(photo == nil ? L("Add a photo") : L("Change photo"))
-                            .font(.system(.footnote, weight: .semibold))
-                            .foregroundStyle(Color.neonAccent)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 8)
-                    .neonAppear()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 4)
 
-                    FormSection(L("Group")) {
-                        NeonTextField(L("Group name"), text: $name, prompt: L("e.g. Villa project"), symbol: "person.3", isRequired: true)
-                    }
+                        // The field's own label names it; no section label above.
+                        FormSection {
+                            NeonTextField(L("Group name"), text: $name, prompt: L("e.g. Villa project"), symbol: "person.3", isRequired: true)
+                        }
 
-                    SectionHeader(L("Members"), subtitle: selected.isEmpty ? L("Pick at least one person") : L("%d chosen", selected.count))
-                        .id("members")
-                    ChatPeoplePicker(people: people, selected: $selected, onlineIds: onlineIds, emptyTitle: L("No one to add yet"))
+                        SectionHeader(L("Members"), subtitle: selected.isEmpty ? L("Pick at least one person") : L("%d chosen", selected.count))
+                            .id("members")
+                        if let candidates {
+                            ChatPeoplePicker(people: candidates, selected: $selected, onlineIds: onlineIds, emptyTitle: L("No one to add yet"))
+                        } else if let problem {
+                            ErrorState(message: problem) { await load() }
+                        } else {
+                            SkeletonRows(count: 4)
+                        }
+                    }
+                    .padding(.horizontal, NeonSpace.gutter)
+                    .padding(.bottom, NeonSpace.xxl)
+                    .shake(attempts)
                 }
-                .padding(NeonSpace.gutter)
-                .shake(attempts)
+                .scrollDismissesKeyboard(.interactively)
+                #if DEBUG
+                .debugScroll(proxy)
+                #endif
             }
-            .scrollDismissesKeyboard(.interactively)
-            #if DEBUG
-            .debugScroll(proxy)
-            #endif
         }
         .safeAreaInset(edge: .bottom) {
-            NeonButton(selected.isEmpty ? L("Create group") : L("Create group with %d", selected.count), symbol: "sparkles", kind: .brand) {
+            ChatSheetFooterButton(title: buttonTitle, symbol: "person.3.fill", isReady: isValid) {
                 await create()
             }
-            .disabled(!isValid)
-            .padding(.horizontal, NeonSpace.gutter)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
-            .background(
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .overlay(alignment: .top) { NeonDivider() }
-                    .ignoresSafeArea()
-            )
         }
         .background(NeonAmbient().ignoresSafeArea())
-        .navigationTitle(L("New group"))
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            guard people == nil, loaded == nil else { return }
+            await load()
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 0) {
+            if showsBack {
+                IconButton("chevron.backward", label: L("Back"), size: NeonSize.circleButton) { dismiss() }
+                    .padding(.leading, NeonSpace.gutter)
+                    // The header's own row sits a little low in its padding.
+                    .padding(.top, 8)
+            }
+            SheetHeader(L("New group"), subtitle: L("Name it, add a photo, pick who is in"), symbol: "person.3.fill", onClose: onClose)
+                .padding(.leading, showsBack ? -4 : 0)
+        }
+    }
+
+    private func load() async {
+        do {
+            let fetched = try await api.fetchChatPeople()
+            withNeonAnimation(NeonMotion.smooth) { loaded = fetched }
+            problem = nil
+        } catch {
+            if loaded == nil { problem = error.localizedDescription }
+        }
     }
 
     private func create() async {
         let upload = photo.flatMap { UploadMaker.photo($0, name: "group.jpg") }
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = trimmedName
         do {
             let created = try await api.createChatGroup(name: trimmed, members: Array(selected), photo: upload)
             Haptic.success()
@@ -332,6 +407,81 @@ struct ChatGroupForm: View {
             attempts += 1
             Toast.error(error)
         }
+    }
+}
+
+/// A new group straight from the list's header (the manager's): the form in
+/// its own sheet, which reads the people itself.
+struct ChatNewGroupSheet: View {
+    var onlineIds: Set<String> = []
+    /// Opens the new group once the sheet has gone.
+    let onOpen: (ChatRoute) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ChatGroupForm(onlineIds: onlineIds, onClose: { dismiss() }) { route in
+                dismiss()
+                // Let the sheet finish leaving before the push, or the push is lost.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onOpen(route) }
+            }
+        }
+        .neonSheet([.large])
+    }
+}
+
+private struct ChatUndimmedButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label }
+}
+
+/// The foot of a group sheet. Ready, it is the kit's primary button; until
+/// then a quiet grey bar in the same place saying what is still missing —
+/// readable, where a faded gradient button's white label was not.
+private struct ChatSheetFooterButton: View {
+    let title: String
+    let symbol: String
+    let isReady: Bool
+    let action: () async -> Void
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: NeonButtonSize.large.radius, style: .continuous)
+        Group {
+            if isReady {
+                NeonButton(title, symbol: symbol) { await action() }
+            } else {
+                Button {} label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: symbol)
+                            .font(.system(size: 15, weight: .semibold))
+                        Text(title)
+                    }
+                    .font(NeonButtonSize.large.font)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .foregroundStyle(Color.neonTextSecondary)
+                    .padding(.horizontal, NeonButtonSize.large.horizontalPadding)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: NeonButtonSize.large.height)
+                    .background(shape.fill(Color.neonSurfaceSunken))
+                    .overlay(shape.strokeBorder(Color.neonLine, lineWidth: 1))
+                }
+                // Disabled for VoiceOver ("dimmed"), but drawn as it is: the
+                // plain style would fade the words the bar exists to say.
+                .buttonStyle(ChatUndimmedButtonStyle())
+                .disabled(true)
+            }
+        }
+        .animation(NeonMotion.smooth, value: isReady)
+        .padding(.horizontal, NeonSpace.gutter)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(alignment: .top) { NeonDivider() }
+                .ignoresSafeArea()
+        )
     }
 }
 
@@ -428,7 +578,7 @@ struct ChatGroupInfoSheet: View {
             .neonFloat(3)
             VStack(spacing: 4) {
                 DirText(detail.name, font: .neonDisplay, color: .white, fill: false, lineLimit: 2)
-                Text(L("%d members", detail.members.count))
+                Text(ChatCount.members(detail.members.count))
                     .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(.white.opacity(0.85))
             }
@@ -579,7 +729,9 @@ struct ChatGroupInfoSheet: View {
     }
 }
 
-/// Picks people to add to a group: everyone `get/chat/people` offers who is not in it yet.
+/// Picks people to add to a group: everyone `get/chat/people` offers who is
+/// not in it yet. The same sheet as New chat — header, search, one card of
+/// people — with the foot saying "Pick people to add" until somebody is ticked.
 struct ChatMemberPickerSheet: View {
     let excluding: Set<String>
     let onAdd: ([String]) async -> Void
@@ -590,31 +742,45 @@ struct ChatMemberPickerSheet: View {
     @State private var problem: String?
     @State private var selected: Set<String> = []
 
+    /// Everybody not in the group yet; the manager is in every group.
+    private var offered: [ChatPerson]? { people?.filter { !excluding.contains($0.id) && $0.id != "manager" } }
+
     var body: some View {
-        SheetScaffold(
-            L("Add members"),
-            subtitle: L("Everyone at the studio who is not in it yet"),
-            symbol: "person.badge.plus",
-            primaryTitle: selected.isEmpty ? L("Add") : L("Add %d", selected.count),
-            primaryKind: .brand,
-            isPrimaryEnabled: !selected.isEmpty
-        ) {
-            await onAdd(Array(selected))
-            dismiss()
-        } content: {
-            if let people {
-                let offered = people.filter { !excluding.contains($0.id) && $0.id != "manager" }
-                if offered.isEmpty {
-                    EmptyState(symbol: "person.crop.circle.badge.checkmark", title: L("Everyone is already in"), hue: .green, card: true)
-                } else {
-                    ChatPeoplePicker(people: offered, selected: $selected, emptyTitle: L("Everyone is already in"))
+        VStack(spacing: 0) {
+            SheetHeader(L("Add members"), subtitle: L("Everyone at the studio who is not in it yet"), symbol: "person.badge.plus")
+            ScrollView {
+                VStack(alignment: .leading, spacing: NeonSpace.stack) {
+                    if let offered {
+                        if offered.isEmpty {
+                            EmptyState(symbol: "person.crop.circle.badge.checkmark", title: L("Everyone is already in"), hue: .green, card: true)
+                        } else {
+                            ChatPeoplePicker(people: offered, selected: $selected, emptyTitle: L("Everyone is already in"))
+                        }
+                    } else if let problem {
+                        ErrorState(message: problem) { await load() }
+                    } else {
+                        SkeletonRows(count: 4)
+                    }
                 }
-            } else if let problem {
-                ErrorState(message: problem) { await load() }
-            } else {
-                SkeletonRows(count: 4)
+                .padding(.horizontal, NeonSpace.gutter)
+                .padding(.top, 4)
+                .padding(.bottom, NeonSpace.xxl)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .safeAreaInset(edge: .bottom) {
+            if offered?.isEmpty != true {
+                ChatSheetFooterButton(
+                    title: selected.isEmpty ? L("Pick people to add") : L("Add %d", selected.count),
+                    symbol: "person.badge.plus",
+                    isReady: !selected.isEmpty
+                ) {
+                    await onAdd(Array(selected))
+                    dismiss()
+                }
             }
         }
+        .background(NeonAmbient().ignoresSafeArea())
         .task { await load() }
         .neonSheet([.large])
     }

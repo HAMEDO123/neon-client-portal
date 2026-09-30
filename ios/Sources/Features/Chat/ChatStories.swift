@@ -13,15 +13,16 @@ import UniformTypeIdentifiers
 
 /// The row under the header, as in the owner's mockup: My Story first (a
 /// "+" to add one), then everybody with a live story — a colourful ring
-/// while there is something new, grey once it is all seen — and then the
-/// rest of the studio's people and groups as plain faces with their green
-/// dots, each opening that chat.
+/// while there is something new, grey once it is all seen — and then whoever
+/// is here right now, with their green dot, each opening that chat. Nobody
+/// else: they are the cards just below, and the rail would only repeat them.
+/// With no stories and nobody here it is My Story alone, not padded out.
 struct ChatStoriesRail: View {
     let stories: ChatStoriesResponse?
     let isLoading: Bool
     let myName: String
     let isManager: Bool
-    /// The conversations whose person or group has no live story, in the list's order.
+    /// The people here right now who have no live story, in the list's order.
     let people: [ConversationSummary]
     /// Whether an author ("admin" or an employee id) is here right now.
     let isOnline: (String) -> Bool
@@ -327,8 +328,8 @@ struct ChatStoryComposer: View {
     var body: some View {
         SheetScaffold(
             L("New story"),
-            subtitle: L("Everyone at the studio sees it for 24 hours."),
-            symbol: "sparkles",
+            subtitle: L("The studio sees it for 24 hours"),
+            symbol: "plus.circle.fill",
             primaryTitle: media == nil ? nil : L("Share to story"),
             primaryKind: .brand,
             isPrimaryEnabled: media != nil && !preparing,
@@ -394,15 +395,11 @@ struct ChatStoryComposer: View {
             }
             sourceTile(L("Photo library"), detail: L("Pick a photo or a video up to a minute"), symbol: "photo.on.rectangle.angled",
                        hue: .indigo) { showLibrary = true }
-            HStack(spacing: 10) {
-                IconTile("clock.fill", hue: .grey, size: 30, style: .soft)
-                Text(L("Stories disappear by themselves after 24 hours. Only you see who viewed yours."))
-                    .font(.neonSubtitle)
-                    .foregroundStyle(Color.neonTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 4)
-            .padding(.top, 4)
+            // The 24 hours are in the header; what is left to say is who sees the views.
+            MetaLabel(L("Only you see who viewed yours."), symbol: "eye", tint: .neonTextSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 6)
+                .padding(.top, 2)
         }
     }
 
@@ -523,7 +520,7 @@ struct ChatStoryViewersSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(L("Seen by"), subtitle: viewers.map { L("%d people", $0.count) }, symbol: "eye.fill")
+            SheetHeader(L("Seen by"), subtitle: viewers.map { ChatCount.people($0.count) }, symbol: "eye.fill")
             ScrollView {
                 VStack(alignment: .leading, spacing: NeonSpace.stack) {
                     if let viewers {
