@@ -199,6 +199,8 @@ final class CallSession: ObservableObject {
         mic?.isEnabled = !audioMuted
     }
 
+    /// Configures the sound but does not switch it on: CallKit does that for
+    /// a call it carries, and CallKitCenter.began otherwise.
     func start() {
         CallAudioSession.configure(video: cameraTrack != nil)
         onSpeaker = cameraTrack != nil || CallAudioSession.isOnSpeaker
@@ -631,6 +633,13 @@ final class CallSession: ObservableObject {
     func toggleSpeaker() {
         onSpeaker.toggle()
         CallAudioSession.setSpeaker(onSpeaker)
+    }
+
+    /// The sound moved without a tap here — the lock screen's audio button,
+    /// a headset — so the speaker button says where it went.
+    func routeChanged(onSpeaker now: Bool) {
+        guard phase != .ended, onSpeaker != now else { return }
+        onSpeaker = now
     }
 
     func setCameraEnabled(_ on: Bool) async {

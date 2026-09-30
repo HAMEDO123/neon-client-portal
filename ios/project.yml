@@ -57,8 +57,10 @@ targets:
         # then. The picker for existing photos needs no permission at all.
         NSCameraUsageDescription: "NEON uses the camera to photograph finished work, and for video calls with the studio."
         # A call keeps its sound when somebody switches to another app, as a
-        # phone call does; nothing else runs in the background.
-        UIBackgroundModes: [audio]
+        # phone call does (audio), and rings a closed or locked phone through
+        # a VoIP push and CallKit (voip); nothing else runs in the background.
+        # PushKit and CallKit are system frameworks, linked by their imports.
+        UIBackgroundModes: [audio, voip]
         NSMicrophoneUsageDescription: "NEON uses the microphone for calls with the studio."
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:

@@ -123,3 +123,9 @@
 "Some networks block calls. You can hang up and try again." = "بعض الشبكات تمنع المكالمات. يمكنك إنهاء المكالمة والمحاولة مجددًا.";
 "Everyone on the team has already been asked into this call." = "كل أعضاء الفريق دُعوا إلى هذه المكالمة بالفعل.";
 "Call buttons in a chat header" = "أزرار الاتصال في رأس المحادثة";
+
+/* Ringing through the iPhone's own call screen (CallKit) — the debug router's fixture */
+"The phone's own call screen" = "شاشة المكالمات في الهاتف";
+"How a NEON call rings on a closed or locked phone" = "كيف ترنّ مكالمة NEON والتطبيق مغلق أو الهاتف مقفل";
+"A made-up call from %@ rings on the phone's own call screen. Nothing is sent to the studio." = "مكالمة تجريبية من %@ ترنّ على شاشة المكالمات في الهاتف. لا يُرسَل شيء إلى الاستوديو.";
+"Ring again" = "رنّ مرة أخرى";
