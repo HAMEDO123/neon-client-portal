@@ -17,19 +17,20 @@ struct ProjectApprovalsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
-            SectionHeader(L("Approvals"), count: approvals?.count) {
-                IconButton("plus", label: L("Add milestone")) { showAdd = true }
-            }
+            pfSectionHeader(
+                L("Approvals"), subtitle: headerSubtitle, section: .approvals,
+                addTitle: L("Add Milestone"), showAdd: !(approvals?.isEmpty ?? true)
+            ) { showAdd = true }
 
             LoadStateView(value: approvals, error: errorMessage, cachedAt: cachedAt, retry: load) { rows in
                 if rows.isEmpty {
                     EmptyState(
-                        symbol: "checkmark.seal",
+                        symbol: PFSection.approvals.symbol,
                         title: L("No approval milestones yet"),
                         detail: L("Add design milestones for the client to review."),
-                        actionTitle: L("Add milestone"),
+                        actionTitle: L("Add Milestone"),
                         action: { showAdd = true },
-                        hue: .orange,
+                        hue: PFSection.approvals.hue,
                         card: true
                     )
                 } else {
@@ -38,11 +39,13 @@ struct ProjectApprovalsSection: View {
                             approval.itemLabel,
                             subtitle: approval.note.map { "\u{201c}\($0)\u{201d}" },
                             meta: [approval.clientName, formattedISODate(approval.respondedAt)].compactMap { $0 }.joined(separator: " · "),
-                            leading: .icon("checkmark.seal", tint: approvalStatusTone(approval.status).color),
+                            leading: .icon(PFSection.approvals.symbol, tint: approvalStatusTone(approval.status).color),
                             badge: approvalStatusLabel(approval.status),
                             badgeTone: approvalStatusTone(approval.status)
                         ) {
-                            Button(role: .destructive) { toDelete = approval } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                            IconButton("trash", label: L("Delete"), look: .plain, tint: .neonDangerStrong, size: NeonSize.touch) {
+                                toDelete = approval
+                            }
                         }
                     }
                     .neonAppear()
@@ -56,6 +59,12 @@ struct ProjectApprovalsSection: View {
         .confirmDestructive(item: $toDelete, title: { L("Delete “%@”?", $0.itemLabel) }, actionTitle: L("Delete")) { approval in
             Task { await delete(approval) }
         }
+    }
+
+    private var headerSubtitle: String {
+        guard let approvals, !approvals.isEmpty else { return L("Design milestones for the client to review") }
+        let waiting = approvals.filter { $0.status != "APPROVED" && $0.status != "CHANGES_REQUESTED" }.count
+        return waiting > 0 ? L("%d waiting on the client", waiting) : L("%d milestones", approvals.count)
     }
 
     private func load() async {
@@ -94,11 +103,11 @@ struct AddApprovalSheet: View {
     private var isValid: Bool { !itemLabel.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
-        SheetScaffold(L("Add milestone"), symbol: "checkmark.seal", primaryTitle: L("Add Milestone"), isPrimaryEnabled: isValid) {
+        SheetScaffold(L("Add Milestone"), symbol: PFSection.approvals.symbol, primaryTitle: L("Add Milestone"), isPrimaryEnabled: isValid) {
             await save()
         } content: {
             FormSection(footer: L("The client sees this on their page and can approve it or ask for changes.")) {
-                NeonTextField(L("Milestone for client approval"), text: $itemLabel, prompt: "Living Room Design", isRequired: true)
+                NeonTextField(L("Milestone for client approval"), text: $itemLabel, prompt: L("Living Room Design"), isRequired: true)
                 if let error { ValidationMessage(error) }
             }
         }

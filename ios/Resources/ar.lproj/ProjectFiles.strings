@@ -11,36 +11,76 @@
 "Approvals" = "الموافقات";
 "Comments" = "التعليقات";
 
+/* Server category values, shown through L() so an Arabic screen never mixes
+   in raw English server enum words (drawing/document/BOQ/material/pricing
+   categories all share this list — one Arabic word per English one). */
+"Architectural" = "معماري";
+"Ceiling" = "سقف";
+"Electrical" = "كهرباء";
+"HVAC" = "تكييف وتهوية";
+"Plumbing" = "سباكة";
+"Joinery" = "نجارة";
+"Contracts" = "عقود";
+"Specifications" = "مواصفات";
+"Reports" = "تقارير";
+"Other" = "أخرى";
+"Flooring" = "أرضيات";
+"Walls" = "جدران";
+"Paint" = "دهان";
+"Gypsum" = "جبس";
+"Doors" = "أبواب";
+"Windows" = "نوافذ";
+"Sanitary" = "صحي";
+"Lighting" = "إضاءة";
+"Accessories" = "إكسسوارات";
+"Marble" = "رخام";
+"Wood" = "خشب";
+"Fabric" = "قماش";
+"Metal" = "معدن";
+"Tiles" = "بلاط";
+"Interior Works" = "أعمال داخلية";
+
 /* Drawings */
-"Add drawing" = "إضافة مخطط";
 "Add Drawing" = "إضافة مخطط";
 "No drawings yet" = "لا توجد مخططات بعد";
+"Technical drawings and revisions" = "المخططات الفنية ومراجعاتها";
+"%d drawings · %d revised" = "%d مخططات · %d بمراجعة";
 "Upload the first technical drawing." = "ارفع أول مخطط فني.";
 "Drawing added" = "تمت إضافة المخطط";
 "Delete" = "حذف";
 "Delete “%@”?" = "حذف «%@»؟";
 "This removes every revision on file too." = "هذا يحذف كل مراجعة مسجّلة أيضًا.";
 "No earlier revisions." = "لا توجد مراجعات سابقة.";
+"Revision history" = "سجل المراجعات";
+"Revision history (%d)" = "سجل المراجعات (%d)";
 "Upload new revision" = "رفع مراجعة جديدة";
+"Upload New Revision" = "رفع مراجعة جديدة";
 "Remove revision %@?" = "إزالة المراجعة %@؟";
 "Remove" = "إزالة";
+"Open file" = "فتح الملف";
+"View" = "عرض";
+"More" = "المزيد";
+"All" = "الكل";
 "Sub-category" = "الفئة الفرعية";
 "Drawing name" = "اسم المخطط";
 "Drawing number" = "رقم المخطط";
 "Revision" = "المراجعة";
 "File (PDF, DWG, image…)" = "الملف (PDF، DWG، صورة…)";
-"New revision" = "مراجعة جديدة";
+"New Revision" = "مراجعة جديدة";
 "New revision label" = "رمز المراجعة الجديدة";
+"Now on %@" = "حاليًا على %@";
 "What changed" = "ما الذي تغيّر";
+"e.g. Kitchen island moved 40 cm" = "مثال: انتقلت جزيرة المطبخ ٤٠ سم";
 "New file" = "الملف الجديد";
 "The current file moves into revision history." = "الملف الحالي ينتقل إلى سجل المراجعات.";
 "Upload Revision" = "رفع المراجعة";
 "Revision uploaded" = "تم رفع المراجعة";
 
 /* Documents */
-"Add document" = "إضافة مستند";
 "Add Document" = "إضافة مستند";
 "No documents yet" = "لا توجد مستندات بعد";
+"%d documents" = "%d مستندات";
+"Contracts, reports and specifications" = "العقود والتقارير والمواصفات";
 "Upload contracts, reports, or specifications." = "ارفع العقود أو التقارير أو المواصفات.";
 "Document added" = "تمت إضافة المستند";
 "Title" = "العنوان";
@@ -49,15 +89,20 @@
 
 /* Shared: categories & fields */
 "Category" = "الفئة";
+"Item" = "العنصر";
+"Details" = "التفاصيل";
 "Name" = "الاسم";
 "Item name" = "اسم العنصر";
 "Quantity" = "الكمية";
+"Quantity & Price" = "الكمية والسعر";
 "Unit" = "الوحدة";
-"Unit price (optional)" = "سعر الوحدة (اختياري)";
+"Unit price" = "سعر الوحدة";
+"Where It Goes" = "أين يُستخدم";
 "Related drawing" = "المخطط المرتبط";
 "Related space" = "المساحة المرتبطة";
+"None" = "بلا";
 "Specification" = "المواصفة";
-"Reference image (optional)" = "صورة مرجعية (اختياري)";
+"Reference image" = "صورة مرجعية";
 "Description" = "الوصف";
 "Brand" = "الماركة";
 "Model" = "الطراز";
@@ -65,7 +110,8 @@
 "Finish" = "التشطيب";
 "Supplier" = "المورّد";
 "Estimated quantity" = "الكمية التقديرية";
-"Price (optional)" = "السعر (اختياري)";
+"Price" = "السعر";
+"Price & Photo" = "السعر والصورة";
 "Used in (spaces)" = "مستخدَم في (المساحات)";
 "Image" = "الصورة";
 "Space" = "المساحة";
@@ -76,72 +122,99 @@
 "Choose a photo" = "اختر صورة";
 "Change photo" = "تغيير الصورة";
 "That file could not be read." = "تعذّرت قراءة هذا الملف.";
+"m²" = "م²";
+"320 × 100 cm" = "٣٢٠ × ١٠٠ سم";
+"42 m²" = "٤٢ م²";
+"A-101" = "A-101";
+"Floor Plans" = "مخططات الأرضيات";
+"Ground Floor Plan" = "مخطط الطابق الأرضي";
+"Design Contract" = "عقد التصميم";
+"v1" = "الإصدار ١";
+"Porcelain Flooring" = "أرضيات بورسلان";
+"Calacatta Gold Marble" = "رخام كالاكاتا الذهبي";
+"Sofa" = "أريكة";
+"Living Room" = "الصالة";
+"Living Room, Kitchen" = "الصالة، المطبخ";
+"Living Room Design" = "تصميم الصالة";
+"e.g. Kitchen joinery" = "مثال: نجارة المطبخ";
 
 /* BOQ */
-"Add item" = "إضافة عنصر";
 "Add Item" = "إضافة عنصر";
 "No BOQ items yet" = "لا توجد عناصر في جدول الكميات بعد";
+"Quantities and specifications" = "الكميات والمواصفات";
+"%d lines" = "%d بنود";
+"%d lines · %@" = "%d بنود · %@";
 "Add quantities and specifications." = "أضف الكميات والمواصفات.";
 "Item added" = "تمت إضافة العنصر";
-"Add BOQ item" = "إضافة عنصر لجدول الكميات";
+"Add BOQ Item" = "إضافة عنصر لجدول الكميات";
 
 /* Pricing */
-"Add line item" = "إضافة بند";
 "Add Line Item" = "إضافة بند";
 "No pricing yet" = "لا يوجد تسعير بعد";
+"Cost breakdown line items" = "بنود تفصيل التكلفة";
+"%d line items · %@" = "%d بنود · %@";
 "Add cost breakdown line items." = "أضف بنود تفصيل التكلفة.";
 "Line item added" = "تمت إضافة البند";
-"Pricing is currently hidden from the client" = "التسعير مخفي حاليًا عن العميل";
-"Enable “Show Execution Pricing” in the project's Overview when ready." = "فعّل «إظهار تسعير التنفيذ» في نظرة عامة على المشروع عند الجاهزية.";
+"Hidden from the client" = "مخفي عن العميل";
+"Only your team can see it until you show it to the client." = "لا يراه إلا فريقك إلى أن تُظهره للعميل.";
+"Show to Client" = "إظهار للعميل";
+"Now visible to the client" = "أصبح مرئيًا للعميل الآن";
 "Optional" = "اختياري";
 "Optional item" = "بند اختياري";
 "Shown separately, not in the total." = "يُعرض بشكل منفصل، ولا يُحتسب في الإجمالي.";
 "Total Project Cost" = "إجمالي تكلفة المشروع";
-"%d line items" = "%d بند";
+"%d line items" = "%#@items@";
 
 /* BOQ subtotal — a derived figure, honestly scoped: only priced lines. */
 "Priced Items Subtotal" = "إجمالي البنود المسعّرة";
 "Only items with a unit price are counted." = "تُحتسب العناصر التي لها سعر وحدة فقط.";
 
 /* Materials & Furniture */
-"Add material" = "إضافة مادة";
 "Add Material" = "إضافة مادة";
 "No materials yet" = "لا توجد مواد بعد";
+"%d materials" = "%d مواد";
+"The material and finish board" = "لوحة المواد والتشطيبات";
 "Build the material and finish board." = "أنشئ لوحة المواد والتشطيبات.";
 "Material added" = "تمت إضافة المادة";
-"Add furniture item" = "إضافة قطعة أثاث";
-"Add Item" = "إضافة عنصر";
+"Add Furniture Item" = "إضافة قطعة أثاث";
 "No furniture yet" = "لا يوجد أثاث بعد";
+"%d items" = "%d عناصر";
+"The furniture and product schedule" = "جدول الأثاث والمنتجات";
 "Build the furniture and product schedule." = "أنشئ جدول الأثاث والمنتجات.";
+"Qty %d" = "الكمية %d";
 
 /* Approvals */
-"Add milestone" = "إضافة معلَم";
 "Add Milestone" = "إضافة معلَم";
 "No approval milestones yet" = "لا توجد معالم موافقة بعد";
+"Design milestones for the client to review" = "معالم تصميم ليراجعها العميل";
+"%d waiting on the client" = "%d بانتظار العميل";
+"%d milestones" = "%d معالم";
 "Add design milestones for the client to review." = "أضف معالم تصميم ليراجعها العميل.";
 "Milestone added" = "تمت إضافة المعلَم";
 "Milestone for client approval" = "معلَم لموافقة العميل";
 "The client sees this on their page and can approve it or ask for changes." = "يرى العميل هذا في صفحته ويمكنه الموافقة عليه أو طلب تعديلات.";
 "Approved" = "تمت الموافقة";
 "Changes Requested" = "طُلبت تعديلات";
-"Pending Review" = "بانتظار المراجعة";
+"Waiting for the client" = "بانتظار رد العميل";
 
 /* Comments */
-"Reply" = "الرد";
+"Write to the client" = "الكتابة للعميل";
 "No comments yet" = "لا توجد تعليقات بعد";
+"Client feedback and change requests" = "ملاحظات العميل وطلبات التعديل";
 "Client feedback and change requests appear here." = "تظهر هنا ملاحظات العميل وطلبات التعديل.";
+"%d open" = "%d مفتوحة";
+"%d comments" = "%d تعليقات";
 "Referring to (optional)" = "بخصوص (اختياري)";
 "e.g. Living Room drawing" = "مثال: مخطط الصالة";
 "Reply as NEON Team" = "الرد كفريق نيون";
-"Send reply" = "إرسال الرد";
+"Send Reply" = "إرسال الرد";
 "Reply sent" = "تم إرسال الرد";
 "Studio" = "الفريق";
 "Open" = "مفتوح";
-"Resolved" = "تمت المعالجة";
-"Mark Resolved" = "وضع كمُعالَج";
+"Addressed · waiting on the client" = "تمت المعالجة · بانتظار رد العميل";
+"Mark as Addressed" = "وضع كمُعالَج";
 "Reopen" = "إعادة الفتح";
 "Delete this comment?" = "حذف هذا التعليق؟";
 
 /* Formats */
 "%@ %@" = "%@ %@";
-"Qty %d" = "الكمية %d";

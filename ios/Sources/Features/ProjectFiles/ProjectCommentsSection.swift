@@ -21,9 +21,17 @@ struct ProjectCommentsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
-            SectionHeader(L("Comments"), count: comments?.count) {
-                IconButton("arrowshape.turn.up.left", label: L("Reply")) {
-                    withNeonAnimation(.snappy) { showReply.toggle() }
+            SectionCard(L("Comments"), subtitle: headerSubtitle, symbol: PFSection.comments.symbol, hue: PFSection.comments.hue) {
+                EmptyView()
+            } trailing: {
+                // A reply offers something to nothing while the thread is
+                // empty — the empty state below carries its own action
+                // instead — and the glyph is picked for RTL (.backward
+                // rather than a hard-coded .left).
+                if !(comments?.isEmpty ?? true) {
+                    IconButton("square.and.pencil", label: L("Write to the client")) {
+                        withNeonAnimation(.snappy) { showReply.toggle() }
+                    }
                 }
             }
 
@@ -32,14 +40,16 @@ struct ProjectCommentsSection: View {
             LoadStateView(value: comments, error: errorMessage, cachedAt: cachedAt, retry: load) { rows in
                 if rows.isEmpty {
                     EmptyState(
-                        symbol: "bubble.left.and.bubble.right",
+                        symbol: PFSection.comments.symbol,
                         title: L("No comments yet"),
                         detail: L("Client feedback and change requests appear here."),
-                        hue: .blue,
+                        actionTitle: L("Write to the client"),
+                        action: { withNeonAnimation(.snappy) { showReply = true } },
+                        hue: PFSection.comments.hue,
                         card: true
                     )
                 } else {
-                    VStack(spacing: 10) {
+                    VStack(spacing: NeonSpace.stack) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, comment in
                             commentCard(comment)
                                 .staggered(index)
@@ -54,11 +64,17 @@ struct ProjectCommentsSection: View {
         }
     }
 
+    private var headerSubtitle: String {
+        guard let comments, !comments.isEmpty else { return L("Client feedback and change requests") }
+        let open = comments.filter { $0.status == "OPEN" }.count
+        return open > 0 ? L("%d open", open) : L("%d comments", comments.count)
+    }
+
     private var replyBox: some View {
         VStack(alignment: .leading, spacing: 10) {
             NeonTextField(L("Referring to (optional)"), text: $replyRef, prompt: L("e.g. Living Room drawing"))
             NeonTextEditor(L("Reply as NEON Team"), text: $replyText, minLines: 2, maxLines: 6)
-            NeonButton(L("Send reply"), symbol: "paperplane.fill", size: .medium, isLoading: sending) {
+            NeonButton(L("Send Reply"), symbol: "paperplane.fill", size: .medium, isLoading: sending) {
                 await sendReply()
             }
             .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -69,9 +85,16 @@ struct ProjectCommentsSection: View {
     }
 
     private func commentCard(_ comment: PFComment) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // The client's change request is settled only when the client says
+        // so on their own page — the studio can only say it looked at it.
+        // Still success green once the client actually confirms; "OPEN" vs
+        // "RESOLVED" is the only state the server tracks today, so this
+        // studio-side action reads as a claim, in info tone, rather than a
+        // verdict, in success tone, for the state the server can express.
+        let isOpen = comment.status == "OPEN"
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                DirText(comment.authorName, font: .system(size: 14, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
+                DirText(comment.authorName, font: .neonRowTitle, color: .neonInk, fill: false, lineLimit: 1)
                 if comment.authorType == "ADMIN" {
                     BadgeView(text: L("Studio"), tone: .purple)
                 }
@@ -79,22 +102,22 @@ struct ProjectCommentsSection: View {
                     BadgeView(text: refLabel, tone: .cyan)
                 }
                 Spacer(minLength: 4)
-                BadgeView(text: comment.status == "OPEN" ? L("Open") : L("Resolved"), tone: comment.status == "OPEN" ? .warning : .success)
+                BadgeView(text: isOpen ? L("Open") : L("Addressed · waiting on the client"), tone: isOpen ? .warning : .info)
             }
-            DirText(comment.message, font: .system(size: 14.5), color: .neonInk.opacity(0.85), fill: false)
+            DirText(comment.message, font: .neonLabel, color: .neonInk.opacity(0.85), fill: false)
             HStack {
                 Text(formattedISODate(comment.createdAt) ?? "")
-                    .font(.system(size: 11)).foregroundStyle(Color.neonTextFaint)
+                    .font(.neonMeta).foregroundStyle(Color.neonTextFaint)
                 Spacer()
                 Button {
                     Task { await toggleStatus(comment) }
                 } label: {
-                    Text(comment.status == "OPEN" ? L("Mark Resolved") : L("Reopen"))
+                    Text(isOpen ? L("Mark as Addressed") : L("Reopen"))
                         .font(.system(size: 12.5, weight: .semibold))
                 }
                 .buttonStyle(.neon(.secondary, size: .small))
-                Button(role: .destructive) { toDelete = comment } label: {
-                    Image(systemName: "trash").foregroundStyle(.red)
+                IconButton("trash", label: L("Delete"), look: .plain, tint: .neonDangerStrong, size: NeonSize.touch) {
+                    toDelete = comment
                 }
             }
         }

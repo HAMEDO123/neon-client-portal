@@ -17,19 +17,20 @@ struct ProjectFurnitureSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
-            SectionHeader(L("Furniture"), count: furniture?.count) {
-                IconButton("plus", label: L("Add item")) { showAdd = true }
-            }
+            pfSectionHeader(
+                L("Furniture"), subtitle: headerSubtitle, section: .furniture,
+                addTitle: L("Add Item"), showAdd: !(furniture?.isEmpty ?? true)
+            ) { showAdd = true }
 
             LoadStateView(value: furniture, error: errorMessage, cachedAt: cachedAt, retry: load) { rows in
                 if rows.isEmpty {
                     EmptyState(
-                        symbol: "sofa",
+                        symbol: PFSection.furniture.symbol,
                         title: L("No furniture yet"),
                         detail: L("Build the furniture and product schedule."),
-                        actionTitle: L("Add item"),
+                        actionTitle: L("Add Item"),
                         action: { showAdd = true },
-                        hue: .indigo,
+                        hue: PFSection.furniture.hue,
                         card: true
                     )
                 } else {
@@ -57,18 +58,23 @@ struct ProjectFurnitureSection: View {
         }
     }
 
+    private var headerSubtitle: String {
+        guard let furniture, !furniture.isEmpty else { return L("The furniture and product schedule") }
+        return L("%d items", furniture.count)
+    }
+
     private func furnitureCard(_ item: PFFurnitureItem) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            RemoteImage(url: resolvedMediaURL(item.imageUrl), placeholderSymbol: "sofa")
+            RemoteImage(url: resolvedMediaURL(item.imageUrl), placeholderSymbol: PFSection.furniture.symbol)
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                DirText(item.name, font: .system(size: 14, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
+                DirText(item.name, font: .neonRowTitle, color: .neonInk, fill: false, lineLimit: 1)
                 Text([item.space ?? "—", L("Qty %d", item.quantity)].joined(separator: " · "))
-                    .font(.system(size: 12)).foregroundStyle(Color.neonTextTertiary).lineLimit(1)
+                    .font(.neonSubtitle).foregroundStyle(Color.neonTextTertiary).lineLimit(1)
                 if let price = item.price {
-                    Text(NeonFormat.money(price)).font(.system(size: 12.5, weight: .semibold, design: .rounded)).foregroundStyle(Color.neonSuccessStrong)
+                    Text(NeonFormat.money(price)).font(.neonNumberSmall).foregroundStyle(Color.neonSuccessStrong)
                 }
             }
             .padding(10)
@@ -122,23 +128,27 @@ struct AddFurnitureSheet: View {
     private var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
-        SheetScaffold(L("Add furniture item"), symbol: "sofa", primaryTitle: L("Add Item"), isPrimaryEnabled: isValid) {
+        SheetScaffold(L("Add Furniture Item"), symbol: PFSection.furniture.symbol, primaryTitle: L("Add Item"), isPrimaryEnabled: isValid) {
             await save()
         } content: {
-            FormSection {
-                NeonTextField(L("Name"), text: $name, prompt: "Sofa", isRequired: true)
+            FormSection(L("Item")) {
+                NeonTextField(L("Name"), text: $name, prompt: L("Sofa"), isRequired: true)
                 HStack(spacing: 12) {
-                    NeonTextField(L("Space"), text: $space, prompt: "Living Room")
+                    NeonTextField(L("Space"), text: $space, prompt: L("Living Room"))
                     NumberField(L("Quantity"), value: $quantity)
                 }
+            }
+            FormSection(L("Details")) {
                 HStack(spacing: 12) {
-                    NeonTextField(L("Brand"), text: $brand)
-                    NeonTextField(L("Model"), text: $model)
+                    NeonTextField(L("Brand"), text: $brand, prompt: "")
+                    NeonTextField(L("Model"), text: $model, prompt: "")
                 }
-                NeonTextField(L("Dimensions"), text: $dimensions, prompt: "320 × 100 cm")
-                NeonTextField(L("Finish"), text: $finish)
-                NeonTextField(L("Supplier"), text: $supplier)
-                MoneyField(L("Price (optional)"), amount: $price)
+                NeonTextField(L("Dimensions"), text: $dimensions, prompt: L("320 × 100 cm"))
+                NeonTextField(L("Finish"), text: $finish, prompt: "")
+                NeonTextField(L("Supplier"), text: $supplier, prompt: "")
+            }
+            FormSection(L("Price & Photo")) {
+                MoneyField(L("Price"), amount: $price)
                 ImagePickerField(label: L("Image"), file: $imageFile, previewData: $imagePreview)
                 if let error { ValidationMessage(error) }
             }

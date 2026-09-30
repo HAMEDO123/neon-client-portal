@@ -8,10 +8,12 @@ struct ProjectDrawingsSection: View {
     let projectId: String
 
     @EnvironmentObject private var api: APIClient
+    @Environment(\.openURL) private var openURL
     @State private var drawings: [PFDrawing]?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @State private var showAdd = false
+    @State private var categoryFilter = ""
     @State private var expanded: Set<String> = []
     @State private var revisionFor: PFDrawing?
     @State private var toDelete: PFDrawing?
@@ -19,26 +21,45 @@ struct ProjectDrawingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
-            SectionHeader(L("Drawings"), count: drawings?.count) {
-                IconButton("plus", label: L("Add drawing")) { showAdd = true }
-            }
+            pfSectionHeader(
+                L("Drawings"), subtitle: headerSubtitle, section: .drawings,
+                addTitle: L("Add Drawing"), showAdd: !(drawings?.isEmpty ?? true)
+            ) { showAdd = true }
 
             LoadStateView(value: drawings, error: errorMessage, cachedAt: cachedAt, retry: load) { items in
                 if items.isEmpty {
                     EmptyState(
-                        symbol: "square.on.square.dashed",
+                        symbol: PFSection.drawings.symbol,
                         title: L("No drawings yet"),
                         detail: L("Upload the first technical drawing."),
-                        actionTitle: L("Add drawing"),
+                        actionTitle: L("Add Drawing"),
                         action: { showAdd = true },
-                        hue: .cyan,
+                        hue: PFSection.drawings.hue,
                         card: true
                     )
                 } else {
-                    VStack(spacing: 10) {
-                        ForEach(Array(items.enumerated()), id: \.element.id) { index, drawing in
-                            drawingCard(drawing)
-                                .staggered(index)
+                    let categories = presentCategories(items)
+                    if categories.count > 1 {
+                        FilterChips(
+                            selection: $categoryFilter,
+                            options: [""] + categories,
+                            title: { $0.isEmpty ? L("All") : L($0) },
+                            count: { cat in cat.isEmpty ? nil : items.filter { $0.category == cat }.count }
+                        )
+                    }
+
+                    let shown = categoryFilter.isEmpty ? items : items.filter { $0.category == categoryFilter }
+                    let shownCategories = categoryFilter.isEmpty ? categories : [categoryFilter]
+                    ForEach(shownCategories, id: \.self) { category in
+                        let rows = shown.filter { $0.category == category }
+                        VStack(alignment: .leading, spacing: NeonSpace.sm) {
+                            SectionLabel(L(category))
+                            VStack(spacing: NeonSpace.stack) {
+                                ForEach(rows) { drawing in
+                                    drawingCard(drawing)
+                                        .staggered(shown.firstIndex(where: { $0.id == drawing.id }) ?? 0)
+                                }
+                            }
                         }
                     }
                 }
@@ -66,75 +87,95 @@ struct ProjectDrawingsSection: View {
         ) { target in Task { await deleteRevision(target) } }
     }
 
+    private var headerSubtitle: String {
+        guard let drawings, !drawings.isEmpty else { return L("Technical drawings and revisions") }
+        let revised = drawings.filter { !$0.revisions.isEmpty }.count
+        return L("%d drawings · %d revised", drawings.count, revised)
+    }
+
+    /// Categories in the order they first appear, deduplicated — used both
+    /// to group the list and to build the (optional) filter row.
+    private func presentCategories(_ items: [PFDrawing]) -> [String] {
+        var seen: [String] = []
+        for item in items where !seen.contains(item.category) { seen.append(item.category) }
+        return seen
+    }
+
     // MARK: Rows
 
+    private var imageFileTypes: Set<String> { ["jpg", "jpeg", "png", "heic"] }
+
     private func drawingCard(_ drawing: PFDrawing) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ListRow(
-                drawing.name,
-                subtitle: [drawing.subCategory, drawing.revision, drawing.fileType.uppercased()].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · "),
-                meta: drawing.drawingNumber,
-                leading: .icon("square.on.square", tint: .neonCyanStrong),
-                badge: drawing.category,
-                badgeTone: .cyan
-            ) {
-                HStack(spacing: 14) {
+        let subtitle = [drawing.subCategory, drawing.revision, drawing.fileType.uppercased()]
+            .compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
+        let leading: RowLeading = imageFileTypes.contains(drawing.fileType.lowercased())
+            ? .thumbnail(url: resolvedMediaURL(drawing.fileUrl))
+            : .icon(PFSection.drawings.symbol, tint: PFSection.drawings.hue.deep)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            ListRow(drawing.name, subtitle: subtitle, meta: drawing.drawingNumber, leading: leading) {
+                Menu {
                     if let url = resolvedMediaURL(drawing.fileUrl) {
-                        Link(destination: url) { Image(systemName: "arrow.up.forward.square") }
+                        Button { openURL(url) } label: { Label(L("Open file"), systemImage: "arrow.up.forward.square") }
                     }
                     Button {
                         Haptic.tap()
                         withNeonAnimation(.snappy) { toggle(drawing.id) }
                     } label: {
-                        HStack(spacing: 3) {
-                            if !drawing.revisions.isEmpty { Text("\(drawing.revisions.count)").font(.system(size: 12, weight: .semibold)) }
-                            Image(systemName: "clock.arrow.circlepath")
-                        }
+                        Label(
+                            drawing.revisions.isEmpty ? L("Revision history") : L("Revision history (%d)", drawing.revisions.count),
+                            systemImage: "clock.arrow.circlepath"
+                        )
                     }
-                    Button(role: .destructive) { toDelete = drawing } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                    Button { revisionFor = drawing } label: { Label(L("Upload new revision"), systemImage: "arrow.up.doc") }
+                    Button(role: .destructive) { toDelete = drawing } label: { Label(L("Delete"), systemImage: "trash") }
+                } label: {
+                    IconButtonLabel("ellipsis")
                 }
-                .font(.system(size: 15))
-                .foregroundStyle(Color.neonTextSecondary)
+                .accessibilityLabel(Text(L("More")))
             }
-            .padding(.horizontal, 4)
+            .rowCard()
+            .dynamicTypeSize(...(.xxLarge))
 
             if expanded.contains(drawing.id) {
-                VStack(alignment: .leading, spacing: 8) {
+                DetailCard(title: L("Revision history"), symbol: "clock.arrow.circlepath", tint: PFSection.drawings.hue.deep) {
                     if drawing.revisions.isEmpty {
                         Text(L("No earlier revisions."))
-                            .font(.system(size: 12))
+                            .font(.neonSubtitle)
                             .foregroundStyle(Color.neonTextTertiary)
                     } else {
-                        ForEach(drawing.revisions) { revision in
-                            HStack(spacing: 10) {
-                                BadgeView(text: revision.revision, tone: .neutral)
-                                DirText(revision.note ?? "—", font: .system(size: 12.5), color: .neonTextSecondary, fill: false, lineLimit: 2)
-                                Spacer(minLength: 4)
-                                Text(formattedISODate(revision.createdAt) ?? "")
-                                    .font(.system(size: 11)).foregroundStyle(Color.neonTextFaint)
-                                if let url = resolvedMediaURL(revision.fileUrl) {
-                                    Link(destination: url) { Image(systemName: "eye") }.font(.system(size: 12))
-                                }
-                                Button(role: .destructive) {
-                                    revisionToDelete = PFRevisionTarget(id: revision.id, label: revision.revision)
-                                } label: {
-                                    Image(systemName: "xmark.circle").font(.system(size: 12)).foregroundStyle(.red)
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(drawing.revisions) { revision in
+                                HStack(spacing: 10) {
+                                    BadgeView(text: revision.revision, tone: .neutral)
+                                    DirText(revision.note ?? "—", font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 2)
+                                    Spacer(minLength: 4)
+                                    Text(formattedISODate(revision.createdAt) ?? "")
+                                        .font(.neonMeta).foregroundStyle(Color.neonTextFaint)
+                                    if let url = resolvedMediaURL(revision.fileUrl) {
+                                        Button { openURL(url) } label: { Image(systemName: "eye") }
+                                            .font(.system(size: 12))
+                                            .accessibilityLabel(Text(L("View")))
+                                    }
+                                    Button {
+                                        revisionToDelete = PFRevisionTarget(id: revision.id, label: revision.revision)
+                                    } label: {
+                                        Image(systemName: "xmark.circle").font(.system(size: 12)).foregroundStyle(Color.neonDangerStrong)
+                                    }
+                                    .accessibilityLabel(Text(L("Remove")))
                                 }
                             }
                         }
                     }
-                    NeonButton(L("Upload new revision"), symbol: "arrow.up.doc", kind: .tinted(.neonCyanStrong), size: .small) {
+                    NeonButton(L("Upload New Revision"), symbol: "arrow.up.doc", kind: .tinted(PFSection.drawings.hue.deep), size: .small) {
                         revisionFor = drawing
                     }
+                    .padding(.top, 4)
                 }
-                .padding(12)
-                .neonSurface(.sunken, radius: 14)
-                .padding(.top, 8)
+                .padding(.top, NeonSpace.sm)
                 .transition(.neonSlideUp)
             }
         }
-        .padding(10)
-        .neonSurface(.glass, radius: NeonRadius.lg)
     }
 
     private func toggle(_ id: String) {
@@ -202,14 +243,14 @@ struct AddDrawingSheet: View {
     private var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && file != nil }
 
     var body: some View {
-        SheetScaffold(L("Add drawing"), symbol: "square.on.square", primaryTitle: L("Add Drawing"), isPrimaryEnabled: isValid) {
+        SheetScaffold(L("Add Drawing"), symbol: PFSection.drawings.symbol, primaryTitle: L("Add Drawing"), isPrimaryEnabled: isValid) {
             await save()
         } content: {
             FormSection {
-                MenuField(L("Category"), selection: $category, options: PFCategories.drawing, title: { $0 })
-                NeonTextField(L("Sub-category"), text: $subCategory, prompt: "Floor Plans")
-                NeonTextField(L("Drawing name"), text: $name, prompt: "Ground Floor Plan", isRequired: true)
-                NeonTextField(L("Drawing number"), text: $drawingNumber, prompt: "A-101")
+                MenuField(L("Category"), selection: $category, options: PFCategories.drawing, title: { L($0) })
+                NeonTextField(L("Sub-category"), text: $subCategory, prompt: L("Floor Plans"))
+                NeonTextField(L("Drawing name"), text: $name, prompt: L("Ground Floor Plan"), isRequired: true)
+                NeonTextField(L("Drawing number"), text: $drawingNumber, prompt: L("A-101"))
                 NeonTextField(L("Revision"), text: $revision, isRequired: true)
                 FilePickerField(label: L("File (PDF, DWG, image…)"), file: $file)
                 if let error { ValidationMessage(error) }
@@ -242,23 +283,33 @@ struct AddRevisionSheet: View {
     @EnvironmentObject private var api: APIClient
     @Environment(\.dismiss) private var dismiss
 
-    @State private var revision = ""
+    @State private var revision: String
     @State private var note = ""
     @State private var file: UploadFile?
     @State private var error: String?
+
+    // Prefilled from the drawing on file ("R00" → "R01") rather than a
+    // hard-coded "R03" that would invent a jump ahead of what the drawing is
+    // actually on.
+    init(projectId: String, drawing: PFDrawing, onSaved: @escaping () -> Void) {
+        self.projectId = projectId
+        self.drawing = drawing
+        self.onSaved = onSaved
+        _revision = State(initialValue: nextRevisionLabel(after: drawing.revision))
+    }
 
     private var isValid: Bool { !revision.trimmingCharacters(in: .whitespaces).isEmpty && file != nil }
 
     var body: some View {
         SheetScaffold(
-            L("New revision"), subtitle: drawing.name, symbol: "arrow.up.doc",
+            L("New Revision"), subtitle: drawing.name, symbol: "arrow.up.doc",
             primaryTitle: L("Upload Revision"), isPrimaryEnabled: isValid
         ) {
             await save()
         } content: {
             FormSection(footer: L("The current file moves into revision history.")) {
-                NeonTextField(L("New revision label"), text: $revision, prompt: "R03", isRequired: true)
-                NeonTextField(L("What changed"), text: $note)
+                NeonTextField(L("New revision label"), text: $revision, isRequired: true, hint: L("Now on %@", drawing.revision))
+                NeonTextField(L("What changed"), text: $note, prompt: L("e.g. Kitchen island moved 40 cm"))
                 FilePickerField(label: L("New file"), file: $file)
                 if let error { ValidationMessage(error) }
             }
