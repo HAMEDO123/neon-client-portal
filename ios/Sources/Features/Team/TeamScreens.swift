@@ -12,8 +12,10 @@ enum TeamScreens {
     ]
 
     /// `EmployeeDetailView`'s scroll anchors (`-neonScroll <anchor>`): profile,
-    /// day-plan, sales, performance, warnings, access.
-    /// `PayrollRootView`'s: totals, paysheet, salaries, attendance, receipts.
+    /// day-plan, sales, performance, warnings, access, playbook.
+    /// `PayrollRootView`'s: totals, paysheet, attendance, receipts (the
+    /// "Salaries" section was removed — see `ios/redesign/team.md` — so
+    /// there is no anchor of that name any more).
     @MainActor static func view(_ id: String) -> AnyView? {
         switch id {
         case "team-employees": return debugPushed(EmployeesRootView())

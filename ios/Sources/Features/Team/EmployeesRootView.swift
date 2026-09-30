@@ -71,9 +71,15 @@ struct EmployeesRootView: View {
     /// "Team" here can read one higher than Payroll's own count: this read
     /// has no `accessRole` filter (unlike `team/payroll`'s, which asks only
     /// for `accessRole: "EMPLOYEE"`), so it counts the manager's own
-    /// device-pairing row alongside the team — a server-side fix, in
-    /// `src/lib/mobile/registry/team.ts`, outside this area's editable files
-    /// (see `ios/redesign/team.md`).
+    /// device-pairing row alongside the team. Fixing that at the root — so
+    /// the two screens count exactly the same people — needs a change to
+    /// the server read in `src/lib/mobile/registry/team.ts`, outside this
+    /// area's editable files (see `ios/redesign/team.md`). Nothing here can
+    /// tell that row apart from a real board-only employee (there is no
+    /// `accessRole` in this response to test), so rather than leave the
+    /// mismatch unexplained, the caption below says honestly why the two
+    /// screens can disagree by one, instead of a silent, unexplained gap
+    /// the manager would otherwise have to puzzle out on their own.
     @ViewBuilder
     private func teamSummary(_ employees: [TeamEmployeeSummary]) -> some View {
         let active = employees.filter { $0.hasAccount && $0.active }.count
@@ -85,6 +91,9 @@ struct EmployeesRootView: View {
             KPICard(L("Warnings"), value: Double(warned), symbol: "exclamationmark.triangle.fill", hue: .orange, density: .compact) { EmptyView() }
             KPICard(L("No login"), value: Double(noAccount), symbol: "person.crop.circle.badge.questionmark", hue: .grey, density: .compact) { EmptyView() }
         }
+        Text(L("\"Team\" here includes your own device-pairing account if you have one. Payroll never counts that row, so the two totals can differ by one."))
+            .font(.neonCaption)
+            .foregroundStyle(Color.neonTextTertiary)
     }
 
     private func filtered(_ employees: [TeamEmployeeSummary]) -> [TeamEmployeeSummary] {
