@@ -77,7 +77,14 @@ export async function ringPhones(
           payload,
           Math.ceil(RING_MS / 1000),
         );
-        if (result.ok) rang.add(key);
+        if (result.ok) {
+          rang.add(key);
+        } else {
+          // The one place a refused ring shows up: `docker logs neon-app`.
+          // "TopicDisallowed" means the APNs key does not cover the
+          // <bundle>.voip topic.
+          console.warn(`[call-ring] ${device.id}: ${result.statusCode ?? "no status"} ${result.error}`);
+        }
         const outcome = deviceOutcome(result, device.failureCount);
         await prisma.deviceToken
           .update({
