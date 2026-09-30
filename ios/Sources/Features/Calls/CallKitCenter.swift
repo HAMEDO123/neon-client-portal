@@ -289,9 +289,8 @@ final class CallKitCenter: NSObject {
         session.$audioMuted
             .removeDuplicates()
             .sink { [weak self, weak entry] muted in
-                guard let self, let entry, entry.systemMuted != muted else { return }
-                entry.systemMuted = muted
-                self.request(CXSetMutedCallAction(call: entry.uuid, muted: muted))
+                guard let self, let entry else { return }
+                self.syncMute(entry, muted)
             }
             .store(in: &entry.watchers)
         session.$phase
@@ -300,6 +299,14 @@ final class CallKitCenter: NSObject {
                 self.markConnected(entry)
             }
             .store(in: &entry.watchers)
+    }
+
+    /// Tells CallKit's screen the app's mute — once CallKit knows the call:
+    /// an outgoing one is synced again when its start is performed.
+    private func syncMute(_ entry: Entry, _ muted: Bool) {
+        guard entry.incoming || entry.started, entry.systemMuted != muted else { return }
+        entry.systemMuted = muted
+        request(CXSetMutedCallAction(call: entry.uuid, muted: muted))
     }
 
     private func markConnected(_ entry: Entry) {
@@ -434,7 +441,10 @@ final class CallKitCenter: NSObject {
         entry.started = true
         provider.reportOutgoingCall(with: entry.uuid, startedConnectingAt: nil)
         provider.reportCall(with: entry.uuid, updated: update(for: entry))
-        if entry.session?.phase == .live { markConnected(entry) }
+        if let session = entry.session {
+            syncMute(entry, session.audioMuted)
+            if session.phase == .live { markConnected(entry) }
+        }
     }
 
     private func performEnd(_ action: CXEndCallAction) {
