@@ -1,4 +1,5 @@
 import AudioToolbox
+import Combine
 import UIKit
 import Foundation
 import WebRTC
@@ -60,6 +61,8 @@ final class CallCenter: ObservableObject {
     private var ringSeen: Set<String> = []
     private var answeringCallId: String?
     private var ringTask: Task<Void, Never>?
+    /// Follows the running call's phase, for the ringback.
+    private var phaseWatch: AnyCancellable?
 
     private var streamTask: Task<Void, Never>?
     private var lastEventId = 0
@@ -152,6 +155,7 @@ final class CallCenter: ObservableObject {
         // root, and with it the overlay that calls this).
         if !APIClient.shared.isLoggedIn { CallKitCenter.shared.endAll() }
         updateRinging()
+        updateRingback()
     }
 
     private func runStream() async {
@@ -265,6 +269,7 @@ final class CallCenter: ObservableObject {
             session?.sync(active)
             holdForPush(value)
             updateRinging()
+            updateRingback()
             CallKitCenter.shared.reconcile()
         case "signals":
             if let id { lastEventId = id }
@@ -354,6 +359,11 @@ final class CallCenter: ObservableObject {
         // next list instead left the session not knowing it was in the call,
         // so it never offered, and both phones sat on "Connecting…".
         next.sync(calls.first { $0.id == callId })
+        phaseWatch = next.$phase.sink { [weak self] _ in
+            // After the change lands: `sink` runs as it is about to.
+            DispatchQueue.main.async { self?.updateRingback() }
+        }
+        updateRingback()
         viewMode = .full
     }
 
@@ -365,6 +375,8 @@ final class CallCenter: ObservableObject {
         CallKitCenter.shared.callEnded(ended.callId, ended.endedByMe ? .hungUpHere : .endedThere(failed: problem != nil))
         guard session === ended else { return }
         session = nil
+        phaseWatch = nil
+        updateRingback()
         viewMode = .full
         if let problem {
             notice = problem
@@ -454,10 +466,24 @@ final class CallCenter: ObservableObject {
         ringSeen = ringing
     }
 
-    /// The phone buzzes while a call rings, as a phone call does — the only
-    /// thing that reaches somebody who has put the phone down.
+    /// What the caller hears while the phone they called rings, as on any
+    /// phone: until somebody answers, the call ends, or they leave it.
+    private func updateRingback() {
+        guard let session, let me else {
+            CallTones.setRingback(false)
+            return
+        }
+        let call = calls.first { $0.id == session.callId }
+        let waiting = call?.status == "RINGING" && call?.startedByKey == me && session.phase == .joining
+        CallTones.setRingback(waiting)
+    }
+
+    /// The phone buzzes and rings while a call rings the app's own screen
+    /// (CallKit rings for itself) — the only thing that reaches somebody who
+    /// has put the phone down.
     private func updateRinging() {
         let ringing = ringingCall != nil && !answering
+        CallTones.setRingtone(ringing)
         if ringing, ringTask == nil {
             ringTask = Task { @MainActor in
                 while !Task.isCancelled {

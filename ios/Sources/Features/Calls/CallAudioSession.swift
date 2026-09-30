@@ -56,6 +56,7 @@ enum CallAudioSession {
         apply(speaker: speaker, activate: true)
         activatedHere = true
         RTCAudioSession.sharedInstance().isAudioEnabled = true
+        CallTones.sessionBecameActive()
     }
 
     /// Just before CallKit answers or starts a call: the category it will
@@ -72,6 +73,7 @@ enum CallAudioSession {
         session.isAudioEnabled = true
         // The speaker override only holds on an active session.
         if inCall { apply(speaker: speaker, activate: false) }
+        CallTones.sessionBecameActive()
     }
 
     static func systemDidDeactivate(_ audioSession: AVAudioSession) {
