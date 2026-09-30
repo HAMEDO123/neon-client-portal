@@ -11,8 +11,9 @@ import WebRTC
 /// shows its avatar, as a camera that is off does). Debug builds only.
 ///
 /// `callkit-incoming` (and `-video`) ring CallKit's own incoming screen for a
-/// made-up call — the simulator shows it, though PushKit never reaches it —
-/// through CallKitCenter's fixture, which touches no stream and no server.
+/// made-up call through CallKitCenter's fixture, which touches no stream and
+/// no server. Only an iPhone draws that screen; the simulator takes the call
+/// and ends it at once, and the fixture's page says so.
 enum CallsScreens {
     static let ids: [String] = [
         "call-prejoin-voice", "call-prejoin-video", "call-prejoin-blocked",

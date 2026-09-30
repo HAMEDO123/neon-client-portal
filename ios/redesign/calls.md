@@ -33,6 +33,8 @@ them (the simulator has no camera), so every tile shows its avatar.
 | `call-mini-video` | The minimised group call: "NEON Team", "12:07 · Salem speaking" |
 | `call-mini-pip` | The minimised call's video window (a track with no frames: the simulator has no camera) |
 | `call-buttons` | The conversation header's call buttons and the Join / Back to call pills |
+| `callkit-incoming` | Rings CallKit's own incoming screen for a made-up voice call from Sally (no stream, no server), and says on the page what became of it |
+| `callkit-incoming-video` | The same for a video call |
 
 No screen is long enough to need a `-neonScroll` anchor. The fixtures give
 people the colours the live server gives them (Sally purple, Salem pink,
@@ -223,13 +225,99 @@ Skipped, with reasons:
   mistake: a private call almost always has people to ring. The empty state
   now says why, and the fixture shows the real empty case.
 
+## Round three: ringing like a phone (branch `ux-callkit`)
+
+The owner wanted a closed or locked iPhone to *ring* for a call, as WhatsApp
+does, not show a banner. That is PushKit + CallKit; the server side (VoIP
+token storage, the push itself) was written alongside by the orchestrator.
+
+- **`App/VoipPush.swift`** — a `PKPushRegistry` for `.voIP`, created in the
+  app delegate's `didFinishLaunching` (it must exist before the push that
+  launched the app is delivered). Its token is registered at
+  `POST api/mobile/devices` with `{token, bundleId, sandbox (DEBUG builds
+  true), deviceName, appVersion, kind: "voip"}` on every launch and after
+  sign-in (only while signed in), and released by `PushCenter.unregister`
+  together with the alert token, using the bearer captured before sign-out.
+- **`CallKitCenter.swift`** — one `CXProvider` ("NEON" from the display name,
+  video, one call at a time, generic handles, a monochrome "N" template icon,
+  out of Recents) and one `CXCallController`; server call ids map to CallKit
+  UUIDs per call. Every VoIP push is reported with `reportNewIncomingCall`
+  before PushKit's completion — a malformed one, one for a call this phone is
+  already in, answering, declined or no longer invited, or one that arrives
+  signed out is reported and ended at once with the matching reason.
+- **How the ring ends.** The server sends no "ended" push. CallKit keeps the
+  app running while it rings, so the calls stream decides: `reconcile` runs
+  after every `calls` list — ENDED or gone from the list → `.remoteEnded`;
+  this person JOINED → `.answeredElsewhere`; DECLINED → `.declinedElsewhere`;
+  no longer a participant → `.remoteEnded`. The push reopens the stream (a
+  connection the phone was suspended on may be dead without knowing it), and
+  a call never yet listed is called gone only by a list from a connection
+  opened after the ring began. Otherwise a 60 s timeout ends it
+  (`.unanswered`) and the app does not ring it again.
+- **Answer / End / Mute.** Answer joins through `CallCenter.answer`, which the
+  app's own Answer button now shares (`accept` calls it). Not active (locked,
+  background) → sound only; the call screen's camera button adds video after
+  unlocking. The action is fulfilled at once and the call screen is full size
+  when the app comes forward. End declines a ringing call and leaves a live
+  one (with background time, so the server hears it before iOS suspends the
+  app); a hang-up before the join has finished leaves the call the moment it
+  opens. Mute is synced both ways.
+- **Outgoing calls go through CallKit too** (chosen): every live call on a
+  device — started, joined from a pill, or answered on the app's ringing
+  screen — is a CallKit call (`CXStartCallAction`, `reportOutgoingCall`
+  connecting/connected). One audio path, the green pill, the lock screen's
+  controls, and CallKit's own "End & Accept" when a second call rings. If
+  CallKit refuses a call it carries on as the app's own.
+- **Audio.** `RTCAudioSession.useManualAudio = true` from launch.
+  `provider(_:didActivate:)` → `audioSessionDidActivate` + `isAudioEnabled =
+  true`; `didDeactivate` the reverse. `CallAudioSession.configure` now only
+  sets the category and route; a call CallKit does not carry (the simulator)
+  is activated directly. The session is CallKit's to switch off, which keeps
+  the sound on when one call is ended to answer another. The pre-join's level
+  meter switches its session off before handing over (`handOver`), leaving
+  activation to CallKit. The speaker button follows route changes.
+- **No double ringing.** While CallKit rings a call, `ringingCall` leaves it
+  out (no in-app screen, no buzz). On a phone registered for VoIP pushes a
+  newly listed ring waits 2.5 s for the push before the app rings it itself —
+  it still rings in the app when no push comes.
+- `UIBackgroundModes: [audio, voip]` in `project.yml`; PushKit and CallKit are
+  linked by their imports.
+
+**The simulator cannot show CallKit's incoming screen.** `callkit-incoming`
+reports its call and CallKit accepts it (no error), then ends it about 25 ms
+later: callservicesd shows an incoming call by opening
+`facetime://?launchForIncomingCall=1`, and the simulator has no app for it
+(LaunchServices -10814). Seen on the iOS 26.5 and 17.2 runtimes, and with a
+bare provider configuration too. The fixture's page says so ("Ended at once
+by the phone…"), which proves the report path runs; on an iPhone running a
+Debug build from Xcode the same id shows CallKit's real screen, with no
+server involved. Checked on "NEON QA 10" (UDID 631CFE4C…) with
+`-uiTestMode`, English and Arabic.
+
+**Only a real iPhone can confirm** (with the server's VoIP push live):
+the ring on a locked phone and with the app force-quit; the ringtone;
+answering from the lock screen and hearing both ways (CallKit's audio
+activation handed to WebRTC); the ring stopping when the caller hangs up,
+when it is answered on the web, and after 60 s; decline reaching the server
+from a locked phone; "End & Accept" between two NEON calls, and a cellular
+call arriving during one; mute and the speaker/AirPods route on the lock
+screen matching the app; an outgoing call's green pill and lock-screen
+controls; the call screen appearing when the app is opened after answering;
+a first call answered on the lock screen before the microphone was ever
+allowed (the permission prompt can only appear once the app is open, so the
+join waits for it); sandbox vs production VoIP tokens (a Debug build from
+Xcode registers `sandbox: true`, TestFlight `false`).
+
 ## Open issues
 
-- **No ringing with the app closed or in the background.** Incoming calls
-  arrive only through the open calls stream; there is no VoIP push
-  (PushKit/CallKit) and no APNs on the server. A phone in a pocket with the
-  app closed does not ring. Needs server APNs + PushKit + CallKit.
-- **No ringtone**, only vibration: no sound asset ships with the app.
+- **Ringing with the app closed** — built in round three; waiting on a real
+  iPhone and the live VoIP push to confirm.
+- **No ringtone in the app's own ringing**, only vibration (no sound asset
+  ships). CallKit's ring uses the phone's own ringtone.
+- **A phone signed out by a refused token** (401, not the Sign Out button)
+  cannot release its VoIP token — its bearer no longer works — so it may keep
+  receiving pushes (each reported and ended at once) until somebody signs in
+  on it or the server retires the token.
 - **Chat voice notes change the shared audio session**
   (`Features/Chat/ChatVoiceRecorder.swift:44` sets `.playAndRecord`/`.default`
   with speaker, `:127` sets `.playback`). Played or recorded while a call is
