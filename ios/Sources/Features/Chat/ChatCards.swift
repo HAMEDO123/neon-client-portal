@@ -128,7 +128,7 @@ struct ChatTaskRow: View {
                     FlowRow(spacing: 6) {
                         ForEach(card.assignments) { part in
                             HStack(spacing: 5) {
-                                ChatAvatar(url: nil, name: part.employee?.name ?? "—", size: 20, color: part.employee?.color)
+                                ChatAvatar(url: facePhotoURL(part.employee?.photoUrl), name: part.employee?.name ?? "—", size: 20, color: part.employee?.color)
                                 Text(verbatim: part.employee?.name ?? "—")
                                     .font(.system(.caption, weight: .semibold))
                                     .foregroundStyle(Color.neonInk.opacity(0.85))

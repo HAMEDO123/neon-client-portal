@@ -17,6 +17,12 @@ struct CallParticipant: Codable, Identifiable, Equatable {
     /// INVITED, JOINED, LEFT, DECLINED
     let state: String
     let joinedAt: String?
+    /// Their face, looked up by the server when the call is read (never
+    /// copied onto the call): a photo, or nil for their initials. Absent from
+    /// a server before faces.
+    var photo: String? = nil
+
+    var photoURL: URL? { facePhotoURL(photo) }
 }
 
 struct CallView: Codable, Identifiable, Equatable {

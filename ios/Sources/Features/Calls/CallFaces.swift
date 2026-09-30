@@ -19,8 +19,8 @@ struct CallFace: Equatable {
     var url: URL?
     var kind: Kind = .person
 
-    static func person(_ name: String, color: String?) -> CallFace {
-        CallFace(name: name, color: color, url: nil, kind: .person)
+    static func person(_ name: String, color: String?, photo: URL? = nil) -> CallFace {
+        CallFace(name: name, color: color, url: photo, kind: .person)
     }
 
     /// The colour family a call's stage glows in: the person's own; nil for
@@ -143,7 +143,8 @@ final class CallFaceDirectory: ObservableObject {
         let other = others.first { $0.memberKey == call.startedByKey } ?? others.first
         guard let other else { return face(slug: call.conversationSlug, title: call.title) }
         // A private call somebody else was rung into is named after all of
-        // them; the face stays the one person's.
-        return .person(other.name, color: other.color)
+        // them; the face stays the one person's — their photo where they
+        // have one.
+        return .person(other.name, color: other.color, photo: other.photoURL)
     }
 }

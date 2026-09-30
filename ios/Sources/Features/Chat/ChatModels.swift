@@ -308,6 +308,8 @@ struct TaskMember: Decodable, Equatable, Hashable, Identifiable {
     let id: String
     let name: String
     let color: String?
+    /// Their face, or nil for initials (absent from a server before faces).
+    let photoUrl: String?
 }
 
 /// One person a meeting can ask — the manager included, as the key "admin".
@@ -315,6 +317,8 @@ struct MeetingMember: Decodable, Equatable, Hashable, Identifiable {
     let key: String
     let name: String
     let color: String?
+    /// Their face, or nil for initials.
+    let photo: String?
     var id: String { key }
 }
 

@@ -192,7 +192,9 @@ struct CallFloatingWindow: View {
         guard let person else { return nil }
         let video = person.sharing ? person.screenTrack : (person.videoOff ? nil : person.cameraTrack)
         return CallTileModel(
-            id: person.key, name: person.name, color: person.color, video: video, audioMuted: person.audioMuted,
+            id: person.key, name: person.name, color: person.color,
+            avatarURL: call?.participants.first { $0.memberKey == person.key }?.photoURL,
+            video: video, audioMuted: person.audioMuted,
             sharing: person.sharing, speaking: person.speaking, quality: person.quality, connection: person.connection
         )
     }

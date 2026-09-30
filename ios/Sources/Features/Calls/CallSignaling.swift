@@ -52,6 +52,8 @@ extension APIClient {
         let key: String
         let name: String
         let color: String?
+        /// Their face, or nil for initials.
+        var photo: String? = nil
         var id: String { key }
     }
 

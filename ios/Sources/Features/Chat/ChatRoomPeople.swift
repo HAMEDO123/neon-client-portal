@@ -10,10 +10,18 @@ import SwiftUI
 // manager), and draws them through the same ChatTint and ChatAvatar the list
 // uses — so Sally is the same purple in both.
 
-/// The studio's own colour for each person the viewer can talk to.
+/// The studio's own colour for each person the viewer can talk to — and
+/// their face, from the same read.
+///
+/// A message, a comment, a meeting's attendee and a read marker each carry a
+/// key (and a copied name), never a picture: a face is a current fact about a
+/// person, so it is looked up here once for the room — the phone's
+/// `FacesProvider` — rather than copied onto every row.
 struct ChatRoomPalette: Equatable {
     private var byKey: [String: String] = [:]
     private var byName: [String: String] = [:]
+    private var photoByKey: [String: URL] = [:]
+    private var photoByName: [String: URL] = [:]
 
     init() {
         // The manager is "ink" everywhere the platform draws them
@@ -24,16 +32,26 @@ struct ChatRoomPalette: Equatable {
         byName[L("Manager")] = "ink"
     }
 
-    init(people: [ChatPerson]) {
+    /// `me` is the viewer themselves — "admin" or their employee id, and
+    /// their own face — whom `chat/people` leaves out, but who is on meeting
+    /// cards and task cards like anybody else.
+    init(people: [ChatPerson], me: (key: String, photo: URL?)? = nil) {
         self.init()
         for person in people {
-            guard let color = person.color, !color.isEmpty else { continue }
             // An employee sees the manager as "manager"; messages and read
             // markers call them "admin".
             let key = person.id == "manager" ? "admin" : person.id
+            // `avatar` is their photo, or the server's initials picture —
+            // which `facePhotoURL` reads as "no photo".
+            if let photo = facePhotoURL(person.avatar) {
+                photoByKey[key] = photo
+                photoByName[person.name] = photo
+            }
+            guard let color = person.color, !color.isEmpty else { continue }
             byKey[key] = color
             byName[person.name] = color
         }
+        if let me, let photo = me.photo { photoByKey[me.key] = photo }
     }
 
     /// The colour the studio gave this person: by who they are first, then —
@@ -41,6 +59,16 @@ struct ChatRoomPalette: Equatable {
     func color(key: String?, name: String?) -> String? {
         if let key, let color = byKey[key] { return color }
         if let name, let color = byName[name] { return color }
+        return nil
+    }
+
+    /// Their face, or nil for their initials: by who they are, and — only
+    /// when there is no key at all, as on a pinned message — by name. A
+    /// wrong colour is a small thing; somebody else's face is not, so a key
+    /// that is known and has no photo never falls back to a name.
+    func photo(key: String?, name: String? = nil) -> URL? {
+        if let key { return photoByKey[key] }
+        if let name { return photoByName[name] }
         return nil
     }
 
@@ -80,21 +108,36 @@ extension ChatMessage {
     var authorKey: String? { chatAuthorKey(authorType: authorType, authorId: authorId) }
 }
 
-/// Reads everybody's colour once and hands it to everything inside.
+/// Reads everybody's colour and face once and hands them to everything
+/// inside — again when somebody's face changes, and with the viewer's own
+/// face as it stands (`APIClient.myPhoto`).
 private struct ChatRoomPaletteLoader: ViewModifier {
     @EnvironmentObject private var api: APIClient
-    @State private var palette = ChatRoomPalette()
+    @State private var people: [ChatPerson] = []
 
     func body(content: Content) -> some View {
         content
-            .environment(\.chatRoomPalette, palette)
-            .task {
-                // A failed read leaves each name on the colour ChatTint picks
-                // for it — the list's own fallback, so the two still agree.
-                if let people = try? await api.fetchChatPeople() {
-                    palette = ChatRoomPalette(people: people)
-                }
+            .environment(\.chatRoomPalette, ChatRoomPalette(people: people, me: me))
+            .task { await load() }
+            .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
+                guard isFaceChange(note.object as? String) else { return }
+                Task { await load() }
             }
+    }
+
+    private var me: (key: String, photo: URL?)? {
+        guard let identity = api.identity else { return nil }
+        let key = identity.side == .admin ? "admin" : identity.id
+        return key.map { ($0, facePhotoURL(api.myPhoto)) }
+    }
+
+    private func load() async {
+        // A failed read leaves each name on the colour ChatTint picks for it
+        // — the list's own fallback, so the two still agree — and each face
+        // on its initials.
+        if let loaded = try? await api.fetchChatPeople() {
+            people = loaded
+        }
     }
 }
 
