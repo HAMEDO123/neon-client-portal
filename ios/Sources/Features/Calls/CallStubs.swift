@@ -33,14 +33,38 @@ struct CallButtons: View {
             }
         } else {
             HStack(spacing: 0) {
-                IconButton("phone.fill", label: L("Call %@", title), look: .plain, tint: .neonPurpleStrong, size: 36) {
+                CallHeaderGlyph(symbol: "phone.fill", label: L("Call %@", title)) {
                     center.prepare(.start(conversation: slug, kind: "AUDIO", title: title))
                 }
-                IconButton("video.fill", label: L("Video call %@", title), look: .plain, tint: .neonPurpleStrong, size: 36) {
+                CallHeaderGlyph(symbol: "video.fill", label: L("Video call %@", title)) {
                     center.prepare(.start(conversation: slug, kind: "VIDEO", title: title))
                 }
             }
         }
+    }
+}
+
+/// One of the header's call glyphs: drawn at 36 pt, the size of the header's
+/// other buttons (the chat area lays them out and draws the white capsule
+/// round them), but touched across a full 44 pt. The extra reaches past the
+/// drawn edge without taking any layout room.
+struct CallHeaderGlyph: View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            Haptic.tap()
+            action()
+        } label: {
+            IconButtonLabel(symbol, look: .plain, tint: .neonPurpleStrong, size: 36)
+                .frame(width: NeonSize.touch, height: NeonSize.touch)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle(scale: 0.88))
+        .padding(-(NeonSize.touch - 36) / 2)
+        .accessibilityLabel(Text(label))
     }
 }
 
@@ -69,8 +93,12 @@ struct CallLivePill: View {
             .background(Capsule().fill(NeonHue.green.fill))
             .shadow(color: .neonSuccess.opacity(0.35), radius: 8, x: 0, y: 3)
             .fixedSize()
+            // Drawn 32 pt tall to sit in a header, touched across 44.
+            .padding(.vertical, (NeonSize.touch - 32) / 2)
+            .contentShape(Capsule())
         }
         .buttonStyle(.pressable)
+        .padding(.vertical, -(NeonSize.touch - 32) / 2)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 }

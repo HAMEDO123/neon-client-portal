@@ -10,6 +10,9 @@ struct CallMiniModel {
     var title: String
     var status: String
     var phase: CallSessionPhase
+    /// A group call names the group first, so it never reads as a private
+    /// call with whoever happens to be shown.
+    var isGroup = false
     /// The person the window shows: whoever is talking, else the first one in.
     var focus: CallTileModel?
     var audioMuted: Bool
@@ -21,8 +24,19 @@ struct CallMiniWindow: View {
     var onHangUp: () -> Void
     var onFrame: ((CGRect) -> Void)?
 
+    /// A drag of the window that starts on the hang-up must not end the call
+    /// when the finger lifts: the tap is refused while dragging and just after.
+    @State private var dragging = false
+    @State private var dragEndedAt: Date?
+
     var body: some View {
-        CallDraggable(topInset: NeonSpace.sm, bottomInset: 96, horizontalInset: NeonSpace.md, startsAtBottom: true, onFrame: onFrame) {
+        CallDraggable(
+            topInset: NeonSpace.sm, bottomInset: 96, horizontalInset: NeonSpace.gutter, startsAtBottom: true, onFrame: onFrame,
+            onDragging: { now in
+                dragging = now
+                if !now { dragEndedAt = Date() }
+            }
+        ) {
             Group {
                 if let focus = model.focus, focus.video != nil {
                     videoWindow(focus)
@@ -32,6 +46,25 @@ struct CallMiniWindow: View {
             }
             .transition(.neonPop)
         }
+    }
+
+    /// The window's own surface: the brand's ink, solid, so it reads as a
+    /// deliberate object over the light app rather than a grey smudge.
+    private func surface<S: InsettableShape>(_ shape: S) -> some View {
+        shape.fill(LinearGradient.neonInkHero)
+            .overlay(shape.strokeBorder(Color.white.opacity(0.16), lineWidth: 1))
+    }
+
+    private var headline: String {
+        model.isGroup ? model.title : (model.focus?.name ?? model.title)
+    }
+
+    /// "12:07", or in a group "12:07 · Salem speaking".
+    private var detail: String {
+        if model.isGroup, let focus = model.focus, focus.speaking {
+            return model.status + " · " + L("%@ speaking", focus.name)
+        }
+        return model.status
     }
 
     private func videoWindow(_ focus: CallTileModel) -> some View {
@@ -51,10 +84,12 @@ struct CallMiniWindow: View {
                     .background(CallGlass(shape: Capsule(), strength: 0.4))
                     .padding(.top, 8)
                 }
-                .overlay(alignment: .bottomTrailing) { hangUpButton(size: 30).padding(6) }
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.white.opacity(0.16), lineWidth: 1))
                 .neonShadow(.floating)
         }
         .buttonStyle(PressableStyle(scale: 0.96))
+        .overlay(alignment: .bottomTrailing) { hangUpButton(size: 34).padding(2) }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(L("Back to call"))
         .accessibilityValue(Text(verbatim: "\(model.title), \(model.status)"))
     }
@@ -70,17 +105,14 @@ struct CallMiniWindow: View {
                                 .frame(width: 46, height: 46)
                                 .transition(.neonPop)
                         }
-                        AvatarView(url: nil, name: model.focus?.name ?? model.title, size: 38, style: .solid)
+                        CallFaceView(face: model.focus?.face ?? .person(model.title, color: nil), size: 38)
                     }
                     .frame(width: 46, height: 46)
                     VStack(alignment: .leading, spacing: 2) {
-                        DirText(model.focus?.name ?? model.title, font: .system(.subheadline, weight: .semibold), color: .white, fill: false, lineLimit: 1)
+                        DirText(headline, font: .system(.subheadline, weight: .semibold), color: .white, fill: false, lineLimit: 1)
                         HStack(spacing: 5) {
                             CallLiveDot(phase: model.phase)
-                            Text(model.status)
-                                .font(.system(.caption, weight: .medium).monospacedDigit())
-                                .foregroundStyle(.white.opacity(0.75))
-                                .lineLimit(1)
+                            DirText(detail, font: .system(.caption, weight: .medium).monospacedDigit(), color: .white.opacity(0.75), fill: false, lineLimit: 1)
                             if model.audioMuted {
                                 Image(systemName: "mic.slash.fill")
                                     .font(.system(size: 10, weight: .bold))
@@ -89,27 +121,29 @@ struct CallMiniWindow: View {
                             }
                         }
                     }
-                    .frame(maxWidth: 120, alignment: .leading)
+                    .frame(maxWidth: 168, alignment: .leading)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.97))
             .accessibilityLabel(L("Back to call"))
-            .accessibilityValue(Text(verbatim: "\(model.focus?.name ?? model.title), \(model.status)"))
+            .accessibilityValue(Text(verbatim: "\(headline), \(detail)"))
 
-            hangUpButton(size: 38)
+            hangUpButton(size: 44)
         }
         .padding(.leading, 5)
         .padding(.trailing, 6)
         .padding(.vertical, 5)
-        .background(CallGlass(shape: Capsule(), strength: 0.55))
+        .background(surface(Capsule()))
         .neonShadow(.floating)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .animation(NeonMotion.snappy, value: model.focus?.speaking == true)
     }
 
+    /// At least 44 pt to touch whatever its drawn size.
     private func hangUpButton(size: CGFloat) -> some View {
         Button {
+            guard !dragging, Date().timeIntervalSince(dragEndedAt ?? .distantPast) > 0.4 else { return }
             Haptic.warning()
             onHangUp()
         } label: {
@@ -118,6 +152,8 @@ struct CallMiniWindow: View {
                 .foregroundStyle(.white)
                 .frame(width: size, height: size)
                 .background(Circle().fill(NeonHue.red.fill))
+                .frame(width: max(size, NeonSize.touch), height: max(size, NeonSize.touch))
+                .contentShape(Circle())
         }
         .buttonStyle(PressableStyle(scale: 0.88))
         .accessibilityLabel(L("End"))
@@ -136,7 +172,10 @@ struct CallFloatingWindow: View {
 
     var body: some View {
         CallMiniWindow(
-            model: CallMiniModel(title: call?.title ?? L("Call"), status: status, phase: session.phase, focus: focus, audioMuted: session.audioMuted),
+            model: CallMiniModel(
+                title: call?.title ?? L("Call"), status: status, phase: session.phase, isGroup: call?.isGroup ?? false,
+                focus: focus, audioMuted: session.audioMuted || session.micTrack == nil
+            ),
             onExpand: {
                 Haptic.tap()
                 center.expand()
@@ -153,7 +192,7 @@ struct CallFloatingWindow: View {
         guard let person else { return nil }
         let video = person.sharing ? person.screenTrack : (person.videoOff ? nil : person.cameraTrack)
         return CallTileModel(
-            id: person.key, name: person.name, video: video, audioMuted: person.audioMuted,
+            id: person.key, name: person.name, color: person.color, video: video, audioMuted: person.audioMuted,
             sharing: person.sharing, speaking: person.speaking, quality: person.quality, connection: person.connection
         )
     }

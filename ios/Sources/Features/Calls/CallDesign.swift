@@ -17,6 +17,17 @@ struct CallBackdrop: View {
     @State private var drift = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// How strongly the person's own colour glows. Orange, amber and green
+    /// over the ink turn brown and olive, so they stay a tint and the brand's
+    /// violet and indigo carry the stage — it never goes muddy.
+    static func glow(_ hue: NeonHue?) -> Double {
+        guard let hue else { return 0.55 }
+        switch hue {
+        case .orange, .amber, .green, .red: return 0.28
+        default: return 0.55
+        }
+    }
+
     var body: some View {
         GeometryReader { geo in
             let side = max(geo.size.width, geo.size.height)
@@ -24,7 +35,7 @@ struct CallBackdrop: View {
                 LinearGradient.neonInkHero
                 Color.neonInk.opacity(0.4)
                 Circle()
-                    .fill((hue?.color ?? .neonBlue).opacity(0.55))
+                    .fill((hue?.color ?? .neonBlue).opacity(Self.glow(hue)))
                     .frame(width: side * 0.75, height: side * 0.75)
                     .blur(radius: 90)
                     .offset(x: -geo.size.width * 0.38 + (drift ? 36 : 0), y: -geo.size.height * 0.34 + (drift ? 24 : 0))
@@ -67,14 +78,23 @@ struct CallGlass<S: InsettableShape>: View {
 // MARK: - Round controls
 
 enum CallButtonLook {
-    /// Frosted dark disc, white glyph: a control that is off.
+    /// Frosted dark disc, white glyph: sending, or a control at rest.
     case glass
-    /// White disc, ink glyph: a control that is on (muted, speaker on).
+    /// White disc, ink glyph: kept for "you are not sending this" alone —
+    /// muted, camera off, no microphone — on every call screen alike.
     case active
     /// Red: hang up, decline.
     case danger
     /// Green: answer.
     case accept
+}
+
+/// A small mark on a round control: an indigo dot for "switched on" where
+/// the disc itself must not change (the speaker), or an orange warning for a
+/// control that cannot work until something is allowed in Settings.
+enum CallButtonMark {
+    case on
+    case warning
 }
 
 /// A round call control with its name under it — the controls bar, the
@@ -86,6 +106,7 @@ struct CallRoundButton: View {
     var size: CGFloat = 58
     /// Said by VoiceOver after the name ("On", "Off"), for a toggle.
     var value: String?
+    var mark: CallButtonMark?
     var showsTitle = true
     let action: () -> Void
 
@@ -97,6 +118,7 @@ struct CallRoundButton: View {
                     .foregroundStyle(look == .active ? Color.neonInk : Color.white)
                     .frame(width: size, height: size)
                     .background { disc }
+                    .overlay(alignment: mark == .on ? .bottom : .topTrailing) { markView }
                     .contentShape(Circle())
                 if showsTitle {
                     Text(title)
@@ -111,6 +133,31 @@ struct CallRoundButton: View {
         .buttonStyle(PressableStyle(scale: 0.9))
         .accessibilityLabel(Text(title))
         .accessibilityValue(Text(value ?? ""))
+    }
+
+    @ViewBuilder
+    private var markView: some View {
+        switch mark {
+        case .on:
+            Circle()
+                .fill(Color.neonIndigo)
+                .frame(width: 7, height: 7)
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.9), lineWidth: 1))
+                .shadow(color: .neonIndigo.opacity(0.8), radius: 4)
+                .offset(y: -size * 0.12)
+                .transition(.neonPop)
+        case .warning:
+            Image(systemName: "exclamationmark")
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundStyle(.white)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(NeonHue.orange.fill))
+                .overlay(Circle().strokeBorder(Color.neonInk.opacity(0.6), lineWidth: 1.5))
+                .offset(x: 2, y: -2)
+                .transition(.neonPop)
+        case nil:
+            EmptyView()
+        }
     }
 
     @ViewBuilder
@@ -166,7 +213,7 @@ struct CallGlassIconButton: View {
 /// rings spreading out while the call rings, and the brand ring while they
 /// speak.
 struct CallHalo: View {
-    let name: String
+    let face: CallFace
     var size: CGFloat = 128
     var ringing = false
     var speaking = false
@@ -175,10 +222,10 @@ struct CallHalo: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let hue = NeonPalette.hue(for: name)
+        let glow = face.hue?.color ?? .neonPurple
         ZStack {
             Circle()
-                .fill(hue.color.opacity(0.5))
+                .fill(glow.opacity(CallBackdrop.glow(face.hue) < 0.5 ? 0.32 : 0.5))
                 .frame(width: size * 1.3, height: size * 1.3)
                 .blur(radius: 34)
 
@@ -204,7 +251,7 @@ struct CallHalo: View {
                     .transition(.neonPop)
             }
 
-            AvatarView(url: nil, name: name, size: size, style: .solid)
+            CallFaceView(face: face, size: size)
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.85), lineWidth: max(2, size * 0.025)))
                 .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 10)
         }
@@ -237,6 +284,9 @@ struct CallQualityBars: View {
                     .frame(width: 3, height: 5 + CGFloat(index) * 3.5)
             }
         }
+        // Signal bars rise left to right in either language, as the
+        // status bar's do.
+        .environment(\.layoutDirection, .leftToRight)
         .accessibilityElement()
         .accessibilityLabel(Text(Self.label(quality)))
     }
@@ -323,28 +373,52 @@ struct CallNoticeBanner: View {
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionTitle, let action {
-                    Button(actionTitle, action: action)
-                        .font(.system(.footnote, weight: .semibold))
-                        .foregroundStyle(Color.neonInk)
-                        .padding(.horizontal, NeonSpace.md)
-                        .frame(minHeight: 30)
-                        .background(Capsule().fill(Color.white))
-                        .buttonStyle(.pressable)
+                    NeonButton(actionTitle, kind: .secondary, size: .medium) { action() }
                 }
             }
             .padding(.top, 5)
             Spacer(minLength: 0)
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white.opacity(0.75))
-                    .frame(width: 28, height: 28)
+                    .frame(width: NeonSize.touch, height: NeonSize.touch)
                     .contentShape(Rectangle())
             }
+            .padding(.top, -8)
+            .padding(.trailing, -8)
             .accessibilityLabel(L("Close"))
         }
         .padding(NeonSpace.md)
         .background(CallGlass(shape: RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous), strength: 0.45))
         .neonShadow(.floating)
+    }
+}
+
+// MARK: - The microphone's level
+
+/// What the microphone is hearing right now, as a row of bars that rise with
+/// the voice — real levels (0…1, newest last), never an animation standing in
+/// for them. Flat bars mean it hears nothing.
+struct CallMicMeter: View {
+    let levels: [Double]
+    /// False while the microphone is off: the bars go quiet and grey.
+    var live = true
+    var bars = CallMicLevelMonitor.count
+
+    var body: some View {
+        let shown = Array((Array(repeating: 0, count: max(0, bars - levels.count)) + levels).suffix(bars))
+        HStack(alignment: .center, spacing: 4) {
+            ForEach(shown.indices, id: \.self) { index in
+                Capsule()
+                    .fill(live ? AnyShapeStyle(NeonHue.green.fill) : AnyShapeStyle(Color.white.opacity(0.28)))
+                    .frame(width: 4, height: 4 + 22 * CGFloat(live ? min(1, max(0, shown[index])) : 0))
+            }
+        }
+        .frame(height: 26)
+        .animation(.linear(duration: 0.08), value: shown)
+        .accessibilityElement()
+        .accessibilityLabel(Text(L("Microphone level")))
+        .accessibilityValue(Text(live && (levels.last ?? 0) > 0.08 ? L("Hearing you") : L("Quiet")))
     }
 }
