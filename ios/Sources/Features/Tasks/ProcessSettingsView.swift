@@ -32,9 +32,7 @@ struct ProcessSettingsView: View {
                     .neonAmbientBackground()
             } else {
                 NeonScroll(spacing: NeonSpace.stack) {
-                    StatGrid(columns: 3) {
-                        ForEach(0..<3, id: \.self) { _ in SkeletonKPICard(compact: true) }
-                    }
+                    SkeletonCard(lines: 3)
                     SkeletonRows(count: 5)
                 }
             }
@@ -42,12 +40,16 @@ struct ProcessSettingsView: View {
         .navigationTitle(L("Delivery process"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await store.load(api) }
-        .sheet(isPresented: $addingSection) { ProcessSectionSheet(section: nil) { await store.load(api) } }
+        .sheet(isPresented: $addingSection) {
+            ProcessSectionSheet(section: nil, existingIds: Set((store.value?.sections ?? []).map(\.id))) { await store.load(api) }
+        }
         .sheet(item: $editingSection) { section in ProcessSectionSheet(section: section) { await store.load(api) } }
         .sheet(isPresented: $addingStep) { ProcessStepSheet(step: nil, process: store.value) { await store.load(api) } }
         .sheet(item: $editingStep) { step in ProcessStepSheet(step: step, process: store.value) { await store.load(api) } }
         .sheet(item: $editingStandard) { step in ProcessTaskTypeSheet(step: step, team: store.value?.team ?? []) { await store.load(api) } }
-        .sheet(isPresented: $addingOwner) { ProcessOwnerSheet(owner: nil) { await store.load(api) } }
+        .sheet(isPresented: $addingOwner) {
+            ProcessOwnerSheet(owner: nil, existingIds: Set((store.value?.team ?? []).map(\.id))) { await store.load(api) }
+        }
         .sheet(item: $editingOwner) { owner in ProcessOwnerSheet(owner: owner) { await store.load(api) } }
         .sheet(isPresented: $addingPeriod) { ProcessPeriodSheet(period: nil, steps: store.value?.steps ?? []) { await store.load(api) } }
         .sheet(item: $editingPeriod) { period in ProcessPeriodSheet(period: period, steps: store.value?.steps ?? []) { await store.load(api) } }
@@ -60,16 +62,10 @@ struct ProcessSettingsView: View {
                     if let cachedAt = store.cachedAt {
                         OfflineBanner(savedAt: cachedAt)
                     }
-                    summary(process)
                     if process.totalDays > 0 {
                         timeline(process)
                     }
-                    let unset = process.steps.filter { $0.deliverable == nil && $0.acceptance == nil }.count
-                    if unset > 0 {
-                        StatusNote(symbol: "exclamationmark.triangle.fill", tone: .warning,
-                                   title: L("%d steps have no standard", unset),
-                                   detail: L("Nothing says what finishing them means, so proof sent for them has nothing to be checked against."))
-                    }
+                    standardsNote(process)
                 }
                 .neonListRow(top: 6, bottom: 6)
 
@@ -93,20 +89,11 @@ struct ProcessSettingsView: View {
         }
     }
 
-    // MARK: - Summary
-
-    private func summary(_ process: ProcessResponse) -> some View {
-        StatGrid(columns: 3) {
-            KPICard(L("Sections"), value: Double(process.sections.count), symbol: "square.stack.3d.up.fill", hue: .cyan, density: .compact)
-            KPICard(L("Steps"), value: Double(process.steps.count), symbol: "checklist", hue: .purple, density: .compact)
-            KPICard(L("Owners"), value: Double(process.team.filter(\.active).count), symbol: "person.2.fill", hue: .pink,
-                    caption: process.team.contains { !$0.active } ? L("%d inactive", process.team.filter { !$0.active }.count) : nil,
-                    density: .compact)
-        }
-    }
+    // MARK: - The top
 
     /// The stage periods laid end to end: how the timed part of the process
-    /// splits its days.
+    /// splits its days. (How many sections, steps and owners there are is
+    /// said once, on each list's own heading below.)
     private func timeline(_ process: ProcessResponse) -> some View {
         SectionCard(L("Timed process"), subtitle: L("%d days", process.totalDays), symbol: "timer", hue: .orange) {
             let parts = process.timeline.enumerated().map { index, range in
@@ -131,14 +118,46 @@ struct ProcessSettingsView: View {
         }
     }
 
+    /// Steps nobody has written a standard for, and a way to start on the
+    /// first of them, in the order the process runs.
+    @ViewBuilder
+    private func standardsNote(_ process: ProcessResponse) -> some View {
+        let unset = orderedSteps(process).filter { $0.deliverable == nil && $0.acceptance == nil }
+        if let first = unset.first {
+            VStack(alignment: .leading, spacing: NeonSpace.sm) {
+                StatusNote(symbol: "exclamationmark.triangle.fill", tone: .warning,
+                           title: unset.count == 1 ? L("1 step has no standard") : L("%d steps have no standard", unset.count),
+                           detail: L("Nothing says what finishing them means, so proof sent for them has nothing to be checked against."))
+                NeonButton(L("Write the first one"), symbol: "square.and.pencil", kind: .tinted(.neonOrangeStrong), size: .small) {
+                    editingStandard = first
+                }
+                .accessibilityHint(Text(first.name))
+            }
+        }
+    }
+
     private func stepName(_ id: String, _ process: ProcessResponse) -> String {
         process.steps.first { $0.id == id }?.name ?? id
     }
 
-    private func header(_ title: String, subtitle: String, count: Int, anchor: String) -> some View {
-        SectionHeader(title, subtitle: subtitle, count: count)
-            .neonListRow(top: 18, bottom: 4)
-            .id(anchor)
+    /// Every step in the order a project meets them: section by section, then
+    /// any not in a section.
+    private func orderedSteps(_ process: ProcessResponse) -> [ProcessStep] {
+        process.sections.flatMap { section in
+            process.steps.filter { $0.sectionId == section.id }.sorted { $0.order < $1.order }
+        } + process.steps.filter { $0.sectionId == nil }.sorted { $0.order < $1.order }
+    }
+
+    /// A list's heading, with its count and its own + to add one more.
+    private func header(_ title: String, subtitle: String, count: Int, anchor: String, addLabel: String, add: @escaping () -> Void) -> some View {
+        SectionHeader(title, subtitle: subtitle, count: count) {
+            IconButton("plus", label: addLabel, look: .tinted, tint: .neonIndigoStrong) {
+                Haptic.tap()
+                add()
+            }
+        }
+        .neonListRow(top: 18, bottom: 6)
+        .id(anchor)
     }
 
     // MARK: - Sections
@@ -146,26 +165,25 @@ struct ProcessSettingsView: View {
     @ViewBuilder
     private func sectionsBlock(_ process: ProcessResponse) -> some View {
         Section {
-            header(L("Sections"), subtitle: L("How the steps are grouped on the board"), count: process.sections.count, anchor: "sections")
-            ForEach(process.sections) { section in
-                sectionRow(section, steps: process.steps.filter { $0.sectionId == section.id }.count)
+            header(L("Sections"), subtitle: L("How the steps are grouped on the board"), count: process.sections.count,
+                   anchor: "sections", addLabel: L("Add a section")) { addingSection = true }
+            ForEach(Array(process.sections.enumerated()), id: \.element.id) { index, section in
+                sectionRow(section, steps: process.steps.filter { $0.sectionId == section.id }.count,
+                           position: .of(index, in: process.sections.count))
             }
-            Button { addingSection = true } label: { TasksAddRow(title: L("Add a section"), hue: .cyan) }
-                .buttonStyle(.pressableCard)
-                .neonListRow()
         }
     }
 
     @ViewBuilder
-    private func sectionRow(_ section: ProcessSection, steps: Int) -> some View {
+    private func sectionRow(_ section: ProcessSection, steps: Int, position: TasksGroupPosition) -> some View {
         let hue = tasksColorHue(section.color, fallback: .indigo)
         Button { editingSection = section } label: {
             ListRow(section.name, subtitle: steps == 1 ? L("1 step") : L("%d steps", steps),
                     leading: .icon("square.stack.3d.up.fill", tint: hue.color), chevron: true)
-                .rowCard()
+                .tasksGroupedRow(position)
         }
         .buttonStyle(.pressableCard)
-        .neonListRow()
+        .neonListRow(top: 0, bottom: 0)
         .destructiveSwipe(L("Delete"), confirm: L("Delete \"%@\"?", section.name), message: L("Its steps survive, ungrouped.")) {
             Task { await run { try await api.deleteSection(id: section.id) } }
         }
@@ -180,25 +198,30 @@ struct ProcessSettingsView: View {
 
     // MARK: - Steps
 
+    /// The steps as one card per section, under the section's name — rows
+    /// with hairlines between them, each keeping its own swipes.
     @ViewBuilder
     private func stepsBlock(_ process: ProcessResponse) -> some View {
         Section {
-            header(L("Steps"), subtitle: L("Every project goes through these"), count: process.steps.count, anchor: "steps")
+            header(L("Steps"), subtitle: L("Every project goes through these"), count: process.steps.count,
+                   anchor: "steps", addLabel: L("Add a step")) { addingStep = true }
             ForEach(process.sections) { section in
                 let steps = process.steps.filter { $0.sectionId == section.id }.sorted { $0.order < $1.order }
                 if !steps.isEmpty {
-                    groupLabel(section.name, hue: tasksColorHue(section.color, fallback: .indigo))
-                    ForEach(steps) { step in stepRow(step, process: process, hue: tasksColorHue(section.color, fallback: .indigo)) }
+                    let hue = tasksColorHue(section.color, fallback: .indigo)
+                    groupLabel(section.name, hue: hue)
+                    ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                        stepRow(step, process: process, hue: hue, position: .of(index, in: steps.count))
+                    }
                 }
             }
             let loose = process.steps.filter { $0.sectionId == nil }.sorted { $0.order < $1.order }
             if !loose.isEmpty {
                 groupLabel(L("Not in a section"), hue: .grey)
-                ForEach(loose) { step in stepRow(step, process: process, hue: .indigo) }
+                ForEach(Array(loose.enumerated()), id: \.element.id) { index, step in
+                    stepRow(step, process: process, hue: .indigo, position: .of(index, in: loose.count))
+                }
             }
-            Button { addingStep = true } label: { TasksAddRow(title: L("Add a step"), hue: .purple) }
-                .buttonStyle(.pressableCard)
-                .neonListRow()
         }
     }
 
@@ -209,26 +232,51 @@ struct ProcessSettingsView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
-        .neonListRow(top: 10, bottom: 2)
+        .accessibilityAddTraits(.isHeader)
+        .neonListRow(top: 12, bottom: 6)
     }
 
     @ViewBuilder
-    private func stepRow(_ step: ProcessStep, process: ProcessResponse, hue: NeonHue) -> some View {
+    private func stepRow(_ step: ProcessStep, process: ProcessResponse, hue: NeonHue, position: TasksGroupPosition) -> some View {
         let owner = process.team.first { $0.id == step.ownerId }
+        let unset = step.deliverable == nil && step.acceptance == nil
         let meta = [
             step.estimateHours.map { L("%@h", NeonFormat.number($0, decimals: 1)) },
             step.acceptanceLines.isEmpty ? nil : (step.acceptanceLines.count == 1 ? L("1 check") : L("%d checks", step.acceptanceLines.count)),
             step.autoAccept && step.mayAutoAccept ? L("Accepted automatically") : nil,
         ].compactMap { $0 }.joined(separator: " · ")
         Button { editingStep = step } label: {
-            ListRow(step.name, subtitle: owner?.name ?? L("Nobody set"), meta: meta.isEmpty ? nil : meta,
-                    leading: .icon("checklist", tint: hue.color),
-                    badge: step.deliverable == nil && step.acceptance == nil ? L("No standard") : nil,
-                    badgeTone: .warning, chevron: true)
-                .rowCard()
+            HStack(spacing: 12) {
+                IconTile("checklist", hue: hue, size: NeonSize.iconTile)
+                VStack(alignment: .leading, spacing: 3) {
+                    // The name has the row's whole width; what is missing
+                    // is said after the owner, not in a badge beside it.
+                    TasksRowTitle(step.name, font: .system(.callout, weight: .semibold))
+                    HStack(spacing: 8) {
+                        DirText(owner?.name ?? L("Nobody set"), font: .system(.footnote), color: .neonTextSecondary, fill: false, lineLimit: 1)
+                        if unset {
+                            MetaLabel(L("No standard"), symbol: "exclamationmark.triangle.fill", tint: .neonOrangeStrong)
+                        }
+                    }
+                    if !meta.isEmpty {
+                        Text(meta)
+                            .font(.system(.caption, weight: .medium))
+                            .foregroundStyle(Color.neonTextTertiary)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.forward")
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(Color.neonTextFaint)
+            }
+            .padding(.vertical, 11)
+            .padding(.horizontal, 14)
+            .contentShape(Rectangle())
+            .tasksGroupedRow(position)
         }
         .buttonStyle(.pressableCard)
-        .neonListRow()
+        .neonListRow(top: 0, bottom: 0)
         .destructiveSwipe(L("Delete"), confirm: L("Delete \"%@\"?", step.name)) {
             Task { await run { try await api.deleteStep(id: step.id) } }
         }
@@ -243,34 +291,59 @@ struct ProcessSettingsView: View {
 
     @ViewBuilder
     private func ownersBlock(_ process: ProcessResponse) -> some View {
+        let inactive = process.team.filter { !$0.active }.count
+        // Colours are the board's: worked out over the active team, as every
+        // other screen of the area does.
+        let hues = TasksTeamHues(process.team.filter(\.active))
         Section {
-            header(L("Owners"), subtitle: L("Who is on the board"), count: process.team.count, anchor: "owners")
-            ForEach(process.team) { member in ownerRow(member, steps: process.steps.filter { $0.ownerId == member.id }.count) }
-            Button { addingOwner = true } label: { TasksAddRow(title: L("Add somebody"), hue: .pink) }
-                .buttonStyle(.pressableCard)
-                .neonListRow()
+            header(L("Owners"), subtitle: inactive > 0 ? L("Who is on the board · %d inactive", inactive) : L("Who is on the board"),
+                   count: process.team.count, anchor: "owners", addLabel: L("Add somebody")) { addingOwner = true }
+            ForEach(Array(process.team.enumerated()), id: \.element.id) { index, member in
+                ownerRow(member, steps: process.steps.filter { $0.ownerId == member.id }.count,
+                         hue: hues.hue(member), position: .of(index, in: process.team.count))
+            }
         }
     }
 
     @ViewBuilder
-    private func ownerRow(_ member: ProcessMember, steps: Int) -> some View {
+    private func ownerRow(_ member: ProcessMember, steps: Int, hue: NeonHue, position: TasksGroupPosition) -> some View {
         let role = member.role.flatMap { $0.isEmpty ? nil : $0 }
         Button { editingOwner = member } label: {
-            ListRow(member.name, subtitle: role, meta: steps == 0 ? nil : (steps == 1 ? L("Usual owner of 1 step") : L("Usual owner of %d steps", steps)),
-                    leading: .avatar(url: nil, name: member.name),
-                    badge: member.active ? nil : L("Inactive"), badgeTone: .neutral, chevron: true)
-                .rowCard()
-                .opacity(member.active ? 1 : 0.7)
+            HStack(spacing: 12) {
+                TasksAvatar(name: member.name, hue: hue, size: NeonSize.iconTile)
+                    .opacity(member.active ? 1 : 0.55)
+                VStack(alignment: .leading, spacing: 3) {
+                    DirText(member.name, font: .system(.callout, weight: .semibold), fill: false, lineLimit: 1)
+                    if let role {
+                        DirText(role, font: .system(.footnote), color: .neonTextSecondary, fill: false, lineLimit: 1)
+                    }
+                    Text(steps == 0 ? L("No steps yet") : (steps == 1 ? L("Usual owner of 1 step") : L("Usual owner of %d steps", steps)))
+                        .font(.system(.caption, weight: .medium))
+                        .foregroundStyle(Color.neonTextTertiary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if !member.active {
+                    BadgeView(text: L("Inactive"), tone: .neutral)
+                }
+                Image(systemName: "chevron.forward")
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(Color.neonTextFaint)
+            }
+            .padding(.vertical, 11)
+            .padding(.horizontal, 14)
+            .contentShape(Rectangle())
+            .tasksGroupedRow(position)
         }
         .buttonStyle(.pressableCard)
-        .neonListRow()
+        .neonListRow(top: 0, bottom: 0)
         .destructiveSwipe(L("Delete"), confirm: L("Delete %@?", member.name), message: L("Their steps survive, unassigned.")) {
             Task { await run { try await api.deleteOwner(id: member.id) } }
         }
         .swipeAction(L("Up"), symbol: "arrow.up", edge: .leading) { move { try await api.moveOwner(id: member.id, direction: "left") } }
         .swipeAction(L("Down"), symbol: "arrow.down", tint: .neonTextTertiary) { move { try await api.moveOwner(id: member.id, direction: "right") } }
         .contextMenu {
-            Button { editingOwner = member } label: { Label(L("Edit"), systemImage: "pencil") }
+            Button { editingOwner = member } label: { Label(L("Edit %@", member.name), systemImage: "pencil") }
             Button { move { try await api.moveOwner(id: member.id, direction: "left") } } label: { Label(L("Up"), systemImage: "arrow.up") }
             Button { move { try await api.moveOwner(id: member.id, direction: "right") } } label: { Label(L("Down"), systemImage: "arrow.down") }
         }
@@ -278,35 +351,51 @@ struct ProcessSettingsView: View {
 
     // MARK: - Stage periods
 
+    /// The periods in the order they chain — the timed process card's order
+    /// above — with any the timeline doesn't reach after them.
+    private func chained(_ process: ProcessResponse) -> [StagePeriodRow] {
+        let start = Dictionary(process.timeline.compactMap { range in range.periodId.map { ($0, range.startDay) } },
+                               uniquingKeysWith: { first, _ in first })
+        return process.periods.enumerated().sorted { a, b in
+            switch (start[a.element.id], start[b.element.id]) {
+            case let (x?, y?): return x == y ? a.offset < b.offset : x < y
+            case (.some, .none): return true
+            case (.none, .some): return false
+            case (.none, .none): return a.offset < b.offset
+            }
+        }.map(\.element)
+    }
+
     @ViewBuilder
     private func periodsBlock(_ process: ProcessResponse) -> some View {
+        let periods = chained(process)
         Section {
-            header(L("Stage periods"), subtitle: L("How long a range of steps may take"), count: process.periods.count, anchor: "periods")
-            ForEach(process.periods) { period in periodRow(period, process: process) }
-            Button { addingPeriod = true } label: { TasksAddRow(title: L("Add a stage period"), hue: .orange) }
-                .buttonStyle(.pressableCard)
-                .neonListRow()
+            header(L("Stage periods"), subtitle: L("How long a range of steps may take"), count: periods.count,
+                   anchor: "periods", addLabel: L("Add a stage period")) { addingPeriod = true }
+            ForEach(Array(periods.enumerated()), id: \.element.id) { index, period in
+                periodRow(period, process: process, position: .of(index, in: periods.count))
+            }
             Text(L("A range of steps and the days it is allowed to take. Ranges chain, so the whole process carries dates without anyone typing one on a project."))
                 .font(.neonMeta)
                 .foregroundStyle(Color.neonTextTertiary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 4)
-                .neonListRow(top: 4, bottom: 4)
+                .neonListRow(top: 10, bottom: 4)
         }
     }
 
     @ViewBuilder
-    private func periodRow(_ period: StagePeriodRow, process: ProcessResponse) -> some View {
+    private func periodRow(_ period: StagePeriodRow, process: ProcessResponse, position: TasksGroupPosition) -> some View {
         let from = stepName(period.fromTaskId, process)
         let to = stepName(period.toTaskId, process)
         Button { editingPeriod = period } label: {
             ListRow(from == to ? from : tasksArrowJoin(from, to),
                     leading: .icon("calendar.badge.clock", tint: .neonOrange),
                     value: period.days == 1 ? L("1 day") : L("%d days", period.days), chevron: true)
-                .rowCard()
+                .tasksGroupedRow(position)
         }
         .buttonStyle(.pressableCard)
-        .neonListRow()
+        .neonListRow(top: 0, bottom: 0)
         .destructiveSwipe(L("Delete"), confirm: L("Delete this stage period?")) {
             Task { await run { try await api.deletePeriod(id: period.id) } }
         }
@@ -352,43 +441,45 @@ func processColorName(_ color: String) -> String {
 
 struct ProcessSectionSheet: View {
     let section: ProcessSection?
+    /// The sections there are now, so the one just made can be found again.
+    var existingIds: Set<String> = []
     let onSaved: () async -> Void
 
     @EnvironmentObject var api: APIClient
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
-    @State private var color: String
+    /// Nil on a new section until a colour is chosen: the server then picks.
+    @State private var color: String?
 
-    init(section: ProcessSection?, onSaved: @escaping () async -> Void) {
+    init(section: ProcessSection?, existingIds: Set<String> = [], onSaved: @escaping () async -> Void) {
         self.section = section
+        self.existingIds = existingIds
         self.onSaved = onSaved
         _name = State(initialValue: section?.name ?? "")
-        _color = State(initialValue: section?.color ?? "cyan")
+        _color = State(initialValue: section?.color)
     }
+
+    private var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         SheetScaffold(section == nil ? L("New section") : L("Edit section"),
                       subtitle: L("A group of steps on the board"),
                       symbol: "square.stack.3d.up.fill",
-                      primaryTitle: L("Save"), isPrimaryEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty,
+                      primaryTitle: L("Save"), primaryKind: isValid ? .primary : .secondary, isPrimaryEnabled: isValid,
                       onPrimary: { await save() }) {
-            // The server picks a new section's colour itself, so it is only
-            // offered once the section exists.
-            FormSection(footer: section == nil ? L("A colour is picked for it; change it once it is made.") : nil) {
+            FormSection(footer: section == nil && color == nil ? L("Leave it, and a colour is picked for it.") : nil) {
                 NeonTextField(L("Name"), text: $name, prompt: L("Design, Drawings, Site…"), symbol: "textformat", isRequired: true)
-                if section != nil {
-                    FormField(L("Colour")) {
-                        HStack(spacing: NeonSpace.md) {
-                            ForEach(processSectionColors, id: \.self) { option in
-                                swatch(option)
-                            }
-                            Spacer(minLength: 0)
+                FormField(L("Colour")) {
+                    HStack(spacing: NeonSpace.md) {
+                        ForEach(processSectionColors, id: \.self) { option in
+                            swatch(option)
                         }
+                        Spacer(minLength: 0)
                     }
                 }
             }
         }
-        .neonSheet([.medium, .large])
+        .neonSheet(tasksShortSheet)
     }
 
     private func swatch(_ option: String) -> some View {
@@ -418,16 +509,29 @@ struct ProcessSectionSheet: View {
     }
 
     private func save() async {
+        let name = name.trimmingCharacters(in: .whitespaces)
         do {
             if let section {
-                try await api.updateSection(id: section.id, name: name, color: color)
+                try await api.updateSection(id: section.id, name: name, color: color ?? section.color)
             } else {
                 try await api.createSection(name: name)
+                // Making a section takes a name only; a colour chosen here is
+                // written onto the new section straight after.
+                if let color {
+                    let made = try await api.fetchTaskProcess().value.sections
+                        .first { !existingIds.contains($0.id) && $0.name == name }
+                    if let made, made.color != color {
+                        try await api.updateSection(id: made.id, name: name, color: color)
+                    }
+                }
             }
             await onSaved()
             Toast.success(L("Saved"))
             dismiss()
-        } catch { Toast.error(error) }
+        } catch {
+            await onSaved()
+            Toast.error(error)
+        }
     }
 }
 
@@ -451,14 +555,16 @@ struct ProcessStepSheet: View {
         _sectionId = State(initialValue: step?.sectionId)
     }
 
+    private var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
+
     var body: some View {
         SheetScaffold(step == nil ? L("New step") : L("Edit step"),
                       subtitle: L("A step every project goes through"),
                       symbol: "checklist",
-                      primaryTitle: L("Save"), isPrimaryEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty,
+                      primaryTitle: L("Save"), primaryKind: isValid ? .primary : .secondary, isPrimaryEnabled: isValid,
                       onPrimary: { await save() }) {
             FormSection {
-                NeonTextField(L("Name"), text: $name, symbol: "textformat", isRequired: true)
+                NeonTextField(L("Name"), text: $name, prompt: L("What the step is called"), symbol: "textformat", isRequired: true)
                 MenuField(L("Section"), selection: $sectionId, options: (process?.sections ?? []).map(\.id),
                           title: { id in process?.sections.first { $0.id == id }?.name ?? id },
                           placeholder: L("None"), noneTitle: L("None"), leadingSymbol: "square.stack.3d.up")
@@ -467,7 +573,7 @@ struct ProcessStepSheet: View {
                           placeholder: L("Nobody set"), noneTitle: L("Nobody set"), leadingSymbol: "person")
             }
         }
-        .neonSheet([.medium, .large])
+        .neonSheet(tasksShortSheet)
     }
 
     private func save() async {
@@ -514,26 +620,30 @@ struct ProcessTaskTypeSheet: View {
         _reviewerId = State(initialValue: step.reviewerId)
     }
 
+    /// What the standard holds so far, under its name: how many lines are
+    /// checked, and how long the checklist is.
+    private var checksLine: String {
+        let checks = step.acceptanceLines.count
+        var line = checks == 0 ? L("No checks written yet") : (checks == 1 ? L("1 check") : L("%d checks", checks))
+        if step.checklistLines > 0 { line += " · " + L("%d on the checklist", step.checklistLines) }
+        return line
+    }
+
     var body: some View {
-        SheetScaffold(step.name, subtitle: L("What this kind of work needs"), symbol: "doc.text.fill",
+        SheetScaffold(step.name, subtitle: checksLine, symbol: "doc.text.fill",
                       primaryTitle: L("Save"), onPrimary: { await save() }) {
-            HStack(spacing: NeonSpace.sm) {
-                StateBadge(step.acceptanceLines.count == 1 ? L("1 check") : L("%d checks", step.acceptanceLines.count),
-                           tone: step.acceptanceLines.isEmpty ? .warning : .success,
-                           symbol: step.acceptanceLines.isEmpty ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                if step.checklistLines > 0 {
-                    StateBadge(L("%d on the checklist", step.checklistLines), tone: .blue, symbol: "list.bullet")
-                }
-                Spacer(minLength: 0)
-            }
             FormSection(L("Deliverable & acceptance"), footer: L("Each line under \"Counts as done when\" is checked on its own when the proof arrives.")) {
-                NeonTextEditor(L("What to hand in"), text: $deliverable, minLines: 2, limit: 2000)
-                NeonTextEditor(L("Counts as done when"), text: $acceptance, prompt: L("One line per item"), minLines: 3, limit: 4000)
-                NumberField(L("Estimate"), value: $estimateHours, unit: L("h"), decimals: 1)
+                NeonTextEditor(L("What to hand in"), text: $deliverable, prompt: L("The file or photo that is handed in"), minLines: 2,
+                               limit: tasksLimit(deliverable, 2000))
+                NeonTextEditor(L("Counts as done when"), text: $acceptance, prompt: L("One line per item"), minLines: 3,
+                               limit: tasksLimit(acceptance, 4000))
+                NumberField(L("Estimate"), value: $estimateHours, unit: L("h"), decimals: 1, prompt: L("e.g. 3"))
             }
             FormSection(L("Proof")) {
-                NeonTextEditor(L("What proof to send"), text: $evidence, minLines: 2, limit: 2000)
-                NeonTextEditor(L("Checklist"), text: $checklist, prompt: L("A reminder, one line per item"), minLines: 2, limit: 4000)
+                NeonTextEditor(L("What proof to send"), text: $evidence, prompt: L("What the photo or file has to show"), minLines: 2,
+                               limit: tasksLimit(evidence, 2000))
+                NeonTextEditor(L("Checklist"), text: $checklist, prompt: L("A reminder, one line per item"), minLines: 2,
+                               limit: tasksLimit(checklist, 4000))
             }
             FormSection(L("Review")) {
                 MenuField(L("Reviewer"), selection: $reviewerId, options: team.map(\.id),
@@ -568,6 +678,8 @@ struct ProcessTaskTypeSheet: View {
 
 struct ProcessOwnerSheet: View {
     let owner: ProcessMember?
+    /// Who is on the list now, so somebody just added can be found again.
+    var existingIds: Set<String> = []
     let onSaved: () async -> Void
 
     @EnvironmentObject var api: APIClient
@@ -575,42 +687,55 @@ struct ProcessOwnerSheet: View {
     @State private var name: String
     @State private var role: String
 
-    init(owner: ProcessMember?, onSaved: @escaping () async -> Void) {
+    init(owner: ProcessMember?, existingIds: Set<String> = [], onSaved: @escaping () async -> Void) {
         self.owner = owner
+        self.existingIds = existingIds
         self.onSaved = onSaved
         _name = State(initialValue: owner?.name ?? "")
         _role = State(initialValue: owner?.role ?? "")
     }
 
+    private var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
+
     var body: some View {
-        SheetScaffold(owner == nil ? L("Add somebody") : L("Edit"),
+        SheetScaffold(owner.map { L("Edit %@", $0.name) } ?? L("Add somebody"),
                       subtitle: L("Somebody who owns steps on the board"),
                       symbol: "person.fill",
-                      primaryTitle: L("Save"), isPrimaryEnabled: !name.trimmingCharacters(in: .whitespaces).isEmpty,
+                      primaryTitle: L("Save"), primaryKind: isValid ? .primary : .secondary, isPrimaryEnabled: isValid,
                       onPrimary: { await save() }) {
-            // Adding takes a name only (`createEmployee(name)`); the role is
-            // written once they are on the list.
-            FormSection(footer: owner == nil ? L("Their role can be added once they are on the list.") : nil) {
-                NeonTextField(L("Name"), text: $name, symbol: "person", isRequired: true)
-                if owner != nil {
-                    NeonTextField(L("Role"), text: $role, prompt: L("Optional"), symbol: "briefcase")
-                }
+            FormSection {
+                NeonTextField(L("Name"), text: $name, prompt: L("Their name"), symbol: "person", isRequired: true)
+                NeonTextField(L("Role"), text: $role, prompt: L("Optional"), symbol: "briefcase")
             }
         }
-        .neonSheet([.medium, .large])
+        .neonSheet(tasksShortSheet)
     }
 
     private func save() async {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        let role = role.trimmingCharacters(in: .whitespaces)
         do {
             if let owner {
                 try await api.updateOwner(id: owner.id, name: name, role: role)
             } else {
                 try await api.createOwner(name: name)
+                // Adding takes a name only (`createEmployee(name)`); a role
+                // typed here is written onto them straight after.
+                if !role.isEmpty {
+                    let added = try await api.fetchTaskProcess().value.team
+                        .first { !existingIds.contains($0.id) && $0.name == name }
+                    if let added {
+                        try await api.updateOwner(id: added.id, name: name, role: role)
+                    }
+                }
             }
             await onSaved()
             Toast.success(L("Saved"))
             dismiss()
-        } catch { Toast.error(error) }
+        } catch {
+            await onSaved()
+            Toast.error(error)
+        }
     }
 }
 
@@ -629,8 +754,10 @@ struct ProcessPeriodSheet: View {
         self.period = period
         self.steps = steps
         self.onSaved = onSaved
-        _fromTaskId = State(initialValue: period?.fromTaskId ?? steps.first?.id)
-        _toTaskId = State(initialValue: period?.toTaskId ?? steps.first?.id)
+        // A new period starts with nothing chosen: both ends are a decision,
+        // and "Site visit to Site visit" filled in for you is not one.
+        _fromTaskId = State(initialValue: period?.fromTaskId)
+        _toTaskId = State(initialValue: period?.toTaskId)
         _days = State(initialValue: period.map { Double($0.days) })
     }
 
@@ -640,16 +767,19 @@ struct ProcessPeriodSheet: View {
         SheetScaffold(period == nil ? L("New stage period") : L("Edit stage period"),
                       subtitle: L("How long a range of steps may take"),
                       symbol: "calendar.badge.clock",
-                      primaryTitle: L("Save"), isPrimaryEnabled: isValid, onPrimary: { await save() }) {
+                      primaryTitle: L("Save"), primaryKind: isValid ? .primary : .secondary, isPrimaryEnabled: isValid,
+                      onPrimary: { await save() }) {
             FormSection(footer: L("Every step from the first to the last shares this deadline.")) {
                 MenuField(L("First step"), selection: $fromTaskId, options: steps.map(\.id),
-                          title: { id in steps.first { $0.id == id }?.name ?? id }, leadingSymbol: "flag")
+                          title: { id in steps.first { $0.id == id }?.name ?? id },
+                          placeholder: L("Choose the first step"), leadingSymbol: "flag", isRequired: true)
                 MenuField(L("Last step"), selection: $toTaskId, options: steps.map(\.id),
-                          title: { id in steps.first { $0.id == id }?.name ?? id }, leadingSymbol: "flag.checkered")
-                NumberField(L("Days"), value: $days, unit: L("days"), decimals: 0, isRequired: true)
+                          title: { id in steps.first { $0.id == id }?.name ?? id },
+                          placeholder: L("Choose the last step"), leadingSymbol: "flag.checkered", isRequired: true)
+                NumberField(L("Days"), value: $days, unit: L("days"), decimals: 0, prompt: "—", isRequired: true)
             }
         }
-        .neonSheet([.medium, .large])
+        .neonSheet(tasksShortSheet)
     }
 
     private func save() async {

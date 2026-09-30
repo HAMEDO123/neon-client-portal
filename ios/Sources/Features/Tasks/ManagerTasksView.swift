@@ -8,7 +8,7 @@ enum CardFilter: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .open: return L("Open")
-        case .review: return L("To review")
+        case .review: return L("Review")
         case .done: return L("Done")
         case .all: return L("All")
         }
@@ -22,6 +22,11 @@ enum CardFilter: String, CaseIterable, Identifiable {
 struct ManagerTasksView: View {
     @EnvironmentObject var api: APIClient
     @ObservedObject var cards: ChatCardsLoader
+    /// The board's team, so each person on a card wears the colour they
+    /// wear on every other segment.
+    var team: [TaskPerson] = []
+    /// Opens the team's chat, where a card is handed out from.
+    let onOpenTeamChat: () -> Void
     @State private var filter: CardFilter = .open
 
     var body: some View {
@@ -35,14 +40,17 @@ struct ManagerTasksView: View {
 
             // A task card is handed out from a conversation's + (the chat
             // area builds it); this opens the team's, natively.
-            NavigationLink(value: ChatRoute(slug: "team", title: L("Team chat"), subtitle: nil, avatar: "/admin-icon-192.png", isGroup: true)) {
+            NavigationLink(value: tasksTeamChatRoute) {
                 entryRow(symbol: "plus", hue: .indigo, title: L("Hand out a task"),
                          detail: L("Press + in the chat and choose Task. For one person, open their chat instead."), count: 0)
             }
             .buttonStyle(.pressableCard)
             .neonAppear(delay: 0.05)
 
-            SectionHeader(L("Handed out in chat"), count: cards.loaded ? cards.tasks.count : nil)
+            // No count here: the filter under it says how many each option
+            // holds, and a total above an "Open" list that is empty read as
+            // a contradiction.
+            SectionHeader(L("Handed out in chat"))
                 .padding(.top, NeonSpace.sm)
 
             PillFilterBar(selection: $filter, options: CardFilter.allCases, title: \.label,
@@ -55,23 +63,21 @@ struct ManagerTasksView: View {
             } else if !cards.loaded {
                 SkeletonRows(count: 4)
             } else if shown.isEmpty {
-                EmptyState(symbol: "checklist", title: emptyTitle, detail: L("Task cards from the last 200 messages of each chat show here."),
+                EmptyState(symbol: "checklist", title: emptyTitle,
+                           detail: filter == .open || filter == .all ? L("Hand one out with + in any chat.") : nil,
+                           actionTitle: filter == .open || filter == .all ? L("Open team chat") : nil,
+                           action: filter == .open || filter == .all ? onOpenTeamChat : nil,
                            hue: .indigo, card: true)
             } else {
+                let hues = TasksTeamHues(team)
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
                     NavigationLink(value: ChatRoute(item.conversation)) {
-                        TasksChatCardRow(item: item)
+                        TasksChatCardRow(item: item, hues: hues)
                     }
                     .buttonStyle(.pressableCard)
                     .staggered(index)
                 }
             }
-
-            Text(L("Tasks from the last 200 messages of each chat."))
-                .font(.neonMeta)
-                .foregroundStyle(Color.neonTextTertiary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, NeonSpace.xs)
         }
         .animation(NeonMotion.smooth, value: filter)
         // Read again each time the segment opens, over what is already shown.
@@ -140,6 +146,7 @@ struct ManagerTasksView: View {
 /// each person on it with where their part stands.
 struct TasksChatCardRow: View {
     let item: ChatCardsLoader.Item
+    var hues = TasksTeamHues([TaskPerson]())
 
     var body: some View {
         if let card = item.message.task {
@@ -169,7 +176,7 @@ struct TasksChatCardRow: View {
                             ForEach(card.assignments) { part in
                                 let name = part.employee?.name ?? "—"
                                 HStack(spacing: 6) {
-                                    AvatarView(url: nil, name: name, size: 20)
+                                    TasksAvatar(name: name, hue: hues.hue(part.employeeId, name: name, color: part.employee?.color), size: 20)
                                     Text(verbatim: name)
                                         .font(.system(.caption, weight: .semibold))
                                         .foregroundStyle(Color.neonInk.opacity(0.8))

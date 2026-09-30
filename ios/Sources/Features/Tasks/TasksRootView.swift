@@ -37,7 +37,7 @@ struct TasksRootView: View {
             case .board: return L("Every project, step by step")
             case .week: return L("Jobs handed out by hand")
             case .chat: return L("Task cards handed out in chat")
-            case .team: return L("What each person has done")
+            case .team: return L("What each person was given, and has done")
             }
         }
     }
@@ -50,6 +50,7 @@ struct TasksRootView: View {
     @StateObject private var chatCards = ChatCardsLoader()
     @State private var segment: Segment
     @State private var jobSheet: WeekBoardView.JobSheetTarget?
+    @State private var openingTeamChat = false
 
     init(initialSegment: Segment = .board) {
         _segment = State(initialValue: initialSegment)
@@ -89,7 +90,7 @@ struct TasksRootView: View {
                     switch segment {
                     case .board: TaskBoardView(store: boardStore)
                     case .week: WeekBoardView(store: weekStore, editing: $jobSheet, proxy: proxy)
-                    case .chat: ManagerTasksView(cards: chatCards)
+                    case .chat: ManagerTasksView(cards: chatCards, team: weekStore.value?.team ?? boardStore.value?.team ?? []) { openingTeamChat = true }
                     case .team: TaskPeopleView(store: peopleStore)
                     }
                 }
@@ -97,6 +98,13 @@ struct TasksRootView: View {
                 .transition(.opacity)
             }
             .refreshable { await reload() }
+            // With no bar on the tab's own page, nothing stopped the cards
+            // printing straight through the clock and the battery as they
+            // scrolled: this fades them out under the status bar instead.
+            .overlay(alignment: .top) {
+                if !isPushed { TasksTopScrim() }
+            }
+            .modifier(TasksSoftTopEdge())
             .floatingActionButton(label: L("New job"), isVisible: segment == .week && weekStore.value != nil) {
                 jobSheet = .new(day: weekStore.value?.todayKey ?? NeonFormat.dayKey(Date()))
             }
@@ -108,6 +116,7 @@ struct TasksRootView: View {
         .navigationTitle(L("Tasks"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
+        .navigationDestination(isPresented: $openingTeamChat) { ChatRoomView(route: tasksTeamChatRoute) }
         .navigationDestination(for: TaskPeopleRoute.self) { route in
             TaskPeopleDetailView(personId: route.id, store: peopleStore, board: boardStore)
         }
@@ -129,12 +138,12 @@ struct TasksRootView: View {
                 .accessibilityLabel(L("Reviews"))
 
                 NavigationLink { ProcessSettingsView() } label: {
-                    IconButtonLabel("slider.horizontal.3")
+                    IconButtonLabel("flowchart")
                 }
                 .buttonStyle(PressableStyle(scale: 0.88))
                 .accessibilityLabel(L("Delivery process"))
 
-                AccountMenu()
+                TasksAccountMenu()
             }
             .animation(NeonMotion.gentle, value: segment)
 
@@ -151,6 +160,40 @@ struct TasksRootView: View {
         case .team:
             await peopleStore.load(api)
             await boardStore.load(api)
+        }
+    }
+}
+
+/// The team's group chat, where a task card is handed out from.
+var tasksTeamChatRoute: ChatRoute { ChatRoute(slug: "team", title: L("Team chat"), subtitle: nil, avatar: "/admin-icon-192.png", isGroup: true) }
+
+/// The page's own colour, solid under the status bar and fading out just
+/// below it, so content scrolled up under the clock is hidden rather than
+/// printed through it. It sits at the top of the safe area and reaches up
+/// under the status bar from there, whatever frame it is given. Nothing
+/// here takes a touch.
+struct TasksTopScrim: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(height: 0)
+                .background(Color.neonBgSoft.opacity(0.96).ignoresSafeArea(edges: .top))
+            LinearGradient(colors: [Color.neonBgSoft.opacity(0.96), Color.neonBgSoft.opacity(0)], startPoint: .top, endPoint: .bottom)
+                .frame(height: NeonSpace.md)
+            Spacer(minLength: 0)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// iOS 26's own soft edge at the top of the scroll, where the system has one.
+struct TasksSoftTopEdge: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            content
         }
     }
 }
