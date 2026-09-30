@@ -35,6 +35,7 @@ struct FacePicker: View {
     @State private var busy = false
     /// What was just picked, drawn until the new URL takes over.
     @State private var preview: UIImage?
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         Menu {
@@ -83,8 +84,17 @@ struct FacePicker: View {
             .ignoresSafeArea()
         }
         // The saved URL is here: it draws from now on (or the initials do,
-        // after a removal).
-        .onChange(of: photo) { _ in preview = nil }
+        // after a removal). Fetched first, at the size the avatar asks for,
+        // so the picture just chosen hands over to the stored one without
+        // the initials flashing in between.
+        .onChange(of: photo) { saved in
+            Task {
+                if let saved, preview != nil {
+                    _ = await ImagePipeline.shared.image(saved, pixels: size * displayScale)
+                }
+                preview = nil
+            }
+        }
     }
 
     private var face: some View {
