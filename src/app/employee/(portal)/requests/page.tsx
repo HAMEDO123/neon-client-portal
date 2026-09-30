@@ -31,6 +31,7 @@ export default async function EmployeeRequestsPage({
     where: { employeeId: employee.id },
     orderBy: { createdAt: "desc" },
     take: 50,
+    include: { lines: { orderBy: { position: "asc" } } },
   });
   const receipts = await getMyReceipts(employee.id, period);
 

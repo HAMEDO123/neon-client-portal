@@ -1358,6 +1358,19 @@ model SupplyRequest {
   decisionNote String?
   decidedAt    DateTime?
 
+  /// The things being asked for, one row each.
+  ///
+  /// A request used to be a single line, because it began as "we are out of
+  /// coffee". A shop run is not that: it is five things bought in one trip and
+  /// decided in one go, and splitting it into five requests makes the manager
+  /// answer the same question five times and lose the fact that they belong
+  /// together.
+  ///
+  /// `item` above stays the headline — a summary written from these — so every
+  /// screen and notification that already reads it keeps working, and a
+  /// request made before this still reads correctly with no lines at all.
+  lines SupplyRequestLine[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -1939,4 +1952,25 @@ model SiteVisit {
 
   @@index([state, scheduledAt])
   @@index([employeeId, scheduledAt])
+}
+
+/// One thing on a purchase request.
+model SupplyRequestLine {
+  id        String        @id @default(cuid())
+  requestId String
+  request   SupplyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  name     String
+  /// "2 boxes", "5m" — words, because a quantity here is written the way
+  /// somebody would say it at the counter, not as a number to compute with.
+  quantity String?
+  /// What it is expected to cost, in JOD. The request's own total is the sum.
+  estimatedCost Float?
+
+  /// The order they were typed in, which is the order they will be bought in.
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([requestId, position])
 }
