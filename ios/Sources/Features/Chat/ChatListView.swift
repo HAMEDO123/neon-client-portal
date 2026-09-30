@@ -280,12 +280,14 @@ struct ChatListView: View {
         )
     }
 
-    /// Whoever is here right now and has no live story, in the list's own
-    /// order — the rail's faces after the rings. Everybody else is already a
-    /// card just below, so the rail does not repeat them.
+    /// The rail's faces after the rings: every conversation without a live
+    /// story — the owner's mockup fills the row with the studio, like
+    /// WhatsApp's — with whoever is here right now first, and otherwise in
+    /// the list's own order. Only a live story earns a ring.
     private var railPeople: [ConversationSummary] {
         let authors = Set((stories?.others ?? []).map { slug(forAuthor: $0.authorKey) })
-        return (conversations ?? []).filter { !$0.isGroup && $0.online == true && !authors.contains($0.slug) }
+        let rest = (conversations ?? []).filter { !authors.contains($0.slug) }
+        return rest.filter { $0.online == true } + rest.filter { $0.online != true }
     }
 
     /// The conversation a story's author is at the other end of: the manager

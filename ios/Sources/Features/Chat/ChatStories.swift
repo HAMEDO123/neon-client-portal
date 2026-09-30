@@ -22,7 +22,7 @@ struct ChatStoriesRail: View {
     let isLoading: Bool
     let myName: String
     let isManager: Bool
-    /// The people here right now who have no live story, in the list's order.
+    /// Every conversation without a live story, whoever is here first.
     let people: [ConversationSummary]
     /// Whether an author ("admin" or an employee id) is here right now.
     let isOnline: (String) -> Bool
