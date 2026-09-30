@@ -79,12 +79,15 @@ struct HomeUploadPhotosSheet: View {
                         Haptic.selection()
                         choose(project)
                     } label: {
+                        // Every row the same picture slot (the kit's placeholder
+                        // when there is no cover), and whether the client can
+                        // see it: a gallery photo has no visibility of its own.
                         ListCardRow(
                             project.name,
                             subtitle: project.clientName,
-                            leading: (project.coverImageUrl ?? "").isEmpty
-                                ? .icon("folder.fill", tint: .neonBlueStrong)
-                                : .thumbnail(url: resolvedMediaURL(project.coverImageUrl))
+                            leading: .thumbnail(url: resolvedMediaURL(project.coverImageUrl)),
+                            badge: localizedEnum("publish", project.publishState),
+                            badgeTone: publishTone(project.publishState)
                         )
                     }
                     .buttonStyle(.pressableCard)
@@ -111,6 +114,18 @@ struct HomeUploadPhotosSheet: View {
         }
         .buttonStyle(.neon(.ghost, size: .small))
 
+        // A gallery photo carries no flag of its own: on a published project
+        // it is on the client's page the moment it lands. Said before the
+        // room is chosen, not after.
+        if project.publishState == "PUBLISHED" {
+            StatusNote(
+                symbol: "eye.fill",
+                tone: .info,
+                title: L("The client sees these straight away"),
+                detail: L("%@ is published, so photos you add appear on the client's page as soon as they upload.", project.name)
+            )
+        }
+
         if let detail {
             if detail.spaces.isEmpty {
                 SectionCard(L("No rooms yet"), symbol: "square.split.2x2", hue: .pink) {
@@ -135,7 +150,7 @@ struct HomeUploadPhotosSheet: View {
                             ListCardRow(
                                 space.name,
                                 subtitle: L("%d photos", space.images.count),
-                                leading: space.images.first.map { .thumbnail(url: $0.resolvedURL) } ?? .icon("photo.on.rectangle", tint: .neonPinkStrong)
+                                leading: .thumbnail(url: space.images.first?.resolvedURL)
                             )
                         }
                         .buttonStyle(.pressableCard)

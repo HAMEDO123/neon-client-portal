@@ -51,7 +51,7 @@ final class HomeWeatherStore: ObservableObject {
     }
 }
 
-/// "☾ 22°  Amman" at the top trailing corner of the hero.
+/// "☾ 22°  Amman" at the top trailing corner of the hero, on a frosted tile.
 struct HomeWeatherBadge: View {
     @ObservedObject private var store = HomeWeatherStore.shared
 
@@ -75,6 +75,14 @@ struct HomeWeatherBadge: View {
                 }
                 .foregroundStyle(.white)
                 .fixedSize()
+                // On a frosted tile of its own, so the white figure reads over
+                // whatever part of the cover photo is behind it. The dark
+                // scheme turns the kit's frosted material smoky rather than
+                // milky under white text.
+                .padding(.horizontal, NeonSpace.sm + 2)
+                .padding(.vertical, NeonSpace.sm - 2)
+                .neonSurface(.frosted, radius: NeonRadius.sm)
+                .environment(\.colorScheme, .dark)
                 .transition(.neonPop)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(L("%@ in Amman, %@", "\(NeonFormat.integer(Int(reading.temperature.rounded())))°", homeWeatherWords(reading.code))))

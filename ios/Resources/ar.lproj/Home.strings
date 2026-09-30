@@ -220,3 +220,44 @@
 "No rooms yet" = "لا توجد غرف بعد";
 "Photos go into a room of the project's gallery. Add a room on the project's Gallery first, then upload into it." = "تُرفع الصور إلى غرفة في معرض المشروع. أضف غرفة من معرض المشروع أولًا، ثم ارفع إليها.";
 "Open the project" = "افتح المشروع";
+
+/* Round 2: the critic's review */
+/* The team card (Right now + The day, one list of people) */
+"What each person is on" = "ما يعمل عليه كل شخص";
+"+%d more" = "+%d أخرى";
+"%d more in progress" = "%d أخرى قيد التنفيذ";
+"since %@" = "منذ %@";
+"No plan published for today yet" = "لم تُنشر خطة لليوم بعد";
+"%d on the day" = "%d على خطة اليوم";
+"%d without a plan" = "%d بلا خطة";
+"%d said started" = "%d قال بدأ";
+"%d overloaded" = "%d محمّل زيادة";
+
+/* The four figures */
+"of %d" = "من %d";
+"Opens the projects" = "يفتح المشاريع";
+"Lists the published projects" = "يعرض المشاريع المنشورة";
+"Lists the projects updated in the last 7 days" = "يعرض المشاريع المحدَّثة في آخر 7 أيام";
+"Published projects" = "المشاريع المنشورة";
+"Updated this week" = "محدَّثة هذا الأسبوع";
+"Clients can open these through their link." = "يستطيع العملاء فتحها عبر روابطهم.";
+"Last changed in the last 7 days, most recent first." = "آخر تعديل عليها خلال آخر 7 أيام، الأحدث أولًا.";
+"No project is published yet" = "لا يوجد مشروع منشور بعد";
+"Nothing was updated this week" = "لم يُحدَّث شيء هذا الأسبوع";
+
+/* Project Progress legend, one line each */
+"pipeline.short.INTERNAL_REVIEW" = "داخلية";
+"pipeline.short.SENT_TO_CLIENT" = "أُرسل";
+"pipeline.short.CLIENT_REVIEWING" = "قيد المراجعة";
+"pipeline.short.CHANGES_REQUESTED" = "تعديلات";
+
+/* Proof to check | Needs you */
+"Proof to check" = "إثباتات للتحقق";
+"Awaiting your approval" = "بانتظار موافقتك";
+"All checked" = "تم التحقق";
+"Unread alert" = "تنبيه غير مقروء";
+"Open request" = "طلب مفتوح";
+
+/* Upload Photos */
+"The client sees these straight away" = "العميل يراها فورًا";
+"%@ is published, so photos you add appear on the client's page as soon as they upload." = "%@ منشور، لذا تظهر الصور التي تضيفها في صفحة العميل فور رفعها.";

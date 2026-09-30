@@ -1,322 +1,500 @@
 import SwiftUI
 
-// The team, below the studio's figures: "Right now" (home/now — who is on
-// what, and for how long) and "The day" (home/day — the day board, most
-// pressing first). Neither ever reads silence as idleness: somebody with no
-// block and nothing in progress is "Nothing planned right now", and an
-// unanswered question is counted as a question, not a verdict.
+// The team, below the studio's figures: one card that holds what used to be
+// two ("Right now" and "The day"). A single row of people — each ringed by
+// how their day is going (home/day), with the one thing they are on under
+// their name (home/now) — then the day board's counts that aren't zero, the
+// notes that need the manager, and the footnote when a question is unanswered.
+// Neither half ever reads silence as idleness: somebody with no block and
+// nothing in progress is "Nothing planned right now", and an unanswered
+// question is counted as a question, not a verdict.
 
-// MARK: - Right now
+// MARK: - One person, from both reads
 
-struct HomeRightNowCard: View {
+/// Somebody on the team as the card draws them: what home/now says they are
+/// on and how home/day judges their day. Either half can be missing while it
+/// loads or when its read failed.
+struct HomeTeamMember: Identifiable {
+    let id: String
+    let name: String
+    let now: HomeNowPerson?
+    let day: HomePersonDay?
+
+    var online: Bool { now?.online ?? false }
+    var kind: String? { day?.describeKind }
+    /// Only home/now knows whether the working day has begun; unknown reads
+    /// as "it has", so nothing is hidden while that read is missing.
+    var beforeWork: Bool { now?.beforeWork ?? false }
+
+    /// Their IN_PROGRESS work, the most recently started first; work whose
+    /// start was never recorded goes last.
+    var inProgress: [HomeInProgressItem] {
+        (now?.inProgress ?? []).sorted { first, second in
+            switch (parseISODate(first.startedAt), parseISODate(second.startedAt)) {
+            case let (a?, b?): return a > b
+            case (.some, .none): return true
+            default: return false
+            }
+        }
+    }
+}
+
+/// Everybody in either read, in the day board's order (the order the manager
+/// set), and anyone home/now has that the board doesn't, after them.
+func homeTeamMembers(now: HomeNow?, day: HomeDay?) -> [HomeTeamMember] {
+    let nowById = Dictionary((now?.people ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    let dayById = Dictionary((day?.everyone ?? []).map { ($0.employeeId, $0) }, uniquingKeysWith: { first, _ in first })
+    var ids: [String] = []
+    for person in day?.everyone ?? [] where !ids.contains(person.employeeId) { ids.append(person.employeeId) }
+    for person in now?.people ?? [] where !ids.contains(person.id) { ids.append(person.id) }
+    return ids.map { id in
+        HomeTeamMember(id: id, name: nowById[id]?.name ?? dayById[id]?.name ?? "", now: nowById[id], day: dayById[id])
+    }
+}
+
+// MARK: - The card
+
+struct HomeTeamCard: View {
     let now: HomeNow?
-    let error: String?
-    let retry: () async -> Void
+    let nowError: String?
+    let day: HomeDay?
+    let dayError: String?
+    /// The studio's timezone, for "since Thu 10 Sep".
+    let timezone: String?
+    let retryNow: () async -> Void
+    let retryDay: () async -> Void
     let onPerson: (String) -> Void
+
+    private var members: [HomeTeamMember] { homeTeamMembers(now: now, day: day) }
 
     var body: some View {
         SectionCard(
-            L("Right now"), subtitle: L("Who is on what, and for how long"),
-            symbol: "dot.radiowaves.left.and.right", hue: .green, spacing: 8
+            L("Right now"), subtitle: L("What each person is on"),
+            symbol: "dot.radiowaves.left.and.right", hue: .green
         ) {
-            if let now {
-                if now.people.isEmpty {
-                    HomeInlineEmpty(
-                        symbol: "person.2",
-                        title: L("No employees yet"),
-                        detail: L("Add the team, and their day appears here."),
-                        hue: .green
-                    )
+            let members = self.members
+            if now == nil && day == nil {
+                if let error = nowError ?? dayError {
+                    HomeInlineError(message: error) {
+                        async let nowTask: Void = retryNow()
+                        async let dayTask: Void = retryDay()
+                        _ = await (nowTask, dayTask)
+                    }
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(now.people.enumerated()), id: \.element.id) { index, person in
-                            if index > 0 { NeonDivider().padding(.leading, 58) }
-                            HomeRightNowRow(person: person) { onPerson(person.id) }
-                                .staggered(index)
-                        }
-                    }
+                    skeleton
                 }
-            } else if let error {
-                HomeInlineError(message: error, retry: retry)
+            } else if members.isEmpty {
+                HomeInlineEmpty(
+                    symbol: "person.2",
+                    title: L("No employees yet"),
+                    detail: L("Add the team, and their day appears here."),
+                    hue: .green
+                )
             } else {
-                VStack(spacing: 14) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        HStack(spacing: 12) {
-                            Circle().fill(Color.neonInk.opacity(0.07)).frame(width: 44, height: 44)
-                            VStack(alignment: .leading, spacing: 8) {
-                                SkeletonBlock(height: 12).frame(maxWidth: 120)
-                                SkeletonBlock(height: 10).frame(maxWidth: 190)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                    }
+                HomeTeamRow(
+                    members: members,
+                    uniformKind: uniformKind(members),
+                    timezone: timezone,
+                    onTap: onPerson
+                )
+                if let nowError, now == nil {
+                    HomeInlineError(message: nowError, retry: retryNow)
                 }
-                .padding(.vertical, 6)
-                .shimmer()
+                if let day {
+                    HomeDayFooter(day: day, members: members, uniformKind: uniformKind(members))
+                        .id("day")
+                } else if let dayError {
+                    HomeInlineError(message: dayError, retry: retryDay)
+                }
             }
         }
         .neonAppear()
     }
+
+    /// The one judgement everybody's day shares, when it is the same for all
+    /// of them — said once under the row instead of under every face.
+    private func uniformKind(_ members: [HomeTeamMember]) -> String? {
+        let kinds = members.compactMap(\.kind)
+        guard members.count > 1, kinds.count == members.count, let first = kinds.first,
+              kinds.allSatisfy({ $0 == first })
+        else { return nil }
+        return first
+    }
+
+    private var skeleton: some View {
+        HStack(alignment: .top, spacing: NeonSpace.sm) {
+            ForEach(0..<4, id: \.self) { _ in
+                VStack(spacing: 8) {
+                    Circle().fill(Color.neonInk.opacity(0.07)).frame(width: 52, height: 52)
+                    SkeletonBlock(height: 10).frame(maxWidth: 50)
+                    SkeletonBlock(height: 8).frame(maxWidth: 64)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.vertical, 6)
+        .shimmer()
+    }
 }
 
-/// One employee, right now: the block their published day plan says they
-/// are on, and/or whatever board cell or hand-assigned job they have
-/// IN_PROGRESS — the two can agree, run ahead of each other, or disagree —
-/// plus what is next.
-struct HomeRightNowRow: View {
-    let person: HomeNowPerson
-    let onTap: () -> Void
+// MARK: - The row of people
+
+/// The team as one row: a ringed avatar each, the name, the day's judgement
+/// when it differs between people, and the one thing each person is on.
+/// Four or fewer share the card's width; more scroll sideways.
+struct HomeTeamRow: View {
+    let members: [HomeTeamMember]
+    let uniformKind: String?
+    let timezone: String?
+    let onTap: (String) -> Void
 
     var body: some View {
-        Button {
-            Haptic.tap()
-            onTap()
-        } label: {
-            HStack(alignment: .top, spacing: NeonSpace.md) {
-                AvatarView(url: resolvedMediaURL(person.avatar), name: person.name, size: 44, online: person.online)
-                VStack(alignment: .leading, spacing: 5) {
-                    DirText(person.name, font: .neonRowTitle, fill: false, lineLimit: 1)
-                    activity
-                    if let next = person.next {
-                        HStack(spacing: 5) {
-                            Image(systemName: "arrow.turn.down.right")
-                                .font(.system(.caption2, weight: .semibold))
-                                .foregroundStyle(Color.neonTextFaint)
-                                .flipsForRightToLeftLayoutDirection(true)
-                            DirText(L("Next: %@ at %@", next.what, next.from), font: .neonMeta, color: .neonTextTertiary, fill: false, lineLimit: 2)
-                        }
-                    }
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.forward")
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(Color.neonTextFaint)
-                    .padding(.top, 4)
+        if members.count <= 4 {
+            HStack(alignment: .top, spacing: NeonSpace.sm) {
+                columns(width: nil)
             }
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: NeonSpace.sm) {
+                    columns(width: 86)
+                }
+                .padding(.horizontal, NeonSpace.card)
+            }
+            .padding(.horizontal, -NeonSpace.card)
         }
-        .buttonStyle(.pressableCard)
     }
+
+    private func columns(width: CGFloat?) -> some View {
+        ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
+            Button {
+                Haptic.tap()
+                onTap(member.id)
+            } label: {
+                HomeTeamColumn(member: member, showsKind: showsKind(member), timezone: timezone)
+                    .frame(width: width)
+                    .frame(maxWidth: width == nil ? .infinity : nil, alignment: .top)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressable)
+            .staggered(index)
+        }
+    }
+
+    /// The calm default says nothing; a judgement everybody shares is said
+    /// once, under the row.
+    private func showsKind(_ member: HomeTeamMember) -> Bool {
+        guard let kind = member.kind, kind != "onTheDay" else { return false }
+        if let uniformKind, uniformKind == "unplanned" || uniformKind == "onTheDay" { return false }
+        return true
+    }
+}
+
+/// One person in the row. At most two lines of what they are on: their plan's
+/// current block (with its pulsing dot) or the work they most recently
+/// started, and a count of the rest.
+struct HomeTeamColumn: View {
+    let member: HomeTeamMember
+    let showsKind: Bool
+    let timezone: String?
+
+    private var kindText: String? {
+        guard showsKind, let day = member.day else { return nil }
+        return describeDayKind(
+            day.describeKind,
+            blocked: day.blocked.count,
+            contradictions: day.contradictions.count,
+            waiting: day.needsManager.count,
+            unanswered: day.unanswered
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            ZStack {
+                Circle()
+                    .strokeBorder(homeDayRing(member.kind, beforeWork: member.beforeWork), lineWidth: 2.5)
+                    .frame(width: 56, height: 56)
+                AvatarView(url: resolvedMediaURL(member.now?.avatar), name: member.name, size: 46, online: member.online)
+            }
+            .padding(.bottom, 1)
+
+            DirText(member.name, font: .system(.caption, weight: .semibold), fill: false, lineLimit: 1)
+
+            if let kindText {
+                Text(kindText)
+                    .font(.system(.caption2, weight: .semibold))
+                    .foregroundStyle(homeDayText(member.kind, beforeWork: member.beforeWork))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            activity
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .padding(.vertical, 2)
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: member.name))
+        .accessibilityValue(Text(spoken))
+        .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: What they are on
 
     @ViewBuilder
     private var activity: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let now = person.now {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Circle().fill(Color.neonSuccess).frame(width: 7, height: 7).neonPulse()
-                    VStack(alignment: .leading, spacing: 1) {
-                        DirText(now.what, font: .system(.subheadline, weight: .semibold), fill: false, lineLimit: 2)
-                        Text(now.leftMinutes.map { L("%@–%@ · %@ left", now.from, now.to, describeMinutes(Double($0))) } ?? L("%@–%@", now.from, now.to))
-                            .font(.neonMeta)
-                            .foregroundStyle(Color.neonTextSecondary)
-                    }
+        if let now = member.now {
+            let work = member.inProgress
+            if let block = now.now {
+                title(block.what, color: .neonInk)
+                HStack(spacing: 4) {
+                    Circle().fill(Color.neonSuccess).frame(width: 6, height: 6).neonPulse()
+                    meta(L("until %@", block.to))
                 }
-            }
-
-            ForEach(person.inProgress) { item in
-                HStack(alignment: .top, spacing: 8) {
-                    IconTile(item.kind == "job" ? "bolt.fill" : "checklist", hue: .purple, size: 24)
-                    VStack(alignment: .leading, spacing: 1) {
-                        DirText(
-                            item.projectName.map { "\(item.title) · \($0)" } ?? item.title,
-                            font: .system(.subheadline, weight: .semibold), fill: false, lineLimit: 2
-                        )
-                        Text(item.minutes.map { L("for %@", describeMinutes(Double($0))) } ?? L("In progress"))
-                            .font(.neonMeta)
-                            .foregroundStyle(Color.neonTextSecondary)
-                    }
+                // Everything in progress is "more" beside the plan's block:
+                // the same capsule, the same words, as everybody else's.
+                if !work.isEmpty {
+                    more(L("+%d more", work.count), spoken: L("%d more in progress", work.count))
                 }
-            }
-
-            if person.now == nil && person.inProgress.isEmpty {
-                Text(neutralState)
-                    .font(.system(.subheadline))
-                    .foregroundStyle(Color.neonTextTertiary)
+            } else if let first = work.first {
+                title(first.projectName.map { "\(first.title) · \($0)" } ?? first.title, color: .neonInk)
+                meta(homeElapsed(first, timezone: timezone))
+                if work.count > 1 {
+                    more(L("+%d more", work.count - 1), spoken: L("%d more in progress", work.count - 1))
+                }
+            } else {
+                title(neutralState(now), color: .neonTextTertiary, lines: 3)
+                if let next = now.next {
+                    meta(L("Next at %@", next.from))
+                }
             }
         }
     }
 
-    private var neutralState: String {
-        if person.beforeWork { return L("The day hasn't started yet") }
-        if person.afterWork { return L("Outside working hours") }
+    private func title(_ text: String, color: Color, lines: Int = 2) -> some View {
+        Text(verbatim: text)
+            .font(.system(.caption, weight: .medium))
+            .foregroundStyle(color)
+            .multilineTextAlignment(.center)
+            .lineLimit(lines)
+            .fixedSize(horizontal: false, vertical: true)
+            // Somebody's Arabic title in the English app (or the reverse)
+            // wraps in its own direction; centred, it sits the same either way.
+            .environment(\.layoutDirection, naturalDirection(text) ?? AppLanguage.current.layoutDirection)
+    }
+
+    private func meta(_ text: String) -> some View {
+        Text(text)
+            .font(.system(.caption2))
+            .foregroundStyle(Color.neonTextTertiary)
+            .multilineTextAlignment(.center)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
+    /// The rest of their in-progress work, as one small capsule — the same
+    /// look as Today's Tasks' "N more today". The whole column opens their page.
+    private func more(_ text: String, spoken: String) -> some View {
+        Text(text)
+            .font(.system(.caption2, weight: .semibold))
+            .foregroundStyle(Color.neonPurpleStrong)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(NeonHue.purple.wash))
+            .padding(.top, 2)
+            .accessibilityLabel(Text(spoken))
+    }
+
+    private func neutralState(_ now: HomeNowPerson) -> String {
+        if now.beforeWork { return L("The day hasn't started yet") }
+        if now.afterWork { return L("Outside working hours") }
         return L("Nothing planned right now")
+    }
+
+    private var spoken: String {
+        var parts: [String] = []
+        if let kindText { parts.append(kindText) }
+        if let now = member.now {
+            let work = member.inProgress
+            if let block = now.now {
+                parts.append(block.what)
+                parts.append(L("until %@", block.to))
+                if !work.isEmpty { parts.append(L("%d more in progress", work.count)) }
+            } else if let first = work.first {
+                parts.append(first.projectName.map { "\(first.title) · \($0)" } ?? first.title)
+                parts.append(homeElapsed(first, timezone: timezone))
+                if work.count > 1 { parts.append(L("%d more in progress", work.count - 1)) }
+            } else {
+                parts.append(neutralState(now))
+            }
+        }
+        return parts.joined(separator: ", ")
     }
 }
 
-// MARK: - The day
+/// How long something has been in progress. Within a working day that is the
+/// time since it started ("for 3h 12m"); past a day, a count of hours reads
+/// as somebody working non-stop, so it becomes the day it started
+/// ("since Thu 10 Sep").
+func homeElapsed(_ item: HomeInProgressItem, timezone: String?) -> String {
+    guard let minutes = item.minutes else { return L("In progress") }
+    if minutes >= 24 * 60, let started = homeShortDate(item.startedAt, timezone: timezone) {
+        return L("since %@", started)
+    }
+    return L("for %@", describeMinutes(Double(minutes)))
+}
 
-struct HomeDayCard: View {
-    let day: HomeDay?
-    let error: String?
-    let retry: () async -> Void
-    let onPerson: (String) -> Void
+/// "Thu 10 Sep" for a moment, on the studio's calendar.
+func homeShortDate(_ iso: String?, timezone: String?) -> String? {
+    guard let date = parseISODate(iso) else { return nil }
+    var style = Date.FormatStyle(date: .omitted, time: .omitted, locale: AppLanguage.current.locale)
+    style.timeZone = timezone.flatMap(TimeZone.init(identifier:)) ?? .current
+    style = style.weekday(.abbreviated).day().month(.abbreviated)
+    return date.formatted(style)
+}
+
+// MARK: - The day, under the row
+
+/// What the day board adds under the people: its counts that aren't zero,
+/// the one sentence everybody shares, the notes that need the manager, and
+/// — only when a question is unanswered — the reminder that silence is not
+/// a verdict.
+struct HomeDayFooter: View {
+    let day: HomeDay
+    let members: [HomeTeamMember]
+    let uniformKind: String?
+
+    private var everyoneBeforeWork: Bool { !members.isEmpty && members.allSatisfy(\.beforeWork) }
+
+    /// People whose day carries something to act on — not only "no plan",
+    /// which the row and the line under it already say.
+    private var notes: [HomePersonDay] {
+        day.pressing.filter { !$0.blocked.isEmpty || !$0.contradictions.isEmpty || !$0.needsManager.isEmpty || $0.overloaded }
+    }
 
     var body: some View {
-        SectionCard(
-            L("The day"), subtitle: day.map { longDayLabel($0.dayKey) },
-            symbol: "calendar.day.timeline.leading", hue: .indigo
-        ) {
-            if let day {
-                if !day.everyone.isEmpty {
-                    HomeTeamDayRow(people: day.everyone, onTap: onPerson)
+        VStack(alignment: .leading, spacing: NeonSpace.md) {
+            if uniformKind == "unplanned" {
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(everyoneBeforeWork ? Color.neonTextTertiary : NeonHue.amber.deep)
+                    Text(L("No plan published for today yet"))
+                        .font(.neonLabel)
+                        .foregroundStyle(Color.neonTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                HomeDaySummary(summary: day.summary)
-                HomeDayPressing(days: day.pressing, dayLabel: longDayLabel(day.dayKey))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+            }
+
+            HomeDaySummary(summary: day.summary, saidAbove: uniformKind == "unplanned" ? ["unplanned"] : [])
+
+            if !notes.isEmpty {
+                VStack(spacing: NeonSpace.sm) {
+                    ForEach(notes) { person in
+                        HomePressingPerson(person: person)
+                    }
+                }
+            } else if day.pressing.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(Color.neonSuccess)
+                    Text(L("Nothing on %@ needs you right now.", longDayLabel(day.dayKey)))
+                        .font(.neonLabel)
+                        .foregroundStyle(Color.neonTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous).fill(NeonHue.green.wash))
+            }
+
+            if day.summary.unanswered > 0 {
                 Text(L("An unanswered question is a question, not a verdict: nobody here is marked as having done nothing."))
                     .font(.neonMeta)
                     .foregroundStyle(Color.neonTextTertiary)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if let error {
-                HomeInlineError(message: error, retry: retry)
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    SkeletonBlock(height: 54)
-                    SkeletonBlock(height: 120, radius: NeonRadius.md)
-                }
-                .shimmer()
             }
         }
-        .neonAppear()
     }
 }
 
-/// The team's day as a row of avatars ringed by how it is going — planned
-/// (quiet), blocked or a mismatch (red), waiting on the manager or
-/// overloaded (amber), and unanswered (grey: a silence, never a verdict).
-struct HomeTeamDayRow: View {
-    let people: [HomePersonDay]
-    let onTap: (String) -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: NeonSpace.sm) {
-                ForEach(Array(people.enumerated()), id: \.element.id) { index, person in
-                    Button {
-                        Haptic.tap()
-                        onTap(person.employeeId)
-                    } label: {
-                        VStack(spacing: 6) {
-                            ZStack {
-                                Circle()
-                                    .stroke(homeDayTone(person.describeKind), lineWidth: 2.5)
-                                    .frame(width: 56, height: 56)
-                                AvatarView(url: nil, name: person.name, size: 48)
-                            }
-                            DirText(person.name, font: .system(.caption, weight: .semibold), fill: false, lineLimit: 1)
-                                .frame(width: 76)
-                            Text(describeDayKind(
-                                person.describeKind,
-                                blocked: person.blocked.count,
-                                contradictions: person.contradictions.count,
-                                waiting: person.needsManager.count,
-                                unanswered: person.unanswered
-                            ))
-                            .font(.system(.caption2, weight: .medium))
-                            .foregroundStyle(homeDayTone(person.describeKind))
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.8)
-                            .multilineTextAlignment(.center)
-                            .frame(width: 76)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.pressable)
-                    .staggered(index)
-                }
-            }
-            .padding(.horizontal, NeonSpace.card)
-        }
-        .padding(.horizontal, -NeonSpace.card)
+/// The ring round a person's face: the day's judgement in the plain token
+/// (fills in plain, text in Strong). No plan before the working day starts
+/// is the manager's to-do, not the person's fault, so it stays quiet then.
+func homeDayRing(_ kind: String?, beforeWork: Bool) -> Color {
+    switch kind {
+    case "blocked", "contradiction": return .neonDanger
+    case "waiting", "overloaded": return .neonWarning
+    case "unplanned": return beforeWork ? Color.neonTextTertiary.opacity(0.45) : .neonWarning
+    case "allStarted": return .neonSuccess
+    default: return Color.neonTextTertiary.opacity(0.45)
     }
 }
 
-/// A colour for `describeKind` — the same judgement the pressing list and
-/// `describeDayKind` read, as a ring instead of a sentence. "unanswered"
-/// stays a quiet grey on purpose: it is a silence, not a fault.
-func homeDayTone(_ kind: String) -> Color {
+/// The same judgement as words: the Strong token. "unanswered" stays a
+/// quiet grey on purpose — it is a silence, not a fault.
+func homeDayText(_ kind: String?, beforeWork: Bool) -> Color {
     switch kind {
     case "blocked", "contradiction": return .neonDangerStrong
-    case "waiting", "overloaded", "unplanned": return .neonWarningStrong
+    case "waiting", "overloaded": return .neonWarningStrong
+    case "unplanned": return beforeWork ? .neonTextTertiary : .neonWarningStrong
     case "allStarted": return .neonSuccessStrong
     default: return .neonTextTertiary
     }
 }
 
-/// The day board's six counts (`summarise` in day-board.ts), three to a row.
+/// The day board's six counts (`summarise` in day-board.ts) — only the ones
+/// that aren't zero, as the kit's badges, each in its own tone whatever its
+/// value: a grid of mostly zeros said nothing, and a tile repainted at zero
+/// changed what its colour meant.
 struct HomeDaySummary: View {
     let summary: DaySummary
+    /// Counts already said in words above, left out here.
+    var saidAbove: Set<String> = []
 
-    private struct Tile {
-        let title: String
-        let value: Int
+    private struct Count: Identifiable {
+        let id: String
+        let text: String
         let symbol: String
-        let hue: NeonHue
-        let alert: Bool
+        let tone: BadgeTone
     }
 
-    var body: some View {
-        let tiles: [Tile] = [
-            Tile(title: L("On the day"), value: summary.planned, symbol: "checkmark.circle.fill", hue: .green, alert: false),
-            Tile(title: L("No plan yet"), value: summary.unplanned, symbol: "calendar.badge.exclamationmark", hue: .amber, alert: summary.unplanned > 0),
-            Tile(title: L("Blocked"), value: summary.blocked, symbol: "pause.circle.fill", hue: .red, alert: summary.blocked > 0),
-            Tile(title: L("Said started"), value: summary.contradictions, symbol: "exclamationmark.triangle.fill", hue: .red, alert: summary.contradictions > 0),
-            Tile(title: L("Overloaded"), value: summary.overloaded, symbol: "clock.badge.exclamationmark.fill", hue: .amber, alert: summary.overloaded > 0),
-            // Unanswered is never coloured as a fault.
-            Tile(title: L("Unanswered"), value: summary.unanswered, symbol: "questionmark.circle.fill", hue: .grey, alert: false),
-        ]
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: NeonSpace.sm), count: 3), spacing: NeonSpace.sm) {
-            ForEach(Array(tiles.enumerated()), id: \.offset) { index, tile in
-                VStack(alignment: .leading, spacing: 6) {
-                    IconTile(tile.symbol, hue: tile.alert ? tile.hue : (tile.hue == .grey ? .grey : .indigo), size: 28, style: tile.alert ? .filled : .soft)
-                    HomeCountUp(value: tile.value, font: .system(.title3, weight: .bold))
-                    Text(tile.title)
-                        .font(.neonMeta)
-                        .foregroundStyle(Color.neonTextSecondary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
-                        .fill(tile.alert ? tile.hue.wash : NeonHue.grey.wash.opacity(0.6))
-                )
-                .accessibilityElement(children: .combine)
-                .staggered(index)
-            }
+    private var counts: [Count] {
+        var counts: [Count] = []
+        func add(_ id: String, _ count: Int, _ text: String, _ symbol: String, _ tone: BadgeTone) {
+            guard count > 0, !saidAbove.contains(id) else { return }
+            counts.append(Count(id: id, text: text, symbol: symbol, tone: tone))
         }
+        add("planned", summary.planned, L("%d on the day", summary.planned), "checkmark", .success)
+        add("unplanned", summary.unplanned, L("%d without a plan", summary.unplanned), "calendar", .warning)
+        add("blocked", summary.blocked, L("%d blocked", summary.blocked), "pause.fill", .danger)
+        add("contradictions", summary.contradictions, L("%d said started", summary.contradictions), "exclamationmark", .orange)
+        add("overloaded", summary.overloaded, L("%d overloaded", summary.overloaded), "clock.fill", .warning)
+        // Unanswered is never coloured as a fault.
+        add("unanswered", summary.unanswered, L("%d unanswered", summary.unanswered), "questionmark", .neutral)
+        return counts
     }
-}
-
-/// The people whose day needs the manager, in the day board's order.
-struct HomeDayPressing: View {
-    let days: [HomePersonDay]
-    let dayLabel: String
 
     var body: some View {
-        if days.isEmpty {
-            HStack(spacing: 10) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(Color.neonSuccess)
-                Text(L("Nothing on %@ needs you right now.", dayLabel))
-                    .font(.neonLabel)
-                    .foregroundStyle(Color.neonTextSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous).fill(NeonHue.green.wash))
-        } else {
-            VStack(spacing: NeonSpace.sm) {
-                ForEach(days) { person in
-                    HomePressingPerson(person: person)
+        let counts = self.counts
+        if !counts.isEmpty {
+            FlowRow(spacing: NeonSpace.sm) {
+                ForEach(Array(counts.enumerated()), id: \.element.id) { index, count in
+                    BadgeView(text: count.text, tone: count.tone, symbol: count.symbol)
+                        .staggered(index)
                 }
             }
         }
     }
 }
+
+// MARK: - What needs the manager
 
 struct HomePressingPerson: View {
     let person: HomePersonDay
@@ -337,7 +515,7 @@ struct HomePressingPerson: View {
                     unanswered: person.unanswered
                 ))
                 .font(.neonMeta)
-                .foregroundStyle(homeDayTone(person.describeKind))
+                .foregroundStyle(homeDayText(person.describeKind, beforeWork: false))
                 .multilineTextAlignment(.trailing)
             }
 
