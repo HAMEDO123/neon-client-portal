@@ -1007,18 +1007,6 @@ enum DevicePlatform {
   IOS
 }
 
-/// Which of a phone's two push tokens this is.
-///
-/// They are different tokens from different Apple services and they are not
-/// interchangeable. ALERT is the ordinary one — banners, badges, a buzz. VOIP
-/// comes from PushKit and is the only thing that can make a locked phone ring
-/// like a telephone through CallKit; it carries an obligation with it, since
-/// iOS kills an app that takes a VoIP push and does not report a call.
-enum DevicePushKind {
-  ALERT
-  VOIP
-}
-
 /// One Apple device signed in to the staff app.
 ///
 /// Deliberately its own table rather than columns on PushSubscription: that row
@@ -1027,6 +1015,11 @@ enum DevicePushKind {
 /// every reader unable to tell which kind of row it was holding without asking
 /// a discriminator column — and would let a half-filled row of either kind be
 /// written. Two shapes, two tables, one engine sending to both.
+enum DeviceTokenKind {
+  ALERT
+  VOIP
+}
+
 model DeviceToken {
   id         String   @id @default(cuid())
   employeeId String
@@ -1039,9 +1032,10 @@ model DeviceToken {
 
   platform DevicePlatform @default(IOS)
 
-  /// ALERT or VOIP — see DevicePushKind. One phone registers one of each,
-  /// so a device is two rows rather than one row with two columns.
-  kind DevicePushKind @default(ALERT)
+  /// ALERT is an ordinary notification token; VOIP is the PushKit token that
+  /// makes the phone ring for a call (CallKit). They are different tokens for
+  /// the same phone and are sent to under different APNs topics.
+  kind DeviceTokenKind @default(ALERT)
 
   /// The app's bundle id, sent to Apple as the `apns-topic`. Stored rather than
   /// taken from configuration so one server can feed more than one app, and so
@@ -1069,7 +1063,6 @@ model DeviceToken {
   deliveries NotificationDelivery[]
 
   @@index([employeeId, active])
-  @@index([employeeId, kind, active])
 }
 
 model NotificationDelivery {

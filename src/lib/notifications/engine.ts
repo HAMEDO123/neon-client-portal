@@ -30,6 +30,13 @@ export type DispatchInput = {
   metadata?: Record<string, unknown>;
   /** A picture for the notification where the device shows one — the sender, for a chat. */
   icon?: string;
+  /**
+   * False leaves the phone app's ordinary notification out — for an incoming
+   * call that is already ringing the phone through CallKit, where a banner on
+   * top of the ringing screen would say the same thing twice. The row and web
+   * push are unaffected.
+   */
+  apns?: boolean;
 };
 
 export type DispatchResult = {
@@ -125,7 +132,8 @@ async function deliverPush(
   // Neither transport can stop the other: each is awaited separately and each
   // decides for itself whether it is configured at all.
   const web = await deliverWebPush(notificationId, input.employeeId, payload);
-  const apple = await deliverApns(notificationId, input.employeeId, payload);
+  const apple =
+    input.apns === false ? { pushed: 0, failed: 0 } : await deliverApns(notificationId, input.employeeId, payload);
 
   const pushed = web.pushed + apple.pushed;
   const failed = web.failed + apple.failed;
@@ -205,13 +213,9 @@ async function deliverApns(
   // push alone for months and still does wherever the app is not installed.
   if (!isApnsConfigured()) return { pushed: 0, failed: 0 };
 
-  // ALERT tokens only. A VoIP token is a different credential from a
-  // different Apple service: an ordinary push sent to one is refused, and the
-  // refusal counts against the token until a perfectly good one is retired.
-  // Calls reach VoIP tokens through lib/notifications/call-push.ts.
-  const devices = await prisma.deviceToken.findMany({
-    where: { employeeId, active: true, kind: "ALERT" },
-  });
+  // Only notification tokens: a VoIP token is for ringing, and Apple refuses
+  // an alert sent to one.
+  const devices = await prisma.deviceToken.findMany({ where: { employeeId, active: true, kind: "ALERT" } });
   if (devices.length === 0) return { pushed: 0, failed: 0 };
 
   let pushed = 0;

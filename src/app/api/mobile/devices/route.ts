@@ -3,11 +3,7 @@ import { prisma } from "@/lib/db";
 import { mobileViewer } from "@/lib/mobile-auth";
 import { managerEmployeeId } from "@/lib/manager-account";
 
-// Where the staff app registers the device tokens Apple gave it.
-//
-// Two of them, and they are not interchangeable: the ordinary APNs token for
-// banners, and the PushKit token that is the only thing able to ring a locked
-// phone through CallKit. `kind` says which this is; a phone posts here twice.
+// Where the staff app registers the device token APNs gave it.
 //
 // A device token is not a credential and not a secret — it is an address. It
 // changes when the app is reinstalled, when a phone is restored from a backup,
@@ -46,14 +42,11 @@ export async function POST(request: Request) {
   const token = typeof body?.token === "string" ? body.token.trim() : "";
   const bundleId = typeof body?.bundleId === "string" ? body.bundleId.trim() : "";
   const sandbox = body?.sandbox === true;
-  // "voip" is the PushKit token, which is a different credential for a
-  // different service — a phone registers one of each and they are two rows.
-  // Anything unrecognised is the ordinary one, because an unknown kind
-  // silently treated as VoIP would be a phone that never gets a banner and
-  // never rings either.
-  const kind = body?.kind === "voip" ? "VOIP" : "ALERT";
   const deviceName = typeof body?.deviceName === "string" ? body.deviceName.trim() : null;
   const appVersion = typeof body?.appVersion === "string" ? body.appVersion.trim() : null;
+  // "voip" is the PushKit token that makes the phone ring for a call; anything
+  // else is the ordinary notification token, as every build before sent.
+  const kind = body?.kind === "voip" ? "VOIP" : "ALERT";
 
   if (!token || !bundleId) {
     return NextResponse.json({ error: "A token and a bundle id are required." }, { status: 400 });
@@ -70,12 +63,12 @@ export async function POST(request: Request) {
   // stay retired because of failures it has already recovered from.
   const device = await prisma.deviceToken.upsert({
     where: { token },
-    create: { employeeId, token, bundleId, sandbox, kind, deviceName, appVersion },
+    create: { employeeId, token, bundleId, sandbox, deviceName, appVersion, kind },
     update: {
       employeeId,
+      kind,
       bundleId,
       sandbox,
-      kind,
       deviceName,
       appVersion,
       active: true,
@@ -84,7 +77,7 @@ export async function POST(request: Request) {
     select: { id: true },
   });
 
-  return NextResponse.json({ id: device.id, registered: true, kind });
+  return NextResponse.json({ id: device.id, registered: true });
 }
 
 /**

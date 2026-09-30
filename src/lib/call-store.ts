@@ -1,6 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
-import { ringPhones, stopRinging } from "@/lib/notifications/call-push";
 import type { ChatViewer } from "@/lib/chat";
 import {
   adminChatUrl,
@@ -24,6 +23,7 @@ import {
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { MANAGER_MEMBER_KEY, notifiableEmployeeId } from "@/lib/manager-account";
 import { avatarUrl } from "@/lib/avatar";
+import { ringPhones } from "@/lib/call-ring-store";
 
 // Calls in the database: starting one and ringing the people in the
 // conversation, answering, declining, leaving, noticing who has gone quiet,
@@ -130,6 +130,19 @@ export async function inviteToCall(viewer: ChatViewer, callId: string, memberKey
     });
   }
 
+  // Their phones ring for real too, where the app is installed.
+  const call = await prisma.call.findUnique({
+    where: { id: callId },
+    select: { kind: true, channel: { select: { key: true } } },
+  });
+  const conversation = call ? conversationFromKey(call.channel.key) : null;
+  if (call && conversation) {
+    void ringPhones(
+      rows.map((row) => row.key),
+      { id: callId, callerName: viewer.name, kind: call.kind, conversation }
+    ).catch(() => undefined);
+  }
+
   return { invited: rows.length };
 }
 
@@ -206,42 +219,41 @@ export async function startCall(viewer: ChatViewer, conversation: Conversation, 
   // no employee row to address one to; there is now, so a call rings their
   // phone like anybody else's — and the link goes to the admin, since they
   // cannot sign in to the employee portal at all.
-  void Promise.all(
-    others.map(async (member) => {
-      const forManager = member.key === MANAGER_MEMBER_KEY;
-      const employeeId = await notifiableEmployeeId(member.key);
-      // Nobody to tell — an installation with nobody paired as manager, say.
-      // Every other phone still rings.
-      if (!employeeId) return;
+  //
+  // A phone with the app installed rings for real (PushKit + CallKit), closed
+  // or locked; the notification still goes to the list and to any browser, but
+  // not as a banner on top of that phone's ringing screen.
+  void (async () => {
+    const rang = await ringPhones(
+      others.map((member) => member.key),
+      { id: call.id, callerName: viewer.name, kind, conversation }
+    ).catch(() => new Set<string>());
+    await Promise.all(
+      others.map(async (member) => {
+        const forManager = member.key === MANAGER_MEMBER_KEY;
+        const employeeId = await notifiableEmployeeId(member.key);
+        // Nobody to tell — an installation with nobody paired as manager, say.
+        // Every other phone still rings.
+        if (!employeeId) return;
 
-      await dispatchNotification({
-        employeeId,
-        type: "CHAT_MESSAGE",
-        title: kind === "VIDEO" ? "Incoming video call" : "Incoming call",
-        message:
-          conversation.kind === "team"
-            ? `${viewer.name} started a call in the team chat.`
-            : conversation.kind === "group"
-              ? `${viewer.name} started a call in the group.`
-              : `${viewer.name} is calling you.`,
-        url: forManager ? adminChatUrl(conversation) : employeeChatUrl(conversation, member.key),
-        icon: viewer.type === "ADMIN" ? avatarUrl("Manager", "ink") : undefined,
-        dedupeKey: `CALL:${call.id}:${member.key}`,
-      }).catch(() => undefined);
-    })
-  );
-
-  // And the phones ring. Not awaited: a call that is already ringing on every
-  // open screen must not wait on Apple, and a push that fails must not undo
-  // it. The banner goes out above through the engine; this is what makes a
-  // locked phone behave like a telephone.
-  void ringPhones({
-    callId: call.id,
-    kind,
-    from: viewer.name,
-    fromKey: memberKeyOf(viewer),
-    memberKeys: members.map((member) => member.key),
-  }).catch(() => undefined);
+        await dispatchNotification({
+          employeeId,
+          type: "CHAT_MESSAGE",
+          title: kind === "VIDEO" ? "Incoming video call" : "Incoming call",
+          message:
+            conversation.kind === "team"
+              ? `${viewer.name} started a call in the team chat.`
+              : conversation.kind === "group"
+                ? `${viewer.name} started a call in the group.`
+                : `${viewer.name} is calling you.`,
+          url: forManager ? adminChatUrl(conversation) : employeeChatUrl(conversation, member.key),
+          icon: viewer.type === "ADMIN" ? avatarUrl("Manager", "ink") : undefined,
+          dedupeKey: `CALL:${call.id}:${member.key}`,
+          apns: !rang.has(member.key),
+        }).catch(() => undefined);
+      })
+    );
+  })();
 
   return { callId: call.id, joinedExisting: false };
 }
@@ -417,22 +429,6 @@ async function finish(
     data: { status: "ENDED", endedAt, endReason: reason },
   });
   if (claimed.count === 0) return;
-
-  // Every phone that was rung has to be told, and not out of politeness: iOS
-  // kills an app that takes a VoIP push and reports no call, so a phone woken
-  // for a call that is already over must still be allowed to close it. It is
-  // also what stops a pocket ringing for the rest of the ring window after
-  // somebody has hung up.
-  void stopRinging(
-    {
-      callId: call.id,
-      kind: call.kind,
-      from: call.startedByName,
-      fromKey: call.startedByKey,
-      memberKeys: call.participants.map((part) => part.memberKey),
-    },
-    reason
-  ).catch(() => undefined);
 
   const seconds =
     reason === "completed" && call.answeredAt ? Math.round((now - call.answeredAt.getTime()) / 1000) : null;
