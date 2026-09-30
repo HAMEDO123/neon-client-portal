@@ -24,11 +24,12 @@ enum TokenStore {
     private static let legacyDefaultsKey = "session_token"
 
     /// "<team>.com.neonjo.staff.shared", from Info.plist (`NeonKeychainGroup`),
-    /// where the build fills the team in. nil when it did not, and the item
-    /// then stays in the app's own group, as before.
+    /// where the build fills the team in. nil when it did not; and when this
+    /// build is not entitled to it (an unsigned CI build) adding to it fails,
+    /// and `write` keeps the item in the app's own group, as before.
     private static let sharedGroup: String? = {
         guard let group = Bundle.main.object(forInfoDictionaryKey: "NeonKeychainGroup") as? String,
-              !group.hasPrefix("."), !group.hasPrefix("com."), !group.contains("$(")
+              !group.hasPrefix("."), !group.contains("$(")
         else { return nil }
         return group
     }()

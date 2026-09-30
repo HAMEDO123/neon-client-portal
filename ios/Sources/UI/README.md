@@ -18,6 +18,11 @@ badges and every hue.
 files into the app as resources, and two files with one name stop the build
 ("Multiple commands produce …/README.md"). Name area notes `<Area>-NOTES.md`.
 
+**`Tokens.swift` and `DesignSystem.swift` are also compiled into the share
+extension** (`ios/Share/`), so it looks like the app. Keep them free of
+app-only API (`UIApplication.shared`, `APIClient`, other kit files); the
+extension build is where a slip shows.
+
 **Names are reserved.** Swift treats a `private struct StatTile` in your file as
 a redeclaration of the kit's `StatTile`, so don't declare any type or global
 function named like one below, even as `private`. Name your own helpers after

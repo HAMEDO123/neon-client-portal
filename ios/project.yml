@@ -63,8 +63,10 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ar]
-        # The keychain group above, spelled out for TokenStore to name.
-        NeonKeychainGroup: "$(AppIdentifierPrefix)com.neonjo.staff.shared"
+        # The keychain group above, spelled out for TokenStore to name. From
+        # the team rather than $(AppIdentifierPrefix), which only a signed
+        # build fills in; this team's App ID prefix is its team ID.
+        NeonKeychainGroup: "$(DEVELOPMENT_TEAM).com.neonjo.staff.shared"
         # Written out: generated Info.plists do not get it injected, and App
         # Store Connect rejects the upload without it (90713).
         CFBundleIconName: AppIcon
@@ -141,7 +143,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ar]
-        NeonKeychainGroup: "$(AppIdentifierPrefix)com.neonjo.staff.shared"
+        NeonKeychainGroup: "$(DEVELOPMENT_TEAM).com.neonjo.staff.shared"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).ShareViewController"

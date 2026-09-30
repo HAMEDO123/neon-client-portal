@@ -2,6 +2,9 @@ import Foundation
 
 // Shared readings of what the server sends: its dates, its URLs, and the
 // studio's names for task states. Used by every feature area.
+//
+// Also compiled into the share extension (ios/Share/README.md): extension-safe
+// APIs only, and nothing from the rest of the app beyond AppLanguage and L.
 
 let portalOrigin = URL(string: "https://clients.neonjo.com")!
 

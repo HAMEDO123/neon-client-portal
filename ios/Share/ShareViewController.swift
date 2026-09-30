@@ -10,6 +10,8 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Light only, as the app is.
+        overrideUserInterfaceStyle = .light
         view.backgroundColor = UIColor(Color.neonBg)
 
         let model = ShareModel(context: extensionContext, token: TokenStore.read())
