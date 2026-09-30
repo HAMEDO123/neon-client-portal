@@ -18,13 +18,12 @@ struct MyRequestsRootView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: NeonSpace.stack) {
-                SegmentedPill(selection: $tab, options: RequestsTab.allCases, title: { $0.label }, symbol: { tab in
-                    switch tab {
-                    case .supplies: return "shippingbox"
-                    case .receipts: return "receipt"
-                    case .report: return "text.book.closed"
-                    }
-                }, badge: { _ in nil })
+                // Hidden until data has loaded: shown early, every tab kept
+                // answering with the same error underneath it, as though the
+                // filters themselves still worked.
+                if data != nil {
+                    PillFilterBar(selection: $tab, options: RequestsTab.allCases, title: { $0.label })
+                }
 
                 if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
@@ -73,8 +72,7 @@ struct MyRequestsRootView: View {
         }
 
         if data.supplyRequests.isEmpty {
-            EmptyState(symbol: "shippingbox", title: L("Nothing requested yet"))
-                .glassCard(radius: 18)
+            EmptyState(symbol: "shippingbox", title: L("Nothing requested yet"), hue: .orange, card: true)
         } else {
             CardList(data.supplyRequests) { request in
                 supplyRow(request)
@@ -115,9 +113,7 @@ struct MyRequestsRootView: View {
                     }
                     Spacer()
                     if request.status == "PENDING" {
-                        Button(L("Cancel")) { cancelling = request }
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.neonTextFaint)
+                        NeonButton(L("Cancel"), kind: .ghost, size: .small) { cancelling = request }
                     }
                 }
             }
@@ -165,8 +161,7 @@ struct MyRequestsRootView: View {
         }
 
         if data.receipts.isEmpty {
-            EmptyState(symbol: "receipt", title: L("No receipts this month yet"))
-                .glassCard(radius: 18)
+            EmptyState(symbol: "receipt", title: L("No receipts this month yet"), hue: .orange, card: true)
         } else {
             VStack(spacing: 10) {
                 ForEach(data.receipts) { receipt in
@@ -199,9 +194,7 @@ struct MyRequestsRootView: View {
                         BadgeView(text: L("Not read yet"), tone: .neutral)
                     }
                     Spacer()
-                    Button(L("Remove")) { deletingReceipt = receipt }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.neonInk.opacity(0.4))
+                    NeonButton(L("Remove"), kind: .ghost, size: .small) { deletingReceipt = receipt }
                 }
             }
         }
@@ -270,11 +263,14 @@ struct MyRequestsRootView: View {
 enum RequestsTab: String, CaseIterable, Identifiable {
     case supplies, receipts, report
     var id: String { rawValue }
+    // Short enough not to run into the pill's trailing edge at 390 pt, in
+    // Arabic, or at larger text sizes — "Today's report" stays the full
+    // words wherever else it's said (the card's own heading, for one).
     var label: String {
         switch self {
         case .supplies: return L("Supplies")
         case .receipts: return L("Receipts")
-        case .report: return L("Today's report")
+        case .report: return L("Report")
         }
     }
 }

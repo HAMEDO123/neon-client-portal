@@ -7,31 +7,35 @@ struct AdminMoreView: View {
     var body: some View {
         NavigationStack {
             NeonScroll(spacing: NeonSpace.stack) {
-                ScreenHeader(L("More"), subtitle: L("Signed in as the manager")) {
+                ScreenHeader(L("More")) {
                     AccountMenu()
                 }
 
+                // Six tiles fill two full rows; the old five-tile "Team" card
+                // left an empty sixth slot that read as a missing tile.
                 MoreDestinationGroup(L("Work"), symbol: "briefcase.fill", hue: .blue) {
-                    MoreDestinationTile(L("Reviews"), symbol: "checkmark.seal.fill", hue: .purple) { ReviewsRootView() }
+                    MoreDestinationTile(L("Reviews"), symbol: "tray.and.arrow.down.fill", hue: .orange) { ReviewsRootView() }
+                    MoreDestinationTile(L("Requests"), symbol: "tray.full.fill", hue: .amber) { RequestsRootView() }
+                    MoreDestinationTile(L("Alerts"), symbol: "bell.badge.fill", hue: .red) { AlertsRootView() }
                     MoreDestinationTile(L("Meetings"), symbol: "calendar", hue: .cyan) { MeetingsView() }
-                    MoreDestinationTile(L("Alerts"), symbol: "bell.fill", hue: .orange) { AlertsRootView() }
+                    MoreDestinationTile(L("Site visits"), symbol: "mappin.and.ellipse", hue: .pink) { SiteVisitsRootView() }
+                    MoreDestinationTile(L("WhatsApp"), symbol: "phone.bubble.fill", hue: .green) { WhatsAppRootView() }
                 }
 
                 MoreDestinationGroup(L("Team"), symbol: "person.2.fill", hue: .purple) {
                     MoreDestinationTile(L("Employees"), symbol: "person.2.fill", hue: .purple) { EmployeesRootView() }
                     MoreDestinationTile(L("Payroll"), symbol: "banknote.fill", hue: .green) { PayrollRootView() }
-                    MoreDestinationTile(L("Attendance"), symbol: "clock.badge.checkmark.fill", hue: .cyan) { AttendanceRootView() }
-                    MoreDestinationTile(L("Requests"), symbol: "tray.full.fill", hue: .orange) { RequestsRootView() }
-                    MoreDestinationTile(L("Site visits"), symbol: "mappin.and.ellipse", hue: .pink) { SiteVisitsRootView() }
+                    MoreDestinationTile(L("Attendance"), symbol: "clock.badge.checkmark.fill", hue: .indigo) { AttendanceRootView() }
                 }
 
-                MoreDestinationGroup(L("Studio"), symbol: "building.2.fill", hue: .indigo) {
-                    MoreDestinationTile(L("Analytics"), symbol: "chart.bar.xaxis", hue: .cyan) { AnalyticsRootView() }
-                    MoreDestinationTile(L("WhatsApp"), symbol: "phone.bubble.fill", hue: .green) { WhatsAppRootView() }
-                    MoreDestinationTile(L("Settings"), symbol: "gearshape.fill", hue: .grey) { SettingsRootView() }
+                // Analytics and Settings each stood alone in a third,
+                // near-empty card — they read better as plain rows on the
+                // account card than as two tiles rattling around a grid.
+                AccountCard {
+                    MoreDestinationListRow(L("Analytics"), leading: .icon("chart.bar.fill", tint: .neonBlueStrong)) { AnalyticsRootView() }
+                    NeonDivider()
+                    MoreDestinationListRow(L("Settings"), leading: .icon("gearshape.fill", tint: .neonTextSecondary)) { SettingsRootView() }
                 }
-
-                AccountCard()
             }
             .toolbar(.hidden, for: .navigationBar)
             .neonAmbientBackground()
@@ -55,44 +59,59 @@ struct EmployeeMoreView: View {
         var canLogSiteVisits = false
     }
 
-    private var hasGivenTo: Bool {
-        permissions.canAssignTasks || permissions.canLogSiteVisits || permissions.canReadWhatsApp
+    /// How many of the three "given to you" destinations this person has.
+    /// Three fills a grid row on its own; fewer left holes in it (and, before
+    /// this, a whole "You" card held nothing but Profile in one third of its
+    /// width), so 1–2 read better as plain rows than as a broken grid.
+    private var givenToCount: Int {
+        [permissions.canAssignTasks, permissions.canLogSiteVisits, permissions.canReadWhatsApp].filter { $0 }.count
     }
 
     var body: some View {
         NavigationStack {
             NeonScroll(spacing: NeonSpace.stack) {
-                ScreenHeader(L("More"), subtitle: api.identity.map { L("Signed in as %@", $0.name) }) {
+                ScreenHeader(L("More")) {
                     AccountMenu()
                 }
 
                 MoreDestinationGroup(L("Your day"), symbol: "sparkles", hue: .indigo) {
-                    MoreDestinationTile(L("Alerts"), symbol: "bell.fill", hue: .orange, badge: store.badges.unread) {
+                    MoreDestinationTile(L("Alerts"), symbol: "bell.badge.fill", hue: .red, badge: store.badges.unread) {
                         NotificationsView(openChat: openChat)
                     }
                     MoreDestinationTile(L("Meetings"), symbol: "calendar", hue: .cyan) { MeetingsView() }
-                    MoreDestinationTile(L("My requests"), symbol: "tray.full.fill", hue: .purple) { MyRequestsRootView() }
+                    MoreDestinationTile(L("My requests"), symbol: "tray.full.fill", hue: .amber) { MyRequestsRootView() }
                 }
 
-                if hasGivenTo {
+                if givenToCount == 3 {
                     MoreDestinationGroup(L("Given to you"), symbol: "hand.raised.fill", hue: .pink) {
-                        if permissions.canAssignTasks {
-                            MoreDestinationTile(L("Assign work"), symbol: "person.badge.plus", hue: .purple) { AssignRootView() }
-                        }
-                        if permissions.canLogSiteVisits {
-                            MoreDestinationTile(L("Site visits"), symbol: "mappin.and.ellipse", hue: .pink) { SiteVisitsRootView() }
-                        }
-                        if permissions.canReadWhatsApp {
-                            MoreDestinationTile(L("WhatsApp"), symbol: "phone.bubble.fill", hue: .green) { WhatsAppRootView() }
-                        }
+                        MoreDestinationTile(L("Assign work"), symbol: "person.badge.plus", hue: .purple) { AssignRootView() }
+                        MoreDestinationTile(L("Site visits"), symbol: "mappin.and.ellipse", hue: .pink) { SiteVisitsRootView() }
+                        MoreDestinationTile(L("WhatsApp"), symbol: "phone.bubble.fill", hue: .green) { WhatsAppRootView() }
                     }
                 }
 
-                MoreDestinationGroup(L("You"), symbol: "person.fill", hue: .grey) {
-                    MoreDestinationTile(L("Profile"), symbol: "person.crop.circle.fill", hue: .indigo) { ProfileRootView() }
-                }
+                AccountCard {
+                    MoreDestinationListRow(
+                        api.identity?.name ?? L("Profile"),
+                        subtitle: L("Profile, notifications, devices"),
+                        leading: .avatar(url: nil, name: api.identity?.name ?? L("Profile"))
+                    ) { ProfileRootView() }
 
-                AccountCard()
+                    if givenToCount > 0 && givenToCount < 3 {
+                        if permissions.canAssignTasks {
+                            NeonDivider()
+                            MoreDestinationListRow(L("Assign work"), leading: .icon("person.badge.plus", tint: .neonPurpleStrong)) { AssignRootView() }
+                        }
+                        if permissions.canLogSiteVisits {
+                            NeonDivider()
+                            MoreDestinationListRow(L("Site visits"), leading: .icon("mappin.and.ellipse", tint: .neonPinkStrong)) { SiteVisitsRootView() }
+                        }
+                        if permissions.canReadWhatsApp {
+                            NeonDivider()
+                            MoreDestinationListRow(L("WhatsApp"), leading: .icon("phone.bubble.fill", tint: .neonSuccessStrong)) { WhatsAppRootView() }
+                        }
+                    }
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .neonAmbientBackground()
@@ -127,7 +146,9 @@ private struct MoreDestinationGroup<Content: View>: View {
 
     var body: some View {
         SectionCard(title, symbol: symbol, hue: hue) {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: NeonSpace.sm), GridItem(.flexible(), spacing: NeonSpace.sm), GridItem(.flexible())], spacing: NeonSpace.sm) {
+            // 12 apart, three to a row — the README's spacing for a grid this
+            // wide, not the 8 pt a four-across grid gets.
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: NeonSpace.md), GridItem(.flexible(), spacing: NeonSpace.md), GridItem(.flexible())], spacing: NeonSpace.md) {
                 content
             }
         }
@@ -136,7 +157,9 @@ private struct MoreDestinationGroup<Content: View>: View {
 
 /// One coloured tile in the grid, pushing its destination — visually the
 /// kit's `QuickActionTile`, wired to a `NavigationLink` instead of a tap
-/// action so it can push a whole screen.
+/// action so it can push a whole screen. Sized and set in the kit's own
+/// figures (`NeonSize.iconTileLarge`, `.neonLabel`) so it doesn't drift from
+/// Home's Quick Actions, which are built on the real thing.
 private struct MoreDestinationTile<Destination: View>: View {
     let title: String
     let symbol: String
@@ -158,13 +181,13 @@ private struct MoreDestinationTile<Destination: View>: View {
                 .toolbar(.hidden, for: .tabBar)
         } label: {
             VStack(spacing: 9) {
-                IconTile(symbol, hue: hue, size: 42, style: .filled)
+                IconTile(symbol, hue: hue, size: NeonSize.iconTileLarge, style: .filled)
                     .overlay(alignment: .topTrailing) {
                         if badge > 0 { CountBadge(badge, size: 18).offset(x: 7, y: -7) }
                     }
                 Text(title)
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(Color.neonInk.opacity(0.88))
+                    .font(.neonLabel)
+                    .foregroundStyle(Color.neonInk)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
@@ -185,26 +208,54 @@ private struct MoreDestinationTile<Destination: View>: View {
     }
 }
 
-/// Language and signing out, at the foot of both More tabs.
-private struct AccountCard: View {
+/// A destination that reads better as a plain row than a tile — a lone one,
+/// or one of a handful that would otherwise leave a hole in a grid. Same
+/// push-a-screen shape as `MoreDestinationTile`, drawn as a `ListRow`.
+private struct MoreDestinationListRow<Destination: View>: View {
+    let title: String
+    var subtitle: String?
+    var leading: RowLeading
+    let destination: Destination
+
+    init(_ title: String, subtitle: String? = nil, leading: RowLeading, @ViewBuilder destination: () -> Destination) {
+        self.title = title
+        self.subtitle = subtitle
+        self.leading = leading
+        self.destination = destination()
+    }
+
+    var body: some View {
+        NavigationLink {
+            destination
+                .toolbar(.hidden, for: .tabBar)
+        } label: {
+            ListRow(title, subtitle: subtitle, leading: leading, chevron: true)
+        }
+        .buttonStyle(.pressable)
+    }
+}
+
+/// Language and signing out, at the foot of both More tabs — plus, above
+/// them, whatever few destinations this tab reads better as rows than tiles.
+/// Built from the kit's own `ListRow`, matching the pastel-tile rows on the
+/// rest of the page instead of a plain system `Label`.
+private struct AccountCard<Extra: View>: View {
+    @ViewBuilder let extra: () -> Extra
+
     @EnvironmentObject var api: APIClient
     @State private var confirmSignOut = false
 
     var body: some View {
         NeonCard {
+            extra()
+
+            NeonDivider()
+
             Button {
                 Haptic.tap()
                 AppLanguage.toggle()
             } label: {
-                HStack {
-                    Label(AppLanguage.current == .arabic ? "English" : "العربية", systemImage: "globe")
-                        .font(.system(.subheadline, weight: .medium))
-                        .foregroundStyle(Color.neonInk)
-                    Spacer()
-                    Image(systemName: "chevron.forward")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.neonTextFaint)
-                }
+                ListRow(AppLanguage.current == .arabic ? "English" : "العربية", leading: .icon("globe"), chevron: true)
             }
             .buttonStyle(.pressable)
 
@@ -213,12 +264,7 @@ private struct AccountCard: View {
             Button(role: .destructive) {
                 confirmSignOut = true
             } label: {
-                HStack {
-                    Label(L("Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
-                        .font(.system(.subheadline, weight: .medium))
-                        .foregroundStyle(Color.neonDangerStrong)
-                    Spacer()
-                }
+                ListRow(L("Sign Out"), leading: .icon("rectangle.portrait.and.arrow.right", tint: .neonDangerStrong))
             }
             .buttonStyle(.pressable)
             .confirmationDialog(L("Sign out of NEON?"), isPresented: $confirmSignOut, titleVisibility: .visible) {
@@ -230,6 +276,7 @@ private struct AccountCard: View {
                 Text(identity.side == .admin ? L("Signed in as the manager") : L("Signed in as %@", identity.name))
                     .font(.neonCaption)
                     .foregroundStyle(Color.neonTextTertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
     }

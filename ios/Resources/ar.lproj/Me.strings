@@ -125,3 +125,17 @@
 "%d planned" = "%d مخطَّطة";
 "%d task card(s)" = "%d بطاقة مهمة";
 "Nothing on the board today." = "لا شيء على اللوحة اليوم.";
+
+/* Round 2: critic fixes (crash guards, wording, kit-built ProofSheet,
+   Assign's direction/badges/dates, the More grid, Requests/Profile refusals). */
+"Handed out directly" = "أُسندت إليك مباشرة";
+"Handed to you" = "أُسندت إليك";
+"Not started yet" = "لم تبدأ بعد";
+"No finish line written" = "لم تُكتب معايير الإنجاز";
+"Hand out work" = "إسناد العمل";
+"This page is for the team" = "هذه الصفحة مخصّصة للفريق";
+"When somebody hands you work" = "عندما يُسند إليك أحدهم عملاً";
+"Nothing planned for today" = "لم يُخطَّط لأي شيء اليوم";
+"Report" = "التقرير";
+"Note for the manager" = "ملاحظة للمدير";
+"Profile, notifications, devices" = "الملف الشخصي، الإشعارات، الأجهزة";

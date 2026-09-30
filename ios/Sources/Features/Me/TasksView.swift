@@ -48,7 +48,7 @@ struct TasksView: View {
                     }
 
                     if let jobs, !jobs.isEmpty {
-                        SectionCard(L("From the manager"), subtitle: L("%d handed to you directly", jobs.count), symbol: "shippingbox.fill", hue: .purple) {
+                        SectionCard(L("Handed to you"), subtitle: L("%d handed to you directly", jobs.count), symbol: "shippingbox.fill", hue: .purple) {
                             VStack(spacing: NeonSpace.sm) {
                                 ForEach(Array(jobs.enumerated()), id: \.element.id) { index, job in
                                     NavigationLink(value: JobRoute(id: job.id)) {
@@ -197,10 +197,8 @@ struct TaskDetailView: View {
                 color: .neonTextSecondary
             )
             FlowRow {
-                BadgeView(text: taskStateLabel(task.state), tone: taskStateTone(task.state))
-                if let priority = priorityLabel(task.priority) {
-                    BadgeView(text: priority, tone: task.priority == "HIGH" ? .pink : .neutral)
-                }
+                meStateBadge(task.state)
+                priorityChip(task.priority)
                 if let estimate = task.effectiveEstimate {
                     BadgeView(text: L("≈ %@ h", estimate.formatted(.number.precision(.fractionLength(0...1)))), tone: .cyan)
                 }
@@ -246,7 +244,7 @@ struct TaskDetailView: View {
                 .disabled(cachedAt != nil)
 
                 if task.state == "IN_PROGRESS" {
-                    NeonButton(L("Put back to pending"), symbol: "arrow.uturn.backward", kind: .secondary) {
+                    NeonButton(L("Not started yet"), symbol: "arrow.uturn.backward", kind: .secondary) {
                         await move(task, to: "TODO")
                     }
                     .disabled(cachedAt != nil)
@@ -278,7 +276,7 @@ struct TaskDetailView: View {
                 ForEach(task.waitingOn, id: \.id) { dependency in
                     HStack {
                         DirText(dependency.task.name, font: .system(size: 14))
-                        BadgeView(text: taskStateLabel(dependency.state), tone: taskStateTone(dependency.state))
+                        meStateBadge(dependency.state)
                     }
                 }
             }
