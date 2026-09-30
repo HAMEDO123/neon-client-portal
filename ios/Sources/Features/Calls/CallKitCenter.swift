@@ -113,6 +113,9 @@ final class CallKitCenter: NSObject {
         // is placed in a conversation, not to a number.
         config.includesCallsInRecents = false
         config.iconTemplateImageData = Self.iconTemplate()
+        // The studio's own ring (Resources/Sounds), the same one the app's
+        // ringing screen and a caller's ringback play.
+        config.ringtoneSound = "neon-ringtone.caf"
         provider = CXProvider(configuration: config)
         super.init()
         provider.setDelegate(self, queue: nil)

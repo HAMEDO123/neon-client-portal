@@ -25,6 +25,8 @@ targets:
         buildPhase: resources
       - path: Resources/ar.lproj
         buildPhase: resources
+      - path: Resources/Sounds
+        buildPhase: resources
     dependencies:
       - package: WebRTC
     # Push notifications (APNs). Xcode's automatic signing turns the
