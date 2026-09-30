@@ -92,3 +92,10 @@ automation,admin-push}-actions.ts`.
   now links straight to the WhatsApp area's own `WhatsAppRootView()`, which
   owns the studio's WhatsApp inbox and its linking flow, rather than this
   screen saying it cannot be done from the app.
+
+## Faces
+- The attendance month's people (`ops/attendanceMonth` `photos`, a map beside
+  the rows), today's reports and who has not written one (`ops/requests`
+  team's `photoUrl`), a supply request's asker, a site visit's owner, and the
+  push list in Settings (`ops/settings` `faces`) draw each person's photo,
+  initials where there is none.

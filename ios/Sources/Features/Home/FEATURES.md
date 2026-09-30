@@ -60,6 +60,18 @@ they use. Kept here so a later run can see what is built and what is left.
 - [x] Shortfall banner with the exact singular/plural sentence, and "Apply deduction(s)" with a confirm step (`applyPerformanceDeductions`, i.e. `runPerformanceReview`).
 - [x] Per-employee rows: colour dot, name, role, progress bar + percent (red under target), Done/Review/Working/Pending/Late/On-time/Deduction figures. Inactive employees dimmed.
 
+## Faces
+- [x] Every person Home draws shows their photo where they have one, and what
+      it drew before where they do not: "Right now" (`home/now` `photo`), the
+      day board and "what needs you" (`home/day` `photo`), today's jobs
+      (`home/today` person `photoUrl`, the job's tile otherwise), "Proof to
+      check" (`home/pulse` reviews' `photoUrl`), Reviews' submitter
+      (`home/reviews`), Activity (`home/alerts` employee `photoUrl`),
+      Analytics' day and month rows (`home/analytics` `photoUrl`), and the
+      header's search.
+- [x] The header's round button is the manager's own face once they have one.
+- [x] Home re-reads its people when anybody's face changes.
+
 ## Not built (see `notImplemented` in the run's report)
 - New Project form from the dashboard (`/admin/projects/new`) — creating a project is Projects' area, not Home's.
 - Deep links from an alert into another area's native screen.
