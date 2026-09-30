@@ -46,7 +46,11 @@ export const reads: ReadRegistry = {
     const requests = await prisma.supplyRequest.findMany({
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
       take: 200,
-      include: { employee: { select: { id: true, name: true, role: true } } },
+      include: {
+        employee: { select: { id: true, name: true, role: true } },
+        // Same reason as the web card: `item` is a headline over these.
+        lines: { orderBy: { position: "asc" } },
+      },
     });
 
     const timezone = await getTimezone();

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Check, Clock, Package, ShoppingCart, X } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import { Check, Clock, Package, Plus, ShoppingCart, X } from "lucide-react";
 import { cancelSupplyRequest, createSupplyRequest } from "@/lib/actions/operations-actions";
 import type { SupplyRequestStatus } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,11 @@ const STATUS = {
 export function SupplyRequestForm() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // One box per thing being bought. Ids rather than a count, so removing the
+  // middle one does not renumber the two around it and wipe what was typed in
+  // them — React would reuse the inputs by position.
+  const [lines, setLines] = useState<number[]>([0]);
+  const nextLine = useRef(1);
 
   return (
     <form
@@ -27,6 +32,7 @@ export function SupplyRequestForm() {
             // Clearing by hand: the form is uncontrolled, so a successful
             // submit should leave it empty for the next request.
             (document.getElementById("supply-form") as HTMLFormElement | null)?.reset();
+            setLines([0]);
           } catch (submitError) {
             setError(submitError instanceof Error ? submitError.message : "Could not send that.");
           }
@@ -37,31 +43,70 @@ export function SupplyRequestForm() {
     >
       <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
         <Package size={15} strokeWidth={2} />
-        Request something for the office
+        Ask to buy something
       </h2>
 
-      <input
-        name="item"
-        required
-        placeholder="What do you need? e.g. Coffee, A4 paper"
-        className="rounded-xl border border-ink/12 bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-cyan-strong"
-      />
+      {/* One box per thing. A shop run is five things decided in one go, and
+          five separate requests makes the manager answer the same question
+          five times and lose the fact that they belong together. */}
+      <div className="flex flex-col gap-2">
+        {lines.map((id, index) => (
+          <div key={id} className="rounded-xl border border-ink/10 bg-white/60 p-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold tabular-nums text-ink/30">{index + 1}</span>
+              <input
+                name="lineName"
+                required={index === 0}
+                dir="auto"
+                placeholder="What to buy — e.g. Coffee, A4 paper"
+                className="min-w-0 flex-1 rounded-lg border border-ink/12 bg-white/80 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+              />
+              {lines.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setLines((current) => current.filter((line) => line !== id))}
+                  aria-label={`Remove item ${index + 1}`}
+                  className="shrink-0 rounded-lg p-1.5 text-ink/30 hover:bg-ink/5 hover:text-ink/60"
+                >
+                  <X size={14} strokeWidth={2} />
+                </button>
+              )}
+            </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          name="quantity"
-          placeholder="How much (2 boxes)"
-          className="rounded-xl border border-ink/12 bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-cyan-strong"
-        />
-        <input
-          name="estimatedCost"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="Approx. cost (JOD)"
-          className="rounded-xl border border-ink/12 bg-white/80 px-3 py-2.5 text-sm outline-none focus:border-cyan-strong"
-        />
+            <div className="mt-2 grid grid-cols-2 gap-2 pl-5">
+              <input
+                name="lineQuantity"
+                dir="auto"
+                placeholder="How much (2 boxes)"
+                className="rounded-lg border border-ink/12 bg-white/80 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+              />
+              <input
+                name="lineCost"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Approx. cost (JOD)"
+                className="rounded-lg border border-ink/12 bg-white/80 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+              />
+            </div>
+          </div>
+        ))}
       </div>
+
+      <button
+        type="button"
+        onClick={() =>
+          setLines((current) => {
+            const id = nextLine.current;
+            nextLine.current += 1;
+            return [...current, id];
+          })
+        }
+        className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-ink/15 py-2.5 text-xs font-medium text-ink/55 active:bg-white/60"
+      >
+        <Plus size={14} strokeWidth={2.5} />
+        Add another thing
+      </button>
 
       <textarea
         name="note"
@@ -101,6 +146,7 @@ export function SupplyRequestList({
     status: SupplyRequestStatus;
     decisionNote: string | null;
     createdAt: Date;
+    lines: { id: string; name: string; quantity: string | null; estimatedCost: number | null }[];
   }[];
 }) {
   const [, startTransition] = useTransition();
@@ -127,6 +173,20 @@ export function SupplyRequestList({
                   {request.item}
                   {request.quantity && <span className="ml-1.5 font-normal text-ink/50">{request.quantity}</span>}
                 </p>
+
+                {/* More than one thing is worth listing; a single one is
+                    already the line above, and repeating it reads as a bug. */}
+                {request.lines.length > 1 && (
+                  <ul className="mt-1.5 flex flex-col gap-0.5">
+                    {request.lines.map((line) => (
+                      <li key={line.id} dir="auto" className="text-sm text-ink/60">
+                        · {line.name}
+                        {line.quantity && <span className="text-ink/40"> {line.quantity}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
                 {request.note && <p className="mt-1 text-sm text-ink/60">{request.note}</p>}
                 {request.decisionNote && (
                   <p className="mt-1.5 text-xs text-ink/50">Manager: {request.decisionNote}</p>

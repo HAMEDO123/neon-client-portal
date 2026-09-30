@@ -20,7 +20,13 @@ export default async function AdminRequestsPage() {
   const requests = await prisma.supplyRequest.findMany({
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     take: 200,
-    include: { employee: { select: { name: true, role: true } } },
+    include: {
+      employee: { select: { name: true, role: true } },
+      // The shopping list itself. `item` is only the headline derived from it,
+      // so without these the manager approves "Coffee and 2 more" without ever
+      // being told what the other two are.
+      lines: { orderBy: { position: "asc" } },
+    },
   });
 
   const pending = requests.filter((request) => request.status === "PENDING");
@@ -112,6 +118,29 @@ export default async function AdminRequestsPage() {
                     {request.employee.name}
                     {request.employee.role ? ` · ${request.employee.role}` : ""} · {formatDate(request.createdAt)}
                   </p>
+
+                  {/* Every line, not the headline. A request made before this
+                      existed has none, and reads exactly as it always did. */}
+                  {request.lines.length > 0 && (
+                    <ul className="mt-2.5 flex flex-col gap-1">
+                      {request.lines.map((line, index) => (
+                        <li
+                          key={line.id}
+                          className="flex items-baseline gap-2 text-sm text-ink/75"
+                        >
+                          <span className="w-4 shrink-0 text-xs tabular-nums text-ink/30">{index + 1}.</span>
+                          <span dir="auto" className="min-w-0">{line.name}</span>
+                          {line.quantity && <span className="text-ink/45">{line.quantity}</span>}
+                          {line.estimatedCost != null && (
+                            <span className="ml-auto shrink-0 text-xs tabular-nums text-ink/45">
+                              {line.estimatedCost.toFixed(2)}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
                   {request.note && <p className="mt-2 text-sm text-ink/70">{request.note}</p>}
                 </div>
 

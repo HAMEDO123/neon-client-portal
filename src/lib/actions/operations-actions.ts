@@ -83,22 +83,53 @@ export async function saveDailyReport(formData: FormData) {
 
 // --- Office supplies -------------------------------------------------------
 
+/**
+ * Asking to buy things — one request, as many lines as the trip has.
+ *
+ * The form posts three parallel lists (`lineName`, `lineQuantity`,
+ * `lineCost`), which is what `getAll` gives back in the order they were typed.
+ * Empty rows are dropped rather than refused: somebody who added a box and
+ * changed their mind should not have to find and remove it.
+ *
+ * `item` and `estimatedCost` on the request itself stay filled — a headline
+ * and the total — because every screen and notification already reads them,
+ * and a request that suddenly had neither would go quiet in all of them.
+ */
 export async function createSupplyRequest(formData: FormData) {
   const employee = await requireEmployee();
 
-  const item = String(formData.get("item") ?? "").trim().slice(0, 200);
-  if (!item) throw new Error("Say what you need.");
+  const names = formData.getAll("lineName").map((value) => String(value).trim().slice(0, 200));
+  const quantities = formData.getAll("lineQuantity").map((value) => String(value).trim().slice(0, 60));
+  const costs = formData.getAll("lineCost").map((value) => Number(value));
 
-  const costRaw = Number(formData.get("estimatedCost") ?? "");
+  const lines = names
+    .map((name, index) => ({
+      name,
+      quantity: quantities[index] || null,
+      estimatedCost: Number.isFinite(costs[index]) && costs[index] > 0 ? costs[index] : null,
+      position: index,
+    }))
+    .filter((line) => line.name.length > 0)
+    // Re-numbered after the empties are gone, so the positions stay 0,1,2.
+    .map((line, index) => ({ ...line, position: index }));
+
+  if (lines.length === 0) throw new Error("Add at least one thing to buy.");
+
+  const total = lines.reduce((sum, line) => sum + (line.estimatedCost ?? 0), 0);
+  const headline =
+    lines.length === 1
+      ? lines[0].name
+      : `${lines[0].name} and ${lines.length - 1} more`;
 
   await prisma.supplyRequest.create({
     data: {
       employeeId: employee.id,
-      item,
-      quantity: String(formData.get("quantity") ?? "").trim().slice(0, 60) || null,
+      item: headline.slice(0, 200),
+      quantity: lines.length === 1 ? lines[0].quantity : `${lines.length} things`,
       note: String(formData.get("note") ?? "").trim().slice(0, 1000) || null,
-      estimatedCost: Number.isFinite(costRaw) && costRaw > 0 ? costRaw : null,
+      estimatedCost: total > 0 ? Math.round(total * 100) / 100 : null,
       urgent: formData.get("urgent") === "on",
+      lines: { create: lines },
     },
   });
 

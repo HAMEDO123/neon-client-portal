@@ -1,4 +1,4 @@
-import { Fingerprint } from "lucide-react";
+import { ChevronRight, Fingerprint } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { deviceAddress, readClock, readDeviceUsers, type DeviceClock, type DeviceUser } from "@/lib/attendance-device";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
@@ -6,7 +6,7 @@ import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
 import { buildMonth, monthBounds, monthKeyFor, type MonthEntry } from "@/lib/attendance-month";
 import { setDeviceUserId } from "@/lib/actions/operations-actions";
 import { getTimezone, getWorkHours } from "@/lib/settings";
-import { dateToDayKey, dayKeyToDate, formatTimeIn, todayKey } from "@/lib/time";
+import { dateToDayKey, dayKeyToDate, formatDayIn, formatTimeIn, todayKey } from "@/lib/time";
 import { AttendanceConsole } from "@/components/admin/attendance-console";
 import { AttendanceMonth } from "@/components/admin/attendance-month";
 import { DeviceUsers } from "@/components/admin/device-users";
@@ -244,9 +244,29 @@ function ClockTimes({
   timezone: string;
   monthKey: string;
 }) {
-  const withTimes = [...rows]
-    .filter((row) => row.arrivedAt !== null)
-    .sort((a, b) => b.day.getTime() - a.day.getTime() || a.employee.name.localeCompare(b.employee.name));
+  const withTimes = [...rows].filter((row) => row.arrivedAt !== null);
+
+  // One section per day, newest first, people alphabetical inside it. A flat
+  // list of every read in a month is the same information and unreadable: the
+  // question is nearly always "what happened on this day", and a month of rows
+  // makes that a scroll rather than a glance.
+  const byDay = new Map<string, typeof withTimes>();
+  for (const row of withTimes) {
+    const key = dateToDayKey(row.day) ?? "";
+    byDay.set(key, [...(byDay.get(key) ?? []), row]);
+  }
+
+  const days = [...byDay.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([dayKey, entries]) => ({
+      dayKey,
+      entries: [...entries].sort((a, b) => a.employee.name.localeCompare(b.employee.name)),
+      // What the day cost, so a closed section still answers the question the
+      // screen is opened with.
+      hoursOff:
+        Math.round(entries.reduce((total, row) => total + row.delayHours + row.earlyHours, 0) * 100) / 100,
+      missing: entries.filter((row) => row.departedAt === null).length,
+    }));
 
   return (
     <section className="mt-6 rounded-2xl border border-warm-line bg-card p-5">
@@ -256,52 +276,90 @@ function ClockTimes({
         figure you typed has an amount but no times.
       </p>
 
-      {withTimes.length === 0 ? (
+      {days.length === 0 ? (
         <p className="mt-4 rounded-xl border border-dashed border-warm-line px-3 py-6 text-center text-xs text-bark/40">
           No reads recorded this month yet.
         </p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-left text-sm">
-            <thead className="text-xs uppercase tracking-wider text-bark/40">
-              <tr>
-                <th className="py-2 pr-3 font-medium">Day</th>
-                <th className="py-2 pr-3 font-medium">Employee</th>
-                <th className="py-2 pr-3 font-medium">In</th>
-                <th className="py-2 pr-3 font-medium">Out</th>
-                <th className="py-2 pr-3 text-right font-medium">Hours off</th>
-              </tr>
-            </thead>
-            <tbody>
-              {withTimes.map((row) => {
-                const off = Math.round((row.delayHours + row.earlyHours) * 100) / 100;
-                return (
-                  <tr key={row.id} className="border-t border-warm-line/60">
-                    <td className="py-2.5 pr-3 tabular-nums text-bark/60">{dateToDayKey(row.day)}</td>
-                    <td className="py-2.5 pr-3 font-medium text-bark">{row.employee.name}</td>
-                    <td className="py-2.5 pr-3 tabular-nums text-bark/70">
-                      {formatTimeIn(timezone, row.arrivedAt)}
-                    </td>
-                    <td className="py-2.5 pr-3 tabular-nums">
-                      {row.departedAt ? (
-                        <span className="text-bark/70">{formatTimeIn(timezone, row.departedAt)}</span>
-                      ) : (
-                        // Said in words rather than left blank: a blank in this
-                        // column reads as "stayed to the end", which is the one
-                        // thing the device cannot tell anybody.
-                        <span className="text-amber-700">no clock-out</span>
-                      )}
-                    </td>
-                    <td
-                      className={`py-2.5 pr-3 text-right tabular-nums ${off > 0 ? "font-medium text-amber-700" : "text-bark/35"}`}
-                    >
-                      {off > 0 ? `${off}h` : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="mt-4 flex flex-col gap-2">
+          {days.map((day, index) => (
+            // `details` rather than a state hook: this page is rendered on the
+            // server, and a disclosure that needs no JavaScript is one that
+            // works before the page has finished loading.
+            <details
+              key={day.dayKey}
+              open={index === 0}
+              className="group rounded-xl border border-warm-line/70 bg-paper-soft/40 open:bg-paper-soft/70"
+            >
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-sm">
+                <ChevronRight
+                  size={14}
+                  strokeWidth={2}
+                  className="shrink-0 text-bark/30 transition-transform group-open:rotate-90"
+                />
+                <span className="font-medium tabular-nums text-bark">
+                  {formatDayIn(timezone, dayKeyToDate(day.dayKey))}
+                </span>
+                <span className="text-xs text-bark/40">
+                  {day.entries.length} {day.entries.length === 1 ? "person" : "people"}
+                </span>
+
+                <span className="ml-auto flex items-center gap-3 text-xs">
+                  {day.missing > 0 && (
+                    <span className="text-amber-700">
+                      {day.missing} no clock-out
+                    </span>
+                  )}
+                  <span
+                    className={day.hoursOff > 0 ? "font-medium tabular-nums text-amber-700" : "tabular-nums text-bark/30"}
+                  >
+                    {day.hoursOff > 0 ? `${day.hoursOff}h off` : "full days"}
+                  </span>
+                </span>
+              </summary>
+
+              <div className="overflow-x-auto border-t border-warm-line/60 px-3 pb-2">
+                <table className="w-full min-w-[26rem] text-left text-sm">
+                  <thead className="text-xs uppercase tracking-wider text-bark/35">
+                    <tr>
+                      <th className="py-2 pr-3 font-medium">Employee</th>
+                      <th className="py-2 pr-3 font-medium">In</th>
+                      <th className="py-2 pr-3 font-medium">Out</th>
+                      <th className="py-2 text-right font-medium">Hours off</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {day.entries.map((row) => {
+                      const off = Math.round((row.delayHours + row.earlyHours) * 100) / 100;
+                      return (
+                        <tr key={row.id} className="border-t border-warm-line/50">
+                          <td className="py-2 pr-3 font-medium text-bark">{row.employee.name}</td>
+                          <td className="py-2 pr-3 tabular-nums text-bark/70">
+                            {formatTimeIn(timezone, row.arrivedAt)}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums">
+                            {row.departedAt ? (
+                              <span className="text-bark/70">{formatTimeIn(timezone, row.departedAt)}</span>
+                            ) : (
+                              // Said in words rather than left blank: a blank
+                              // here reads as "stayed to the end", which is the
+                              // one thing the device cannot tell anybody.
+                              <span className="text-amber-700">no clock-out</span>
+                            )}
+                          </td>
+                          <td
+                            className={`py-2 text-right tabular-nums ${off > 0 ? "font-medium text-amber-700" : "text-bark/30"}`}
+                          >
+                            {off > 0 ? `${off}h` : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ))}
         </div>
       )}
     </section>
