@@ -56,14 +56,17 @@ enum TasksScreens {
 
         case "tasks-process": return debugPushed(ProcessSettingsView())
 
+        // The short forms open over the page as the app opens them — a
+        // half-height sheet — so a screenshot shows what a manager sees.
         case "tasks-process-section", "tasks-process-section-new":
-            return AnyView(DebugAsync(load: { try await api.fetchTaskProcess().value }) { process in
-                ProcessSectionSheet(section: id.hasSuffix("-new") ? nil : process.sections.first) {}
-            })
+            return overProcess { process in
+                ProcessSectionSheet(section: id.hasSuffix("-new") ? nil : process.sections.first,
+                                    existingIds: Set(process.sections.map(\.id))) {}
+            }
         case "tasks-process-step", "tasks-process-step-new":
-            return AnyView(DebugAsync(load: { try await api.fetchTaskProcess().value }) { process in
+            return overProcess { process in
                 ProcessStepSheet(step: id.hasSuffix("-new") ? nil : process.steps.first, process: process) {}
-            })
+            }
         case "tasks-process-standard":
             return AnyView(DebugAsync(load: {
                 let process = try await api.fetchTaskProcess().value
@@ -72,16 +75,33 @@ enum TasksScreens {
                 ProcessTaskTypeSheet(step: found.0, team: found.1) {}
             })
         case "tasks-process-owner", "tasks-process-owner-new":
-            return AnyView(DebugAsync(load: { try await api.fetchTaskProcess().value }) { process in
-                ProcessOwnerSheet(owner: id.hasSuffix("-new") ? nil : process.team.first) {}
-            })
+            return overProcess { process in
+                ProcessOwnerSheet(owner: id.hasSuffix("-new") ? nil : process.team.first,
+                                  existingIds: Set(process.team.map(\.id))) {}
+            }
         case "tasks-process-period", "tasks-process-period-new":
-            return AnyView(DebugAsync(load: { try await api.fetchTaskProcess().value }) { process in
+            return overProcess { process in
                 ProcessPeriodSheet(period: id.hasSuffix("-new") ? nil : process.periods.first, steps: process.steps) {}
-            })
+            }
 
         default: return nil
         }
+    }
+
+    /// The delivery process page with one of its short forms open over it.
+    @MainActor private static func overProcess<Sheet: View>(@ViewBuilder _ sheet: @escaping (ProcessResponse) -> Sheet) -> AnyView {
+        AnyView(
+            NavigationStack { ProcessSettingsView() }
+                .sheet(isPresented: .constant(true)) {
+                    DebugAsync(load: { try await APIClient.shared.fetchTaskProcess().value }) { process in
+                        sheet(process)
+                    }
+                    // The same heights as the form itself, from the start, so
+                    // the sheet opens at them rather than full height while
+                    // the form loads.
+                    .neonSheet(tasksShortSheet)
+                }
+        )
     }
 
     struct FoundCell {

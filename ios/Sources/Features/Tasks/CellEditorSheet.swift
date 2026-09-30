@@ -3,7 +3,10 @@ import SwiftUI
 /// One cell of the board: state, assignee, scheduling, priority, notes, and
 /// what finishing it means — `updateTaskEntryDetails` on the website, with
 /// the state change (`setTaskState`) as its own, immediate action, exactly as
-/// the board's own click-to-cycle is separate from the editor's Save.
+/// the board's own click-to-cycle is separate from the editor's Save. The
+/// editor says so when a state lands, Completed is asked first, and work
+/// sent for review opens Reviews instead of offering a tile that would
+/// approve it unseen.
 struct CellEditorSheet: View {
     let project: BoardProject
     let cell: BoardCell
@@ -69,14 +72,17 @@ struct CellEditorSheet: View {
             summary
                 .neonAppear()
 
-            FormSection(L("State"), footer: L("A state changes the moment you tap it — it is not part of Save.")) {
-                TasksStatePicker(states: ["TODO", "DONE", "TOMORROW"], current: currentState) { target in
-                    await setState(target)
-                }
+            FormSection(L("State")) {
+                // Work sent for review is settled in Reviews, beside its proof
+                // and the checks it was held to — never approved from a tile.
                 if currentState == "SUBMITTED" {
-                    StatusNote(symbol: "paperplane.fill", tone: .purple, title: L("Sent for review"),
-                               detail: L("The proof waits in Reviews, to approve or send back."))
-                } else if currentState == "IN_PROGRESS" {
+                    TasksSentForReview()
+                } else {
+                    TasksStatePicker(states: ["TODO", "DONE", "TOMORROW"], current: currentState) { target in
+                        await setState(target)
+                    }
+                }
+                if currentState == "IN_PROGRESS" {
                     StatusNote(symbol: "bolt.fill", tone: .cyan, title: L("In progress"),
                                detail: L("Somebody has started it."))
                 }
@@ -99,18 +105,21 @@ struct CellEditorSheet: View {
             .animation(NeonMotion.smooth, value: scheduledFor != nil)
 
             FormSection(L("What finishing means"), footer: stepStandard?.deliverable == nil && stepStandard?.acceptance == nil ? nil : L("Left empty, this cell uses the step's own standard.")) {
-                NeonTextEditor(L("Deliverable"), text: $deliverable, prompt: stepStandard?.deliverable ?? L("What to hand in"), minLines: 2, limit: 2000)
-                NeonTextEditor(L("Counts as done when"), text: $acceptance, prompt: stepStandard?.acceptance ?? L("One line per item"), minLines: 3, limit: 4000)
-                NumberField(L("Estimate"), value: $estimateHours, unit: L("h"), decimals: 1)
+                NeonTextEditor(L("Deliverable"), text: $deliverable, prompt: stepStandard?.deliverable ?? L("What to hand in"), minLines: 2,
+                               limit: tasksLimit(deliverable, 2000))
+                NeonTextEditor(L("Counts as done when"), text: $acceptance, prompt: stepStandard?.acceptance ?? L("One line per item"), minLines: 3,
+                               limit: tasksLimit(acceptance, 4000))
+                NumberField(L("Estimate"), value: $estimateHours, unit: L("h"), decimals: 1,
+                            prompt: stepStandard?.estimateHours.map { NeonFormat.number($0, decimals: 1) } ?? L("e.g. 3"))
             }
 
             FormSection(L("Notes")) {
-                NeonTextEditor(L("Note to the team"), text: $adminNote, minLines: 2, limit: 2000)
+                NeonTextEditor(L("Note to the team"), text: $adminNote, minLines: 2, limit: tasksLimit(adminNote, 2000))
                 ToggleRow(L("Not counted in progress"), detail: L("Left out of the board's totals."), symbol: "circle.lefthalf.filled", isOn: $excludedFromProgress)
             }
 
             FormSection(L("Blocked")) {
-                NeonTextEditor(L("Reason"), text: $blockedReason, prompt: L("Why this can't move"), minLines: 2, limit: 1000)
+                NeonTextEditor(L("Reason"), text: $blockedReason, prompt: L("Why this can't move"), minLines: 2, limit: tasksLimit(blockedReason, 1000))
                 MenuField(L("Blocked by"), selection: $blockedById, options: team.map(\.id),
                           title: { id in team.first { $0.id == id }?.name ?? id },
                           placeholder: L("Nobody in particular"), noneTitle: L("Nobody in particular"))
@@ -138,7 +147,7 @@ struct CellEditorSheet: View {
 
     // MARK: - Pieces
 
-    /// Where this step sits and who is on the hook, before anything changes.
+    /// Where this step sits and whose it is, before anything changes.
     private var summary: some View {
         HStack(alignment: .center, spacing: 12) {
             if let url = resolvedMediaURL(project.coverImageUrl) {
@@ -163,7 +172,7 @@ struct CellEditorSheet: View {
                     if excludedFromProgress { BadgeView(text: L("Not counted"), tone: .neutral) }
                 }
                 if let owner {
-                    MetaLabel(L("On the hook: %@", owner.name), symbol: "person.fill", tint: .neonTextSecondary)
+                    MetaLabel(L("Owner: %@", owner.name), symbol: "person.fill", tint: .neonTextSecondary)
                 }
             }
             Spacer(minLength: 0)
@@ -205,6 +214,8 @@ struct CellEditorSheet: View {
             try await api.setBoardCellState(projectId: project.id, taskId: cell.taskId, state: target)
             withNeonAnimation(NeonMotion.snappy) { currentState = target }
             Haptic.success()
+            // A state is saved the moment it is tapped, not with the form.
+            Toast.success(taskStateLabel(target), detail: L("Saved straight away"))
         } catch {
             Toast.error(error)
         }

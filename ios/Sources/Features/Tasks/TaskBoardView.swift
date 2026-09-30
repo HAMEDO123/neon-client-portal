@@ -65,36 +65,58 @@ struct TaskBoardView: View {
 
     // MARK: - The four figures
 
+    /// Four figures, none of them repeated below: the projects on the board
+    /// (and how many of their counted steps are still open), the steps
+    /// finished over the last seven days — with those days as bars and the
+    /// change on the seven before — what is in progress, and what is planned
+    /// for tomorrow. "In progress" and the steps in "Tomorrow" count the same
+    /// counted set the card under them splits, so the two never differ.
     private func figures(_ board: TaskBoardResponse) -> some View {
-        StatGrid(columns: 4) {
-            KPICard(L("Active projects"), value: Double(board.stats.activeProjects), symbol: "folder.fill", hue: .blue, density: .compact)
-            KPICard(L("Steps done"), text: "\(NeonFormat.integer(board.stats.stepsDone))/\(NeonFormat.integer(board.stats.stepsCounted))",
-                    symbol: "checkmark.seal.fill", hue: .green, density: .compact)
-            KPICard(L("In progress"), value: Double(board.stats.inProgress), symbol: "bolt.fill", hue: .cyan, density: .compact)
-            KPICard(L("Due tomorrow"), value: Double(board.stats.dueTomorrow), symbol: "moon.stars.fill", hue: .orange, density: .compact)
+        let cells = board.rows.flatMap(\.cells)
+        let counted = cells.filter { !$0.excludedFromProgress }
+        let open = counted.filter { $0.state != "DONE" }.count
+        let inProgress = counted.filter { $0.state == "IN_PROGRESS" }.count
+        // The server's figure is every step flagged for tomorrow plus the jobs
+        // handed out to start tomorrow; the jobs are what is left once its own
+        // steps are taken off, and the steps are then the counted ones.
+        let jobsTomorrow = max(0, board.stats.dueTomorrow - cells.filter { $0.state == "TOMORROW" }.count)
+        let tomorrow = counted.filter { $0.state == "TOMORROW" }.count + jobsTomorrow
+        let week = TasksDoneWeek(cells: counted, todayKey: board.todayKey, timezone: board.timezone)
+        return StatGrid(columns: 4) {
+            KPICard(L("Active projects"), value: Double(board.stats.activeProjects), symbol: "folder.fill", hue: .blue,
+                    caption: L("%d steps open", open), density: .compact)
+            KPICard(L("Done in 7 days"), value: Double(week.done), symbol: "checkmark.seal.fill", hue: .green,
+                    trend: week.trend, bars: week.bars, density: .compact)
+            KPICard(L("In progress"), value: Double(inProgress), symbol: "bolt.fill", hue: .cyan, density: .compact)
+            KPICard(L("Tomorrow"), value: Double(tomorrow), symbol: "moon.stars.fill", hue: .orange,
+                    caption: L("steps and jobs"), density: .compact)
         }
     }
 
     // MARK: - Where the steps stand
 
-    /// Every counted step on the board by state — the same set the "Steps
-    /// done" figure counts, so its parts add up to that figure's total.
+    /// Every counted step on the board by state, and the ring with the share
+    /// done. The subtitle says how many are counted; the ring and the key say
+    /// the rest, so no figure is said twice.
     @ViewBuilder
     private func standing(_ board: TaskBoardResponse) -> some View {
         let cells = board.rows.flatMap(\.cells)
         let counted = cells.filter { !$0.excludedFromProgress }
         let blocked = cells.filter { $0.blockedReason?.isEmpty == false }.count
+        let high = cells.filter { $0.priority == "HIGH" && $0.state != "DONE" }.count
         let notCounted = cells.count - counted.count
         SectionCard(L("Where the steps stand"),
-                    subtitle: counted.isEmpty ? L("No steps counted yet") : L("%d of %d counted steps done", board.stats.stepsDone, board.stats.stepsCounted),
+                    subtitle: counted.isEmpty ? L("No steps counted yet") : L("%d counted steps", counted.count),
                     symbol: "chart.bar.doc.horizontal.fill", hue: .indigo) {
             TasksBreakdown(parts: TasksBreakdownPart.states(counted.map(\.state)))
             NeonDivider()
-            // The chips' key: what the marks on a step mean.
+            // The chips' key: what the marks on a step mean, each with how
+            // many carry it. A mark nobody carries stays grey, so "0 blocked"
+            // never reads as an alarm.
             FlowRow(spacing: NeonSpace.md) {
-                MetaLabel(L("High priority"), symbol: "flame.fill", tint: .neonPinkStrong)
-                MetaLabel(blocked > 0 ? L("%d blocked", blocked) : L("Blocked"), symbol: "exclamationmark.octagon.fill", tint: .neonDangerStrong)
-                MetaLabel(notCounted > 0 ? L("%d not counted", notCounted) : L("Not counted"), symbol: "circle.lefthalf.filled", tint: .neonTextTertiary)
+                MetaLabel(L("%d high priority", high), symbol: "flame.fill", tint: high > 0 ? .neonPinkStrong : .neonTextTertiary)
+                MetaLabel(L("%d blocked", blocked), symbol: "exclamationmark.octagon.fill", tint: blocked > 0 ? .neonDangerStrong : .neonTextTertiary)
+                MetaLabel(L("%d not counted", notCounted), symbol: "circle.lefthalf.filled", tint: .neonTextTertiary)
             }
         } trailing: {
             if !counted.isEmpty {
@@ -129,28 +151,46 @@ struct TaskBoardView: View {
         .buttonStyle(.pressableCard)
     }
 
-    // MARK: - Upcoming
+    // MARK: - Due dates
 
+    /// What the stage periods say is due, soonest first: what is already past
+    /// its deadline under its own red heading, then what comes next — so a
+    /// card of late work is never called "Upcoming".
     @ViewBuilder
     private func upcoming(_ board: TaskBoardResponse) -> some View {
-        SectionCard(L("Upcoming"), subtitle: L("What the stage periods say is due next"),
-                    symbol: "hourglass", hue: .orange, spacing: board.upcoming.isEmpty ? 14 : 6) {
+        let late = board.upcoming.filter { $0.dueDayKey < board.todayKey }
+        let next = board.upcoming.filter { $0.dueDayKey >= board.todayKey }
+        SectionCard(L("Due dates"), subtitle: L("From the stage periods"),
+                    symbol: late.isEmpty ? "hourglass" : "exclamationmark.triangle.fill", hue: late.isEmpty ? .orange : .red,
+                    spacing: board.upcoming.isEmpty ? 14 : 8) {
             if board.upcoming.isEmpty {
                 Text(L("Nothing due from the stage periods."))
                     .font(.neonLabel)
                     .foregroundStyle(Color.neonTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(board.upcoming.enumerated()), id: \.element.id) { index, stage in
-                        if index > 0 { NeonDivider().padding(.leading, 60) }
-                        upcomingRow(stage, board: board)
-                    }
+                if !late.isEmpty {
+                    dueGroup(L("Past their deadline"), symbol: "exclamationmark.triangle.fill", tint: .neonDangerStrong, late, board: board)
                 }
-                .padding(.horizontal, -NeonSpace.card + 2)
+                if !next.isEmpty {
+                    dueGroup(L("Coming up"), symbol: "hourglass", tint: .neonTextSecondary, next, board: board)
+                        .padding(.top, late.isEmpty ? 0 : NeonSpace.sm)
+                }
             }
-        } trailing: {
-            if !board.upcoming.isEmpty { CountBadge(board.upcoming.count, tone: .neutral) }
+        }
+    }
+
+    private func dueGroup(_ title: String, symbol: String, tint: Color, _ stages: [UpcomingStage], board: TaskBoardResponse) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            MetaLabel(title, symbol: symbol, tint: tint)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) {
+                ForEach(Array(stages.enumerated()), id: \.element.id) { index, stage in
+                    if index > 0 { NeonDivider().padding(.leading, 60) }
+                    upcomingRow(stage, board: board)
+                }
+            }
+            .padding(.horizontal, -NeonSpace.card + 2)
         }
     }
 
@@ -257,6 +297,9 @@ struct TasksProjectCard: View {
     let onOpen: (BoardCell, BoardStepRef) -> Void
     let onReset: () -> Void
 
+    /// Sections whose completed steps are unfolded.
+    @State private var openSections: Set<String> = []
+
     var body: some View {
         let cells = row.cells.filter { person == nil || $0.ownerId == person }
         let counted = cells.filter { !$0.excludedFromProgress }
@@ -318,6 +361,7 @@ struct TasksProjectCard: View {
                 ForEach(groups) { group in
                     let section = group.section
                     let sectionCells = cells.filter { cell in section.steps.contains { $0.id == cell.taskId } && !cell.excludedFromProgress }
+                    let unfolded = openSections.contains(section.id)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 7) {
                             Circle()
@@ -332,10 +376,28 @@ struct TasksProjectCard: View {
                                     .foregroundStyle(Color.neonTextTertiary)
                             }
                         }
+                        // What is still open, each on its own chip; what is
+                        // finished folded into one chip that opens on a tap, so
+                        // the open steps are not lost among a wall of green.
                         FlowRow(spacing: 6) {
-                            ForEach(group.steps) { item in
+                            ForEach(group.open) { item in
                                 TasksCellChip(cell: item.cell, name: item.step.name) { onOpen(item.cell, item.step) }
                                     .transition(.neonPop)
+                            }
+                            if !hideDone, !group.done.isEmpty {
+                                Chip(L("%d completed", group.done.count), symbol: unfolded ? "chevron.up" : "checkmark.seal.fill",
+                                     isSelected: unfolded, tint: .neonSuccessStrong) {
+                                    withNeonAnimation(NeonMotion.smooth) {
+                                        if unfolded { openSections.remove(section.id) } else { openSections.insert(section.id) }
+                                    }
+                                }
+                                .accessibilityHint(Text(unfolded ? L("Hides the completed steps") : L("Shows the completed steps")))
+                                if unfolded {
+                                    ForEach(group.done) { item in
+                                        TasksCellChip(cell: item.cell, name: item.step.name) { onOpen(item.cell, item.step) }
+                                            .transition(.neonPop)
+                                    }
+                                }
                             }
                         }
                     }
@@ -362,7 +424,8 @@ struct TasksProjectCard: View {
     }
 }
 
-/// A section of a project's card: the section, and the steps of it shown.
+/// A section of a project's card: the section, its steps still open, and
+/// its completed ones (folded on the card).
 struct TasksSectionGroup: Identifiable {
     struct Item: Identifiable {
         let cell: BoardCell
@@ -371,18 +434,61 @@ struct TasksSectionGroup: Identifiable {
     }
 
     let section: BoardSection
-    let steps: [Item]
+    let open: [Item]
+    let done: [Item]
     var id: String { section.id }
 
-    /// Each section with the cells of it being shown, in the board's own
-    /// order; a section with none shown is left out.
+    /// Each section with its cells, in the board's own order; a section with
+    /// nothing to show is left out — with "Hide completed" on, that is one
+    /// whose every step is completed.
     static func groups(cells: [BoardCell], sections: [BoardSection], hideDone: Bool) -> [TasksSectionGroup] {
         sections.compactMap { section in
             let items = cells.compactMap { cell in
                 section.steps.first { $0.id == cell.taskId }.map { Item(cell: cell, step: $0) }
             }
-            let shown = hideDone ? items.filter { $0.cell.state != "DONE" } : items
-            return shown.isEmpty ? nil : TasksSectionGroup(section: section, steps: shown)
+            let open = items.filter { $0.cell.state != "DONE" }
+            let done = hideDone ? [] : items.filter { $0.cell.state == "DONE" }
+            return open.isEmpty && done.isEmpty ? nil : TasksSectionGroup(section: section, open: open, done: done)
+        }
+    }
+}
+
+// MARK: - The last seven days
+
+/// Steps finished over the last seven days on the studio's calendar, read
+/// off each counted cell's `completedAt` — the moment it was ticked or
+/// approved — with each day as a bar and the change on the seven days
+/// before. A step reopened since loses its moment and is not counted; one
+/// finished before anybody recorded the moment has none and is not guessed.
+struct TasksDoneWeek {
+    let done: Int
+    let bars: [Double]?
+    let trend: StatTrend?
+
+    init(cells: [BoardCell], todayKey: String, timezone: String) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: timezone) ?? .current
+        var perDay: [String: Int] = [:]
+        for cell in cells where cell.state == "DONE" {
+            guard let at = parseISODate(cell.completedAt) else { continue }
+            perDay[NeonFormat.dayKey(at, calendar: calendar), default: 0] += 1
+        }
+        // Today and the thirteen days before it, newest first.
+        let days = (0..<14).map { tasksShiftDay(todayKey, by: -$0) }
+        let week = days.prefix(7).reversed().map { perDay[$0] ?? 0 }
+        let before = days.suffix(7).reduce(0) { $0 + (perDay[$1] ?? 0) }
+        done = week.reduce(0, +)
+        bars = week.contains { $0 > 0 } ? week.map(Double.init) : nil
+        let change = done - before
+        if done == 0 && before == 0 {
+            trend = nil
+        } else if change == 0 {
+            trend = .steady(L("No change"), L("vs the week before"))
+        } else {
+            let text = "\u{200E}" + (change > 0 ? "+" : "−") + NeonFormat.integer(abs(change))
+            // Fewer finished is a fact about the week, not a verdict on
+            // anybody: fewer may simply have been due.
+            trend = change > 0 ? .rising(text, L("vs the week before")) : .falling(text, L("vs the week before"), tone: .neutral)
         }
     }
 }
