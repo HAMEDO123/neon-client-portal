@@ -12,13 +12,13 @@ them (the simulator has no camera), so every tile shows its avatar.
 
 | id | What it shows |
 |---|---|
-| `call-prejoin-voice` | Pre-join, voice call: who you are calling, mic toggle, Start call |
-| `call-prejoin-video` | Pre-join, video call with the camera unavailable (the simulator's own state) |
-| `call-prejoin-blocked` | Pre-join with microphone and camera refused: the notice with Open Settings |
+| `call-prejoin-voice` | Pre-join, voice call: a compact card with who you are calling, the microphone's level meter and chip, Mute, Start call |
+| `call-prejoin-video` | Pre-join, video call with no camera found (the simulator's own state): "Start with sound only", no Flip |
+| `call-prejoin-blocked` | Pre-join with microphone and camera refused: Open Settings is the main button, "Start anyway" the quiet one |
 | `call-incoming-voice` | Ringing, private voice call |
 | `call-incoming-video` | Ringing, private video call: Decline / Voice only / Answer |
-| `call-incoming-group` | Ringing, group call: "Sally started a video call", who is already in |
-| `call-incoming-busy` | Ringing while already in a call: "Answering ends the call you are in." |
+| `call-incoming-group` | Ringing, group call: the studio's mark, "Sally started a video call", who is already in (in their colours) |
+| `call-incoming-busy` | Ringing while already in a call: "End & answer", "You are in another call" |
 | `call-ringing` | This phone calling, nobody answered yet |
 | `call-connecting` | Answered, connection still not made after a while ("Still connecting…") |
 | `call-voice` | One-to-one voice call, the other person speaking |
@@ -26,14 +26,17 @@ them (the simulator has no camera), so every tile shows its avatar.
 | `call-group-grid` | Four in a group call, grid |
 | `call-group-speaker` | The same, speaker view |
 | `call-reconnecting` | One-to-one, reconnecting, poor connection |
-| `call-notice` | In a call with a notice (microphone refused) and Open Settings |
-| `call-people` | People sheet: who is in / ringing / declined, Ring someone in |
-| `call-people-empty` | People sheet when nobody else can be rung |
-| `call-mini-voice` | The minimised voice call floating over the app |
-| `call-mini-video` | The minimised call (video) floating over the app, Arabic corner |
+| `call-notice` | In a call with a notice (microphone refused), Open Settings, and the "No mic" button |
+| `call-people` | People sheet: who is in / declined, Amro to ring (opens tall) |
+| `call-people-empty` | People sheet of a group call everybody has been asked into |
+| `call-mini-voice` | The minimised private voice call floating over the app |
+| `call-mini-video` | The minimised group call: "NEON Team", "12:07 · Salem speaking" |
+| `call-mini-pip` | The minimised call's video window (a track with no frames: the simulator has no camera) |
 | `call-buttons` | The conversation header's call buttons and the Join / Back to call pills |
 
-No screen is long enough to need a `-neonScroll` anchor.
+No screen is long enough to need a `-neonScroll` anchor. The fixtures give
+people the colours the live server gives them (Sally purple, Salem pink,
+Amro and Wael cyan, the manager ink), as the chat list shows them.
 
 For my own checks I ran these on "NEON QA 11" with `-uiTestMode` (the offline
 test mode: every APIClient call fails as offline, and the calls stream now
@@ -148,6 +151,78 @@ None of this was verified by a real call (no sign-in, no device). It compiles
 and reads right against `components/calls/call-session.ts`; the orchestrator's
 live screenshots and a TestFlight call are the real test.
 
+## Round two (the critic's review of the live screenshots)
+
+- **Faces are the chat's faces** (`CallFaces.swift`). Every face on a call —
+  the big halo, grid and strip tiles, the minimised window, the people
+  sheet, the incoming screen's "in the call" stack — is drawn with the
+  chat's `ChatAvatar` / `ChatStudioMark` in the colour the server gives each
+  person (`CallParticipant.color`, `CallMember.color`), instead of a hash of
+  the name. The team is the studio's mark; a group without a photo is the
+  chat's group face. The stage's glow comes from the same colour
+  (`ChatTint`). For what a call does not carry — the colour of the person
+  about to be rung on the pre-join, a group's photo — `CallFaceDirectory`
+  reads the chat's own `chat/conversations` list (read-only, at most every
+  two minutes, on sign-in, on a pre-join and when a new group call appears).
+  People have no photos on the platform (`Employee` has no photo field), so
+  only groups can show one.
+- **No muddy stages.** Orange, amber, green and red glow at 0.28 instead of
+  0.55; tiles run from the person's colour into indigo, never grey.
+- **Pre-join.** Header: the X sits beside the overline and name, the one-line
+  subtitle has the full width, the overline uses `.neonOverline`. Voice: a
+  ~250 pt card with the halo, a live level meter (`CallMicLevelMonitor`: an
+  `AVAudioRecorder` writing to /dev/null, metering only, stopped before the
+  microphone is handed to the call) and the microphone chip. Video with no
+  camera: "Start with sound only" / "Join with sound only", no Flip.
+  Microphone refused and no picture: Open Settings is the brand button,
+  "Start anyway: you won't be heard or seen" the quiet one, and the notice
+  loses its own Settings button. Chips say "Microphone blocked" / "Camera
+  blocked" (lock, amber) read from the permission itself, so they stay true
+  after the notice is closed.
+- **One meaning for a white disc** on every call screen: "you are not sending
+  this" (muted, no microphone, camera off). Toggle names match on both
+  screens: Mute / Unmute, Camera / Camera off. The speaker keeps the glass
+  and shows "on" with its glyph and an indigo dot. With no microphone the
+  bar's button is "No mic" with a warning mark, and opens Settings.
+- **Touch targets**: the header's call glyphs and the Join / Back to call
+  pills keep their drawn size but are touched across 44 pt (without taking
+  layout room in the chat header); the notice's action is a 44 pt
+  `NeonButton` and its X a 44 pt frame; the minimised hang-up is 44 pt and
+  refuses a tap that a drag of the window ends on.
+- **Minimised window**: solid brand ink, 16 pt gutter; a group call names the
+  group first with "12:07 · Salem speaking" under it. The video window's
+  hang-up is no longer a button inside a button, and it names the person
+  (it used to say "You" for anybody muted).
+- **Incoming, busy**: the answer button says "End & answer"; the separate
+  capsule became a quiet "You are in another call" line.
+- **People sheet**: no second heading; one ~56 pt row each with the state as
+  a trailing badge; "Ring someone in" as a list with 44 pt Ring buttons;
+  opens tall when anybody can be rung; the empty case says why ("Everyone on
+  the team has already been asked into this call.").
+- **Speaker strip** tiles share the width (up to 118 pt, 3:4), centred.
+- **Still connecting** adds "Some networks block calls. You can hang up and
+  try again."
+- One speaking cue per tile (border on grid/large, ring on strip/pip); no
+  connection bars on a tile that is not connected.
+- **Arabic**: whole-sentence keys for "%@ started a (video) call"
+  ("مكالمة (فيديو) من %@", no gendered verb); the duration now uses the
+  app's digits like the people count; "Left" and "Speaking" reworded
+  without a gendered verb; signal bars stay left to right. Checked on "NEON
+  QA 11" with `-uiTestMode -app_language ar`: pre-join (X on the left),
+  controls mirrored, name tags at bottom-leading, notice, mini window.
+
+Skipped, with reasons:
+
+- **"Ring again" on DECLINED / LEFT rows**: the server cannot do it —
+  `inviteToCall` (`src/lib/call-store.ts:108`) drops anybody already a
+  participant in any state, so the button would report success and ring
+  nobody. Needs a server change outside this area (see open issues).
+- **Hiding the people pill in a private call**: it is how somebody else is
+  rung into a one-to-one call (the server offers the whole team), so hiding
+  it would remove a feature. The fixture's empty sheet was the fixture's
+  mistake: a private call almost always has people to ring. The empty state
+  now says why, and the fixture shows the real empty case.
+
 ## Open issues
 
 - **No ringing with the app closed or in the background.** Incoming calls
@@ -164,9 +239,12 @@ live screenshots and a TestFlight call are the real test.
 - **Server**: `src/app/api/mobile/calls/stream/route.ts:31` starts a stream
   with no Last-Event-ID at the newest signal. Sending the starting cursor as
   the `ready` event's `id:` would close the gap for the web too.
-- **Server**: `addableToCall` (`src/lib/call-store.ts:82`) leaves out anybody
-  already a participant in any state, so somebody who declined or left cannot
-  be rung again.
+- **Server**: `addableToCall` (`src/lib/call-store.ts:78`) and
+  `inviteToCall` (`:108`) leave out anybody already a participant in any
+  state, so somebody who declined or left cannot be rung again — which is
+  why the people sheet has no "Ring again".
+- The pre-join level meter and its hand-over of the audio session to the call
+  are untested on a device (the simulator fixture shows it idle).
 - Unverified on a device: the calls window's status bar style, audio routing
   with AirPods, camera hand-over and flip, implicit rollback against Safari.
 - Still not built (unchanged): sending a screen share, the in-call chat

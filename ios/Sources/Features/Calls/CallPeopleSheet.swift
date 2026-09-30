@@ -22,30 +22,38 @@ struct CallPeopleSheet: View {
     let onRetry: () -> Void
     let onClose: () -> Void
 
+    /// Tall enough to show the one action whenever there is somebody to ring.
+    @State private var detent: PresentationDetent
+
+    init(
+        participants: [CallParticipant], me: String, mutedKeys: Set<String>, addable: CallAddableState,
+        ringing: Set<String>, onRing: @escaping (APIClient.CallMember) async -> Void,
+        onRetry: @escaping () -> Void, onClose: @escaping () -> Void
+    ) {
+        self.participants = participants
+        self.me = me
+        self.mutedKeys = mutedKeys
+        self.addable = addable
+        self.ringing = ringing
+        self.onRing = onRing
+        self.onRetry = onRetry
+        self.onClose = onClose
+        _detent = State(initialValue: Self.ringable(addable, participants).isEmpty ? .medium : .large)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            // The header's line already says who is in and who is ringing, so
+            // the list starts straight under it.
             SheetHeader(L("People"), subtitle: summary, symbol: "person.2.fill", tint: .neonSuccessStrong, onClose: onClose)
             ScrollView {
-                VStack(spacing: NeonSpace.stack) {
-                    SectionCard(
-                        L("Asked into this call"), subtitle: L("Who is in, who is still being rung, and who said no."),
-                        symbol: "phone.fill", hue: .green
-                    ) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(ordered.enumerated()), id: \.element.memberKey) { index, part in
-                                if index > 0 { NeonDivider().padding(.leading, 54) }
-                                participantRow(part)
-                                    .staggered(index)
-                            }
-                        }
+                VStack(alignment: .leading, spacing: NeonSpace.stack) {
+                    CardList(ordered, id: \.memberKey, dividerInset: 66) { part in
+                        participantRow(part)
                     }
-
-                    SectionCard(
-                        L("Ring someone in"), subtitle: L("Their phone rings the same way as any call."),
-                        symbol: "phone.arrow.up.right.fill", hue: .purple
-                    ) {
-                        addableContent
-                    }
+                    SectionHeader(L("Ring someone in"))
+                        .padding(.top, NeonSpace.sm)
+                    addableContent
                 }
                 .padding(.horizontal, NeonSpace.gutter)
                 .padding(.top, NeonSpace.xs)
@@ -54,6 +62,10 @@ struct CallPeopleSheet: View {
         }
         .background(NeonAmbient().ignoresSafeArea())
         .neonSheet([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $detent)
+        .onChange(of: Self.ringable(addable, participants).isEmpty) { empty in
+            if !empty, detent == .medium { withNeonAnimation(.smooth) { detent = .large } }
+        }
     }
 
     private var summary: String {
@@ -63,6 +75,15 @@ struct CallPeopleSheet: View {
             return L("%@ in the call · %@ ringing", NeonFormat.integer(inCall), NeonFormat.integer(ringingNow))
         }
         return L("%@ in the call", NeonFormat.integer(inCall))
+    }
+
+    /// Who can still be rung: the server already leaves out everybody asked
+    /// into the call, whatever they answered — checked again here so nobody
+    /// can appear twice.
+    static func ringable(_ addable: CallAddableState, _ participants: [CallParticipant]) -> [APIClient.CallMember] {
+        guard case .loaded(let members) = addable else { return [] }
+        let asked = Set(participants.map(\.memberKey))
+        return members.filter { !asked.contains($0.key) }
     }
 
     /// In the call first, then still ringing, then those who said no or left.
@@ -76,30 +97,33 @@ struct CallPeopleSheet: View {
         }
     }
 
+    /// One line each, about 56 pt: the face in the colour the chat shows,
+    /// the name, and where they stand as a badge on the trailing side.
     private func participantRow(_ part: CallParticipant) -> some View {
-        HStack(spacing: NeonSpace.md) {
-            AvatarView(url: nil, name: part.name, size: 42, style: .solid)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    DirText(part.name, font: .neonRowTitle, fill: false, lineLimit: 1)
-                    if part.memberKey == me {
-                        BadgeView(text: L("You"), tone: .neutral)
-                    }
+        let state = Self.state(part.state)
+        return HStack(spacing: NeonSpace.md) {
+            ChatAvatar(url: nil, name: part.name, size: 40, color: part.color)
+            HStack(spacing: 6) {
+                DirText(part.name, font: .system(.callout, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
+                if part.memberKey == me {
+                    BadgeView(text: L("You"), tone: .neutral)
                 }
-                let state = Self.state(part.state)
-                StateBadge(state.text, tone: state.tone, symbol: state.symbol, pulsing: part.state == "INVITED")
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
             if part.state == "JOINED", mutedKeys.contains(part.memberKey) {
                 Image(systemName: "mic.slash.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.neonDangerStrong)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                     .background(Circle().fill(NeonHue.red.wash))
                     .accessibilityLabel(L("Muted"))
             }
+            StateBadge(state.text, tone: state.tone, symbol: state.symbol, pulsing: part.state == "INVITED")
+                .fixedSize()
         }
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(minHeight: 56)
         .accessibilityElement(children: .combine)
     }
 
@@ -120,13 +144,15 @@ struct CallPeopleSheet: View {
             VStack(spacing: NeonSpace.md) {
                 ForEach(0..<2, id: \.self) { _ in
                     HStack(spacing: NeonSpace.md) {
-                        SkeletonBlock(width: 42, height: 42, radius: 21)
+                        SkeletonBlock(width: 40, height: 40, radius: 20)
                         SkeletonBlock(width: 140, height: 14)
                         Spacer(minLength: 0)
-                        SkeletonBlock(width: 70, height: 30, radius: 15)
+                        SkeletonBlock(width: 70, height: 34, radius: 17)
                     }
                 }
             }
+            .padding(14)
+            .neonSurface(.glass, radius: NeonRadius.lg)
             .shimmer()
         case .failed(let message):
             VStack(alignment: .leading, spacing: NeonSpace.sm) {
@@ -137,22 +163,24 @@ struct CallPeopleSheet: View {
                     .font(.neonSubtitle)
                     .foregroundStyle(Color.neonTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                NeonButton(L("Try again"), symbol: "arrow.clockwise", kind: .secondary, size: .small) { onRetry() }
+                NeonButton(L("Try again"), symbol: "arrow.clockwise", kind: .secondary, size: .medium) { onRetry() }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        case .loaded(let members):
+            .padding(NeonSpace.card)
+            .neonSurface(.glass, radius: NeonRadius.lg)
+        case .loaded:
+            let members = Self.ringable(addable, participants)
             if members.isEmpty {
-                Text(L("Nobody else can be rung in right now."))
-                    .font(.neonSubtitle)
+                // Why, in one line: the list is the whole team less everybody
+                // already asked, so empty means everybody has been.
+                Text(L("Everyone on the team has already been asked into this call."))
+                    .font(.neonFootnote)
                     .foregroundStyle(Color.neonTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(members.enumerated()), id: \.element.key) { index, member in
-                        if index > 0 { NeonDivider().padding(.leading, 54) }
-                        addableRow(member)
-                    }
+                CardList(members, dividerInset: 66) { member in
+                    addableRow(member)
                 }
             }
         }
@@ -160,20 +188,23 @@ struct CallPeopleSheet: View {
 
     private func addableRow(_ member: APIClient.CallMember) -> some View {
         HStack(spacing: NeonSpace.md) {
-            AvatarView(url: nil, name: member.name, size: 42, style: .soft)
-            DirText(member.name, font: .neonRowTitle, fill: false, lineLimit: 1)
-            Spacer(minLength: NeonSpace.sm)
+            ChatAvatar(url: nil, name: member.name, size: 40, color: member.color)
+            DirText(member.name, font: .system(.callout, weight: .semibold), color: .neonInk, fill: false, lineLimit: 1)
+                .frame(maxWidth: .infinity, alignment: .leading)
             if ringing.contains(member.key) {
                 StateBadge(L("Ringing"), tone: .blue, pulsing: true)
+                    .fixedSize()
                     .transition(.neonPop)
             } else {
-                NeonButton(L("Ring"), symbol: "phone.arrow.up.right.fill", kind: .tinted(.neonSuccessStrong), size: .small) {
+                NeonButton(L("Ring"), symbol: "phone.arrow.up.right.fill", kind: .tinted(.neonSuccessStrong), size: .medium) {
                     await onRing(member)
                 }
                 .accessibilityLabel(L("Ring %@", member.name))
             }
         }
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .frame(minHeight: 56)
         .animation(NeonMotion.snappy, value: ringing.contains(member.key))
     }
 }

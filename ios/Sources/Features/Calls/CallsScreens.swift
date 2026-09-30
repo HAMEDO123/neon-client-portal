@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import WebRTC
 
 /// This area's screens for the debug router (App/DebugScreens.swift):
 /// `-neonScreen <id>` opens one straight from launch, for screenshots.
@@ -14,7 +15,7 @@ enum CallsScreens {
         "call-incoming-voice", "call-incoming-video", "call-incoming-group", "call-incoming-busy",
         "call-ringing", "call-connecting", "call-voice", "call-video-1to1", "call-group-grid", "call-group-speaker",
         "call-reconnecting", "call-notice", "call-people", "call-people-empty",
-        "call-mini-voice", "call-mini-video", "call-buttons",
+        "call-mini-voice", "call-mini-video", "call-mini-pip", "call-buttons",
     ]
 
     @MainActor static func view(_ id: String) -> AnyView? {
@@ -27,7 +28,10 @@ enum CallsScreens {
             var model = prejoin(video: true)
             model.micAvailable = false
             model.micOn = false
+            model.micBlocked = true
             model.cameraOn = false
+            model.cameraBlocked = true
+            model.cameraUnavailable = false
             model.problem = .denied
             return AnyView(CallPreJoinStage(model: model, actions: CallPreJoinActions()))
 
@@ -57,30 +61,50 @@ enum CallsScreens {
         case "call-reconnecting":
             return AnyView(CallStage(model: stage(others: [person("Amro", quality: .poor, connection: .reconnecting)], phase: .reconnecting, status: L("Reconnecting…")), actions: CallStageActions()))
         case "call-notice":
+            // The microphone refused in Settings: this phone has no
+            // microphone track, so it is muted and the button says so.
             var model = stage(others: [person("Wael", quality: .good)])
             model.notice = CallMediaProblem.micDenied.text
+            model.audioMuted = true
+            model.micAvailable = false
             return AnyView(CallStage(model: model, actions: CallStageActions()))
 
         case "call-people":
+            // Wael said no; Amro was never asked, so he is the one to ring.
             return AnyView(Color.clear.sheet(isPresented: .constant(true)) {
                 CallPeopleSheet(
-                    participants: groupParticipants, me: "admin", mutedKeys: ["e-salem"],
-                    addable: .loaded([APIClient.CallMember(key: "e-wael", name: "Wael", color: nil)]),
+                    participants: [
+                        participant("admin", "Manager", "JOINED"),
+                        participant("e-sally", "Sally", "JOINED"),
+                        participant("e-salem", "Salem", "JOINED"),
+                        participant("e-wael", "Wael", "DECLINED"),
+                    ],
+                    me: "admin", mutedKeys: ["e-salem"],
+                    addable: .loaded([APIClient.CallMember(key: "e-amro", name: "Amro", color: colour("Amro"))]),
                     ringing: [], onRing: { _ in }, onRetry: {}, onClose: {}
                 )
             })
         case "call-people-empty":
+            // Everybody on the team has been asked, whatever they answered,
+            // which is when the server has nobody left to offer.
             return AnyView(Color.clear.sheet(isPresented: .constant(true)) {
                 CallPeopleSheet(
-                    participants: Array(groupParticipants.prefix(2)), me: "admin", mutedKeys: [],
+                    participants: groupParticipants, me: "admin", mutedKeys: [],
                     addable: .loaded([]), ringing: [], onRing: { _ in }, onRetry: {}, onClose: {}
                 )
             })
 
         case "call-mini-voice":
-            return AnyView(miniOverApp(CallMiniModel(title: "Sally", status: "4:32", phase: .live, focus: person("Sally", speaking: true), audioMuted: true)))
+            return AnyView(miniOverApp(CallMiniModel(title: "Sally", status: callDurationText(272), phase: .live, focus: person("Sally", speaking: true), audioMuted: true)))
         case "call-mini-video":
-            return AnyView(miniOverApp(CallMiniModel(title: "NEON Team", status: "12:07", phase: .live, focus: person("Salem"), audioMuted: false)))
+            return AnyView(miniOverApp(CallMiniModel(title: "NEON Team", status: callDurationText(727), phase: .live, isGroup: true, focus: person("Salem", speaking: true), audioMuted: false)))
+        case "call-mini-pip":
+            // The video window. The simulator has no camera, so the track
+            // carries no frames: what this shows is the window itself — its
+            // size, the time, the name and the hang-up — over a dark picture.
+            var focus = person("Sally")
+            focus.video = RTCEnvironment.factory.videoTrack(with: RTCEnvironment.factory.videoSource(), trackId: "fixture-pip")
+            return AnyView(miniOverApp(CallMiniModel(title: "Sally", status: callDurationText(272), phase: .live, focus: focus, audioMuted: false)))
         case "call-buttons":
             return AnyView(buttonsFixture)
         default:
@@ -90,15 +114,24 @@ enum CallsScreens {
 
     // MARK: Fixed values
 
+    /// The colours the studio's server gives these people — the ones the
+    /// chat list draws them in.
+    private static func colour(_ name: String) -> String? {
+        ["Manager": "ink", "Sally": "purple", "Salem": "pink", "Amro": "cyan", "Wael": "cyan"][name]
+    }
+
     private static func prejoin(video: Bool) -> CallPreJoinModel {
         CallPreJoinModel(
-            title: video ? "NEON Team" : "Sally", isVideo: video, isJoin: false, loading: false,
-            micOn: true, micAvailable: true, cameraOn: false, camera: nil, mirror: true, problem: video ? .noCamera : nil
+            title: video ? "NEON Team" : "Sally",
+            face: video ? CallFace(name: "NEON Team", kind: .team) : .person("Sally", color: colour("Sally")),
+            isVideo: video, isJoin: false, loading: false,
+            micOn: true, micAvailable: true, cameraOn: false, cameraUnavailable: video, camera: nil, mirror: true,
+            problem: video ? .noCamera : nil
         )
     }
 
     private static func participant(_ key: String, _ name: String, _ state: String) -> CallParticipant {
-        CallParticipant(memberKey: key, name: name, color: nil, state: state, joinedAt: state == "JOINED" ? "2026-09-30T09:00:00.000Z" : nil)
+        CallParticipant(memberKey: key, name: name, color: colour(name), state: state, joinedAt: state == "JOINED" ? "2026-09-30T09:00:00.000Z" : nil)
     }
 
     private static var groupParticipants: [CallParticipant] {
@@ -131,20 +164,20 @@ enum CallsScreens {
         connection: CallPeerConnState = .connected, stalled: Bool = false
     ) -> CallTileModel {
         CallTileModel(
-            id: "e-\(name.lowercased())", name: name, video: nil, audioMuted: muted, speaking: speaking,
+            id: "e-\(name.lowercased())", name: name, color: colour(name), video: nil, audioMuted: muted, speaking: speaking,
             quality: quality, connection: connection, stalled: stalled
         )
     }
 
     private static func stage(
         others: [CallTileModel], video: Bool = false, ringing: Bool = false,
-        phase: CallSessionPhase = .live, status: String = "4:32"
+        phase: CallSessionPhase = .live, status: String = callDurationText(272)
     ) -> CallStageModel {
         let title = others.first?.name ?? "Sally"
         return CallStageModel(
-            title: title, isVideo: video, isGroup: false, status: status,
+            title: title, titleFace: .person(title, color: colour(title)), isVideo: video, isGroup: false, status: status,
             waiting: ringing ? L("Calling…") : status, phase: phase, ringing: ringing,
-            me: CallTileModel(id: "admin", name: "Manager", video: nil, isSelf: true),
+            me: CallTileModel(id: "admin", name: "Manager", color: colour("Manager"), video: nil, isSelf: true),
             others: others, audioMuted: false, cameraOn: false, onSpeaker: video,
             inCall: others.count + 1, notice: nil
         )
@@ -152,8 +185,9 @@ enum CallsScreens {
 
     private static func groupStage() -> CallStageModel {
         CallStageModel(
-            title: "NEON Team", isVideo: true, isGroup: true, status: "12:07", waiting: "12:07", phase: .live, ringing: false,
-            me: CallTileModel(id: "admin", name: "Manager", video: nil, audioMuted: true, isSelf: true),
+            title: "NEON Team", titleFace: CallFace(name: "NEON Team", kind: .team), isVideo: true, isGroup: true,
+            status: callDurationText(727), waiting: callDurationText(727), phase: .live, ringing: false,
+            me: CallTileModel(id: "admin", name: "Manager", color: colour("Manager"), video: nil, audioMuted: true, isSelf: true),
             others: [
                 person("Sally", speaking: true, quality: .good),
                 person("Salem", muted: true, quality: .fair),
@@ -170,15 +204,23 @@ enum CallsScreens {
         }
     }
 
+    /// The header's buttons as the chat room header draws them — in its white
+    /// capsule (ChatRoomView.headerButtons) — and the two live pills.
     private static var buttonsFixture: some View {
         NeonScroll(spacing: NeonSpace.stack) {
-            SectionCard(L("Call"), subtitle: "CallButtons", symbol: "phone.fill", hue: .green) {
-                VStack(alignment: .leading, spacing: NeonSpace.md) {
+            SectionCard(L("Call"), subtitle: L("Call buttons in a chat header"), symbol: "phone.fill", hue: .green) {
+                VStack(alignment: .leading, spacing: NeonSpace.lg) {
                     CallButtons(slug: "fixture-none", title: "Sally")
+                        .padding(.horizontal, 1)
+                        .frame(minHeight: 36)
+                        .background(Capsule().fill(Color.white.opacity(0.96)))
+                        .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1))
+                        .neonShadow(.low)
                     CallLivePill(title: L("Join call"), symbol: "video.fill") {}
                     CallLivePill(title: L("Back to call"), symbol: "phone.fill") {}
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, NeonSpace.xs)
             }
         }
     }

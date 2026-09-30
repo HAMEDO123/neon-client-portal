@@ -171,3 +171,86 @@ func callMediaAllowed(_ mediaType: AVMediaType) async -> Bool {
     default: return false
     }
 }
+
+/// How loud the microphone is, for the pre-join screen to show that it hears
+/// something before anybody is rung. It listens through a recorder that
+/// writes nowhere (/dev/null) and reads only its meter; nothing is kept.
+///
+/// It never runs while a call is going — the call owns the microphone and the
+/// audio session then — and it stops before the pre-join hands the
+/// microphone over, so the call starts on a session nothing else is using.
+@MainActor
+final class CallMicLevelMonitor: ObservableObject {
+    /// How many recent levels are kept for the bars.
+    static let count = 14
+
+    /// 0…1, newest last.
+    @Published private(set) var levels: [Double] = []
+    private var recorder: AVAudioRecorder?
+    private var timer: Timer?
+    /// This monitor switched the audio session on, so it switches it off.
+    private var ownsSession = false
+
+    func start() {
+        guard recorder == nil, CallCenter.shared.session == nil else { return }
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
+        let session = AVAudioSession.sharedInstance()
+        do {
+            // The call's own category and mode, so starting the call after
+            // this changes nothing about where the sound goes.
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
+            try session.setActive(true)
+            ownsSession = true
+            let settings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatLinearPCM,
+                AVSampleRateKey: 16_000,
+                AVNumberOfChannelsKey: 1,
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsFloatKey: false,
+            ]
+            let recorder = try AVAudioRecorder(url: URL(fileURLWithPath: "/dev/null"), settings: settings)
+            recorder.isMeteringEnabled = true
+            guard recorder.record() else { return }
+            self.recorder = recorder
+            levels = []
+            timer?.invalidate()
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.tick() }
+            }
+        } catch {
+            recorder = nil
+        }
+    }
+
+    /// Stops listening, leaving the session as it is — for handing the
+    /// microphone to a call about to start, or for a switched-off microphone.
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        recorder?.stop()
+        recorder = nil
+        levels = []
+    }
+
+    /// Stops, and gives the sound back to whatever was playing before —
+    /// unless a call has taken the session over in the meantime.
+    func release() {
+        stop()
+        guard ownsSession else { return }
+        ownsSession = false
+        if CallCenter.shared.session == nil {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
+    }
+
+    private func tick() {
+        guard let recorder else { return }
+        recorder.updateMeters()
+        // Decibels (−160…0) to a bar: the bottom 50 dB are silence to the ear.
+        let power = Double(recorder.averagePower(forChannel: 0))
+        var next = levels
+        next.append(max(0, min(1, (power + 50) / 50)))
+        if next.count > Self.count { next.removeFirst(next.count - Self.count) }
+        levels = next
+    }
+}

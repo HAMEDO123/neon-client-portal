@@ -97,6 +97,9 @@ final class CallCenter: ObservableObject {
         guard !started else { return }
         started = true
         streamTask = Task { [weak self] in await self?.runStream() }
+        // The chat's faces, read once now so the pre-join screen already has
+        // the colour of whoever is about to be rung.
+        CallFaceDirectory.shared.refresh()
     }
 
     func stop() {
@@ -211,6 +214,11 @@ final class CallCenter: ObservableObject {
             }
         case "calls":
             guard let value = try? JSONDecoder().decode([CallView].self, from: jsonData) else { return }
+            // A group call not seen before may be in a group whose photo the
+            // faces were read without.
+            if value.contains(where: { $0.isGroup && !calls.map(\.id).contains($0.id) }) {
+                CallFaceDirectory.shared.refresh()
+            }
             calls = value
             let active = session.flatMap { current in value.first { $0.id == current.callId } }
             session?.sync(active)
@@ -226,7 +234,10 @@ final class CallCenter: ObservableObject {
 
     // MARK: - Starting, joining, answering
 
-    func prepare(_ request: PreJoinRequest) { prejoinRequest = request }
+    func prepare(_ request: PreJoinRequest) {
+        CallFaceDirectory.shared.refresh()
+        prejoinRequest = request
+    }
 
     /// Starts or joins, with the devices chosen on the pre-join screen —
     /// which hands its microphone and camera over to the call.

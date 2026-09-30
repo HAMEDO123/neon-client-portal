@@ -18,6 +18,11 @@ import WebRTC
 struct CallTileModel: Identifiable {
     let id: String
     let name: String
+    /// The colour the studio gave them (the server's `color`), so their face
+    /// is the one the chat shows.
+    var color: String?
+    /// A photo of them, when the server has one.
+    var avatarURL: URL?
     /// Their picture when there is one to show (camera on, or a shared screen).
     var video: RTCVideoTrack?
     var mirror = false
@@ -29,10 +34,14 @@ struct CallTileModel: Identifiable {
     var connection: CallPeerConnState = .connected
     /// Still not connected after a while — said as such, not as a failure.
     var stalled = false
+
+    var face: CallFace { CallFace(name: name, color: color, url: avatarURL, kind: .person) }
 }
 
 struct CallStageModel {
     var title: String
+    /// The call's face: the other person, the group, or the studio's team.
+    var titleFace: CallFace
     var isVideo: Bool
     var isGroup: Bool
     /// The line under the title: the duration, or where the call stands.
@@ -45,6 +54,8 @@ struct CallStageModel {
     var me: CallTileModel
     var others: [CallTileModel]
     var audioMuted: Bool
+    /// False when the microphone was refused: there is nothing to unmute.
+    var micAvailable = true
     var cameraOn: Bool
     var onSpeaker: Bool
     /// Everybody in the call now, this phone included.
@@ -74,6 +85,9 @@ struct CallStage: View {
     @State private var layout: CallLayout
     @State private var pinned: String?
     @State private var chromeHidden = false
+    /// How tall the notice is, so the big avatar moves down under it rather
+    /// than being covered on a smaller phone.
+    @State private var noticeHeight: CGFloat = 0
 
     init(model: CallStageModel, actions: CallStageActions, initialLayout: CallLayout = .grid) {
         self.model = model
@@ -108,6 +122,14 @@ struct CallStage: View {
                     )
                     .padding(.horizontal, NeonSpace.gutter)
                     .padding(.top, NeonSpace.sm)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { noticeHeight = proxy.size.height }
+                                .onChange(of: proxy.size.height) { noticeHeight = $0 }
+                        }
+                    )
+                    .onDisappear { noticeHeight = 0 }
                     .transition(.neonDrop)
                 }
                 if tiled {
@@ -132,9 +154,12 @@ struct CallStage: View {
     }
 
     private var backdropHue: NeonHue? {
-        if let single { return NeonPalette.hue(for: single.name) }
-        return model.others.isEmpty && !model.isGroup ? NeonPalette.hue(for: model.title) : nil
+        if let single { return single.face.hue }
+        return model.others.isEmpty && !model.isGroup ? model.titleFace.hue : nil
     }
+
+    /// Room for the notice above the big avatar.
+    private var belowNotice: CGFloat { noticeHeight > 0 ? noticeHeight : 0 }
 
     // MARK: Nobody else in yet
 
@@ -147,7 +172,7 @@ struct CallStage: View {
             }
             VStack(spacing: NeonSpace.xl) {
                 Spacer()
-                CallHalo(name: model.title, size: 132, ringing: model.ringing)
+                CallHalo(face: model.titleFace, size: 132, ringing: model.ringing)
                 VStack(spacing: NeonSpace.sm) {
                     CallCenteredName(model.title, font: .neonDisplay)
                     Text(model.waiting)
@@ -159,6 +184,7 @@ struct CallStage: View {
                 Spacer()
                 Spacer()
             }
+            .padding(.top, belowNotice)
         }
     }
 
@@ -183,7 +209,7 @@ struct CallStage: View {
             } else {
                 VStack(spacing: NeonSpace.lg) {
                     Spacer()
-                    CallHalo(name: person.name, size: 136, speaking: person.speaking)
+                    CallHalo(face: person.face, size: 136, speaking: person.speaking)
                     VStack(spacing: NeonSpace.sm) {
                         CallCenteredName(person.name, font: .neonDisplay)
                         HStack(spacing: NeonSpace.sm) {
@@ -195,9 +221,13 @@ struct CallStage: View {
                             Text(person.connection == .connected ? model.status : CallConnectionNote.text(person.connection, stalled: person.stalled))
                                 .font(.neonCallout.monospacedDigit())
                                 .foregroundStyle(.white.opacity(0.8))
-                            if person.quality != .unknown {
+                            if person.connection == .connected, person.quality != .unknown {
                                 CallQualityBars(quality: person.quality)
                             }
+                        }
+                        if person.stalled, person.connection != .connected {
+                            CallStalledHint()
+                                .transition(.opacity)
                         }
                         if person.audioMuted {
                             Label(L("Muted"), systemImage: "mic.slash.fill")
@@ -213,13 +243,18 @@ struct CallStage: View {
                     Spacer()
                     Spacer()
                 }
+                .padding(.top, belowNotice)
                 .transition(.opacity)
             }
 
             // Over a picture there is no status line to carry it.
             if person.video != nil, person.connection != .connected {
-                CallConnectionNote(connection: person.connection, stalled: person.stalled)
-                    .transition(.neonPop)
+                VStack(spacing: NeonSpace.sm) {
+                    CallConnectionNote(connection: person.connection, stalled: person.stalled)
+                    if person.stalled { CallStalledHint() }
+                }
+                .padding(.horizontal, NeonSpace.xxl)
+                .transition(.neonPop)
             }
 
             if model.cameraOn || model.isVideo {
@@ -243,27 +278,15 @@ struct CallStage: View {
     private var tiles: some View {
         let everyone = model.others + [model.me]
         if layout == .speaker, let focus = speakerFocus {
+            let rest = everyone.filter { $0.id != focus.id }
             VStack(spacing: NeonSpace.sm) {
                 CallTileView(tile: focus, style: .large)
                     .id(focus.id)
                     .transition(.opacity)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: NeonSpace.sm) {
-                        ForEach(everyone.filter { $0.id != focus.id }) { tile in
-                            Button {
-                                Haptic.selection()
-                                withNeonAnimation(.smooth) { pinned = tile.id }
-                            } label: {
-                                CallTileView(tile: tile, style: .strip)
-                                    .frame(width: 88, height: 118)
-                            }
-                            .buttonStyle(PressableStyle(scale: 0.95))
-                            .accessibilityLabel(Text(tile.name))
-                            .accessibilityHint(Text(L("Show large")))
-                        }
-                    }
+                CallSpeakerStrip(tiles: rest) { tile in
+                    Haptic.selection()
+                    withNeonAnimation(.smooth) { pinned = tile.id }
                 }
-                .frame(height: 118)
             }
         } else {
             CallGrid(tiles: everyone)
@@ -341,17 +364,22 @@ struct CallStage: View {
         }
     }
 
+    /// White discs mean one thing on every call screen: "you are not sending
+    /// this" — muted, no microphone, camera off. The speaker is a sound
+    /// setting, not something sent, so it keeps the glass and shows its state
+    /// with its glyph and an indigo dot.
     private var controls: some View {
         HStack(alignment: .top, spacing: 0) {
             CallRoundButton(
                 symbol: model.onSpeaker ? "speaker.wave.2.fill" : "speaker.fill", title: L("Speaker"),
-                look: model.onSpeaker ? .active : .glass, value: model.onSpeaker ? L("Turned on") : L("Turned off"),
+                look: .glass, value: model.onSpeaker ? L("Turned on") : L("Turned off"),
+                mark: model.onSpeaker ? .on : nil,
                 action: actions.toggleSpeaker
             )
             .frame(maxWidth: .infinity)
             CallRoundButton(
-                symbol: model.cameraOn ? "video.fill" : "video.slash.fill", title: L("Camera"),
-                look: model.isVideo && !model.cameraOn ? .active : .glass, value: model.cameraOn ? L("Turned on") : L("Turned off"),
+                symbol: model.cameraOn ? "video.fill" : "video.slash.fill", title: model.cameraOn ? L("Camera") : L("Camera off"),
+                look: model.cameraOn ? .glass : .active, value: model.cameraOn ? L("Turned on") : L("Turned off"),
                 action: actions.toggleCamera
             )
             .frame(maxWidth: .infinity)
@@ -360,12 +388,22 @@ struct CallStage: View {
                     .frame(maxWidth: .infinity)
                     .transition(.neonPop)
             }
-            CallRoundButton(
-                symbol: model.audioMuted ? "mic.slash.fill" : "mic.fill", title: L("Mute"),
-                look: model.audioMuted ? .active : .glass, value: model.audioMuted ? L("Turned on") : L("Turned off"),
-                action: actions.toggleMute
-            )
-            .frame(maxWidth: .infinity)
+            if model.micAvailable {
+                CallRoundButton(
+                    symbol: model.audioMuted ? "mic.slash.fill" : "mic.fill", title: model.audioMuted ? L("Unmute") : L("Mute"),
+                    look: model.audioMuted ? .active : .glass, value: model.audioMuted ? L("Muted") : L("Microphone on"),
+                    action: actions.toggleMute
+                )
+                .frame(maxWidth: .infinity)
+            } else {
+                // Refused in Settings: there is no microphone to switch, so
+                // the button goes where it can be allowed again.
+                CallRoundButton(symbol: "mic.slash.fill", title: L("No mic"), look: .active, value: L("Microphone blocked"), mark: .warning) {
+                    openCallSettings()
+                }
+                .accessibilityHint(Text(L("Opens Settings")))
+                .frame(maxWidth: .infinity)
+            }
             CallRoundButton(symbol: "phone.down.fill", title: L("End"), look: .danger, action: actions.hangUp)
                 .frame(maxWidth: .infinity)
         }
@@ -390,26 +428,36 @@ struct CallTileView: View {
     let tile: CallTileModel
     var style: CallTileStyle = .grid
 
+    /// The small tiles mark a speaker with a ring round the face; the large
+    /// ones with the tile's own border. One cue each, never both.
+    private var ringsFace: Bool { style == .strip || style == .pip }
+
     var body: some View {
-        let hue = NeonPalette.hue(for: tile.name)
+        let hue = tile.face.hue
         let radius: CGFloat = style == .strip ? NeonRadius.md : style == .pip ? 20 : NeonRadius.lg
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
             ZStack {
-                LinearGradient(colors: [hue.deep.opacity(0.8), Color.neonInk.opacity(0.92)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                // Every tile ends in the brand's violet, whatever the person's
+                // own colour: warm colours over grey turned brown and olive.
+                Color.neonInk
+                LinearGradient(
+                    colors: [(hue?.color ?? .neonPurple).opacity(CallBackdrop.glow(hue) < 0.5 ? 0.4 : 0.55), Color.neonIndigoStrong.opacity(0.85)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
                 if let video = tile.video {
                     CallVideoView(track: video, mirror: tile.mirror, contentMode: tile.sharing ? .scaleAspectFit : .scaleAspectFill)
                 } else {
                     let size = min(max(side * 0.44, 34), 112)
                     ZStack {
-                        if tile.speaking {
+                        if tile.speaking, ringsFace {
                             Circle()
                                 .strokeBorder(AngularGradient.neonStory, lineWidth: 3)
                                 .frame(width: size + 12, height: size + 12)
                                 .transition(.neonPop)
                         }
-                        AvatarView(url: nil, name: tile.name, size: size, style: .solid)
+                        CallFaceView(face: tile.face, size: size)
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: max(1.5, size * 0.025)))
                     }
                 }
@@ -432,7 +480,7 @@ struct CallTileView: View {
         .clipShape(shape)
         .overlay(alignment: .bottomLeading) { tag.padding(style == .strip || style == .pip ? 6 : NeonSpace.sm) }
         .overlay {
-            if tile.speaking {
+            if tile.speaking, !ringsFace {
                 shape.strokeBorder(AngularGradient.neonStory, lineWidth: 3)
                     .shadow(color: .neonPurple.opacity(0.55), radius: 10)
             } else {
@@ -449,11 +497,22 @@ struct CallTileView: View {
     private var tag: some View {
         switch style {
         case .pip:
-            if tile.audioMuted { CallNameTag(name: L("You"), muted: true) }
+            // This phone's own corner says nothing unless muted; anybody
+            // else in a small window (the minimised call) keeps their name.
+            if tile.isSelf {
+                if tile.audioMuted { CallNameTag(name: L("You"), muted: true) }
+            } else {
+                CallNameTag(name: tile.name, muted: tile.audioMuted, compact: true)
+            }
         case .strip:
             CallNameTag(name: tile.isSelf ? L("You") : tile.name, muted: tile.audioMuted, compact: true)
         case .grid, .large:
-            CallNameTag(name: tile.isSelf ? L("You") : tile.name, muted: tile.audioMuted, quality: tile.isSelf ? nil : tile.quality)
+            // No bars for somebody not connected yet: there is no connection
+            // to measure, whatever the last numbers said.
+            CallNameTag(
+                name: tile.isSelf ? L("You") : tile.name, muted: tile.audioMuted,
+                quality: tile.isSelf || tile.connection != .connected ? nil : tile.quality
+            )
         }
     }
 
@@ -535,6 +594,66 @@ struct CallConnectionNote: View {
     }
 }
 
+/// Under "Still connecting…": what that usually means and what can be done.
+/// A fact about networks — some refuse direct connections — never a
+/// verdict on the other person.
+struct CallStalledHint: View {
+    var body: some View {
+        Text(L("Some networks block calls. You can hang up and try again."))
+            .font(.neonFootnote)
+            .foregroundStyle(.white.opacity(0.7))
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// The speaker view's strip: everybody but the one shown large. When they fit,
+/// the tiles share the width (up to 118 pt each, 3:4) and sit centred; when
+/// they do not, the strip scrolls, still centred while it is short.
+struct CallSpeakerStrip: View {
+    let tiles: [CallTileModel]
+    let onSelect: (CallTileModel) -> Void
+
+    @State private var available: CGFloat = 0
+
+    private static let minWidth: CGFloat = 88
+    private static let maxWidth: CGFloat = 118
+
+    private var fitted: CGFloat {
+        let count = CGFloat(max(tiles.count, 1))
+        return (available - NeonSpace.sm * (count - 1)) / count
+    }
+    private var fits: Bool { fitted >= Self.minWidth }
+    private var tileWidth: CGFloat { fits ? min(Self.maxWidth, fitted) : Self.minWidth }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: NeonSpace.sm) {
+                ForEach(tiles) { tile in
+                    Button { onSelect(tile) } label: {
+                        CallTileView(tile: tile, style: .strip)
+                            .frame(width: tileWidth, height: tileWidth * 4 / 3)
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.95))
+                    .accessibilityLabel(Text(tile.isSelf ? L("You") : tile.name))
+                    .accessibilityHint(Text(L("Show large")))
+                }
+            }
+            .frame(minWidth: available)
+        }
+        .scrollDisabled(fits)
+        .frame(maxWidth: .infinity)
+        .frame(height: tileWidth * 4 / 3)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { available = proxy.size.width }
+                    .onChange(of: proxy.size.width) { available = $0 }
+            }
+        )
+    }
+}
+
 /// A darker top and bottom over a picture, so the controls and the name
 /// stay readable on anything.
 struct CallScrim: View {
@@ -585,22 +704,27 @@ struct CallDraggable<Content: View>: View {
     var bottomInset: CGFloat
     var horizontalInset: CGFloat
     var onFrame: ((CGRect) -> Void)?
+    /// Told when a drag starts and when it ends, so a button inside can
+    /// refuse the tap a drag ends on (the minimised call's hang-up).
+    var onDragging: ((Bool) -> Void)?
     let content: Content
 
     @State private var corner: Alignment
     @State private var size: CGSize = .zero
+    @State private var dragging = false
     @GestureState private var drag: CGSize = .zero
 
     /// Starts in the trailing corner (the right in English, the left in
     /// Arabic), at the top or the bottom.
     init(
         topInset: CGFloat, bottomInset: CGFloat, horizontalInset: CGFloat = NeonSpace.gutter, startsAtBottom: Bool = false,
-        onFrame: ((CGRect) -> Void)? = nil, @ViewBuilder content: () -> Content
+        onFrame: ((CGRect) -> Void)? = nil, onDragging: ((Bool) -> Void)? = nil, @ViewBuilder content: () -> Content
     ) {
         self.topInset = topInset
         self.bottomInset = bottomInset
         self.horizontalInset = horizontalInset
         self.onFrame = onFrame
+        self.onDragging = onDragging
         self.content = content()
         let horizontal: HorizontalAlignment = AppLanguage.current == .arabic ? .leading : .trailing
         _corner = State(initialValue: Alignment(horizontal: horizontal, vertical: startsAtBottom ? .bottom : .top))
@@ -621,7 +745,15 @@ struct CallDraggable<Content: View>: View {
                 .gesture(
                     DragGesture(minimumDistance: 6)
                         .updating($drag) { value, state, _ in state = value.translation }
+                        .onChanged { _ in
+                            if !dragging {
+                                dragging = true
+                                onDragging?(true)
+                            }
+                        }
                         .onEnded { value in
+                            dragging = false
+                            onDragging?(false)
                             let area = CGSize(
                                 width: geo.size.width - horizontalInset * 2,
                                 height: geo.size.height - topInset - bottomInset
@@ -671,6 +803,7 @@ struct CallScreenView: View {
     let call: CallView?
     let me: String
 
+    @ObservedObject private var faces = CallFaceDirectory.shared
     @State private var showPeople = false
     @State private var now = Date()
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -678,6 +811,7 @@ struct CallScreenView: View {
     var body: some View {
         CallStage(model: model, actions: actions)
             .onReceive(ticker) { now = $0 }
+            .onAppear { faces.refresh() }
             .sheet(isPresented: $showPeople) {
                 CallPeopleLive(
                     callId: session.callId, participants: call?.participants ?? [], me: me,
@@ -698,19 +832,22 @@ struct CallScreenView: View {
         let others = session.people.map { person in
             let video = person.sharing ? person.screenTrack : (person.videoOff ? nil : person.cameraTrack)
             return CallTileModel(
-                id: person.key, name: person.name, video: video,
+                id: person.key, name: person.name, color: person.color, video: video,
                 audioMuted: person.audioMuted, sharing: person.sharing && person.screenTrack != nil,
                 speaking: person.speaking, quality: person.quality, connection: person.connection,
                 stalled: person.connectingSince.map { now.timeIntervalSince($0) > 20 } ?? false
             )
         }
         let mine = CallTileModel(
-            id: me, name: center.ready?.name ?? L("You"), video: session.cameraTrack, mirror: session.mirrorSelf,
+            id: me, name: center.ready?.name ?? L("You"), color: call?.participants.first { $0.memberKey == me }?.color,
+            video: session.cameraTrack, mirror: session.mirrorSelf,
             audioMuted: session.audioMuted || session.micTrack == nil, isSelf: true
         )
         let joined = call?.participants.filter { $0.state == "JOINED" && $0.memberKey != me }.count ?? others.count
+        let title = call?.title ?? L("Call")
         return CallStageModel(
-            title: call?.title ?? L("Call"),
+            title: title,
+            titleFace: call.map { faces.face(for: $0, me: me) } ?? .person(title, color: nil),
             isVideo: call?.isVideo ?? (session.cameraTrack != nil),
             isGroup: call?.isGroup ?? false,
             status: status,
@@ -720,6 +857,7 @@ struct CallScreenView: View {
             me: mine,
             others: others,
             audioMuted: session.audioMuted || session.micTrack == nil,
+            micAvailable: session.micTrack != nil,
             cameraOn: session.cameraTrack != nil,
             onSpeaker: session.onSpeaker,
             inCall: joined + 1,

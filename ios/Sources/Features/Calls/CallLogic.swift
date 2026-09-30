@@ -50,12 +50,23 @@ func callGridFor(count: Int, narrow: Bool) -> (columns: Int, rows: Int) {
     return (columns, Int(ceil(Double(count) / Double(columns))))
 }
 
-/// "0:45", "4:32", "1:02:05".
+/// "0:45", "4:32", "1:02:05" — in the app's own digits ("٤:٣٢" in Arabic),
+/// the same set NeonFormat gives the people count beside it, so one bar never
+/// mixes two kinds of numerals.
 func callDurationText(_ seconds: Int) -> String {
     let total = max(0, seconds)
     let hours = total / 3600
     let minutes = (total % 3600) / 60
-    let rest = String(format: "%02d", total % 60)
-    if hours > 0 { return "\(hours):\(String(format: "%02d", minutes)):\(rest)" }
-    return "\(minutes):\(rest)"
+    let rest = callDigits(total % 60, width: 2)
+    if hours > 0 { return "\(callDigits(hours)):\(callDigits(minutes, width: 2)):\(rest)" }
+    return "\(callDigits(minutes)):\(rest)"
+}
+
+private func callDigits(_ value: Int, width: Int = 1) -> String {
+    let formatter = NumberFormatter()
+    formatter.locale = AppLanguage.current.locale
+    formatter.numberStyle = .none
+    formatter.usesGroupingSeparator = false
+    formatter.minimumIntegerDigits = width
+    return formatter.string(from: NSNumber(value: value)) ?? String(value)
 }
