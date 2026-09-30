@@ -63,16 +63,31 @@ private struct PushHealthCard: View {
 
     var body: some View {
         SectionCard(L("Push notifications"), subtitle: L("Why a notification is or isn't arriving."), symbol: "bell.badge.fill", hue: .amber) {
-            StatGrid {
-                StatTile(L("Server keys"), text: health.configured ? (health.source == "database" ? L("Generated") : L("Set")) : L("Not set"), symbol: "key", tint: health.configured ? .neonSuccessStrong : .neonTextFaint)
-                StatTile(L("Devices reachable"), value: Double(health.activeTotal), symbol: "iphone")
+            HStack(spacing: 6) {
+                Image(systemName: "key")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.neonTextTertiary)
+                    .frame(width: 16)
+                Text(L("Server keys"))
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.neonTextSecondary)
+                Spacer(minLength: 12)
+                BadgeView(
+                    text: health.configured ? (health.source == "database" ? L("Generated") : L("Set")) : L("Not set"),
+                    tone: health.configured ? .success : .neutral
+                )
             }
+            KeyValueRow(L("Devices that can be reached"), value: NeonFormat.integer(health.activeTotal), symbol: "iphone")
 
+            // Native push has no APNs key or device-token storage yet, on any
+            // build — so this is true today whether the phone is signed for
+            // testing or shipped through TestFlight, unlike the old note,
+            // which named one signing method and was wrong on the other.
             StatusNote(
-                symbol: "apple.logo",
+                symbol: "bell.slash",
                 tone: .info,
-                title: L("This phone cannot receive push"),
-                detail: L("The app is signed for testing (AltStore), which Apple does not allow to register for push notifications. This card is diagnostic only.")
+                title: L("Push to this app isn't set up yet"),
+                detail: L("The team's notifications go out to the web app's own subscriptions. This card only reads their health — it doesn't control this phone.")
             )
 
             if !managerPaired {
@@ -83,8 +98,16 @@ private struct PushHealthCard: View {
 
             if !health.devices.isEmpty {
                 SectionLabel(L("The team's devices"))
-                ForEach(health.devices) { device in
-                    ListRow(device.name, meta: device.lastUsedAt.flatMap(shortTime), leading: .icon("iphone"), value: "\(device.active)")
+                VStack(spacing: 0) {
+                    ForEach(Array(health.devices.enumerated()), id: \.element.id) { index, device in
+                        ListRow(
+                            device.name,
+                            meta: device.lastUsedAt.flatMap(shortTime),
+                            leading: .avatar(url: nil, name: device.name),
+                            value: L("%d devices", device.active)
+                        )
+                        if index < health.devices.count - 1 { NeonDivider() }
+                    }
                 }
             }
         }
@@ -128,21 +151,28 @@ private struct WorkingDayCard: View {
     var body: some View {
         SectionCard(L("The working day"), subtitle: L("What can be planned, which days are worked, when nobody should be messaged."), symbol: "calendar.badge.clock", hue: .blue) {
             SectionLabel(L("Working days"))
-            FlowRow {
-                ForEach(Array(workingDayNames().enumerated()), id: \.offset) { index, name in
+            HStack(spacing: 6) {
+                ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { index, name in
                     Chip(name, isSelected: days.contains(index)) {
                         Haptic.selection()
                         if days.contains(index) { days.remove(index) } else { days.insert(index) }
                     }
+                    .frame(maxWidth: .infinity)
                 }
             }
 
-            TimeField(L("Starts"), time: $start)
-            TimeField(L("Ends"), time: $end)
-            TimeField(L("Lunch at"), time: $lunchAt)
-            NumberField(L("Lunch"), value: $lunchMinutes, unit: L("min"))
-            NumberField(L("Margin"), value: $bufferMinutes, unit: L("min"))
-            NumberField(L("Allowed late"), value: $graceMinutes, unit: L("min"))
+            HStack(spacing: NeonSpace.md) {
+                OpsTimeField(label: L("Starts"), time: $start)
+                OpsTimeField(label: L("Ends"), time: $end)
+            }
+            HStack(spacing: NeonSpace.md) {
+                OpsTimeField(label: L("Lunch at"), time: $lunchAt)
+                NumberField(L("Lunch"), value: $lunchMinutes, unit: L("min"))
+            }
+            HStack(spacing: NeonSpace.md) {
+                NumberField(L("Left unplanned"), value: $bufferMinutes, unit: L("min"), hint: L("Kept free of any plan, in case something comes up."))
+                NumberField(L("Grace before late"), value: $graceMinutes, unit: L("min"), hint: L("Arriving within this many minutes still counts as on time."))
+            }
 
             Text(L("A day is %@ long, so %@ can be planned after lunch and the margin.", describeMinutes(Double(dayLengthMinutes)), describeMinutes(Double(capacityMinutes))))
                 .font(.neonFootnote)
@@ -153,7 +183,7 @@ private struct WorkingDayCard: View {
 
             if let error { ValidationMessage(error) }
 
-            NeonButton(L("Save the working day"), kind: .secondary, size: .medium) {
+            NeonButton(L("Save the working day"), kind: isDirty ? .primary : .secondary, size: .medium) {
                 do {
                     try await api.opsSaveWorkHours(form: [
                         "days": days.sorted(),
@@ -171,6 +201,71 @@ private struct WorkingDayCard: View {
                     self.error = error.localizedDescription
                 }
             }
+            .disabled(!isDirty)
+        }
+    }
+
+    /// Short weekday names, always Sunday-first regardless of locale — the
+    /// same index `workHours.days` uses, just narrow enough for seven to
+    /// share one row instead of wrapping onto three.
+    private var weekdaySymbols: [String] {
+        let calendar = Calendar(identifier: .gregorian)
+        return AppLanguage.current == .arabic ? calendar.veryShortWeekdaySymbols : calendar.shortWeekdaySymbols
+    }
+
+    /// So the button only invites a tap once something has actually changed
+    /// from what the server last saved — never a "Save" that looks the same
+    /// whether the card is clean or edited.
+    private var isDirty: Bool {
+        days != Set(workHours.days)
+            || dateToTimeString(start) != workHours.start
+            || dateToTimeString(end) != workHours.end
+            || dateToTimeString(lunchAt) != workHours.lunchAt
+            || lunchMinutes != workHours.lunchMinutes
+            || bufferMinutes != workHours.bufferMinutes
+            || graceMinutes != workHours.graceMinutes
+    }
+}
+
+/// A time of day, drawn with the kit's own field chrome rather than the
+/// system's grey compact-`DatePicker` capsule sitting inside it — one chrome
+/// instead of two. Tapping it opens a plain wheel picker in a sheet.
+private struct OpsTimeField: View {
+    let label: String
+    @Binding var time: Date
+    @State private var showPicker = false
+
+    var body: some View {
+        FormField(label) {
+            Button {
+                Haptic.tap()
+                showPicker = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color.neonPurpleStrong.opacity(0.8))
+                        .frame(width: 20)
+                    Text(time.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.neonInk)
+                    Spacer(minLength: 0)
+                }
+                .fieldChrome()
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .sheet(isPresented: $showPicker) {
+            VStack(spacing: 18) {
+                SheetHeader(label, symbol: "clock") { showPicker = false }
+                DatePicker(label, selection: $time, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .datePickerStyle(.wheel)
+                NeonButton(L("OK"), kind: .primary, size: .medium) { showPicker = false }
+            }
+            .padding(NeonSpace.gutter)
+            .neonSheet([.medium])
         }
     }
 }
@@ -195,7 +290,7 @@ private struct PlanningNotesCard: View {
         SectionCard(L("How we plan a day"), subtitle: L("Your rules, in your own words — read whenever a day is proposed for somebody."), symbol: "text.book.closed.fill", hue: .purple) {
             NeonTextEditor(L("Rules for planning"), text: $text, minLines: 4, maxLines: 10)
             if let error { ValidationMessage(error) }
-            NeonButton(L("Save rules"), kind: .secondary, size: .medium) {
+            NeonButton(L("Save rules"), kind: isDirty ? .primary : .secondary, size: .medium) {
                 do {
                     try await api.opsSavePlanningNotes(text)
                     Toast.success(L("Saved"))
@@ -205,8 +300,11 @@ private struct PlanningNotesCard: View {
                     self.error = error.localizedDescription
                 }
             }
+            .disabled(!isDirty)
         }
     }
+
+    private var isDirty: Bool { text != notes }
 }
 
 // MARK: - Automation
@@ -225,22 +323,37 @@ private struct AutomationCard: View {
     @State private var toggling = false
 
     var body: some View {
-        SectionCard(L("Rules that watch the day"), subtitle: L("A rule can only ever speak — it never moves, ticks or approves work."), symbol: "bolt.fill", hue: .cyan) {
-            ToggleRow(L("Rules are switched on"), detail: L("The one switch that stops all of them at once."), symbol: "bolt.badge.a", isOn: Binding(
-                get: { switchedOn },
-                set: { on in
-                    toggling = true
-                    Task {
-                        try? await api.opsSetAutomationSwitch(on)
-                        toggling = false
-                        await onChanged()
+        SectionCard(L("Rules that watch the day"), subtitle: L("Rules only speak — they never move work."), symbol: "bolt.fill", hue: .cyan) {
+            ToggleRow(
+                L("Let rules speak"),
+                detail: switchedOn
+                    ? L("On — each rule still needs its own switch.")
+                    : L("Off — no rule says anything, whatever its own switch."),
+                symbol: "bolt.fill",
+                tint: NeonHue.cyan.deep,
+                isOn: Binding(
+                    get: { switchedOn },
+                    set: { on in
+                        toggling = true
+                        Task {
+                            try? await api.opsSetAutomationSwitch(on)
+                            toggling = false
+                            await onChanged()
+                        }
                     }
-                }
-            ))
+                )
+            )
             .disabled(toggling)
 
             if rules.isEmpty {
-                EmptyState(symbol: "bolt.slash", title: L("No rules yet"), hue: .grey)
+                EmptyState(
+                    symbol: "bolt.fill",
+                    title: L("No rules yet"),
+                    detail: L("A rule can ask, tell or escalate. New rules start switched off."),
+                    actionTitle: L("Add a rule"),
+                    action: { showNew = true },
+                    hue: .cyan
+                )
             } else {
                 ForEach(rules) { rule in
                     Button { editing = rule } label: {
@@ -266,10 +379,12 @@ private struct AutomationCard: View {
                 }
             }
 
-            NeonButton(previewing ? L("Running…") : L("Preview against today"), symbol: "eye", kind: .ghost, size: .medium, isLoading: previewing) {
-                previewing = true
-                preview = try? await api.opsAutomationPreview()
-                previewing = false
+            if !rules.isEmpty {
+                NeonButton(previewing ? L("Running…") : L("Preview against today"), symbol: "eye", kind: .ghost, size: .medium, isLoading: previewing) {
+                    previewing = true
+                    preview = try? await api.opsAutomationPreview()
+                    previewing = false
+                }
             }
 
             if let preview {
@@ -387,9 +502,29 @@ private struct WhatsAppStatusCard: View {
     var body: some View {
         SectionCard(L("Company channel"), symbol: "message.fill", hue: .green) {
             if whatsapp.transport != "none" {
-                KeyValueRow(L("Transport"), value: whatsapp.transport == "cloud" ? L("Official Cloud API") : L("Session worker"), symbol: "antenna.radiowaves.left.and.right")
-                if let number = whatsapp.number { KeyValueRow(L("Sends from"), value: number, symbol: "phone") }
-                if let detail = whatsapp.detail { KeyValueRow(L("Status"), value: detail, symbol: "info.circle") }
+                KeyValueRow(
+                    L("Status"),
+                    value: whatsapp.connected ? L("Sending normally") : L("Not reaching WhatsApp"),
+                    symbol: whatsapp.connected ? "checkmark.circle" : "exclamationmark.circle"
+                )
+                // The worker's own line id ("main") is not a phone number and
+                // means nothing to the owner, so it — and the transport's
+                // name — sit behind a disclosure rather than reading as
+                // "sends from a number called main".
+                DisclosureGroup(L("Technical details")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        KeyValueRow(
+                            L("Transport"),
+                            value: whatsapp.transport == "cloud" ? L("Official Cloud API") : L("Session worker"),
+                            symbol: "antenna.radiowaves.left.and.right"
+                        )
+                        if let number = whatsapp.number { KeyValueRow(L("Line"), value: number, symbol: "number") }
+                        if let detail = whatsapp.detail { KeyValueRow(L("Detail"), value: detail, symbol: "info.circle") }
+                    }
+                    .padding(.top, 8)
+                }
+                .font(.neonSubheadline)
+                .tint(Color.neonTextSecondary)
             } else {
                 Text(L("Neither the Cloud API nor the session worker is set up on the server.")).font(.neonFootnote).foregroundStyle(Color.neonTextTertiary)
             }
@@ -401,6 +536,9 @@ private struct WhatsAppStatusCard: View {
             .neonSurface(.sunken, radius: NeonRadius.md)
         } trailing: {
             BadgeView(
+                // "Connected", not "Working" — that word already means
+                // "in progress" elsewhere (Home's task state), and reusing
+                // it here would show that translation instead of this one.
                 text: whatsapp.transport == "none" ? L("Not configured") : (whatsapp.connected ? L("Connected") : L("Unreachable")),
                 tone: whatsapp.transport == "none" ? .neutral : (whatsapp.connected ? .success : .warning)
             )
@@ -430,7 +568,7 @@ private struct TimezoneCard: View {
         SectionCard(L("Company timezone"), subtitle: L("Decides which day a task belongs to and when the daily jobs run."), symbol: "globe", hue: .cyan) {
             MenuField(L("Timezone"), selection: $selection, options: options, title: { $0.replacingOccurrences(of: "_", with: " ") })
             if let error { ValidationMessage(error) }
-            NeonButton(L("Save timezone"), kind: .secondary, size: .medium) {
+            NeonButton(L("Save timezone"), kind: isDirty ? .primary : .secondary, size: .medium) {
                 do {
                     try await api.opsSaveTimezone(selection)
                     Toast.success(L("Saved"))
@@ -440,8 +578,11 @@ private struct TimezoneCard: View {
                     self.error = error.localizedDescription
                 }
             }
+            .disabled(!isDirty)
         }
     }
+
+    private var isDirty: Bool { selection != timezone }
 }
 
 // MARK: - Other integrations

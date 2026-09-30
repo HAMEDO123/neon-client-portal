@@ -37,11 +37,13 @@ struct WhatsAppAttachmentRow: View {
                         .font(.system(size: 18))
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(whatsAppKindLabel(message.type))
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(downloading ? L("Downloading…") : L("Tap to open"))
-                        .font(.system(size: 11))
+                    Text(title)
+                        .font(.neonSubheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text(subtitleText)
+                        .font(.neonCaption)
                         .opacity(0.7)
+                        .lineLimit(1)
                 }
             }
             .foregroundStyle(mine ? Color.white : Color.neonInk)
@@ -59,6 +61,20 @@ struct WhatsAppAttachmentRow: View {
         } message: {
             Text(errorMessage ?? "")
         }
+    }
+
+    /// A document's own filename, when the account sent one as the
+    /// message's body — a document with no name still says what it is.
+    private var title: String {
+        message.type == "document" && !message.body.isEmpty ? message.body : whatsAppKindLabel(message.type)
+    }
+
+    private var subtitleText: String {
+        if downloading { return L("Downloading…") }
+        if message.type == "document" && !message.body.isEmpty {
+            return "\(whatsAppKindLabel(message.type)) · \(L("Tap to open"))"
+        }
+        return L("Tap to open")
     }
 
     private func download() async {

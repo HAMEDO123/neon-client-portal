@@ -288,3 +288,51 @@
 "Late %@" = "تأخّر %@";
 "Left early %@" = "غادر مبكرًا %@";
 "no clock-out" = "بلا تسجيل انصراف";
+
+/* --- Round 2: critic fixes --- */
+
+/* Attendance: month list + person page */
+"%d day recorded" = "يوم واحد مسجَّل";
+"%d enrolled" = "%d مسجَّلين";
+"Asking the device…" = "يُسأل الجهاز…";
+"The device" = "الجهاز";
+"A person with no days here had nothing recorded — not that they were absent." = "الشخص الذي لا يظهر له يوم هنا لم يُسجَّل له شيء — لا أنه كان غائبًا.";
+"%d set by hand" = "%d أُدخلت يدويًا";
+"Set by hand · no lateness" = "أُدخلت يدويًا · بلا تأخير";
+
+/* Requests: reordered, compact reports, pending card, decided rows */
+"%d haven't written today's report yet" = "%d لم يكتبوا تقرير اليوم بعد";
+"Show more" = "عرض المزيد";
+"To buy" = "للشراء";
+"Cost" = "التكلفة";
+"No quantity or cost given" = "لم تُذكر كمية ولا تكلفة";
+
+/* Settings: push */
+"Devices that can be reached" = "الأجهزة التي يمكن الوصول إليها";
+"Push to this app isn't set up yet" = "الإشعارات لهذا التطبيق غير مفعّلة بعد";
+"The team's notifications go out to the web app's own subscriptions. This card only reads their health — it doesn't control this phone." = "إشعارات الفريق تُرسل عبر اشتراكات تطبيق الويب. هذه البطاقة تعرض حالتها فقط ولا تتحكم بهذا الهاتف.";
+"%d devices" = "%d أجهزة";
+
+/* Settings: working day */
+"Left unplanned" = "متروك بلا تخطيط";
+"Grace before late" = "المهلة قبل احتساب التأخير";
+"Kept free of any plan, in case something comes up." = "يُترك بلا تخطيط احتياطًا لأي طارئ.";
+"Arriving within this many minutes still counts as on time." = "الوصول خلال هذه الدقائق ما زال يُحتسب في الوقت.";
+
+/* Settings: automation */
+"Let rules speak" = "دع القواعد تتكلم";
+"On — each rule still needs its own switch." = "مفعّلة — كل قاعدة ما زالت بحاجة إلى مفتاحها الخاص.";
+"Off — no rule says anything, whatever its own switch." = "معطّلة — لا قاعدة تقول شيئًا مهما كان وضع مفتاحها.";
+"Rules only speak — they never move work." = "القواعد تتكلم فقط — لا تُحرّك عملًا أبدًا.";
+"Add a rule" = "أضف قاعدة";
+"A rule can ask, tell or escalate. New rules start switched off." = "القاعدة قد تسأل أو تُخبر أو تصعّد. القواعد الجديدة تبدأ معطّلة.";
+
+/* Settings: WhatsApp company channel */
+"Sending normally" = "تُرسل بلا مشاكل";
+"Not reaching WhatsApp" = "لا تصل إلى واتساب";
+"Technical details" = "تفاصيل تقنية";
+"Detail" = "التفصيل";
+
+/* Site visits */
+"Choose who logs visits" = "اختر من يسجّل الزيارات";
+"Only people with “Logs site visits” ticked on their page can plan one." = "فقط من فُعِّل له خيار «تسجيل زيارات الموقع» في صفحته يمكنه التخطيط لزيارة.";

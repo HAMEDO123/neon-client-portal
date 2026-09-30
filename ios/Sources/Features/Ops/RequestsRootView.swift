@@ -14,16 +14,9 @@ struct RequestsRootView: View {
         ScrollViewReader { proxy in
             NeonScroll {
                 LoadStateView(value: requests, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
-                    SectionHeader(L("Today's reports"), count: data.reports.count).id("reports")
-                    if data.team.isEmpty {
-                        EmptyState(symbol: "note.text", title: L("No team yet"), hue: .grey)
-                    } else {
-                        ForEach(Array(data.team.enumerated()), id: \.element.id) { index, member in
-                            ReportCard(member: member, report: reportBy(data)[member.id])
-                                .staggered(index)
-                        }
-                    }
-
+                    // The one thing that needs the owner leads — not four
+                    // near-empty "hasn't written yet" cards. Reports follow,
+                    // in a quarter of the space a card each used to take.
                     SectionHeader(L("Waiting for you"), count: data.pending.count).id("pending")
                     if data.pending.isEmpty {
                         EmptyState(symbol: "shippingbox", title: L("Nothing waiting"), detail: L("New requests appear here."), hue: .orange)
@@ -34,6 +27,9 @@ struct RequestsRootView: View {
                         }
                     }
 
+                    TodaysReportsCard(team: data.team, reportByMember: reportBy(data))
+                        .id("reports")
+
                     if !data.decided.isEmpty {
                         SectionHeader(L("Decided"), count: data.decided.count).id("decided")
                         CardList(data.decided) { request in
@@ -41,12 +37,17 @@ struct RequestsRootView: View {
                                 request.item,
                                 subtitle: request.employee.name,
                                 meta: request.decidedAt.flatMap(formattedISODate),
+                                leading: .icon("shippingbox.fill", tint: supplyStatusIconTint(request.status)),
                                 badge: supplyStatusLabel(request.status),
                                 badgeTone: supplyStatusTone(request.status)
-                            )
-                            .contextMenu {
+                            ) {
+                                // A visible next step, not only a long-press
+                                // menu nobody would find: an approved
+                                // request can be marked bought right here.
                                 if request.status == "APPROVED" {
-                                    Button { deciding = (request, "PURCHASED") } label: { Label(L("Mark bought"), systemImage: "checkmark.circle") }
+                                    NeonButton(L("Mark bought"), symbol: "checkmark.circle", kind: .tinted(.neonSuccessStrong), size: .small) {
+                                        deciding = (request, "PURCHASED")
+                                    }
                                 }
                             }
                         }
@@ -91,27 +92,51 @@ private struct DecisionSheetItem: Identifiable {
 
 // MARK: - Today's reports
 
-private struct ReportCard: View {
-    let member: OpsRequests.TeamMember
-    let report: OpsRequests.DailyReportEntry?
+/// One compact card: written reports as rows, and everybody who hasn't
+/// written yet as a single line — never a card each saying only "hasn't
+/// written today's report yet", which read as four near-empty forms rather
+/// than one small fact. Silence is still never a verdict: the line only
+/// ever counts who is quiet, and never claims to know why.
+private struct TodaysReportsCard: View {
+    let team: [OpsRequests.TeamMember]
+    let reportByMember: [String: OpsRequests.DailyReportEntry]
+
+    private var written: [(member: OpsRequests.TeamMember, report: OpsRequests.DailyReportEntry)] {
+        team.compactMap { member in reportByMember[member.id].map { (member, $0) } }
+    }
+
+    private var unwritten: [OpsRequests.TeamMember] {
+        team.filter { reportByMember[$0.id] == nil }
+    }
 
     var body: some View {
-        NeonCard {
-            HStack(alignment: .center, spacing: 10) {
-                AvatarView(url: nil, name: member.name, size: NeonSize.avatar)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(member.name).font(.neonHeadline)
-                    if let role = member.role { Text(role).font(.neonFootnote).foregroundStyle(Color.neonTextTertiary) }
-                }
-                Spacer()
-                if let report { Text(shortTime(report.updatedAt) ?? "").font(.neonCaption).foregroundStyle(Color.neonTextFaint) }
-            }
-            if let report {
-                DirText(report.text, font: .neonSubheadline, color: .neonTextSecondary)
+        SectionCard(L("Today's reports"), symbol: "note.text", hue: .indigo) {
+            if team.isEmpty {
+                Text(L("No team yet")).font(.neonSubheadline).foregroundStyle(Color.neonTextTertiary)
             } else {
-                Text(L("Hasn't written today's report yet."))
-                    .font(.neonSubheadline)
-                    .foregroundStyle(Color.neonTextFaint)
+                if !written.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(written.enumerated()), id: \.offset) { index, pair in
+                            ListRow(
+                                pair.member.name,
+                                subtitle: pair.report.text,
+                                meta: shortTime(pair.report.updatedAt),
+                                leading: .avatar(url: nil, name: pair.member.name)
+                            )
+                            if index < written.count - 1 { NeonDivider() }
+                        }
+                    }
+                }
+                if !unwritten.isEmpty {
+                    HStack(spacing: 10) {
+                        AvatarStack(unwritten.map { AvatarItem(id: $0.id, name: $0.name) }, size: 26, limit: 5)
+                        Text(L("%d haven't written today's report yet", unwritten.count))
+                            .font(.neonSubheadline)
+                            .foregroundStyle(Color.neonTextSecondary)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.top, written.isEmpty ? 0 : 4)
+                }
             }
         }
     }
@@ -123,25 +148,53 @@ private struct SupplyRequestCard: View {
     let request: SupplyRequest
     let onDecide: (String) -> Void
 
+    @State private var noteExpanded = false
+
     var body: some View {
         NeonCard {
             HStack(alignment: .top, spacing: 10) {
                 IconTile("shippingbox.fill", hue: request.urgent ? .pink : .orange, size: NeonSize.iconTile)
                 VStack(alignment: .leading, spacing: 4) {
+                    // `fill: false`, same as `ListRow`'s own title — a
+                    // trailing-aligned Arabic title otherwise expands to
+                    // fill the row and then hugs the far edge, leaving a
+                    // gap between it and the tile on the leading side.
                     HStack(spacing: 6) {
-                        DirText(request.item, font: .neonHeadline)
-                        if let quantity = request.quantity { Text(quantity).font(.neonFootnote).foregroundStyle(Color.neonTextTertiary) }
+                        DirText(request.item, font: .neonHeadline, fill: false)
                         if request.urgent { BadgeView(text: L("Urgent"), tone: .pink) }
                     }
-                    Text("\(request.employee.name)\(request.employee.role.map { " · \($0)" } ?? "") · \(formattedISODate(request.createdAt) ?? "")")
+                    // Name and a relative date only — the role and a year
+                    // nobody needs for "yesterday" were what wrapped this
+                    // onto two lines.
+                    Text("\(request.employee.name) · \(relativeDayTime(request.createdAt) ?? "")")
                         .font(.neonFootnote)
                         .foregroundStyle(Color.neonTextTertiary)
-                    if let note = request.note { DirText(note, font: .neonSubheadline, color: .neonTextSecondary) }
+                        .lineLimit(1)
+                    if let note = request.note, !note.isEmpty {
+                        DirText(note, font: .neonSubheadline, color: .neonTextSecondary, lineLimit: noteExpanded ? nil : 4)
+                        if !noteExpanded && noteMayBeClamped(note) {
+                            ViewAllButton(L("Show more"), hue: request.urgent ? .pink : .orange, chevron: false) {
+                                withNeonAnimation(.smooth) { noteExpanded = true }
+                            }
+                        }
+                    }
                 }
-                Spacer()
+                Spacer(minLength: 0)
+            }
+
+            // A request never says it's a purchase by default — a daily
+            // report mis-filed as one ("تقرير اليومي") has no quantity or
+            // cost, and this line is what makes that obvious before Approve.
+            SectionLabel(L("To buy"))
+            if request.quantity != nil || request.estimatedCost != nil {
+                if let quantity = request.quantity { KeyValueRow(L("Quantity"), value: quantity, symbol: "number") }
                 if let cost = request.estimatedCost {
-                    Text("≈ \(NeonFormat.money(cost, decimals: 2))").font(.neonSubheadline).foregroundStyle(Color.neonTextSecondary)
+                    KeyValueRow(L("Cost"), value: "≈ \(NeonFormat.money(cost, decimals: 2))", symbol: "banknote")
                 }
+            } else {
+                Text(L("No quantity or cost given"))
+                    .font(.neonFootnote)
+                    .foregroundStyle(Color.neonTextTertiary)
             }
 
             HStack(spacing: 10) {
@@ -150,6 +203,14 @@ private struct SupplyRequestCard: View {
             }
         }
     }
+}
+
+/// A cheap stand-in for "will this truncate at 4 lines": long enough in
+/// characters, or already broken into enough lines by hand, that clamping
+/// is likely to have cut something — so "Show more" isn't offered on a
+/// one-line note with nothing more to show.
+private func noteMayBeClamped(_ note: String) -> Bool {
+    note.count > 180 || note.filter { $0 == "\n" }.count >= 3
 }
 
 private struct DecideSupplyRequestSheet: View {
