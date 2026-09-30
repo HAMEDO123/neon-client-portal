@@ -3,12 +3,38 @@
 import { useRef, useState, useTransition } from "react";
 import { Camera, Loader2, Trash2 } from "lucide-react";
 import { PersonAvatar } from "@/components/chat/person-avatar";
-import { shrinkPhoto } from "@/lib/client-image";
+import { compressInBrowser } from "@/lib/client-image-compress";
 
 // Setting somebody's face. One component for both sides: the manager uses it on
 // an employee's page, the person uses it on their own profile, and the only
 // difference is which action it is handed — so the wording, the shrinking and
 // the "remove" path cannot drift between the two.
+
+/**
+ * Smaller before it is sent, and **never** able to stop it being sent.
+ *
+ * The server squares and re-encodes whatever arrives, so this only saves a
+ * phone from pushing a five-megabyte original up a mobile connection: a step
+ * worth taking and never worth failing on.
+ *
+ * It is `compressInBrowser` rather than `shrinkPhoto` for one reason, and it
+ * cost an afternoon: `shrinkPhoto` waits on an `<img>` load event, and an
+ * iPhone photo the browser will not decode fires **neither** `load` nor
+ * `error` — so the promise never settles, the button sits at "Saving…" for
+ * ever, and nothing reaches the server to be logged. `createImageBitmap`
+ * settles either way. The race is belt and braces on top of that: whatever
+ * happens, the original goes after eight seconds.
+ */
+async function shrink(file: File): Promise<File> {
+  try {
+    return await Promise.race([
+      compressInBrowser(file),
+      new Promise<File>((resolve) => setTimeout(() => resolve(file), 8000)),
+    ]);
+  } catch {
+    return file;
+  }
+}
 
 export function PhotoPicker({
   name,
@@ -41,16 +67,12 @@ export function PhotoPicker({
 
   function pick(file: File | undefined) {
     if (!file) return;
+    setError(null);
+
     startTransition(async () => {
-      setError(null);
       try {
-        // Shrunk here before it is sent, for the reason the project uploader
-        // documents: the request body limit applies to the raw upload, and a
-        // modern phone's camera photo is several megabytes of a face that ends
-        // up 512 pixels wide.
-        const small = await shrinkPhoto(file);
         const formData = new FormData();
-        formData.set("photo", small);
+        formData.set("photo", await shrink(file));
         await action(formData);
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "That photo could not be saved.");
@@ -111,7 +133,7 @@ export function PhotoPicker({
         ref={input}
         type="file"
         accept="image/*"
-        className="hidden"
+        hidden
         onChange={(event) => pick(event.target.files?.[0])}
       />
     </div>
