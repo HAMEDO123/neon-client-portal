@@ -54,8 +54,7 @@ enum ProjectsScreens {
             })
         case "project-viewer":
             return AnyView(DebugAsync(load: { try await firstDetail(where: { !$0.allImages.isEmpty })?.detail }) { detail in
-                ImageViewerView(payload: viewerPayload(detail))
-                    .neonLanguage()
+                ProjectViewerScreen(payload: viewerPayload(detail))
             })
         default: return nil
         }
@@ -127,6 +126,23 @@ enum ProjectsScreens {
     /// A sheet drawn as a screen, on the page colour a sheet has.
     @MainActor private static func sheet<V: View>(_ content: V) -> AnyView {
         AnyView(content.background(NeonAmbient().ignoresSafeArea()).neonLanguage())
+    }
+}
+
+/// The viewer as the gallery presents it — a full-screen cover, which is
+/// what gives it its own (dark) status bar.
+private struct ProjectViewerScreen: View {
+    let payload: ImageViewerPayload
+    @State private var shown: ImageViewerPayload?
+
+    var body: some View {
+        Color.black
+            .ignoresSafeArea()
+            .onAppear { if shown == nil { shown = payload } }
+            .fullScreenCover(item: $shown) { payload in
+                ImageViewerView(payload: payload)
+                    .neonLanguage()
+            }
     }
 }
 

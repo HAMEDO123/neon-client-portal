@@ -16,7 +16,11 @@ struct EditProjectSheet: View {
     @State private var clientEmail: String
     @State private var clientPhone: String
     @State private var location: String
+    /// Free text the app didn't write ("300–350") stays a text field; a
+    /// number, or nothing yet, is a number field in m².
     @State private var area: String
+    @State private var areaNumber: Double?
+    private let areaIsText: Bool
     @State private var projectType: String
     @State private var description: String
     @State private var deliveryDate: Date?
@@ -49,6 +53,9 @@ struct EditProjectSheet: View {
         _clientPhone = State(initialValue: detail.clientPhone ?? "")
         _location = State(initialValue: detail.location ?? "")
         _area = State(initialValue: detail.area ?? "")
+        let parsedArea = projectAreaNumber(detail.area)
+        _areaNumber = State(initialValue: parsedArea)
+        areaIsText = parsedArea == nil && !(detail.area ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         _projectType = State(initialValue: detail.projectType ?? "")
         _description = State(initialValue: detail.description ?? "")
         _deliveryDate = State(initialValue: parseISODate(detail.deliveryDate))
@@ -82,21 +89,25 @@ struct EditProjectSheet: View {
             }
             FormSection(L("Project")) {
                 NeonTextField(L("Project Name"), text: $name, symbol: "textformat", isRequired: true)
-                NeonTextField(L("Client Name"), text: $clientName, symbol: "person")
-                NeonTextField(L("Client Email"), text: $clientEmail, symbol: "envelope", keyboard: .emailAddress, contentType: .emailAddress, capitalization: .never, autocorrect: false, leftToRight: true)
-                NeonTextField(L("Client Phone"), text: $clientPhone, symbol: "phone", keyboard: .phonePad, contentType: .telephoneNumber, leftToRight: true)
+                NeonTextField(L("Client Name"), text: $clientName, prompt: L("e.g. Lina Haddad"), symbol: "person")
+                NeonTextField(L("Client Email"), text: $clientEmail, prompt: "name@example.com", symbol: "envelope", keyboard: .emailAddress, contentType: .emailAddress, capitalization: .never, autocorrect: false, leftToRight: true)
+                NeonTextField(L("Client Phone"), text: $clientPhone, prompt: "07X XXX XXXX", symbol: "phone", keyboard: .phonePad, contentType: .telephoneNumber, leftToRight: true)
                 OptionalDateField(L("Delivery Date"), date: $deliveryDate)
             }
             FormSection(L("Details")) {
-                NeonTextField(L("Location"), text: $location, symbol: "mappin.and.ellipse")
-                NeonTextField(L("Area"), text: $area, symbol: "ruler")
-                NeonTextField(L("Project Type"), text: $projectType, symbol: "tag")
+                NeonTextField(L("Location"), text: $location, prompt: L("e.g. Amman, Abdoun"), symbol: "mappin.and.ellipse")
+                if areaIsText {
+                    NeonTextField(L("Area"), text: $area, prompt: "320 m²", symbol: "ruler")
+                } else {
+                    NumberField(L("Area"), value: $areaNumber, unit: L("m²"), decimals: 2, prompt: "320", symbol: "ruler")
+                }
+                NeonTextField(L("Project Type"), text: $projectType, prompt: L("e.g. Interior design"), symbol: "tag")
                 NeonTextEditor(L("Description"), text: $description, minLines: 3, maxLines: 8, limit: 600)
             }
             FormSection(L("Pipeline")) {
                 MenuField(
                     L("Pipeline Status"), selection: $pipelineStatus, options: ProjectConstants.pipelineStatuses,
-                    title: { localizedEnum("pipeline", $0) }
+                    title: { ProjectPipelineStyle.label($0) }
                 )
                 MenuField(
                     L("Journey Stage"), selection: $currentStage, options: ProjectConstants.projectStages,
@@ -129,20 +140,27 @@ struct EditProjectSheet: View {
     }
 
     /// The cover as the client's page leads with it: the photo wide, with
-    /// replacing it on the photo itself and removing it under it.
+    /// Replace and Remove on the photo itself. Remove shows the page without
+    /// a cover at once, with Undo; nothing is removed until Save.
     @ViewBuilder
     private var coverField: some View {
         let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
         let showsNone = removeCover && coverUpload == nil
+        let hasCover = coverUpload != nil || (detail.coverImageUrl != nil && !removeCover)
         VStack(alignment: .leading, spacing: NeonSpace.md) {
             ZStack {
-                if showsNone {
+                if showsNone || !hasCover {
                     VStack(spacing: 8) {
                         IconTile("photo.on.rectangle.angled", hue: .grey, size: 44)
                         Text(L("No cover — the page opens on the brand colours"))
                             .font(.neonSubtitle)
                             .foregroundStyle(Color.neonTextSecondary)
                             .multilineTextAlignment(.center)
+                        if showsNone {
+                            NeonButton(L("Undo"), symbol: "arrow.uturn.backward", kind: .ghost, size: .small) {
+                                withNeonAnimation(NeonMotion.gentle) { removeCover = false }
+                            }
+                        }
                     }
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -157,17 +175,33 @@ struct EditProjectSheet: View {
             .frame(height: 170)
             .clipShape(shape)
             .overlay(alignment: .bottomTrailing) {
-                PhotosPicker(selection: $coverSelection, matching: .images) {
-                    Label(detail.coverImageUrl == nil && coverUpload == nil ? L("Upload cover image") : L("Replace cover image"), systemImage: "photo.badge.plus")
-                        .font(.system(.footnote, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 34)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .background(Color.black.opacity(0.3), in: Capsule())
-                        .environment(\.colorScheme, .dark)
+                HStack(spacing: NeonSpace.sm) {
+                    if hasCover {
+                        Button {
+                            Haptic.tap()
+                            withNeonAnimation(NeonMotion.gentle) {
+                                if coverUpload != nil {
+                                    // The photo just picked goes; the saved one comes back.
+                                    coverUpload = nil
+                                    coverPreview = nil
+                                    coverSelection = nil
+                                } else {
+                                    removeCover = true
+                                }
+                            }
+                        } label: {
+                            ProjectCoverCapsule(title: L("Remove"), symbol: "trash")
+                        }
+                        .buttonStyle(.pressable)
+                    }
+                    PhotosPicker(selection: $coverSelection, matching: .images) {
+                        ProjectCoverCapsule(
+                            title: hasCover ? L("Replace") : L("Upload cover image"),
+                            symbol: "photo.badge.plus"
+                        )
+                    }
+                    .buttonStyle(.pressable)
                 }
-                .buttonStyle(.pressable)
                 .padding(10)
             }
             .overlay(alignment: .topLeading) {
@@ -178,10 +212,6 @@ struct EditProjectSheet: View {
                 }
             }
             .animation(NeonMotion.resolved(NeonMotion.gentle), value: showsNone)
-
-            if detail.coverImageUrl != nil && coverUpload == nil {
-                ToggleRow(L("Remove current cover image"), symbol: "trash", tint: .neonDangerStrong, isOn: $removeCover)
-            }
         }
         .onChange(of: coverSelection) { item in
             guard let item else { return }
@@ -200,6 +230,13 @@ struct EditProjectSheet: View {
         }
     }
 
+    /// The area as typed; a number untouched keeps the words it was saved in.
+    private var areaToSave: String {
+        if areaIsText { return area }
+        if areaNumber == projectAreaNumber(detail.area) { return detail.area ?? "" }
+        return projectAreaValue(areaNumber)
+    }
+
     private func loadSellers() async {
         if let loaded = try? await api.fetchSellers() { sellers = loaded.value }
     }
@@ -211,7 +248,7 @@ struct EditProjectSheet: View {
             "clientEmail": clientEmail,
             "clientPhone": clientPhone,
             "location": location,
-            "area": area,
+            "area": areaToSave,
             "projectType": projectType,
             "description": description,
             "pipelineStatus": pipelineStatus ?? detail.pipelineStatus,
@@ -241,5 +278,23 @@ struct EditProjectSheet: View {
             Haptic.error()
             Toast.error(error)
         }
+    }
+}
+
+/// A frosted capsule laid on the cover photo.
+private struct ProjectCoverCapsule: View {
+    let title: String
+    let symbol: String
+
+    var body: some View {
+        Label(title, systemImage: symbol)
+            .font(.system(.footnote, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 34)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(Color.black.opacity(0.3), in: Capsule())
+            .environment(\.colorScheme, .dark)
+            .contentShape(Capsule())
     }
 }

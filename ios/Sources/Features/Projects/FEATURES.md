@@ -124,8 +124,18 @@ See `ios/redesign/projects.md` for every screen. Behaviour that is new or fixed:
   draws the photo's hotspots.
 - **Preview opens the client's page** (the website's `<a target=_blank>`);
   sharing the link is its own Share tile.
-- **The publish filter's labels** read "Published / Draft / Archived" (the chips
-  showed the raw key `publish.PUBLISHED`).
-- **Renders Viewed** carries a note that the client page does not log render
-  views (README, Known issues) — its 0 is "not recorded".
+- **The publish filter's labels** read "Published / Not published / Archived"
+  (the chips showed the raw key `publish.PUBLISHED`; round 2 dropped "Draft",
+  which is the pipeline's word and read as the same thing).
+- **Renders Viewed is not shown.** The client page never logs `viewed_render`
+  (README, Known issues), so its 0 said nothing; the figure comes back when
+  the page logs it. **Downloads** counts every `downloaded_*` event, the
+  gallery PDF included (the server's `downloads` leaves that one out).
+- **Messages to the client ask first.** Send to Client and Send Update name
+  the client, the number and the message's first line (the server's own
+  English text) before anything goes out; Unpublish confirms; Regenerate
+  moved to the ⋮ menu, still confirmed.
+- **Client Visibility switches save on the spot** (`updateProjectSettings`,
+  the same six flags the Edit sheet sends), put back with the server's
+  sentence if it refuses.
 - `projects/list` rows carry `completionPercent` (additive), shown on the cards.

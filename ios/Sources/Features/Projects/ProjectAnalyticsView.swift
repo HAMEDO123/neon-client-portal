@@ -20,8 +20,8 @@ struct ProjectAnalyticsView: View {
                 ErrorState(message: errorMessage) { await load() }
             } else {
                 VStack(spacing: NeonSpace.stack) {
-                    StatGrid(columns: 3) {
-                        ForEach(0..<6, id: \.self) { _ in SkeletonKPICard(compact: true) }
+                    StatGrid(columns: 4) {
+                        ForEach(0..<4, id: \.self) { _ in SkeletonKPICard(compact: true) }
                     }
                     SkeletonCard(lines: 4)
                 }
@@ -35,25 +35,17 @@ struct ProjectAnalyticsView: View {
         VStack(alignment: .leading, spacing: NeonSpace.stack) {
             if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
-            StatGrid(columns: 3) {
-                KPICard(L("Project Opens"), value: Double(analytics.views), symbol: "eye.fill", hue: .blue, density: .compact)
-                KPICard(L("Renders Viewed"), value: Double(analytics.renderViews), symbol: "photo.fill", hue: .purple, density: .compact)
-                KPICard(L("Downloads"), value: Double(analytics.downloads), symbol: "arrow.down.circle.fill", hue: .green, density: .compact)
-                KPICard(L("Approval Responses"), value: Double(analytics.approvals), symbol: "checkmark.seal.fill", hue: .orange, density: .compact)
+            // Four figures the client's page really records. Renders viewed
+            // is left out: the page never logs `viewed_render` (README, Known
+            // issues), so its zero would read as "never looked" — a verdict
+            // from silence. Every kind that is logged is in the breakdown.
+            StatGrid(columns: 4) {
+                KPICard(L("Opens"), value: Double(analytics.views), symbol: "eye.fill", hue: .blue, density: .compact)
+                KPICard(L("Downloads"), value: Double(downloads(analytics)), symbol: "arrow.down.circle.fill", hue: .green, density: .compact)
+                KPICard(L("Responses"), value: Double(analytics.approvals), symbol: "checkmark.seal.fill", hue: .orange, density: .compact)
                 KPICard(L("Comments"), value: Double(analytics.comments), symbol: "bubble.left.fill", hue: .pink, density: .compact)
-                KPICard(L("All Activity"), value: Double(analytics.totalEvents), symbol: "waveform.path.ecg", hue: .indigo, density: .compact)
             }
             .id("figures")
-
-            // The client page does not log render views yet (README, Known
-            // issues), so a zero there is "not recorded", never "not looked at".
-            if analytics.renderViews == 0 {
-                Label(L("The client page doesn't record render views yet, so that figure says nothing about whether renders were looked at."), systemImage: "info.circle")
-                    .font(.neonSubtitle)
-                    .foregroundStyle(Color.neonTextTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
-            }
 
             if analytics.totalEvents == 0 {
                 EmptyState(
@@ -111,6 +103,12 @@ struct ProjectAnalyticsView: View {
                 .id("activity")
             }
         }
+    }
+
+    /// Every download of any kind — the server's own `downloads` leaves out
+    /// the gallery PDF, which the breakdown right under it lists.
+    private func downloads(_ analytics: ProjectAnalytics) -> Int {
+        analytics.byType.filter { $0.type.hasPrefix("downloaded") }.reduce(0) { $0 + $1.count.type }
     }
 
     /// Largest first.

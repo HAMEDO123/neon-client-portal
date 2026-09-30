@@ -1,38 +1,46 @@
-/* Projects tab: the list, a project's page — overview, gallery, hotspots, analytics. */
+/* Projects tab: the list, a project's page — overview, gallery, hotspots, analytics.
+   Modern Standard Arabic throughout, as the rest of the app writes.
+   Keys ending in #zero/#one/#two/#few/#many/#other are the plural forms
+   projectPlural() picks (ProjectStyle.swift). */
 
 "Projects" = "المشاريع";
-"An overview of every client project delivery." = "نظرة عامة على كل مشاريع العملاء الجارية.";
-"Search projects" = "ابحث عن مشروع";
+"Search projects" = "ابحث في المشاريع";
 "All" = "الكل";
-"No projects yet" = "لا مشاريع بعد";
-"Nothing matches “%@”." = "ما في شي يطابق “%@”.";
-"Total Projects" = "إجمالي المشاريع";
-"Published" = "منشورة";
-"Pending Approvals" = "بانتظار الموافقة";
-"Updated This Week" = "تحدّثت هالأسبوع";
-"Filters" = "الفلاتر";
-"Filter Projects" = "فلترة المشاريع";
+"No projects yet" = "لا توجد مشاريع بعد";
+"Nothing matches “%@”." = "لا شيء يطابق “%@”.";
+"Published" = "منشور";
+"Not published" = "غير منشور";
+"Archived" = "مؤرشف";
+"Filters" = "عوامل التصفية";
+"Filter Projects" = "تصفية المشاريع";
 "Show Results" = "عرض النتائج";
-"Clear Filters" = "مسح الفلاتر";
-"This project is live. Anything you add or remove here changes the client’s page straight away." = "هذا المشروع منشور. أي إضافة أو حذف هون بيتغيّر فوراً على صفحة العميل.";
-"This project is not published, so the client sees nothing until somebody publishes it." = "هذا المشروع مش منشور، فالعميل ما بيشوف شي لحد ما حدا ينشره.";
+"Clear Filters" = "مسح عوامل التصفية";
+"This project is live. Anything you add or remove here changes the client’s page straight away." = "هذا المشروع منشور. أي إضافة أو حذف هنا يغيّر صفحة العميل فورًا.";
+"This project is not published, so the client sees nothing until somebody publishes it." = "هذا المشروع غير منشور، فلا يرى العميل شيئًا حتى يُنشر.";
 
 /* New project */
 "New Project" = "مشروع جديد";
-"Start with the essentials — renders, drawings, BOQ and pricing come right after." = "ابدأ بالأساسيات — الريندر والمخططات وجدول الكميات والتسعير تضيفهم بعدين.";
 "Create Project" = "إنشاء المشروع";
 "Project" = "المشروع";
 "Project Name" = "اسم المشروع";
 "Client Name" = "اسم العميل";
-"Client Email" = "إيميل العميل";
-"Client Phone" = "رقم العميل";
+"Client Email" = "بريد العميل الإلكتروني";
+"Client Phone" = "هاتف العميل";
 "Delivery Date" = "تاريخ التسليم";
 "Details" = "التفاصيل";
 "Location" = "الموقع";
 "Area" = "المساحة";
+"m²" = "م²";
+"%@ m²" = "%@ م²";
 "Project Type" = "نوع المشروع";
 "Description" = "الوصف";
 "Project created" = "تم إنشاء المشروع";
+"Villa, café, office…" = "فيلا، مقهى، مكتب…";
+"e.g. Lina Haddad" = "مثال: لينا حداد";
+"e.g. Amman, Abdoun" = "مثال: عمّان، عبدون";
+"e.g. Interior design" = "مثال: تصميم داخلي";
+"Only the name is needed now; everything else can be filled in later from the project's page." = "الاسم وحده مطلوب الآن، ويمكن إكمال الباقي لاحقًا من صفحة المشروع.";
+"Renders, drawings and pricing come next" = "تأتي صور التصاميم والمخططات والتسعير بعد ذلك";
 
 /* Project page */
 "Overview" = "نظرة عامة";
@@ -50,192 +58,168 @@
 "Edit Project" = "تعديل المشروع";
 "Delete Project" = "حذف المشروع";
 "Delete this project?" = "حذف هذا المشروع؟";
-"“%@” and every file it holds — cover, renders, drawings, documents, materials, furniture — is deleted for good. This cannot be undone." = "“%@” وكل ملفاته — الغلاف والريندر والمخططات والمستندات والخامات والأثاث — بينحذفوا نهائياً. ما فيك ترجع فيها.";
+"“%@” and every file it holds — cover, renders, drawings, documents, materials, furniture — is deleted for good. This cannot be undone." = "سيُحذف “%@” نهائيًا مع كل ملفاته — الغلاف وصور التصاميم والمخططات والمستندات والخامات والأثاث. لا يمكن التراجع عن ذلك.";
 "Delete" = "حذف";
 "Project deleted" = "تم حذف المشروع";
 "Publish Project" = "نشر المشروع";
 "Unpublish" = "إلغاء النشر";
+"Unpublish this project?" = "إلغاء نشر هذا المشروع؟";
+"The client's link stops opening until you publish again." = "لن يُفتح رابط العميل حتى تنشر المشروع من جديد.";
 "Archive" = "أرشفة";
 "Archive this project?" = "أرشفة هذا المشروع؟";
-"It will be hidden from the client link." = "بيختفي عن رابط العميل.";
+"It will be hidden from the client link." = "سيُخفى عن رابط العميل.";
+"Client Page" = "صفحة العميل";
+"Live — the client can open this link." = "منشور — يستطيع العميل فتح هذا الرابط.";
+"Not published — the client sees nothing yet." = "غير منشور — لا يرى العميل شيئًا بعد.";
+"Archived — hidden from the client link." = "مؤرشف — مخفي عن رابط العميل.";
 
 /* Client link */
 "Copy Link" = "نسخ الرابط";
 "Copied" = "تم النسخ";
 "Preview" = "معاينة";
-"Send to Client" = "إرسال للعميل";
+"Share" = "مشاركة";
+"Send to Client" = "إرسال إلى العميل";
 "Send Update" = "إرسال تحديث";
+"Send %@ the project link on WhatsApp?" = "إرسال رابط المشروع إلى %@ عبر واتساب؟";
+"Send the client the project link on WhatsApp?" = "إرسال رابط المشروع إلى العميل عبر واتساب؟";
+"Send %@ an update on WhatsApp?" = "إرسال تحديث إلى %@ عبر واتساب؟";
+"Send the client an update on WhatsApp?" = "إرسال تحديث إلى العميل عبر واتساب؟";
+"Send on WhatsApp" = "إرسال عبر واتساب";
+"To %@" = "إلى %@";
 "Sent" = "تم الإرسال";
-"Nothing was sent" = "ما انبعث شي";
+"Nothing was sent" = "لم يُرسل شيء";
 "Regenerate" = "تجديد الرابط";
+"Regenerate Link" = "تجديد الرابط";
 "Regenerate this project's link?" = "تجديد رابط هذا المشروع؟";
-"The old link stops working immediately." = "الرابط القديم بيتوقف فوراً.";
+"The old link stops working immediately." = "سيتوقف الرابط القديم عن العمل فورًا.";
 "Link regenerated" = "تم تجديد الرابط";
 
-/* Overview content */
+/* Overview */
+"Progress" = "التقدّم";
 "Completion" = "نسبة الإنجاز";
+"Stage: %@" = "المرحلة: %@";
+"Stage %d of %d" = "المرحلة %d من %d";
+"%@ · %@ — next: %@" = "%@ · %@ — التالية: %@";
+"Delivery %@" = "التسليم %@";
+"Spaces" = "المساحات";
+"Opens %@" = "يفتح %@";
 "Client" = "العميل";
-"Stage" = "المرحلة";
-"Client Visibility" = "ما يشوفه العميل";
+"No client name yet" = "لا يوجد اسم عميل بعد";
+"No email or phone number on file for this client." = "لا يوجد بريد إلكتروني ولا رقم هاتف مسجّل لهذا العميل.";
+"No location, area, type or delivery date recorded yet." = "لم يُسجَّل موقع أو مساحة أو نوع أو تاريخ تسليم بعد.";
+"Client Visibility" = "ما يراه العميل";
+"What the client's page shows" = "ما تعرضه صفحة العميل";
 "Execution Pricing" = "تسعير التنفيذ";
 "Detailed Pricing Breakdown" = "تفاصيل التسعير";
 "BOQ Quantities" = "كميات جدول الكميات";
-"BOQ Unit Prices" = "أسعار وحدات جدول الكميات";
-"File Downloads" = "تحميل الملفات";
+"BOQ Unit Prices" = "أسعار الوحدات في جدول الكميات";
+"File Downloads" = "تنزيل الملفات";
 "Watermark" = "العلامة المائية";
 
 /* Edit sheet */
 "Cover" = "الغلاف";
-"Upload cover image" = "رفع صورة الغلاف";
-"Replace cover image" = "تغيير صورة الغلاف";
-"Remove current cover image" = "إزالة صورة الغلاف الحالية";
+"Upload cover image" = "رفع صورة غلاف";
+"Replace" = "استبدال";
+"Undo" = "تراجع";
+"No cover — the page opens on the brand colours" = "بلا غلاف — تُفتح الصفحة على ألوان الهوية";
+"New" = "جديد";
 "Pipeline" = "المسار";
 "Pipeline Status" = "حالة المسار";
-"Journey Stage" = "مرحلة الرحلة";
+"Journey Stage" = "مرحلة المشروع";
 "Completion %" = "نسبة الإنجاز %";
 "Sale" = "البيع";
-"Sold by" = "باعه";
+"Sold by" = "البائع";
 "Sold on" = "تاريخ البيع";
 "Not recorded" = "غير مسجّل";
-"This project counts as a sale for whoever is picked here, in the month of the date beside it. Leave the date empty and today is used." = "هذا المشروع بيُحسب كبيعة لمن تختاره هون، بشهر التاريخ المحدد جنبه. اذا تركت التاريخ فاضي بيُحسب اليوم.";
+"This project counts as a sale for whoever is picked here, in the month of the date beside it. Leave the date empty and today is used." = "يُحتسب هذا المشروع بيعًا لمن تختاره هنا، في شهر التاريخ المحدد بجانبه. وإن تُرك التاريخ فارغًا يُعتمد تاريخ اليوم.";
 "Show Execution Pricing" = "إظهار تسعير التنفيذ";
-"Hide entirely until the proposal is ready." = "يختفي كلياً لحد ما يجهز العرض.";
+"Hide entirely until the proposal is ready." = "يبقى مخفيًا تمامًا حتى يجهز العرض.";
 "Show Detailed Pricing Breakdown" = "إظهار تفاصيل التسعير";
-"Otherwise only the total is shown." = "غير هيك بيظهر المجموع بس.";
+"Otherwise only the total is shown." = "وإلا يظهر الإجمالي فقط.";
 "Show BOQ Quantities" = "إظهار كميات جدول الكميات";
-"Show BOQ Unit Prices" = "إظهار أسعار وحدات جدول الكميات";
-"Allow File Downloads" = "السماح بتحميل الملفات";
+"Show BOQ Unit Prices" = "إظهار أسعار الوحدات في جدول الكميات";
+"Allow File Downloads" = "السماح بتنزيل الملفات";
 "Drawings, documents and the handover package." = "المخططات والمستندات وحزمة التسليم.";
 "Enable Watermark" = "تفعيل العلامة المائية";
-"Overlays “NEON DESIGN — CONFIDENTIAL” on renders." = "يحط “NEON DESIGN — سري” فوق الريندر.";
+"Overlays “NEON DESIGN — CONFIDENTIAL” on renders." = "تضع عبارة “NEON DESIGN — سري” فوق صور التصاميم.";
 "Save" = "حفظ";
 "Saved" = "تم الحفظ";
 
-/* Gallery */
-"Add a space" = "إضافة مساحة";
-"Add Space" = "إضافة المساحة";
-"Name" = "الاسم";
-"Living Room" = "غرفة المعيشة";
-"No spaces yet" = "لا مساحات بعد";
-"Add a space like “Living Room” or “Kitchen” to start uploading renders." = "أضف مساحة متل “غرفة المعيشة” أو “المطبخ” عشان تبدأ ترفع الريندر.";
-"Add Photos" = "إضافة صور";
-"Remove Space" = "حذف المساحة";
-"Remove “%@”?" = "حذف “%@”؟";
-"Every photo in it is removed too." = "كل صورها بتنحذف معها.";
-"Before/After" = "قبل/بعد";
-"Add Hotspots" = "إضافة نقاط";
-"Edit Hotspots (%d)" = "تعديل النقاط (%d)";
-"Set as Cover" = "استخدامها كغلاف";
-"Cover updated" = "تم تحديث الغلاف";
-"Delete this photo?" = "حذف هذي الصورة؟";
-"It comes off the client's page too." = "بتختفي عن صفحة العميل كمان.";
-
-/* Upload sheet */
-"Before / After pair" = "زوج قبل/بعد";
-"One “after” photo, with an optional “before” to compare." = "صورة “بعد” وحدة، مع صورة “قبل” اختيارية للمقارنة.";
-"Photos" = "الصور";
-"After photo" = "صورة بعد";
-"Before photo (optional)" = "صورة قبل (اختياري)";
-"Choose photos" = "اختيار صور";
-"%d photo(s) chosen" = "تم اختيار %d صورة";
-"Caption (optional)" = "وصف الصورة (اختياري)";
-"Some photos failed" = "بعض الصور ما انرفعت";
-"Upload" = "رفع";
-"Uploading %d/%d…" = "جاري الرفع %d/%d…";
-"Photos added" = "تمت إضافة الصور";
-
-/* Hotspots */
-"Hotspots" = "النقاط التفاعلية";
-"Tap the photo to place one" = "اضغط على الصورة لتحط نقطة";
-"New Hotspot" = "نقطة جديدة";
-"Label" = "التسمية";
-"Sofa" = "كنبة";
-"Category" = "التصنيف";
-"Reference (material or furniture name)" = "المرجع (اسم خامة أو قطعة أثاث)";
-"Add Hotspot" = "إضافة النقطة";
-"Cancel" = "إلغاء";
-"Remove" = "حذف";
-
-/* Analytics */
-"Project Opens" = "مرات فتح المشروع";
-"Renders Viewed" = "الريندر المُشاهَد";
-"Downloads" = "التحميلات";
-"Approval Responses" = "ردود الموافقة";
-"No client activity yet" = "لا نشاط للعميل بعد";
-"Once the client opens their project link, their activity will appear here." = "أول ما يفتح العميل رابط مشروعه، بيظهر نشاطه هون.";
-"Activity Breakdown" = "تفاصيل النشاط";
-"Recent Activity" = "النشاط الأخير";
-"just now" = "الآن";
-"%dm ago" = "قبل %d دقيقة";
-"%dh ago" = "قبل %d ساعة";
-"%dd ago" = "قبل %d يوم";
-
-/* Activity log codes (lib/activity-labels.ts) */
-"activity.viewed_project" = "فتح المشروع";
-"activity.viewed_render" = "شاهد ريندر";
-"activity.viewed_drawing" = "شاهد مخطط";
-"activity.downloaded_drawing" = "حمّل مخطط";
-"activity.downloaded_document" = "حمّل مستند";
-"activity.downloaded_image" = "حمّل صورة";
-"activity.downloaded_package" = "حمّل حزمة المشروع كاملة";
-"activity.downloaded_gallery_pdf" = "حمّل ملف PDF للمعرض";
-"activity.viewed_boq" = "شاهد جدول الكميات";
-"activity.viewed_pricing" = "شاهد التسعير";
-"activity.approved" = "وافق على تصميم";
-"activity.requested_changes" = "طلب تعديلات";
-"activity.commented" = "ترك تعليق";
-"activity.sent_to_client" = "أُرسل رابط المشروع للعميل (واتساب)";
-"activity.sent_update" = "أُشعر العميل بتحديث (واتساب)";
-
-/* Redesign: the list */
-"Every client project, newest first" = "كل مشاريع العملاء، الأحدث أولاً";
+/* The list */
 "Show as grid" = "عرض كشبكة";
 "Show as list" = "عرض كقائمة";
 "Project Pipeline" = "مسار المشاريع";
-"Removes this filter" = "بيشيل هالفلتر";
+"Shows only these projects" = "يعرض هذه المشاريع فقط";
+"Removes this filter" = "يزيل عامل التصفية هذا";
 "All Projects" = "كل المشاريع";
-"Newest update first" = "الأحدث تحديثاً أولاً";
-"No projects match" = "لا مشاريع مطابقة";
-"None of the projects fit these filters." = "ولا مشروع بيطابق هالفلاتر.";
-"Create the first one and it shows here." = "أنشئ أول مشروع وبيظهر هون.";
-"When the studio starts a project, it shows here." = "لما يبدأ الاستوديو مشروع، بيظهر هون.";
+"Newest update first" = "الأحدث تحديثًا أولًا";
+"No projects match" = "لا توجد مشاريع مطابقة";
+"None of the projects fit these filters." = "لا يطابق أي مشروع عوامل التصفية هذه.";
+"Create the first one and it shows here." = "أنشئ أول مشروع وسيظهر هنا.";
+"When the studio starts a project, it shows here." = "عندما يبدأ الاستوديو مشروعًا سيظهر هنا.";
 "Approvals: %d" = "الموافقات: %d";
 "Comments: %d" = "التعليقات: %d";
-"Loading" = "جاري التحميل";
-"%d of %d projects shown" = "ظاهر %d من %d مشروع";
+"Loading" = "جارٍ التحميل";
+"No cover photo yet" = "لا توجد صورة غلاف بعد";
 
-/* Redesign: a project's page */
-"Client Page" = "صفحة العميل";
-"Live — the client can open this link." = "منشور — العميل بيقدر يفتح هالرابط.";
-"Not published — the client sees nothing yet." = "مش منشور — العميل ما بيشوف شي لسا.";
-"Archived — hidden from the client link." = "مؤرشف — مخفي عن رابط العميل.";
-"Share" = "مشاركة";
-"Progress" = "التقدّم";
-"Stage: %@" = "المرحلة: %@";
-"Delivery %@" = "التسليم %@";
-"Spaces" = "المساحات";
-"Opens %@" = "بيفتح %@";
-"No client name yet" = "ما في اسم عميل بعد";
-"No email or phone number on file for this client." = "ما في إيميل ولا رقم مسجّل لهالعميل.";
-"No location, area, type or delivery date recorded yet." = "ما في موقع ولا مساحة ولا نوع ولا تاريخ تسليم مسجّل بعد.";
-"What the client's page shows" = "شو بتعرض صفحة العميل";
-"On" = "مفعّل";
-"Off" = "متوقف";
-"Only the name is needed now; everything else can be filled in later from the project's page." = "الاسم بس مطلوب هلأ؛ الباقي بتعبّيه بعدين من صفحة المشروع.";
-"Villa, café, office…" = "فيلا، كافيه، مكتب…";
-"No cover — the page opens on the brand colours" = "بلا غلاف — الصفحة بتفتح على ألوان الهوية";
-"New" = "جديد";
+"%d projects#zero" = "لا مشاريع";
+"%d projects#one" = "مشروع واحد";
+"%d projects#two" = "مشروعان";
+"%d projects#few" = "%d مشاريع";
+"%d projects#many" = "%d مشروعًا";
+"%d projects#other" = "%d مشروع";
 
-/* Redesign: the gallery */
-"Renders and site photos, by space" = "الريندر وصور الموقع، حسب المساحة";
-"%d spaces · %d photos" = "%d مساحة · %d صورة";
-"Add" = "إضافة";
-"Hotspots: %d" = "النقاط: %d";
-"Photo %d of %d" = "صورة %d من %d";
-"No photos in this space yet" = "ما في صور بهالمساحة بعد";
-"Take them on site or pick renders from the library." = "صوّرها بالموقع أو اختار ريندر من المكتبة.";
-"A room or area the renders belong to" = "غرفة أو منطقة بتنتمي إلها الصور";
+"%d approvals waiting#zero" = "لا موافقات معلّقة";
+"%d approvals waiting#one" = "موافقة واحدة معلّقة";
+"%d approvals waiting#two" = "موافقتان معلّقتان";
+"%d approvals waiting#few" = "%d موافقات معلّقة";
+"%d approvals waiting#many" = "%d موافقة معلّقة";
+"%d approvals waiting#other" = "%d موافقة معلّقة";
+
+"%d updated this week#zero" = "لم يُحدَّث أي مشروع هذا الأسبوع";
+"%d updated this week#one" = "مشروع واحد حُدِّث هذا الأسبوع";
+"%d updated this week#two" = "مشروعان حُدِّثا هذا الأسبوع";
+"%d updated this week#few" = "%d مشاريع حُدِّثت هذا الأسبوع";
+"%d updated this week#many" = "%d مشروعًا حُدِّث هذا الأسبوع";
+"%d updated this week#other" = "%d مشروع حُدِّث هذا الأسبوع";
+
+"%d of %d projects shown#zero" = "يُعرض %d من %d مشروع";
+"%d of %d projects shown#one" = "يُعرض %d من مشروع واحد";
+"%d of %d projects shown#two" = "يُعرض %d من مشروعين";
+"%d of %d projects shown#few" = "يُعرض %d من %d مشاريع";
+"%d of %d projects shown#many" = "يُعرض %d من %d مشروعًا";
+"%d of %d projects shown#other" = "يُعرض %d من %d مشروع";
+
+/* Times */
+"just now" = "الآن";
+"%dm ago#zero" = "قبل أقل من دقيقة";
+"%dm ago#one" = "قبل دقيقة";
+"%dm ago#two" = "قبل دقيقتين";
+"%dm ago#few" = "قبل %d دقائق";
+"%dm ago#many" = "قبل %d دقيقة";
+"%dm ago#other" = "قبل %d دقيقة";
+"%dh ago#zero" = "قبل أقل من ساعة";
+"%dh ago#one" = "قبل ساعة";
+"%dh ago#two" = "قبل ساعتين";
+"%dh ago#few" = "قبل %d ساعات";
+"%dh ago#many" = "قبل %d ساعة";
+"%dh ago#other" = "قبل %d ساعة";
+"%dd ago#zero" = "اليوم";
+"%dd ago#one" = "قبل يوم";
+"%dd ago#two" = "قبل يومين";
+"%dd ago#few" = "قبل %d أيام";
+"%dd ago#many" = "قبل %d يومًا";
+"%dd ago#other" = "قبل %d يوم";
+
+/* Gallery */
+"Renders and site photos, by space" = "صور التصاميم وصور الموقع، حسب المساحة";
+"Add a space" = "إضافة مساحة";
+"Add Space" = "إضافة المساحة";
+"Name" = "الاسم";
+"e.g. Seating Area" = "مثال: منطقة الجلوس";
+"A room or area the renders belong to" = "غرفة أو منطقة تنتمي إليها الصور";
 "Suggestions" = "اقتراحات";
+"Living Room" = "غرفة المعيشة";
 "Kitchen" = "المطبخ";
 "Master Bedroom" = "غرفة النوم الرئيسية";
 "Bedroom" = "غرفة النوم";
@@ -243,49 +227,132 @@
 "Dining Room" = "غرفة الطعام";
 "Entrance" = "المدخل";
 "Exterior" = "الواجهة الخارجية";
+"No spaces yet" = "لا توجد مساحات بعد";
+"Add a space like “Living Room” or “Kitchen” to start uploading renders." = "أضف مساحة مثل “غرفة المعيشة” أو “المطبخ” لتبدأ برفع صور التصاميم.";
+"Add" = "إضافة";
+"Add Photos" = "إضافة صور";
+"Remove Space" = "حذف المساحة";
+"Remove “%@”?" = "حذف “%@”؟";
+"Every photo in it is removed too." = "ستُحذف كل الصور التي فيها أيضًا.";
+"Before/After" = "قبل/بعد";
+"Add Hotspots" = "إضافة نقاط تفاعلية";
+"Edit Hotspots (%d)" = "تعديل النقاط التفاعلية (%d)";
+"Set as Cover" = "تعيين كغلاف";
+"Cover updated" = "تم تحديث الغلاف";
+"Delete this photo?" = "حذف هذه الصورة؟";
+"It comes off the client's page too." = "ستختفي من صفحة العميل أيضًا.";
+"Hotspots: %d" = "النقاط التفاعلية: %d";
+"Photo %d of %d" = "الصورة %d من %d";
+"No photos in this space yet" = "لا توجد صور في هذه المساحة بعد";
+"Take them on site or pick renders from the library." = "التقطها في الموقع أو اختر صور التصاميم من المكتبة.";
 
-/* Redesign: the viewer */
+"%d spaces#zero" = "لا مساحات";
+"%d spaces#one" = "مساحة واحدة";
+"%d spaces#two" = "مساحتان";
+"%d spaces#few" = "%d مساحات";
+"%d spaces#many" = "%d مساحة";
+"%d spaces#other" = "%d مساحة";
+
+"%d photos#zero" = "لا صور";
+"%d photos#one" = "صورة واحدة";
+"%d photos#two" = "صورتان";
+"%d photos#few" = "%d صور";
+"%d photos#many" = "%d صورة";
+"%d photos#other" = "%d صورة";
+
+/* The viewer */
 "%d of %d" = "%d من %d";
 "Before" = "قبل";
 "After" = "بعد";
-"Hide hotspots" = "إخفاء النقاط";
-"Show hotspots" = "إظهار النقاط";
-"This photo couldn't be loaded." = "ما قدرنا نحمّل هالصورة.";
+"Hide hotspots" = "إخفاء النقاط التفاعلية";
+"Show hotspots" = "إظهار النقاط التفاعلية";
+"This photo couldn't be loaded." = "تعذّر تحميل هذه الصورة.";
 
-/* Redesign: uploading */
+/* Uploading */
+"Photos" = "الصور";
+"Before / After pair" = "زوج قبل/بعد";
+"One “after” photo, with an optional “before” to compare." = "صورة “بعد” واحدة، مع صورة “قبل” اختيارية للمقارنة.";
+"After photo" = "صورة بعد";
+"Before photo (optional)" = "صورة قبل (اختيارية)";
 "From the library" = "من المكتبة";
 "Take a photo" = "التقاط صورة";
-"Pick up to 20 at a time. Each one goes up on its own, and a retry sends only the ones that didn't." = "اختار لحد 20 صورة بالمرة. كل وحدة بتنرفع لحالها، وإعادة المحاولة بترفع بس اللي ما انرفعت.";
-"Shown under the photo on the client's page." = "بيظهر تحت الصورة بصفحة العميل.";
-"%d of %d uploaded" = "انرفع %d من %d";
-"Upload the rest" = "رفع الباقي";
-"The photos weren't uploaded" = "الصور ما انرفعت";
-"The “after” photo couldn't be read. Choose it again." = "ما قدرنا نقرأ صورة “بعد”. اختارها مرة ثانية.";
-"%d photo(s) couldn't be read on this phone. Remove them or try again." = "ما قدرنا نقرأ %d صورة على هالجهاز. احذفها أو جرّب مرة ثانية.";
 "Choose" = "اختيار";
+"Pick up to 20 at a time. Each one goes up on its own, and a retry sends only the ones that didn't." = "اختر حتى 20 صورة في كل مرة. تُرفع كل صورة وحدها، وعند إعادة المحاولة يُرفع ما لم يُرفع فقط.";
+"Photo caption" = "وصف الصورة";
+"e.g. View from the entrance" = "مثال: المنظر من المدخل";
+"Shown under the photo on the client's page." = "يظهر تحت الصورة في صفحة العميل.";
+"Upload" = "رفع";
+"Uploading %d/%d…" = "جارٍ الرفع %d/%d…";
+"%d of %d uploaded" = "رُفع %d من %d";
+"Upload the rest" = "رفع الباقي";
+"Some photos failed" = "تعذّر رفع بعض الصور";
+"The photos weren't uploaded" = "لم تُرفع الصور";
+"Photos added" = "تمت إضافة الصور";
+"The “after” photo couldn't be read. Choose it again." = "تعذّرت قراءة صورة “بعد”. اخترها مرة أخرى.";
 
-/* Redesign: hotspots */
-"Name the new point below" = "سمِّ النقطة الجديدة تحت";
-"The photo — tap to place a hotspot" = "الصورة — اضغط لتحط نقطة";
-"This photo couldn't be loaded, so points can't be placed on it right now." = "ما قدرنا نحمّل هالصورة، فما بتقدر تحط نقاط عليها هلأ.";
-"On this photo" = "على هالصورة";
-"No hotspots on this photo yet." = "ما في نقاط على هالصورة بعد.";
-"%d points the client can tap" = "%d نقطة بيقدر العميل يضغط عليها";
+"%d photos couldn't be read on this phone. Remove them or try again.#zero" = "لا صور تعذّرت قراءتها.";
+"%d photos couldn't be read on this phone. Remove them or try again.#one" = "تعذّرت قراءة صورة واحدة على هذا الجهاز. احذفها أو حاول مرة أخرى.";
+"%d photos couldn't be read on this phone. Remove them or try again.#two" = "تعذّرت قراءة صورتين على هذا الجهاز. احذفهما أو حاول مرة أخرى.";
+"%d photos couldn't be read on this phone. Remove them or try again.#few" = "تعذّرت قراءة %d صور على هذا الجهاز. احذفها أو حاول مرة أخرى.";
+"%d photos couldn't be read on this phone. Remove them or try again.#many" = "تعذّرت قراءة %d صورة على هذا الجهاز. احذفها أو حاول مرة أخرى.";
+"%d photos couldn't be read on this phone. Remove them or try again.#other" = "تعذّرت قراءة %d صورة على هذا الجهاز. احذفها أو حاول مرة أخرى.";
+
+/* Hotspots */
+"Hotspots" = "النقاط التفاعلية";
+"Tap the photo to place one" = "اضغط على الصورة لوضع نقطة";
+"Name the new point below" = "أدخل اسم النقطة الجديدة أدناه";
+"The photo — tap to place a hotspot" = "الصورة — اضغط لوضع نقطة تفاعلية";
+"This photo couldn't be loaded, so points can't be placed on it right now." = "تعذّر تحميل هذه الصورة، لذا لا يمكن وضع نقاط عليها الآن.";
+"New Hotspot" = "نقطة جديدة";
+"Label" = "التسمية";
+"Sofa" = "أريكة";
+"Category" = "التصنيف";
+"Reference (material or furniture name)" = "المرجع (اسم الخامة أو قطعة الأثاث)";
+"e.g. Oak veneer, Minotti sofa" = "مثال: قشرة بلوط، أريكة Minotti";
+"Add Hotspot" = "إضافة النقطة";
+"Cancel" = "إلغاء";
+"Remove" = "حذف";
+"On this photo" = "على هذه الصورة";
+"No hotspots on this photo yet." = "لا توجد نقاط تفاعلية على هذه الصورة بعد.";
+"Shows its pin on the photo" = "يُظهر موضعها على الصورة";
 "hotspot.Material" = "خامة";
 "hotspot.Furniture" = "أثاث";
 "hotspot.Lighting" = "إضاءة";
 "hotspot.Drawing" = "مخطط";
 "hotspot.Note" = "ملاحظة";
 
-/* Redesign: analytics */
-"All Activity" = "كل النشاط";
-"Not recorded by the client page yet" = "صفحة العميل ما بتسجّله لسا";
-"Everything the client did, by kind" = "كل اللي عمله العميل، حسب النوع";
-"events" = "حدث";
-"Newest first" = "الأحدث أولاً";
-"Nothing recent to show." = "ما في شي حديث.";
-"Where every project stands" = "وين واصل كل مشروع";
-"No cover photo yet" = "ما في صورة غلاف بعد";
-"Renders, drawings and pricing come next" = "الريندر والمخططات والتسعير بتيجي بعدين";
-"The client page doesn't record render views yet, so that figure says nothing about whether renders were looked at." = "صفحة العميل ما بتسجّل مشاهدات الريندر لسا، فهالرقم ما بيقول إذا انشافت الصور أو لا.";
-"Every event logged on the client's link, by kind" = "كل حدث انسجّل على رابط العميل، حسب النوع";
+"%d points the client can tap#zero" = "لا نقاط يستطيع العميل الضغط عليها";
+"%d points the client can tap#one" = "نقطة واحدة يستطيع العميل الضغط عليها";
+"%d points the client can tap#two" = "نقطتان يستطيع العميل الضغط عليهما";
+"%d points the client can tap#few" = "%d نقاط يستطيع العميل الضغط عليها";
+"%d points the client can tap#many" = "%d نقطة يستطيع العميل الضغط عليها";
+"%d points the client can tap#other" = "%d نقطة يستطيع العميل الضغط عليها";
+
+/* Analytics */
+"Opens" = "مرات الفتح";
+"Downloads" = "التنزيلات";
+"Responses" = "الردود";
+"No client activity yet" = "لا يوجد نشاط للعميل بعد";
+"Once the client opens their project link, their activity will appear here." = "سيظهر نشاط العميل هنا بمجرد أن يفتح رابط مشروعه.";
+"Activity Breakdown" = "تفصيل النشاط";
+"Every event logged on the client's link, by kind" = "كل حدث سُجّل على رابط العميل، حسب النوع";
+"Recent Activity" = "النشاط الأخير";
+"Newest first" = "الأحدث أولًا";
+"Nothing recent to show." = "لا يوجد نشاط حديث.";
+
+/* Activity log codes (lib/activity-labels.ts) */
+"activity.viewed_project" = "فتح المشروع";
+"activity.viewed_render" = "شاهد صورة تصميم";
+"activity.viewed_drawing" = "شاهد مخططًا";
+"activity.downloaded_drawing" = "نزّل مخططًا";
+"activity.downloaded_document" = "نزّل مستندًا";
+"activity.downloaded_image" = "نزّل صورة";
+"activity.downloaded_package" = "نزّل حزمة المشروع كاملة";
+"activity.downloaded_gallery_pdf" = "نزّل ملف PDF للمعرض";
+"activity.viewed_boq" = "شاهد جدول الكميات";
+"activity.viewed_pricing" = "شاهد التسعير";
+"activity.approved" = "وافق على تصميم";
+"activity.requested_changes" = "طلب تعديلات";
+"activity.commented" = "أضاف تعليقًا";
+"activity.sent_to_client" = "أُرسل رابط المشروع إلى العميل (واتساب)";
+"activity.sent_update" = "أُبلغ العميل بتحديث (واتساب)";

@@ -18,7 +18,11 @@ struct ProjectDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var confirmRegenerate = false
     @State private var sending: String?
-    @State private var regenerating = false
+    /// The send waiting on its confirmation: "sent_to_client" or "sent_update".
+    @State private var confirmSend: String?
+    /// The hero has gone under the bar and the tabs have pinned: the bar
+    /// takes the name and a background.
+    @State private var heroGone = false
 
     /// `initialSection` opens the page on a tab other than Overview — a deep
     /// link to a project's gallery or files.
@@ -66,36 +70,74 @@ struct ProjectDetailView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            NeonScroll(spacing: NeonSpace.stack) {
-                hero
-                    .id("hero")
+            // NeonScroll's stack, with the tabs as a pinned section header —
+            // they stay under the bar however far down a gallery goes.
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: NeonSpace.stack, pinnedViews: [.sectionHeaders]) {
+                    hero
+                        .id("hero")
+                        .background(ProjectPageMark(name: "hero", edge: .bottom))
 
-                if let detail {
-                    page(detail)
-                } else if let errorMessage {
-                    ErrorState(message: errorMessage) { await load() }
-                } else {
-                    SkeletonCard(lines: 4)
-                    SkeletonCard(lines: 3)
+                    if let detail {
+                        Section {
+                            sectionContent(detail)
+                        } header: {
+                            sectionTabs(detail)
+                                .id("sections")
+                        }
+                    } else if let errorMessage {
+                        ErrorState(message: errorMessage) { await load() }
+                    } else {
+                        SkeletonCard(lines: 4)
+                        SkeletonCard(lines: 3)
+                    }
                 }
+                .padding(NeonSpace.gutter)
+                .padding(.bottom, NeonSpace.xxl)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .neonAmbientBackground()
+            .onPreferenceChange(ProjectPageMarks.self) { marks in
+                // Pinned once the hero's bottom has passed above the tabs;
+                // a hero the lazy stack has let go of is far above.
+                guard let tabs = marks["sections"] else { return }
+                let gone = (marks["hero"].map { tabs - $0 > NeonSpace.stack + 2 }) ?? true
+                if gone != heroGone { heroGone = gone }
+            }
+            .onChange(of: section) { _ in
+                withNeonAnimation(NeonMotion.snappy) { proxy.scrollTo("sections", anchor: .top) }
             }
             .refreshable { await load() }
             .debugScroll(proxy)
         }
-        .navigationTitle(detail?.name ?? seed?.name ?? "")
+        // The name moves to the bar only once the hero's own has gone.
+        .navigationTitle(heroGone ? (detail?.name ?? seed?.name ?? "") : "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.neonSurfaceStrong, for: .navigationBar)
+        .toolbarBackground(heroGone ? .visible : .automatic, for: .navigationBar)
         .toolbar {
-            if detail != nil {
+            if let detail {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { showEdit = true } label: { Label(L("Edit"), systemImage: "pencil") }
+                        if detail.clientLink != nil {
+                            Button(role: .destructive) {
+                                Haptic.warning()
+                                confirmRegenerate = true
+                            } label: {
+                                Label(L("Regenerate Link"), systemImage: "arrow.triangle.2.circlepath")
+                            }
+                        }
                         if api.side == .admin {
+                            Divider()
                             Button(role: .destructive) { showDeleteConfirm = true } label: {
                                 Label(L("Delete Project"), systemImage: "trash")
                             }
                         }
                     } label: {
-                        IconButtonLabel("ellipsis", size: 36)
+                        // The bar draws its own glass around a plain glyph.
+                        Image(systemName: "ellipsis")
+                            .font(.system(.body, weight: .semibold))
                     }
                     .accessibilityLabel(Text(L("More")))
                 }
@@ -118,6 +160,17 @@ struct ProjectDetailView: View {
             actionTitle: L("Regenerate"),
             isPresented: $confirmRegenerate
         ) { Task { await regenerateLink() } }
+        .confirmationDialog(
+            confirmSend.map(sendTitle) ?? "",
+            isPresented: Binding(get: { confirmSend != nil }, set: { if !$0 { confirmSend = nil } }),
+            titleVisibility: .visible,
+            presenting: confirmSend
+        ) { kind in
+            Button(L("Send on WhatsApp")) { Task { await send(kind: kind) } }
+            Button(L("Cancel"), role: .cancel) {}
+        } message: { kind in
+            Text(sendPreview(kind))
+        }
         .task { await load() }
         .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
             if let name = note.object as? String, name.hasPrefix("projects/") { Task { await load(silently: true) } }
@@ -127,14 +180,16 @@ struct ProjectDetailView: View {
     // MARK: - Hero
 
     /// The cover and the name come from the list's row at once, so the page
-    /// opens on its picture instead of a skeleton.
+    /// opens on its picture instead of a skeleton. The area's own hero (the
+    /// kit's look), so an Arabic page keeps the eyebrow, the name, the
+    /// client line and the pills on one edge.
     @ViewBuilder
     private var hero: some View {
         if let name = detail?.name ?? seed?.name {
             let cover = detail?.resolvedCoverURL ?? (detail == nil ? seed?.resolvedCoverURL : nil)
             let status = detail?.pipelineStatus ?? seed?.pipelineStatus ?? ""
             let publish = detail?.publishState ?? seed?.publishState ?? ""
-            HeroHeader(
+            ProjectHero(
                 name,
                 subtitle: heroSubtitle,
                 eyebrow: L("Project"),
@@ -163,15 +218,9 @@ struct ProjectDetailView: View {
 
     // MARK: - Page
 
-    @ViewBuilder
-    private func page(_ detail: ProjectDetail) -> some View {
-        if let cachedAt { OfflineBanner(savedAt: cachedAt) }
-
-        if api.side == .employee { liveStatusBanner(detail) }
-
-        clientPageCard(detail)
-            .id("link")
-
+    /// The eleven tabs, straight under the hero and pinned under the bar
+    /// once it scrolls off, on a strip of the bar's own white.
+    private func sectionTabs(_ detail: ProjectDetail) -> some View {
         FilterChips(
             selection: $section,
             options: DetailSection.allCases,
@@ -180,12 +229,18 @@ struct ProjectDetailView: View {
             symbol: { $0.symbol },
             count: { sectionCount($0, detail) }
         )
+        .padding(.vertical, NeonSpace.sm)
+        .background(ProjectPageMark(name: "sections", edge: .top))
+        // Inside the bleed, so the strip runs from edge to edge.
+        .background {
+            Rectangle()
+                .fill(Color.neonSurfaceStrong)
+                .overlay(alignment: .bottom) { NeonDivider() }
+                .shadow(color: Color.neonShadowTint.opacity(0.06), radius: 6, x: 0, y: 3)
+                .opacity(heroGone ? 1 : 0)
+                .animation(NeonMotion.resolved(NeonMotion.quick), value: heroGone)
+        }
         .padding(.horizontal, -NeonSpace.gutter)
-        .padding(.top, NeonSpace.xs)
-        .id("sections")
-
-        sectionContent(detail)
-            .transition(.neonRise)
     }
 
     /// A count beside a tab only where the page already knows it.
@@ -202,12 +257,22 @@ struct ProjectDetailView: View {
 
     @ViewBuilder
     private func sectionContent(_ detail: ProjectDetail) -> some View {
+        if let cachedAt { OfflineBanner(savedAt: cachedAt) }
+
+        if api.side == .employee { liveStatusBanner(detail) }
+
         switch section {
         case .overview:
+            // The client's page — its link, sharing, publishing — is the
+            // overview's first card.
+            clientPageCard(detail)
+                .id("link")
+                .transition(.neonRise)
             ProjectOverviewContent(
                 detail: detail,
                 onEdit: { showEdit = true },
-                onOpenSection: { target in withNeonAnimation(NeonMotion.snappy) { section = target } }
+                onOpenSection: { target in withNeonAnimation(NeonMotion.snappy) { section = target } },
+                onChanged: { Task { await load(silently: true) } }
             )
         case .gallery:
             ProjectGalleryView(
@@ -265,31 +330,30 @@ struct ProjectDetailView: View {
             if let link = detail.clientLink {
                 linkCapsule(link)
 
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: NeonSpace.sm, alignment: .top), count: 3),
-                    spacing: NeonSpace.sm
-                ) {
-                    ProjectActionTile(title: L("Copy Link"), symbol: "doc.on.doc.fill", hue: .blue) {
-                        copy(link)
+                // Three that stay on this phone, then the two that message
+                // the client — each asks first, naming who gets it.
+                VStack(spacing: NeonSpace.sm) {
+                    HStack(alignment: .top, spacing: NeonSpace.sm) {
+                        ProjectActionTile(title: L("Copy Link"), symbol: "doc.on.doc.fill", hue: .blue) {
+                            copy(link)
+                        }
+                        ProjectActionTile(title: L("Preview"), symbol: "safari.fill", hue: .indigo) {
+                            openURL(link)
+                        }
+                        ShareLink(item: link) {
+                            ProjectActionTileLabel(title: L("Share"), symbol: "square.and.arrow.up.fill", hue: .purple)
+                        }
+                        .buttonStyle(.pressable)
                     }
-                    ProjectActionTile(title: L("Preview"), symbol: "safari.fill", hue: .indigo) {
-                        openURL(link)
-                    }
-                    ShareLink(item: link) {
-                        ProjectActionTileLabel(title: L("Share"), symbol: "square.and.arrow.up.fill", hue: .purple)
-                    }
-                    .buttonStyle(.pressable)
-                    ProjectActionTile(title: L("Send to Client"), symbol: "paperplane.fill", hue: .green, isBusy: sending == "sent_to_client") {
-                        Task { await send(kind: "sent_to_client") }
-                    }
-                    .disabled(sending != nil)
-                    ProjectActionTile(title: L("Send Update"), symbol: "bell.badge.fill", hue: .cyan, isBusy: sending == "sent_update") {
-                        Task { await send(kind: "sent_update") }
-                    }
-                    .disabled(sending != nil)
-                    ProjectActionTile(title: L("Regenerate"), symbol: "arrow.triangle.2.circlepath", hue: .orange, isBusy: regenerating) {
-                        Haptic.warning()
-                        confirmRegenerate = true
+                    HStack(alignment: .top, spacing: NeonSpace.sm) {
+                        ProjectActionTile(title: L("Send to Client"), symbol: "paperplane.fill", hue: .green, isBusy: sending == "sent_to_client") {
+                            askToSend("sent_to_client")
+                        }
+                        .disabled(sending != nil)
+                        ProjectActionTile(title: L("Send Update"), symbol: "bell.badge.fill", hue: .cyan, isBusy: sending == "sent_update") {
+                            askToSend("sent_update")
+                        }
+                        .disabled(sending != nil)
                     }
                 }
 
@@ -339,7 +403,11 @@ struct ProjectDetailView: View {
                     await setPublish("PUBLISHED")
                 }
             } else {
-                NeonButton(L("Unpublish"), symbol: "eye.slash", kind: .secondary, size: .medium, fullWidth: true) {
+                NeonButton(
+                    L("Unpublish"), symbol: "eye.slash", kind: .secondary, size: .medium, fullWidth: true,
+                    confirm: L("Unpublish this project?"),
+                    confirmMessage: L("The client's link stops opening until you publish again.")
+                ) {
                     await setPublish("DRAFT")
                 }
             }
@@ -353,6 +421,47 @@ struct ProjectDetailView: View {
                 .fixedSize()
             }
         }
+    }
+
+    // MARK: - Sending to the client
+
+    private var clientPhone: String? {
+        let phone = detail?.clientPhone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return phone.isEmpty ? nil : phone
+    }
+
+    /// A message to the client goes out only after a confirmation that says
+    /// to whom. With no number on file there is nothing to confirm: the
+    /// server says so itself.
+    private func askToSend(_ kind: String) {
+        guard sending == nil else { return }
+        if clientPhone == nil {
+            Task { await send(kind: kind) }
+        } else {
+            Haptic.warning()
+            confirmSend = kind
+        }
+    }
+
+    private func sendTitle(_ kind: String) -> String {
+        let name = detail?.clientName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        switch (kind, name.isEmpty) {
+        case ("sent_update", true): return L("Send the client an update on WhatsApp?")
+        case ("sent_update", false): return L("Send %@ an update on WhatsApp?", name)
+        case (_, true): return L("Send the client the project link on WhatsApp?")
+        default: return L("Send %@ the project link on WhatsApp?", name)
+        }
+    }
+
+    /// The number and the message's first line, as the server writes it
+    /// (sendProjectWhatsApp in src/lib/actions/whatsapp-actions.ts — it sends
+    /// in English, whatever this phone reads).
+    private func sendPreview(_ kind: String) -> String {
+        let name = detail?.clientName ?? ""
+        let opening = kind == "sent_update"
+            ? "Hi \(name), there's an update on your NEON project."
+            : "Hi \(name), your project from NEON is ready."
+        return L("To %@", clientPhone ?? "") + "\n“" + opening + " …”"
     }
 
     // MARK: - Actions
@@ -388,8 +497,6 @@ struct ProjectDetailView: View {
     }
 
     private func regenerateLink() async {
-        regenerating = true
-        defer { regenerating = false }
         do {
             try await api.regenerateProjectLink(id: projectId)
             Haptic.success()
@@ -427,6 +534,30 @@ struct ProjectDetailView: View {
         } catch {
             Haptic.error()
             Toast.error(error)
+        }
+    }
+}
+
+// MARK: - Where the hero and the tabs are
+
+/// Screen positions of named edges on the project's page, gathered up to the
+/// scroll view: the hero's bottom and the tabs' top say whether the tabs have
+/// pinned (and the hero gone under the bar).
+private struct ProjectPageMarks: PreferenceKey {
+    static let defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+private struct ProjectPageMark: View {
+    let name: String
+    let edge: VerticalEdge
+
+    var body: some View {
+        GeometryReader { geo in
+            let frame = geo.frame(in: .global)
+            Color.clear.preference(key: ProjectPageMarks.self, value: [name: edge == .top ? frame.minY : frame.maxY])
         }
     }
 }
