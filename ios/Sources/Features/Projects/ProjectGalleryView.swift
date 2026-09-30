@@ -88,7 +88,10 @@ struct ProjectGalleryView: View {
     private var summaryCard: some View {
         SectionCard(
             L("Gallery"),
-            subtitle: spaces.isEmpty ? L("Renders and site photos, by space") : L("%d spaces · %d photos", spaces.count, photoCount),
+            subtitle: spaces.isEmpty
+                ? L("Renders and site photos, by space")
+                : projectPlural(spaces.count, one: "%d space", other: "%d spaces")
+                    + " · " + projectPlural(photoCount, one: "%d photo", other: "%d photos"),
             symbol: "photo.on.rectangle.angled",
             hue: .purple
         ) {
@@ -377,7 +380,7 @@ struct ProjectAddSpaceSheet: View {
             }
         } content: {
             FormSection {
-                NeonTextField(L("Name"), text: $name, prompt: L("Living Room"), symbol: "door.left.hand.open", isRequired: true)
+                NeonTextField(L("Name"), text: $name, prompt: L("e.g. Seating Area"), symbol: "door.left.hand.open", isRequired: true)
             }
             VStack(alignment: .leading, spacing: NeonSpace.sm) {
                 SectionLabel(L("Suggestions"))
@@ -391,7 +394,8 @@ struct ProjectAddSpaceSheet: View {
                 }
             }
         }
-        .neonSheet([.medium, .large])
+        // A name and a row of suggestions: half the screen is enough.
+        .neonSheet([.medium])
         .shake(attempts)
     }
 }

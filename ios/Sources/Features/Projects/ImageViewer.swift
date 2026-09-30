@@ -81,6 +81,9 @@ struct ImageViewerView: View {
             }
         }
         .statusBarHidden(chromeHidden)
+        // The app is light; on this black page the status bar's glyphs must
+        // be white. Applies to the viewer's own presentation only.
+        .preferredColorScheme(.dark)
         .onChange(of: index) { _ in
             showBefore = false
             Haptic.selection()
@@ -348,6 +351,15 @@ private struct ZoomSource: View {
     @State private var image: UIImage?
     @State private var failed = false
 
+    /// The largest smaller copy already in memory (the gallery's tiles, the
+    /// strip's thumbnails), to show at once.
+    private var smallerCopy: UIImage? {
+        for width in ImagePipeline.widths.reversed() where width < 1600 {
+            if let copy = ImagePipeline.shared.cached(url, pixels: CGFloat(width)) { return copy }
+        }
+        return nil
+    }
+
     var body: some View {
         Group {
             if let image = image ?? ImagePipeline.shared.cached(url, pixels: 1600) {
@@ -376,8 +388,24 @@ private struct ZoomSource: View {
                         .font(.neonSubtitle)
                 }
                 .foregroundStyle(.white.opacity(0.6))
+            } else if let preview = smallerCopy {
+                // The copy the gallery already drew, sharpening when the
+                // full picture arrives.
+                Image(uiImage: preview)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .overlay(alignment: .bottom) {
+                        ProgressView()
+                            .tint(.white)
+                            .padding(10)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .environment(\.colorScheme, .dark)
+                            .padding(.bottom, 16)
+                    }
             } else {
-                ProgressView().tint(.white)
+                ProgressView()
+                    .tint(.white)
+                    .controlSize(.large)
             }
         }
         .task(id: url) {

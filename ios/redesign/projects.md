@@ -9,10 +9,10 @@ in the language of the Home and Chat mockups. Area-local pieces live in
 
 | Router id | What | Anchors (`-neonScroll`) |
 |---|---|---|
-| `projects-list` (also `tab-projects`) | The tab: header, KPI cards, pipeline bar, search, publish chips, project cards | `stats`, `pipeline`, `filters`, `list` |
-| `project-detail` | A project's page on Overview | `hero`, `link`, `sections`, `progress`, `figures`, `client`, `details`, `visibility` |
-| `project-gallery` | The same page on Gallery, first project that has photos | `hero`, `link`, `sections` |
-| `project-analytics` | The same page on Analytics | `hero`, `link`, `sections` |
+| `projects-list` (also `tab-projects`) | The tab: header, pipeline card, search, publish chips, project cards | `pipeline`, `filters`, `list` (`stats` is gone with the KPI row) |
+| `project-detail` | A project's page on Overview | `hero`, `sections`, `link`, `progress`, `figures`, `client`, `details`, `visibility` |
+| `project-gallery` | The same page on Gallery, first project that has photos | `hero`, `sections` |
+| `project-analytics` | The same page on Analytics | `hero`, `sections` |
 | `project-new` | New Project sheet | — |
 | `project-edit` | Edit Project sheet (first project) | — |
 | `project-filter` | Filter sheet, with the real list's counts | — |
@@ -24,9 +24,14 @@ in the language of the Home and Chat mockups. Area-local pieces live in
 Anchors inside the gallery and analytics tabs are not reachable: those tabs
 are one view each (the gallery owns its sheets and the analytics its load), and
 `scrollTo` cannot reach an id nested inside one row of the page's lazy stack.
-`sections` puts the top of either in view.
+`sections` puts the top of either in view. Since round 2 the tabs are a
+pinned section header, so an anchored card (`progress`, `client`, …) lands
+with its first ~60 pt under the pinned tabs: `scrollTo(…, anchor: .top)`
+does not know about a pinned header, and a mark placed above the card is
+ignored (the lazy stack scrolls to the row's own frame — tried both ways).
+Scrolling by hand never does this.
 
-## What changed
+## What changed (round 1 — where round 2 below differs, it wins)
 
 - **List** — no navigation bar: a `ScreenHeader` ("Projects", "Every client
   project, newest first") with a list/grid toggle and a Filters button that
@@ -97,6 +102,101 @@ are one view each (the gallery owns its sheets and the analytics its load), and
   symbols on the visibility switches); Filter (chips with colour dots and
   counts instead of two menus); Add a space (room suggestions a tap away).
 
+## Round 2 — the critic's review of the live screenshots
+
+1. **Tabs first, and pinned.** The eleven tabs sit straight under the hero,
+   as a pinned `LazyVStack` section header on a white strip that joins the
+   navigation bar once the hero has gone under it. The Client Page card
+   (link, share, send, publish) is the Overview's first card. Changing tab
+   scrolls to the tabs (`withNeonAnimation(.snappy)`), so Gallery and
+   Analytics show their own content on the first screen.
+2. **One pipeline map.** `ProjectPipelineStyle.hue/label` now read Home's
+   `HomePipeline` (Home had already shipped its round with its own map, so
+   following it is the one way both tabs agree without editing Home). The
+   list's pipeline card uses Home's legend layout: up to four statuses on one
+   row, more three to a row, grey dots a shade darker as the kit's legend
+   draws them; each entry still filters the list. The filter sheet, cards,
+   hero and edit menu use the same words ("Sent to Client").
+3. **"Draft" is the pipeline's word only.** The publish state reads
+   Published / **Not published** (غير منشور) / Archived everywhere in the
+   area; on a card's photo it is an icon alone (checkmark.seal / eye.slash /
+   archivebox) with the name as its accessibility label, so the status pill
+   under the name is the card's one status word.
+4. **Nothing reaches the client on one tap.** Send to Client and Send Update
+   ask first, naming the client, the number and the first line of the
+   message the server sends (its English text, `sendProjectWhatsApp`); with
+   no number on file the server says so itself and nothing is sent.
+   Unpublish confirms ("The client's link stops opening until you publish
+   again."). Regenerate Link moved to the ⋮ menu (destructive, still
+   confirmed); the grid is Copy · Preview · Share over Send to Client · Send
+   Update.
+5. **Analytics tell the truth.** Four compact figures: Opens, Downloads (every
+   `downloaded_*` kind — the gallery PDF was missing from the server's sum),
+   Responses, Comments. Renders Viewed is gone until the client page logs
+   `viewed_render`; All Activity was the breakdown's sum; the footnote went
+   with them.
+6. **Arabic hero on one edge.** `ProjectHero` (area-local, the kit's look)
+   sizes the name and client line to their words, so eyebrow, name, client
+   line and pills share the leading edge (the right in Arabic) while each
+   string keeps its direction; `neonDisplay` / `neonSubtitle`, capped at
+   xxxLarge to stay inside the photo. The kit's `HeroHeader` still fills —
+   see Open issues.
+7. **Viewer status bar.** `.preferredColorScheme(.dark)` on the viewer (it is
+   always a full-screen cover, from the gallery and from Chat), so the clock
+   and signal are white on black. The photo shows the gallery's smaller copy
+   at once when one is in memory, with a small frosted spinner; otherwise a
+   large white spinner.
+8. **Stage without a scroller.** An eight-step bar (done blue, current indigo,
+   to come grey) and one line: "Stage 5 of 8 · BOQ — next: Pricing". The
+   card no longer says the stage twice.
+9. **A project on arrival.** The KPI row is gone (Home owns those figures);
+   the pipeline card's subtitle says "4 projects · 0 approvals waiting", the
+   list header "Newest update first · 2 updated this week" (with plurals);
+   no header subtitle; covers are 140 pt.
+10. **Status-bar band.** The tab paints the page's own `NeonAmbient` over the
+    status bar, fading out just below it (Home's technique), so the title,
+    buttons and chips never run under the clock. The project page's bar turns
+    solid white once the hero has gone, and takes the project's name then
+    (empty while the hero shows it).
+11. **Filter colours mean one thing.** Pipeline chips keep their dots (Home's
+    colours); Archived gets the archivebox symbol; stages are neutral chips
+    numbered ① … ⑧.
+12. **Plurals.** `projectPlural(count, one:other:)` — English one/other,
+    Arabic zero/one/two/few/many/other read from `"<key>#<category>"` in
+    Projects.strings (falls back to the plain key). A `.stringsdict` was not
+    used because it follows the phone's language, and the app's language is
+    chosen in the app. Spaces, photos, points, projects, approvals, "updated
+    this week", "N of M projects shown", unreadable photos and "Nm/h/d ago".
+13. **Client card.** Name, then the phone (left to right) under it, call and
+    email buttons, email as a row; the project type lives only in Details.
+    Area shows "120 m²" when it is a number; New/Edit take it in a
+    `NumberField` with an m² unit (an area saved as free text, like
+    "300–350", stays a text field in Edit and is never rewritten).
+14. **Real switches.** Client Visibility is six `ToggleRow`s that save on the
+    spot (`updateProjectSettings`, all six together, one save at a time, the
+    last flip wins), put back with the server's sentence on a refusal; no
+    Edit capsule; titles stay dark whichever way a switch is set.
+15. **Toolbar.** A plain ellipsis in the system's own glass.
+16. **Forms.** Prompts are examples ("e.g. Lina Haddad", name@example.com,
+    07X XXX XXXX, "e.g. Amman, Abdoun", "e.g. Interior design", "e.g. Seating
+    Area"); "Optional" is a field hint, not a label suffix; Add a space opens
+    at the medium detent.
+17. **Remove cover.** A frosted "Remove" capsule beside "Replace" on the
+    photo; tapping it shows the no-cover state with Undo, applied on Save
+    (or drops a photo just picked).
+18. **Hotspot targets.** Pins are touched at 44 pt (drawn at 26); delete is 44
+    pt; a whole row is a button that highlights its pin and scrolls the photo
+    into view.
+19. **FAB corner.** "7d ago" moved to the name's row; the chevron is gone (the
+    card is the link); the percentage sits beside the status pill.
+20. **One Arabic register.** Projects.strings is Modern Standard Arabic
+    throughout (no بيقدر/هال/مش/لسا/شي/هون/بعدين…).
+
+Skipped: the kit's disabled `NeonButton` contrast (16, first half) — it lives
+in `ios/Sources/UI/Buttons.swift`, which this area does not edit.
+Kept: the filter sheet's chips still wrap (`FlowRow`); a two-column grid of
+equal chips would cut "Changes Requested" and "Technical Drawings" short.
+
 ## Server (additive)
 
 `projects/list` rows carry `completionPercent` (already on the row
@@ -116,6 +216,18 @@ percentage on the cards. `npx tsc --noEmit`, `npm run lint` (0 errors),
   `[safe:]`.
 
 ## Open issues
+
+- Kit: `HeroHeader` renders its title and subtitle with `DirText(fill: true)`
+  and fixed `.system(size:)` fonts, so a Latin name on an Arabic page starts
+  from the left while the eyebrow and pills sit on the right. The area draws
+  `ProjectHero` meanwhile; the fix belongs in `Hero.swift` (`fill: false`,
+  `.neonDisplay` / `.neonSubtitle`), after which `ProjectHero` can go.
+- Kit: a disabled `NeonButton` lowers its opacity (white on pale lavender,
+  about 1.5:1); a sunken fill with a tertiary label would read as "not yet".
+- Kit: the pipeline's colours and words live in Home's `HomePipeline`; they
+  belong next to `statusTone()` in the kit, and the status-bar band is drawn
+  twice (Home's `HomeStatusBarFade`, this area's `ProjectStatusBarScrim`) —
+  one `NeonScroll` option would serve every tab.
 
 - Kit: `PillFilterBar` truncates ("Publis…", "Archi…") instead of scrolling
   when four English options don't fit — its `ViewThatFits` accepts the even

@@ -1,8 +1,9 @@
 import Foundation
 
 // Mirrors src/lib/constants.ts — the enum values the website's Overview form
-// offers. Labels come from localizedEnum("pipeline"/"stage", raw), which
-// already carries every one of these in Localizable.strings.
+// offers. Pipeline labels come from ProjectPipelineStyle.label (Home's
+// HomePipeline words), stages from projectStageLabel; both read the Arabic
+// from Localizable.strings, which carries every one of these.
 
 enum ProjectConstants {
     static let publishStates = ["DRAFT", "PUBLISHED", "ARCHIVED"]

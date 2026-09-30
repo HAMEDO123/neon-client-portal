@@ -20,6 +20,7 @@ struct HotspotEditorView: View {
     @State private var description = ""
     @State private var toDelete: ProjectHotspot?
     @State private var highlighted: String?
+    @State private var revealPhoto = 0
 
     init(projectId: String, image: GalleryImage, onChanged: @escaping () -> Void) {
         self.projectId = projectId
@@ -67,6 +68,10 @@ struct HotspotEditorView: View {
                     .onChange(of: pending) { point in
                         guard point != nil else { return }
                         withNeonAnimation(NeonMotion.smooth) { proxy.scrollTo("form", anchor: .top) }
+                    }
+                    .onChange(of: revealPhoto) { _ in
+                        // A row picked in the list: bring its pin into view.
+                        withNeonAnimation(NeonMotion.smooth) { proxy.scrollTo("photo", anchor: .top) }
                     }
                     .debugScroll(proxy)
                 }
@@ -117,7 +122,14 @@ struct HotspotEditorView: View {
             )
 
             ForEach(Array(hotspots.enumerated()), id: \.element.id) { index, spot in
+                // Drawn at 26, touched at 44: two pins close together can
+                // still each be picked.
                 ProjectHotspotPin(number: index + 1, category: spot.category, size: 26, highlighted: highlighted == spot.id)
+                    .frame(width: NeonSize.touch, height: NeonSize.touch)
+                    .contentShape(Circle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(spot.label))
+                    .accessibilityAddTraits(.isButton)
                     .position(
                         x: size.width * CGFloat(spot.xPercent / 100),
                         y: size.height * CGFloat(spot.yPercent / 100)
@@ -192,7 +204,7 @@ struct HotspotEditorView: View {
                 }
             }
 
-            NeonTextField(L("Reference (material or furniture name)"), text: $linkLabel, symbol: "link")
+            NeonTextField(L("Reference (material or furniture name)"), text: $linkLabel, prompt: L("e.g. Oak veneer, Minotti sofa"), symbol: "link", hint: L("Optional"))
             NeonTextEditor(L("Description"), text: $description, minLines: 2, maxLines: 5)
 
             HStack(spacing: NeonSpace.sm) {
@@ -215,7 +227,9 @@ struct HotspotEditorView: View {
     private var placedList: some View {
         SectionCard(
             L("On this photo"),
-            subtitle: hotspots.isEmpty ? L("No hotspots on this photo yet.") : L("%d points the client can tap", hotspots.count),
+            subtitle: hotspots.isEmpty
+                ? L("No hotspots on this photo yet.")
+                : projectPlural(hotspots.count, one: "%d point the client can tap", other: "%d points the client can tap"),
             symbol: "mappin.circle.fill",
             hue: .cyan
         ) {
@@ -230,38 +244,49 @@ struct HotspotEditorView: View {
         }
     }
 
+    /// A placed point: tap the row and it and its pin pulse together.
     private func hotspotRow(_ spot: ProjectHotspot, number: Int) -> some View {
-        HStack(alignment: .top, spacing: NeonSpace.md) {
-            ProjectHotspotPin(number: number, category: spot.category, size: 28, highlighted: highlighted == spot.id)
-            VStack(alignment: .leading, spacing: 4) {
-                DirText(spot.label, font: .neonRowTitle, fill: false, lineLimit: 2)
-                if let category = spot.category, !category.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: ProjectHotspotStyle.symbol(category))
-                            .font(.system(.caption2, weight: .bold))
-                        Text(ProjectHotspotStyle.label(category))
+        HStack(alignment: .top, spacing: NeonSpace.sm) {
+            Button {
+                Haptic.selection()
+                let picking = highlighted != spot.id
+                withNeonAnimation(NeonMotion.snappy) { highlighted = picking ? spot.id : nil }
+                if picking { revealPhoto += 1 }
+            } label: {
+                HStack(alignment: .top, spacing: NeonSpace.md) {
+                    ProjectHotspotPin(number: number, category: spot.category, size: 28, highlighted: highlighted == spot.id)
+                    VStack(alignment: .leading, spacing: 4) {
+                        DirText(spot.label, font: .neonRowTitle, fill: false, lineLimit: 2)
+                        if let category = spot.category, !category.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: ProjectHotspotStyle.symbol(category))
+                                    .font(.system(.caption2, weight: .bold))
+                                Text(ProjectHotspotStyle.label(category))
+                            }
+                            .font(.system(.caption, weight: .semibold))
+                            .foregroundStyle(ProjectHotspotStyle.hue(category).deep)
+                        }
+                        if let reference = spot.linkLabel, !reference.isEmpty {
+                            DirText(reference, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 2)
+                        }
+                        if let detail = spot.description, !detail.isEmpty {
+                            DirText(detail, font: .neonSubtitle, color: .neonTextTertiary, fill: false, lineLimit: 3)
+                        }
                     }
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(ProjectHotspotStyle.hue(category).deep)
+                    Spacer(minLength: 0)
                 }
-                if let reference = spot.linkLabel, !reference.isEmpty {
-                    DirText(reference, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 2)
-                }
-                if let detail = spot.description, !detail.isEmpty {
-                    DirText(detail, font: .neonSubtitle, color: .neonTextTertiary, fill: false, lineLimit: 3)
-                }
+                .frame(minHeight: NeonSize.touch)
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 4)
-            IconButton("trash", label: L("Remove"), look: .tinted, tint: .neonDangerStrong, size: 34) {
+            .buttonStyle(PressableStyle(scale: 0.98))
+            .accessibilityAddTraits(highlighted == spot.id ? .isSelected : [])
+            .accessibilityHint(Text(L("Shows its pin on the photo")))
+
+            IconButton("trash", label: L("Remove"), look: .tinted, tint: .neonDangerStrong, size: NeonSize.touch) {
                 toDelete = spot
             }
         }
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            Haptic.selection()
-            withNeonAnimation(NeonMotion.snappy) { highlighted = highlighted == spot.id ? nil : spot.id }
-        }
+        .padding(.vertical, 8)
     }
 
     // MARK: - Work

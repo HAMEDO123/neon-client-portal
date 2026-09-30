@@ -75,7 +75,7 @@ struct AddPhotosSheet: View {
             }
 
             FormSection(footer: L("Shown under the photo on the client's page.")) {
-                NeonTextField(L("Caption (optional)"), text: $caption, symbol: "text.quote")
+                NeonTextField(L("Photo caption"), text: $caption, prompt: L("e.g. View from the entrance"), symbol: "text.quote", hint: L("Optional"))
             }
 
             if isUploading || doneCount > 0, !isBeforeAfter, !photos.isEmpty {
@@ -374,7 +374,11 @@ struct AddPhotosSheet: View {
 
         if unreadable > 0 {
             Haptic.warning()
-            errorMessage = L("%d photo(s) couldn't be read on this phone. Remove them or try again.", unreadable)
+            errorMessage = projectPlural(
+                unreadable,
+                one: "%d photo couldn't be read on this phone. Remove it or try again.",
+                other: "%d photos couldn't be read on this phone. Remove them or try again."
+            )
             if doneCount > 0 { onDone() }
             return
         }

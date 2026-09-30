@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// The Projects tab's list: the studio's figures, where every project stands
-/// in the pipeline, search, filters by publish state (and, in a sheet, by
-/// pipeline status and journey stage), and every project on a card led by
-/// its cover — for the manager and the team alike.
+/// The Projects tab's list: where every project stands in the pipeline,
+/// search, filters by publish state (and, in a sheet, by pipeline status and
+/// journey stage), and every project on a card led by its cover — for the
+/// manager and the team alike. Home carries the studio's headline figures;
+/// the few this list needs sit in its own lines.
 struct ProjectListView: View {
     @EnvironmentObject var api: APIClient
     @State private var data: ProjectsListResponse?
@@ -22,9 +23,8 @@ struct ProjectListView: View {
         case all, published = "PUBLISHED", draft = "DRAFT", archived = "ARCHIVED"
 
         var label: String {
-            // The filter chips once showed the raw key ("publish.PUBLISHED"):
-            // L() has no English table, localizedEnum() humanizes the value.
-            self == .all ? L("All") : localizedEnum("publish", rawValue)
+            // "Not published", not "Draft": that word is the pipeline's.
+            self == .all ? L("All") : ProjectPublishStyle.label(rawValue)
         }
 
         var symbol: String {
@@ -48,6 +48,7 @@ struct ProjectListView: View {
             .refreshable { await load() }
             .debugScroll(proxy)
         }
+        .overlay(alignment: .top) { ProjectStatusBarScrim() }
         .toolbar(.hidden, for: .navigationBar)
         .floatingActionButton("plus", label: L("New Project"), isVisible: api.side == .admin && data != nil) {
             showNewProject = true
@@ -82,7 +83,7 @@ struct ProjectListView: View {
     // MARK: - Header
 
     private var header: some View {
-        ScreenHeader(L("Projects"), subtitle: L("Every client project, newest first")) {
+        ScreenHeader(L("Projects")) {
             IconButton(
                 gridLayout ? "rectangle.grid.1x2" : "square.grid.2x2",
                 label: gridLayout ? L("Show as list") : L("Show as grid"),
@@ -109,16 +110,8 @@ struct ProjectListView: View {
 
         if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
-        StatGrid(columns: 4) {
-            KPICard(L("Total Projects"), value: Double(data.stats.total), symbol: "folder.fill", hue: .blue, density: .compact)
-            KPICard(L("Published"), value: Double(data.stats.published), symbol: "checkmark.seal.fill", hue: .purple, density: .compact)
-            KPICard(L("Pending Approvals"), value: Double(data.stats.pendingApprovals), symbol: "clock.fill", hue: .orange, density: .compact)
-            KPICard(L("Updated This Week"), value: Double(data.stats.recentlyUpdated), symbol: "chart.line.uptrend.xyaxis", hue: .pink, density: .compact)
-        }
-        .id("stats")
-
         if !data.projects.isEmpty {
-            pipelineCard(data.projects)
+            pipelineCard(data)
                 .id("pipeline")
         }
 
@@ -170,7 +163,7 @@ struct ProjectListView: View {
         } else {
             SectionHeader(
                 filter == .all ? L("All Projects") : filter.label,
-                subtitle: L("Newest update first"),
+                subtitle: listSubtitle(data.stats.recentlyUpdated),
                 count: filtered.count
             )
             .padding(.top, NeonSpace.sm)
@@ -207,31 +200,47 @@ struct ProjectListView: View {
         }
     }
 
-    /// Every pipeline status that has a project, as one bar and a key whose
-    /// entries filter the list — the same filter the sheet sets.
+    /// Every pipeline status that has a project, as one bar and Home's
+    /// legend under it — each entry also narrows the list to its status, the
+    /// same filter the sheet sets.
     @ViewBuilder
-    private func pipelineCard(_ projects: [ProjectSummary]) -> some View {
-        let segments = pipelineSegments(projects)
+    private func pipelineCard(_ data: ProjectsListResponse) -> some View {
+        let segments = pipelineSegments(data.projects)
         SectionCard(
             L("Project Pipeline"),
-            subtitle: L("Where every project stands"),
+            subtitle: projectPlural(data.projects.count, one: "%d project", other: "%d projects")
+                + " · " + projectPlural(data.stats.pendingApprovals, one: "%d approval waiting", other: "%d approvals waiting"),
             symbol: "square.stack.3d.up.fill",
             hue: .blue
         ) {
-            SegmentedProgressBar(segments)
-            FlowRow(spacing: NeonSpace.sm) {
-                ForEach(segments) { segment in
-                    ProjectPipelineKey(
-                        segment: segment,
-                        isSelected: pipelineFilter == segment.id
-                    ) {
-                        withNeonAnimation(NeonMotion.snappy) {
-                            pipelineFilter = pipelineFilter == segment.id ? nil : segment.id
+            // Home's layout: up to four statuses share one row, more wrap
+            // three to a row (the pipeline has nine).
+            VStack(alignment: .leading, spacing: NeonSpace.md) {
+                SegmentedProgressBar(segments)
+                LazyVGrid(
+                    columns: Array(
+                        repeating: GridItem(.flexible(), spacing: NeonSpace.xs, alignment: .topLeading),
+                        count: segments.count <= 4 ? max(segments.count, 1) : 3
+                    ),
+                    alignment: .leading,
+                    spacing: NeonSpace.xs
+                ) {
+                    ForEach(segments) { segment in
+                        ProjectPipelineKey(segment: segment, isSelected: pipelineFilter == segment.id) {
+                            withNeonAnimation(NeonMotion.snappy) {
+                                pipelineFilter = pipelineFilter == segment.id ? nil : segment.id
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, -NeonSpace.sm)
             }
         }
+    }
+
+    /// "Newest update first · 2 updated this week".
+    private func listSubtitle(_ updatedThisWeek: Int) -> String {
+        L("Newest update first") + " · " + projectPlural(updatedThisWeek, one: "%d updated this week", other: "%d updated this week")
     }
 
     private func pipelineSegments(_ projects: [ProjectSummary]) -> [ProgressSegment] {
@@ -240,14 +249,14 @@ struct ProjectListView: View {
         let order = ProjectConstants.pipelineStatuses + counts.keys.filter { !ProjectConstants.pipelineStatuses.contains($0) }.sorted()
         return order.compactMap { status in
             guard let count = counts[status], count > 0 else { return nil }
-            return ProgressSegment(localizedEnum("pipeline", status), value: Double(count), hue: ProjectPipelineStyle.hue(status), id: status)
+            return ProgressSegment(ProjectPipelineStyle.label(status), value: Double(count), hue: ProjectPipelineStyle.hue(status), id: status)
         }
     }
 
     private var activeFilterChips: some View {
         FlowRow(spacing: NeonSpace.sm) {
             if let pipelineFilter {
-                Chip(localizedEnum("pipeline", pipelineFilter), symbol: "xmark.circle.fill", isSelected: true) {
+                Chip(ProjectPipelineStyle.label(pipelineFilter), symbol: "xmark.circle.fill", isSelected: true) {
                     withNeonAnimation(NeonMotion.snappy) { self.pipelineFilter = nil }
                 }
                 .accessibilityHint(Text(L("Removes this filter")))
@@ -277,9 +286,6 @@ struct ProjectListView: View {
 
     private var loadingPlaceholder: some View {
         VStack(alignment: .leading, spacing: NeonSpace.stack) {
-            StatGrid(columns: 4) {
-                ForEach(0..<4, id: \.self) { _ in SkeletonKPICard(compact: true) }
-            }
             SkeletonCard(lines: 2)
             ForEach(0..<3, id: \.self) { _ in ProjectCoverSkeleton() }
         }
@@ -327,8 +333,9 @@ struct ProjectListView: View {
 
 // MARK: - Pieces
 
-/// One entry of the pipeline bar's key: the colour, the count, the status —
-/// a button that narrows the list to it.
+/// One entry of the pipeline bar's legend, in the look of the kit's
+/// `ProgressLegend` (the dot and the count, the status under it) — and a
+/// button that narrows the list to that status.
 private struct ProjectPipelineKey: View {
     let segment: ProgressSegment
     let isSelected: Bool
@@ -339,28 +346,88 @@ private struct ProjectPipelineKey: View {
             Haptic.selection()
             action()
         } label: {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(segment.hue.color)
-                    .frame(width: 8, height: 8)
-                Text(NeonFormat.number(segment.value))
-                    .font(.system(.subheadline, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.neonInk)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Circle()
+                        // The kit's legend draws grey a shade darker, so it
+                        // still reads as a dot.
+                        .fill(segment.hue == .grey ? segment.hue.gradient[1] : segment.hue.color)
+                        .frame(width: 8, height: 8)
+                    Text(NeonFormat.number(segment.value))
+                        .font(.system(.headline, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.neonInk)
+                }
                 Text(segment.label)
-                    .font(.system(.footnote, weight: .medium))
+                    .font(.neonSubtitle)
                     .foregroundStyle(isSelected ? segment.hue.deep : Color.neonTextSecondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 14)
             }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 32)
-            .background(Capsule().fill(isSelected ? segment.hue.wash : Color.neonSurfaceSunken))
-            .overlay(Capsule().strokeBorder(isSelected ? segment.hue.color.opacity(0.5) : Color.clear, lineWidth: 1))
-            .contentShape(Capsule())
+            .padding(.horizontal, NeonSpace.sm)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: NeonSize.touch, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous)
+                    .fill(isSelected ? segment.hue.wash : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous)
+                    .strokeBorder(isSelected ? segment.hue.color.opacity(0.45) : Color.clear, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: NeonRadius.sm, style: .continuous))
         }
-        .buttonStyle(PressableStyle(scale: 0.95))
+        .buttonStyle(PressableStyle(scale: 0.96))
+        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint(Text(L("Shows only these projects")))
     }
+}
+
+/// A band of the page's own background under the status bar. The tab has
+/// no navigation bar (a tab's root page has none), so nothing else stops a
+/// scrolled title, button or chip running into the clock and the Dynamic
+/// Island. It is the very `NeonAmbient` the page is painted with, laid over
+/// the whole screen as the page's is — so it never shows as a stripe —
+/// solid over the status bar and fading out just under it. Home draws the
+/// same band.
+///
+/// The height comes from the window: a reader that ignores the safe area
+/// (as this one must, to line up with the page) is told its inset is zero.
+struct ProjectStatusBarScrim: View {
+    var body: some View {
+        let top = projectWindowTopInset()
+        NeonAmbient()
+            .mask(alignment: .top) {
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.72),
+                        .init(color: .black.opacity(0), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: top + NeonSpace.lg)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// How far the status bar (and the Dynamic Island) reach down the screen.
+@MainActor
+func projectWindowTopInset() -> CGFloat {
+    let windows = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap(\.windows)
+    let key = windows.first(where: \.isKeyWindow) ?? windows.first
+    let inset = key?.safeAreaInsets.top ?? 0
+    // Before the window has its insets (the first pass), assume a notched phone.
+    return inset > 0 ? inset : 47
 }
 
 /// A project on its own card, led by its cover: the publish state, the
@@ -372,29 +439,29 @@ struct ProjectCoverCard: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: NeonRadius.lg, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
-            ProjectCoverPhoto(project: project, height: 168, showsStage: true)
+            ProjectCoverPhoto(project: project, height: 140, showsStage: true)
 
+            // The whole card is the link; the top row's trailing end tells
+            // when it last moved (the floating button covers the bottom one).
             VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .center, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     DirText(project.name, font: .neonCardTitle, fill: false, lineLimit: 1)
                     Spacer(minLength: 6)
+                    if let ago = projectTimeAgo(project.updatedAt) {
+                        MetaLabel(ago, symbol: "clock")
+                            .layoutPriority(1)
+                    }
+                }
+                DirText(project.clientLine, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 1)
+                HStack(spacing: 8) {
+                    ProjectStatusPill(status: project.pipelineStatus)
                     if let completion = project.completionPercent {
                         Text(NeonFormat.percent(Double(completion)))
                             .font(.system(.subheadline, weight: .bold))
                             .monospacedDigit()
                             .foregroundStyle(Color.neonInk.opacity(0.82))
                     }
-                    Image(systemName: "chevron.forward")
-                        .font(.system(.caption, weight: .semibold))
-                        .foregroundStyle(Color.neonTextFaint)
-                }
-                DirText(project.clientLine, font: .neonSubtitle, color: .neonTextSecondary, fill: false, lineLimit: 1)
-                HStack(spacing: 8) {
-                    ProjectStatusPill(status: project.pipelineStatus)
-                    Spacer(minLength: 4)
-                    if let ago = projectTimeAgo(project.updatedAt) {
-                        MetaLabel(ago, symbol: "clock")
-                    }
+                    Spacer(minLength: 0)
                 }
                 .padding(.top, 5)
                 if let completion = project.completionPercent {
@@ -460,7 +527,9 @@ private struct ProjectCoverPhoto: View {
         .frame(height: height)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .topLeading) {
-            ProjectPublishPill(state: project.publishState, onPhoto: true)
+            // A symbol alone: the pill under the name is the card's one
+            // status word.
+            ProjectPublishBadge(state: project.publishState)
                 .padding(10)
         }
         .overlay(alignment: .topTrailing) {
@@ -523,7 +592,7 @@ private struct ProjectCoverFallback: View {
 private struct ProjectCoverSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SkeletonBlock(height: 150, radius: 0)
+            SkeletonBlock(height: 140, radius: 0)
             VStack(alignment: .leading, spacing: 9) {
                 SkeletonBlock(height: 14).frame(maxWidth: 170)
                 SkeletonBlock(height: 10).frame(maxWidth: 120)

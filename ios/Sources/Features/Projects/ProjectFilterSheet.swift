@@ -15,11 +15,17 @@ struct ProjectFilterSheet: View {
     var body: some View {
         SheetScaffold(
             L("Filter Projects"),
-            subtitle: projects.isEmpty ? nil : L("%d of %d projects shown", matching, projects.count),
+            subtitle: projects.isEmpty ? nil : projectPlural(
+                projects.count, one: "%d of %d project shown", other: "%d of %d projects shown",
+                arguments: [matching, projects.count]
+            ),
             symbol: "line.3.horizontal.decrease.circle",
             primaryTitle: L("Show Results"),
             onPrimary: { dismiss() }
         ) {
+            // Colour here means pipeline status only — the same dot as on
+            // the list's bar and the cards. Archived is set apart by its
+            // symbol, not by a grey it would share with Draft.
             FormSection(L("Pipeline Status")) {
                 FlowRow(spacing: NeonSpace.sm) {
                     Chip(L("All"), isSelected: pipelineFilter == nil) {
@@ -27,8 +33,9 @@ struct ProjectFilterSheet: View {
                     }
                     ForEach(ProjectConstants.pipelineStatuses, id: \.self) { status in
                         ProjectFilterChoice(
-                            title: localizedEnum("pipeline", status),
+                            title: ProjectPipelineStyle.label(status),
                             hue: ProjectPipelineStyle.hue(status),
+                            symbol: status == "ARCHIVED" ? "archivebox" : nil,
                             count: projects.isEmpty ? nil : projects.filter { $0.pipelineStatus == status }.count,
                             isSelected: pipelineFilter == status
                         ) {
@@ -38,17 +45,19 @@ struct ProjectFilterSheet: View {
                 }
             }
 
+            // The journey's stages carry no colour of their own (they have
+            // none anywhere else): numbered, in order.
             FormSection(L("Journey Stage")) {
                 FlowRow(spacing: NeonSpace.sm) {
                     Chip(L("All"), isSelected: stageFilter == nil) {
                         withNeonAnimation(NeonMotion.snappy) { stageFilter = nil }
                     }
                     ForEach(Array(ProjectConstants.projectStages.enumerated()), id: \.element) { index, stage in
-                        ProjectFilterChoice(
-                            title: projectStageLabel(stage),
-                            hue: NeonPalette.hue(at: index),
-                            count: projects.isEmpty ? nil : projects.filter { $0.currentStage == stage }.count,
-                            isSelected: stageFilter == stage
+                        Chip(
+                            projectStageLabel(stage),
+                            symbol: "\(index + 1).circle",
+                            isSelected: stageFilter == stage,
+                            count: projects.isEmpty ? nil : projects.filter { $0.currentStage == stage }.count
                         ) {
                             withNeonAnimation(NeonMotion.snappy) { stageFilter = stageFilter == stage ? nil : stage }
                         }
@@ -81,10 +90,12 @@ struct ProjectFilterSheet: View {
     }
 }
 
-/// A choice with a colour dot and a count; chosen, it fills with its colour.
+/// A choice with a colour dot (or a symbol) and a count; chosen, it fills
+/// with its colour.
 private struct ProjectFilterChoice: View {
     let title: String
     let hue: NeonHue
+    var symbol: String?
     let count: Int?
     let isSelected: Bool
     let action: () -> Void
@@ -95,9 +106,14 @@ private struct ProjectFilterChoice: View {
             action()
         } label: {
             HStack(spacing: 6) {
-                Circle()
-                    .fill(isSelected ? Color.white : hue.color)
-                    .frame(width: 8, height: 8)
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 12, weight: .semibold))
+                } else {
+                    Circle()
+                        .fill(isSelected ? Color.white : hue.color)
+                        .frame(width: 8, height: 8)
+                }
                 Text(title)
                     .lineLimit(1)
                 if let count {

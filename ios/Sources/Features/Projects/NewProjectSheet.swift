@@ -14,7 +14,7 @@ struct NewProjectSheet: View {
     @State private var clientEmail = ""
     @State private var clientPhone = ""
     @State private var location = ""
-    @State private var area = ""
+    @State private var area: Double?
     @State private var projectType = ""
     @State private var description = ""
     @State private var deliveryDate: Date?
@@ -34,15 +34,15 @@ struct NewProjectSheet: View {
         } content: {
             FormSection(L("Project"), footer: L("Only the name is needed now; everything else can be filled in later from the project's page.")) {
                 NeonTextField(L("Project Name"), text: $name, prompt: L("Villa, café, office…"), symbol: "textformat", isRequired: true)
-                NeonTextField(L("Client Name"), text: $clientName, symbol: "person")
-                NeonTextField(L("Client Email"), text: $clientEmail, symbol: "envelope", keyboard: .emailAddress, contentType: .emailAddress, capitalization: .never, autocorrect: false, leftToRight: true)
-                NeonTextField(L("Client Phone"), text: $clientPhone, symbol: "phone", keyboard: .phonePad, contentType: .telephoneNumber, leftToRight: true)
+                NeonTextField(L("Client Name"), text: $clientName, prompt: L("e.g. Lina Haddad"), symbol: "person")
+                NeonTextField(L("Client Email"), text: $clientEmail, prompt: "name@example.com", symbol: "envelope", keyboard: .emailAddress, contentType: .emailAddress, capitalization: .never, autocorrect: false, leftToRight: true)
+                NeonTextField(L("Client Phone"), text: $clientPhone, prompt: "07X XXX XXXX", symbol: "phone", keyboard: .phonePad, contentType: .telephoneNumber, leftToRight: true)
                 OptionalDateField(L("Delivery Date"), date: $deliveryDate)
             }
             FormSection(L("Details")) {
-                NeonTextField(L("Location"), text: $location, symbol: "mappin.and.ellipse")
-                NeonTextField(L("Area"), text: $area, symbol: "ruler")
-                NeonTextField(L("Project Type"), text: $projectType, symbol: "tag")
+                NeonTextField(L("Location"), text: $location, prompt: L("e.g. Amman, Abdoun"), symbol: "mappin.and.ellipse")
+                NumberField(L("Area"), value: $area, unit: L("m²"), decimals: 2, prompt: "320", symbol: "ruler")
+                NeonTextField(L("Project Type"), text: $projectType, prompt: L("e.g. Interior design"), symbol: "tag")
                 NeonTextEditor(L("Description"), text: $description, minLines: 3, maxLines: 8, limit: 600)
             }
         }
@@ -57,7 +57,7 @@ struct NewProjectSheet: View {
             "clientEmail": clientEmail,
             "clientPhone": clientPhone,
             "location": location,
-            "area": area,
+            "area": projectAreaValue(area),
             "projectType": projectType,
             "description": description,
         ]
