@@ -16,8 +16,13 @@
 "Active" = "نشط";
 "Disabled" = "معطّل";
 "%d/%d warnings" = "%d/%d إنذارات";
-"%d/%d sold" = "%d/%d مبيع";
+/* "من أصل" (out of) plus a plural noun reads correctly for any count, unlike
+   "%d/%d مبيع" which only agreed with the singular. */
+"%d/%d sold" = "%1$d من أصل %2$d مبيعات";
 "%d device" = "%d جهاز";
+"%d devices" = "%d أجهزة";
+"No login" = "بلا تسجيل دخول";
+"\"Team\" here includes your own device-pairing account if you have one. Payroll never counts that row, so the two totals can differ by one." = "«الفريق» هنا يشمل حساب ربط جهازك أنت إن وُجد. الرواتب لا يحتسب هذا الصف أبداً، لذلك قد يختلف المجموعان بمقدار واحد.";
 
 /* Create employee sheet */
 "They sign in at the employee portal and see only their own tasks." = "يسجّلون الدخول من بوابة الموظفين ويرون مهامهم فقط.";
@@ -44,7 +49,11 @@
 "WhatsApp" = "واتساب";
 "Assign tasks" = "إسناد المهام";
 "Site visits" = "زيارات الموقع";
-"What they usually do" = "ما يقومون به عادة";
+"What they usually do" = "مهامه المعتادة";
+"Show all" = "عرض الكل";
+"Added %@" = "أُضيف %@";
+"Never signed in" = "لم يسجّل الدخول أبداً";
+"Signed in %@" = "دخول %@";
 
 /* Details edit sheet */
 "Edit details" = "تعديل التفاصيل";
@@ -68,11 +77,13 @@
 "min" = "د";
 "Their work is reviewed by" = "عملهم يراجعه";
 "Saved" = "تم الحفظ";
+"+962 7 0000 0000" = "+962 7 0000 0000";
 
 /* Password reset sheet */
 "Set a new password" = "تعيين كلمة مرور جديدة";
 "The employee is notified in-app. Existing sessions stay valid until they expire." = "يُخطَر الموظف داخل التطبيق. الجلسات الحالية تبقى صالحة حتى تنتهي.";
 "New password" = "كلمة المرور الجديدة";
+/* Same "at least 8 characters" text doubles as the too-short hint. */
 "Update password" = "تحديث كلمة المرور";
 "Password updated" = "تم تحديث كلمة المرور";
 
@@ -104,6 +115,7 @@
 
 /* Sales card */
 "Sales this month" = "المبيعات هذا الشهر";
+"projects sold" = "مشاريع مبيعة";
 "No target set." = "لا هدف محدد.";
 "Target met, %d over." = "تحقق الهدف، بزيادة %d.";
 "Target met." = "تحقق الهدف.";
@@ -117,8 +129,9 @@
 "Sent back" = "أُعيد";
 "Waiting on others" = "بانتظار الآخرين";
 "Estimates" = "التقديرات";
-"from %d measurements" = "من %d قياسات";
-"Not enough to say" = "لا يكفي للحكم";
+"%d task" = "%d مهمة";
+"%d tasks" = "%d مهام";
+"Not enough to say yet" = "لا يكفي للحكم بعد";
 "About right" = "تقريباً صحيح";
 "Takes about %.1f× the estimate" = "يستغرق نحو %.1f× من التقدير";
 "Finishes in about %.1f× the estimate" = "ينتهي في نحو %.1f× من التقدير";
@@ -155,7 +168,10 @@
 "Remove %@'s email and password?" = "إزالة بريد %@ وكلمة مروره؟";
 "They stay on the task board but can no longer sign in." = "يبقى على لوحة المهام لكنه لن يتمكن من تسجيل الدخول.";
 "Login revoked" = "تم إلغاء تسجيل الدخول";
-"%d device receiving push · %d notification sent" = "%d جهاز يستقبل الإشعارات · %d إشعار أُرسل";
+"%d device receiving push" = "%d جهاز يستقبل الإشعارات";
+"%d devices receiving push" = "%d أجهزة تستقبل الإشعارات";
+"%d notification sent" = "%d إشعار أُرسل";
+"%d notifications sent" = "%d إشعارات أُرسلت";
 
 /* Payroll */
 "Salary ÷ working days ÷ 8 gives the hourly rate, times hours late is the cutoff, plus receipts." = "الراتب ÷ أيام العمل ÷ 8 يعطي أجر الساعة، مضروباً بساعات التأخير يعطي الاستقطاع، مضافاً إليه الإيصالات.";
@@ -165,15 +181,22 @@
 "Total deducted" = "إجمالي المخصوم";
 "Receipts owed" = "الإيصالات المستحقة";
 "Total payable" = "إجمالي المستحق";
+"%@ exactly" = "%@ بالضبط";
+"%@ exactly · includes %d weekly" = "%@ بالضبط · يتضمن %d بأجر أسبوعي";
 "Pay sheet" = "كشف الرواتب";
 "Final pay" = "الصافي المستحق";
 "Per hour %@" = "أجر الساعة %@";
-"Late %.2f h" = "تأخير %.2f س";
+"%@/h" = "%@/س";
+"%@ h" = "%@ س";
 "Cutoff −%@" = "الاستقطاع −%@";
 "Adjustments −%@" = "تعديلات −%@";
 "Receipts +%@" = "إيصالات +%@";
-"Salaries" = "الرواتب الأساسية";
-"Not set" = "غير محدد";
+"Performance" = "الأداء";
+"%d of %d tasks · %d%% — below 90%%" = "%1$d من %2$d مهمة · %3$d%% — أقل من 90%%";
+"No salary set" = "لا راتب محدد";
+"%@ late this month can't be charged until there is one." = "%@ متأخرة هذا الشهر لن تُخصَم قبل تحديد راتب.";
+"Set a salary to start paying %@." = "حدّد راتباً لبدء دفع مستحقات %@.";
+"Set salary" = "تحديد الراتب";
 "Monthly" = "شهري";
 "Weekly" = "أسبوعي";
 "Salary" = "الراتب";
@@ -185,29 +208,34 @@
 /* Attendance */
 "Arrival delays" = "تأخيرات الحضور";
 "Record" = "تسجيل";
-"Recorded per day and per person. The fingerprint device writes these same rows, and never writes over a figure you typed here." = "تُسجَّل ليوم واحد لشخص واحد. جهاز البصمة يكتب نفس هذه الصفوف، ولا يستبدل رقماً كتبته هنا أبداً.";
+"The fingerprint device writes these too, and never overwrites a figure you typed." = "جهاز البصمة يكتب هذه أيضاً، ولا يستبدل رقماً كتبته أبداً.";
+"No delays recorded" = "لا تأخيرات مسجّلة";
 "Fingerprint pairing" = "ربط جهاز البصمة";
 "Paired by the device's own user number, never by name." = "الربط برقم المستخدم في الجهاز نفسه، وليس بالاسم أبداً.";
-"device no." = "رقم الجهاز";
-"Pair" = "ربط";
+"Device no." = "رقم الجهاز";
 "Paired" = "تم الربط";
+"%d of %d paired." = "%1$d من %2$d مرتبطون.";
+"Hide" = "إخفاء";
 "Remove" = "إزالة";
 "Remove this delay record?" = "إزالة سجل التأخير هذا؟";
 "Record a delay" = "تسجيل تأخير";
+"Typed figures are never overwritten by the fingerprint device." = "الأرقام المكتوبة يدوياً لا يستبدلها جهاز البصمة أبداً.";
 "Day" = "اليوم";
 "Hours late" = "ساعات التأخير";
 "Note" = "ملاحظة";
 "Recorded" = "تم التسجيل";
+"Done" = "تم";
 
 /* Receipts */
 "Receipts" = "الإيصالات";
 "No receipts this month" = "لا إيصالات هذا الشهر";
-"Read from the photo automatically. Each receipt counts up to 2 JOD — correct the amount if the reading is wrong." = "تُقرأ من الصورة تلقائياً. كل إيصال يُحتسب حتى 2 دينار — صحّح المبلغ إن كانت القراءة خاطئة.";
+"Each receipt counts up to 2 JOD." = "كل إيصال يُحتسب حتى 2 دينار.";
+"Read from the photo automatically — correct the amount if the reading is wrong." = "تُقرأ من الصورة تلقائياً — صحّح المبلغ إن كانت القراءة خاطئة.";
 "No description" = "لا وصف";
 "Fix this receipt" = "تصحيح هذا الإيصال";
 "Vendor" = "المتجر";
+"Amount on the receipt" = "المبلغ على الإيصال";
 "Counts as" = "يُحتسب";
-"Fix" = "تصحيح";
+"Save amount" = "حفظ المبلغ";
 "Updated" = "تم التحديث";
-"%.2f h" = "%.2f س";
 "%@ · %@" = "%@ · %@";

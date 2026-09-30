@@ -62,9 +62,9 @@ struct EditEmployeeSheet: View {
                 NeonTextField(L("Full name"), text: $name, symbol: "person", isRequired: true)
                 NeonTextField(L("Email"), text: $email, symbol: "envelope", keyboard: .emailAddress, capitalization: .never, autocorrect: false, leftToRight: true)
                 NeonTextField(L("Job title"), text: $role, symbol: "briefcase")
-                NeonTextField(L("Phone"), text: $phone, symbol: "phone", keyboard: .phonePad, leftToRight: true)
+                NeonTextField(L("Phone"), text: $phone, prompt: L("+962 7 0000 0000"), symbol: "phone", keyboard: .phonePad, leftToRight: true)
                 NeonTextField(L("Employee ID"), text: $employeeCode, symbol: "number", leftToRight: true)
-                NumberField(L("Monthly sales target"), value: $monthlySalesTarget, unit: L("projects"))
+                NumberField(L("Monthly sales target"), value: $monthlySalesTarget, unit: L("projects"), symbol: "target")
             }
 
             FormSection(L("Permissions"), footer: L("Off for everyone until you tick it.")) {
@@ -144,7 +144,11 @@ struct ResetPasswordSheet: View {
             await save()
         } content: {
             FormSection {
-                NeonTextField(L("New password"), text: $password, prompt: L("At least 8 characters"), symbol: "lock", isSecure: true, leftToRight: true)
+                NeonTextField(
+                    L("New password"), text: $password, prompt: L("At least 8 characters"), symbol: "lock",
+                    error: (1...7).contains(password.count) ? L("At least 8 characters") : nil,
+                    isSecure: true, leftToRight: true
+                )
             }
         }
         .neonSheet([.medium])

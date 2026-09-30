@@ -16,8 +16,8 @@ every screen and sheet into the debug router with scroll anchors.
 | id | View | Notes |
 |---|---|---|
 | `team-employees` | `EmployeesRootView` | Pushed from More, keeps the system nav bar (per the kit rule: only a tab's *root* loses it). |
-| `team-employee` | `EmployeeDetailView` | Anchors `profile`, `day-plan`, `sales`, `performance`, `warnings`, `access`. |
-| `team-payroll` | `PayrollRootView` | Anchors `totals`, `paysheet`, `salaries`, `attendance`, `receipts`. |
+| `team-employee` | `EmployeeDetailView` | Anchors `profile`, `day-plan`, `sales`, `performance`, `warnings`, `access`, `playbook`. |
+| `team-payroll` | `PayrollRootView` | Anchors `totals`, `paysheet`, `attendance`, `receipts` (no `salaries` any more — that section was removed in the design-critique pass below). |
 | `team-employee-create` | `CreateEmployeeSheet` | Was `private`; opened directly as a screen now (its `.neonSheet` detents are no-ops outside a real sheet, harmless). |
 | `team-employee-edit` | `EditEmployeeSheet` | `DebugAsync` → first employee's id → `DebugAsync` → their full record. |
 | `team-employee-password` | `ResetPasswordSheet` | `DebugAsync` → first employee's id. |
@@ -74,9 +74,10 @@ area already had.
     `NeonCard` — same swap, same reasoning.
   - Wrapped in `ScrollViewReader` with anchors for `-neonScroll`.
   - Totals (`StatTile`/`KPICard`), the pay-sheet cards, salaries list,
-    attendance list and receipts list are visually unchanged — they already
-    matched the kit's patterns (`SectionHeader` above a run of cards/`CardList`
-    is the *allowed* case, not the anti-pattern).
+    attendance list and receipts list matched the kit's patterns at the time
+    (`SectionHeader` above a run of cards/`CardList` is the *allowed* case,
+    not the anti-pattern). The design-critique pass below later removed the
+    separate salaries list and reworked the pay-sheet cards themselves.
 - **Strings:** one new key, `"Fingerprint pairing"`, added to
   `ar.lproj/Team.strings` with an Arabic translation. Every other string
   touched was already in the table.
@@ -112,3 +113,150 @@ area already had.
 worktree: **BUILD SUCCEEDED**, no new warnings introduced beyond an
 `unused proxy` note in Release-only compilation paths (the `ScrollViewReader`
 proxy is only read inside `#if DEBUG`, which is expected and harmless).
+
+---
+
+## Design-critique pass (23 issues, `team-critique.json`)
+
+A second pass, against a critic's screenshot review of the above
+(`ux-shots/round1/team-*`, judged against `team-critique.json`). One agent
+did most of this pass (committed as `08846b1`) and stalled before writing it
+up; this note also covers the small amount finished afterwards.
+
+**All 23 issues were addressed.** 22 are genuine code fixes; the 23rd (the
+Employees/Payroll team-count mismatch) could only be partly fixed from these
+files, for a reason explained below, so its fix is an honest on-screen
+caption rather than the two screens agreeing outright.
+
+### The five money/trust bugs (high severity)
+
+1. **A weekly wage read as a monthly one.** `PayrollRow` (`PayrollRootView.swift`)
+   now shows a `Weekly` badge next to the name when `payBasis == "WEEKLY"`,
+   and a `MetaLabel` states the base salary and its basis
+   (`"%@ · %@"`, e.g. "JOD 300.00 · Weekly"). `Total payable`'s caption adds
+   `"includes %d weekly"` whenever any row is weekly, so the combined figure
+   is never silently mixing two different pay periods.
+2. **"Final pay JOD 0.00" for nobody's salary.** `PayrollRow` checks
+   `employee.salaryAmount == nil` first: with no salary set it draws no
+   breakdown at all, only a `BadgeView("No salary set")`, a `StatusNote`
+   that names the uncharged late hours if there are any, and a
+   `NeonButton("Set salary")` that opens `EditPaySheet` directly.
+3. **A made-up "3:00 AM".** `formattedDay` (`Core/Formatting.swift`, a
+   shared file outside this area, already fixed before this note) parses the
+   day and formats it with `time: .omitted` in the UTC timezone the
+   `@db.Date` column is actually stored in — the day is shown, never a
+   clock-face time invented by converting UTC midnight into Amman's. Both
+   attendance rows and the "View All" sheet's day headings use it.
+4. **Team counts disagree (Employees 5, Payroll 4).** Confirmed against
+   `src/lib/mobile/registry/team.ts`: `team/employees` reads
+   `prisma.employee.findMany()` with no `where` at all, while `team/payroll`
+   reads `where: { active: true, accessRole: "EMPLOYEE" }` — so Employees
+   alone includes the manager's own `accessRole: "MANAGER"` device-pairing
+   row. **This cannot be fixed from the iOS files alone**: `accessRole`
+   isn't part of what `team/employees` sends back
+   (`TeamEmployeeSummary` in `TeamModels.swift` has no such field), so
+   nothing on the phone can tell that row apart from a real board-only
+   employee with no login — the two look identical in the payload. Making
+   the counts actually agree needs a one-line filter added to
+   `team/employees`'s own Prisma query in `team.ts`, which is a server file
+   this pass is not allowed to touch (see "Rules" in the task this note
+   answers). Given that, `EmployeesRootView.teamSummary` now says so
+   honestly, in a footnote under the KPI row: *"'Team' here includes your
+   own device-pairing account if you have one. Payroll never counts that
+   row, so the two totals can differ by one."* — an explained, expected
+   difference of at most one, rather than a silent inconsistency the
+   manager has to puzzle out for themselves. (The critique also noted a
+   *second*, smaller mismatch bundled into this same issue — a device count
+   that includes dead subscriptions on Employees but not on the employee's
+   own page — which has the same root cause, a server-side aggregate that
+   doesn't filter on `active`, and is left with the same explanation rather
+   than a guessed correction.)
+5. **A delay sheet pre-filled with a chargeable hour.** `RecordAttendanceSheet`
+   starts `delayHours` at `nil` (was `1`), the `NumberField` takes whole
+   hours only (`decimals: 0`, matching the studio's round-up rule), the
+   `DateField`'s range is `Date.distantPast...Date()` so no future day can
+   be picked, and `isPrimaryEnabled` requires both an employee and
+   `delayHours ?? 0 > 0` — so nothing can be charged by one accidental tap.
+
+### Everything else (medium/low severity)
+
+All fixed, matching the critique's suggested fix in each case unless noted:
+
+- Manager-voice adjustment rows (`AdjustmentRow` parses the "N of M tasks
+  (P%)" shape back out of the server's employee-facing sentence and redraws
+  it in the studio's own words; a reason of a different shape still shows
+  honestly, unparsed, rather than being invented).
+- `Total payable` full-width and green, `StatGrid(columns: 3)` at
+  `.compact` density for Team/Deducted/Receipts so no figure is drawn larger
+  just because it's shorter.
+- Pay-sheet rows rebuilt on `ListRow` with an avatar, `%@/h`-formatted
+  rates, whole-hour lateness, and a receipts `MetaLabel` shown only when
+  `receiptTotal > 0`.
+- The separate "Salaries" list is gone; each pay-sheet card is itself the
+  editor now (`Button(action: onEdit) { ListRow(...) }`).
+- Fingerprint pairing collapsed behind "View All", a `Paired` badge per row,
+  and `Save` appearing only once a typed number actually differs from the
+  saved one.
+- Attendance: the card shows the 5 most recent non-zero delays with a
+  44pt `IconButton` trash target; the full month (including zero-hour
+  reader tests) is a day-grouped "View All" sheet with swipe-to-remove.
+  The same 44pt `IconButton` swap was applied to `TeamWarningsCard`'s trash
+  button.
+- The playbook moved out of the header into its own collapsed
+  `SectionCard`, and `TeamPlaybookText` now strips bidi marks (U+200E/F,
+  U+061C) before checking for a bullet prefix, and recognises "–", "—" and
+  "•" as well as "-".
+- `EmployeeDetailView`'s header is a `HeroHeader` with the role as its
+  subtitle, an "Employee" eyebrow, and `MetaLabel`s for the added date
+  (date-only) and a relative "signed in" time, instead of three-line full
+  timestamps.
+- The sales card formats its own month on the device
+  (`teamMonthYearLabel`, reading the raw `"YYYY-MM"` key rather than the
+  server's English `Intl` string) and shows an actual "0/3 projects sold"
+  figure instead of an empty bar.
+- The performance card is `KPICard`s in a `StatGrid`, with the refused
+  indicators grouped into one block below rather than left as isolated
+  half-empty tiles.
+- The day-plan segmented control lists `[today, tomorrow]` in reading
+  order (tomorrow stays selected by default), and "Generate" is the one
+  `.brand` action on the card.
+- Account access is three stacked full-width buttons (secondary → tinted
+  danger → destructive, easiest-to-undo first) instead of an uneven 2+1
+  grid, and both push counts go through `teamPlural` for a real
+  singular/plural instead of "1 device", "400 notification sent".
+- The Employees list says "Team" once (the KPI), adds via
+  `.floatingActionButton`, and shows only exception badges
+  (`Disabled`/`No login`/warnings) instead of `ACTIVE` and `0/3 SOLD` noise
+  on every row; devices use the `iphone` symbol and `teamPlural`.
+- Arabic fixes: the playbook heading uses the correct singular ("مهامه
+  المعتادة", not a plural "they"); every counted phrase the critique named
+  ("%d device", "%d/%d sold", "%d notification sent") has a real
+  singular/plural pair in `Team.strings` rather than one fixed form (there
+  is no true zero/one/two/few/many/other plural pipeline in this app — see
+  `TeamModels.swift`'s `teamPlural` doc comment — so this is a
+  singular-vs-plural improvement, not a full `.stringsdict`); the payroll
+  and sales period labels are formatted on the device in the app's own
+  language instead of showing the server's English `Intl` string.
+- The edit-employee sheet's sales-target field has a leading symbol
+  (`target`) like every other field, and the phone field's placeholder
+  matches the create sheet's (`+962 7 0000 0000`).
+- The receipt sheet's button reads "Save amount", its field "Amount on the
+  receipt", and the row amount uses `.neonNumberSmall` in
+  `.neonSuccessStrong` instead of a hand-set system font. The critique
+  couldn't screenshot the sheet itself (no receipt existed in the demo
+  data this pass runs against) — that's a data/tooling gap, not something
+  fixable from source, so it's left as a known gap in what could be
+  visually re-verified.
+- The password sheet opens at `.medium` (was `.large`, mostly empty), and
+  shows an "At least 8 characters" error once the typed password is 1–7
+  characters.
+
+### What's still explained rather than fixed, and why
+
+Issue 4 above is the only one not fully resolved, and it stays that way for
+a concrete reason: the fix needs data the phone's API doesn't send
+(`accessRole`) or a query change on the server (`team/employees` in
+`src/lib/mobile/registry/team.ts`), and this pass's rules are "Edit only
+`ios/Sources/Features/Team/*`, `ios/Resources/ar.lproj/Team.strings`, and
+`ios/redesign/team.md`... No server changes." Everything else the critique
+raised was fixable from inside those files, and is fixed.

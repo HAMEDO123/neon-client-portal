@@ -20,13 +20,6 @@ struct EmployeesRootView: View {
 
     var body: some View {
         NeonScroll {
-            SectionHeader(L("Team"), count: response.map { filtered($0.employees).count }) {
-                IconButton("person.badge.plus", label: L("Add an employee"), look: .tinted, tint: .neonPurpleStrong) {
-                    Haptic.tap()
-                    showCreate = true
-                }
-            }
-
             LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
                 teamSummary(data.employees)
 
@@ -42,11 +35,13 @@ struct EmployeesRootView: View {
                         detail: search.isEmpty ? L("Add the first account above — they can then sign in to the employee portal.") : nil
                     )
                 } else {
-                    CardList(shown) { employee in
-                        NavigationLink(value: TeamEmployeeRoute(id: employee.id)) {
-                            EmployeeSummaryRow(employee: employee, warningLimit: data.warningLimit)
+                    VStack(spacing: NeonSpace.stack) {
+                        ForEach(shown) { employee in
+                            NavigationLink(value: TeamEmployeeRoute(id: employee.id)) {
+                                EmployeeSummaryRow(employee: employee, warningLimit: data.warningLimit)
+                            }
+                            .buttonStyle(.pressableCard)
                         }
-                        .buttonStyle(.pressableCard)
                     }
                 }
             }
@@ -59,6 +54,9 @@ struct EmployeesRootView: View {
         .navigationDestination(for: TeamEmployeeRoute.self) { route in
             EmployeeDetailView(employeeId: route.id)
         }
+        .floatingActionButton("person.badge.plus", label: L("Add an employee")) {
+            showCreate = true
+        }
         .sheet(isPresented: $showCreate) {
             CreateEmployeeSheet { await load() }
         }
@@ -69,6 +67,19 @@ struct EmployeesRootView: View {
 
     /// The team at a glance, above the list — real counts off what just
     /// loaded, never a figure invented for the sake of a fuller-looking row.
+    ///
+    /// "Team" here can read one higher than Payroll's own count: this read
+    /// has no `accessRole` filter (unlike `team/payroll`'s, which asks only
+    /// for `accessRole: "EMPLOYEE"`), so it counts the manager's own
+    /// device-pairing row alongside the team. Fixing that at the root — so
+    /// the two screens count exactly the same people — needs a change to
+    /// the server read in `src/lib/mobile/registry/team.ts`, outside this
+    /// area's editable files (see `ios/redesign/team.md`). Nothing here can
+    /// tell that row apart from a real board-only employee (there is no
+    /// `accessRole` in this response to test), so rather than leave the
+    /// mismatch unexplained, the caption below says honestly why the two
+    /// screens can disagree by one, instead of a silent, unexplained gap
+    /// the manager would otherwise have to puzzle out on their own.
     @ViewBuilder
     private func teamSummary(_ employees: [TeamEmployeeSummary]) -> some View {
         let active = employees.filter { $0.hasAccount && $0.active }.count
@@ -78,8 +89,11 @@ struct EmployeesRootView: View {
             KPICard(L("Team"), value: Double(employees.count), symbol: "person.2.fill", hue: .blue, density: .compact) { EmptyView() }
             KPICard(L("Active"), value: Double(active), symbol: "checkmark.seal.fill", hue: .green, density: .compact) { EmptyView() }
             KPICard(L("Warnings"), value: Double(warned), symbol: "exclamationmark.triangle.fill", hue: .orange, density: .compact) { EmptyView() }
-            KPICard(L("No account"), value: Double(noAccount), symbol: "person.crop.circle.badge.questionmark", hue: .grey, density: .compact) { EmptyView() }
+            KPICard(L("No login"), value: Double(noAccount), symbol: "person.crop.circle.badge.questionmark", hue: .grey, density: .compact) { EmptyView() }
         }
+        Text(L("\"Team\" here includes your own device-pairing account if you have one. Payroll never counts that row, so the two totals can differ by one."))
+            .font(.neonCaption)
+            .foregroundStyle(Color.neonTextTertiary)
     }
 
     private func filtered(_ employees: [TeamEmployeeSummary]) -> [TeamEmployeeSummary] {
@@ -106,42 +120,43 @@ private struct EmployeeSummaryRow: View {
     let warningLimit: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             ListRow(
                 employee.name,
-                subtitle: employee.role,
-                meta: employee.email ?? L("Board only — no login"),
+                subtitle: employee.role ?? employee.email ?? L("Board only — no login"),
                 leading: .avatar(url: nil, name: employee.name),
+                value: soldText,
+                badge: exceptionBadge?.text,
+                badgeTone: exceptionBadge?.tone ?? .neutral,
                 chevron: true
             )
-
-            HStack(spacing: 6) {
-                accountBadge
-                if employee.warningCount > 0 {
-                    BadgeView(text: L("%d/%d warnings", employee.warningCount, warningLimit), tone: .warning)
-                }
-                if employee.monthlySalesTarget > 0 {
-                    BadgeView(
-                        text: L("%d/%d sold", employee.sold, employee.monthlySalesTarget),
-                        tone: employee.sold >= employee.monthlySalesTarget ? .success : .neutral
-                    )
-                }
-                Spacer(minLength: 0)
-                if employee.deviceCount > 0 {
-                    MetaLabel(L("%d device", employee.deviceCount), symbol: "shield.checkerboard")
-                }
+            if employee.deviceCount > 0 {
+                MetaLabel(deviceCountText, symbol: "iphone")
+                    // Lines up with the name column, not under the avatar.
+                    .padding(.leading, 64)
+                    .padding(.bottom, 10)
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
         }
+        .rowCard()
     }
 
-    @ViewBuilder private var accountBadge: some View {
-        if !employee.hasAccount {
-            BadgeView(text: L("No account"), tone: .warning)
-        } else {
-            BadgeView(text: employee.active ? L("Active") : L("Disabled"), tone: employee.active ? .success : .neutral)
-        }
+    /// Only what's out of the ordinary — an always-on ACTIVE badge on every
+    /// row is noise the same way a smoke alarm going off every morning would
+    /// be. At most one shown, worst first.
+    private var exceptionBadge: (text: String, tone: BadgeTone)? {
+        if !employee.hasAccount { return (L("No login"), .warning) }
+        if !employee.active { return (L("Disabled"), .neutral) }
+        if employee.warningCount > 0 { return (L("%d/%d warnings", employee.warningCount, warningLimit), .warning) }
+        return nil
+    }
+
+    private var soldText: String? {
+        guard employee.monthlySalesTarget > 0 else { return nil }
+        return L("%d/%d sold", employee.sold, employee.monthlySalesTarget)
+    }
+
+    private var deviceCountText: String {
+        teamPlural(employee.deviceCount, one: "%d device", other: "%d devices")
     }
 }
 
