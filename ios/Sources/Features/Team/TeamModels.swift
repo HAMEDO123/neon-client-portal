@@ -20,6 +20,11 @@ struct TeamEmployeeSummary: Decodable, Identifiable {
     let phone: String?
     let employeeCode: String?
     let active: Bool
+    /// Their face, or nil for initials (`facePhotoURL`). Optional so an
+    /// answer from before faces still decodes.
+    let photoUrl: String?
+    /// Their studio colour ("cyan", "purple"…); nil from an older server.
+    let color: String?
     /// "MANAGER" for the manager's own row (there to pair the attendance
     /// device); nil from a server older than this field.
     let accessRole: String?
@@ -61,6 +66,13 @@ struct TeamEmployeeDetail: Decodable {
     let phone: String?
     let employeeCode: String?
     let active: Bool
+    /// Their face, or nil for initials. Optional so an answer saved before
+    /// faces still opens offline.
+    let photoUrl: String?
+    let color: String?
+    /// "MANAGER" for the manager's own row — whose face is also the one
+    /// `me/photo` sets, so a change here is the manager's own face too.
+    let accessRole: String?
     let createdAt: String
     let lastLoginAt: String?
     let monthlySalesTarget: Int

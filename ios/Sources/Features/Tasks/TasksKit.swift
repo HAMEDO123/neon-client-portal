@@ -761,7 +761,7 @@ struct TasksAccountMenu: View {
                 Label(L("Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
             }
         } label: {
-            AvatarView(url: nil, name: accountName, size: NeonSize.circleButton, ring: true)
+            AvatarView(url: facePhotoURL(api.myPhoto), name: accountName, size: NeonSize.circleButton, ring: true)
                 .neonShadow(.low)
                 .frame(width: NeonSize.touch, height: NeonSize.touch)
                 .contentShape(Circle())

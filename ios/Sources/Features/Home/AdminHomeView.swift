@@ -193,7 +193,9 @@ struct AdminHomeView: View {
                 Haptic.tap()
                 HomeTabLink.open(HomeTabLink.more)
             } label: {
-                AvatarView(url: nil, name: "NEON", size: NeonSize.circleButton, ring: true)
+                // The manager's own face once they have set one (More → the
+                // top card); the studio's "N" until then.
+                AvatarView(url: facePhotoURL(api.myPhoto), name: "NEON", size: NeonSize.circleButton, ring: true)
                     .neonShadow(.low)
             }
             .buttonStyle(PressableStyle(scale: 0.88))

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { mobileEmployee } from "@/lib/mobile-auth";
+import { mobileViewer } from "@/lib/mobile-auth";
+import { managerEmployeeId } from "@/lib/manager-account";
 import { saveEmployeePhoto } from "@/lib/employee-photo";
 
-// The person's own face, set from the phone.
+// The signed-in person's own face, set from the phone — somebody on the team,
+// or the manager.
 //
 // The web has this on `/employee/profile`; the app's own profile screen drew
 // initials and offered nothing, so "each employee adds their own photo" was
@@ -17,12 +19,35 @@ import { saveEmployeePhoto } from "@/lib/employee-photo";
 //
 // Their own and nobody else's: the id comes from the token, never from the
 // body, exactly as the employee's server action takes it from the session.
+// The manager's token writes to the manager's own `Employee` row — the
+// `accessRole: "MANAGER"` one `lib/faces.ts` already reads their face from,
+// so the photo set here is the one every chat row, call tile and story shows
+// for "admin". Setting somebody *else's* face is the manager's alone and goes
+// through `team/employees/photo`, behind `requireAdmin`.
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Whose face this token may write: an employee is themselves; the manager is
+ * their own row, or nobody when this studio never paired one (see
+ * `managerEmployeeId`) — an ordinary answer the phone is told in a sentence,
+ * as `/api/mobile/devices` does.
+ */
+async function ownRow(viewer: NonNullable<Awaited<ReturnType<typeof mobileViewer>>>) {
+  return viewer.type === "ADMIN" ? managerEmployeeId() : viewer.id;
+}
+
 export async function POST(request: Request) {
-  const employee = await mobileEmployee(request);
-  if (!employee) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const viewer = await mobileViewer(request);
+  if (!viewer) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+  const employeeId = await ownRow(viewer);
+  if (!employeeId) {
+    return NextResponse.json(
+      { error: "This account has no employee record to put a photo on." },
+      { status: 409 }
+    );
+  }
 
   if (!(request.headers.get("content-type") ?? "").includes("multipart/form-data")) {
     return NextResponse.json(
@@ -40,7 +65,7 @@ export async function POST(request: Request) {
 
   let photoUrl: string | null;
   try {
-    photoUrl = await saveEmployeePhoto(employee.id, formData.get("photo"));
+    photoUrl = await saveEmployeePhoto(employeeId, formData.get("photo"));
   } catch (error) {
     // saveEmployeePhoto says what to do about a file it cannot read. That
     // sentence is the useful one, so it travels rather than being swallowed.
@@ -50,7 +75,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await prisma.employee.update({ where: { id: employee.id }, data: { photoUrl } });
+  await prisma.employee.update({ where: { id: employeeId }, data: { photoUrl } });
 
   return NextResponse.json({ ok: true, photoUrl });
 }

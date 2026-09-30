@@ -21,6 +21,21 @@ func resolvedMediaURL(_ raw: String?) -> URL? {
     return URL(string: raw, relativeTo: portalOrigin)
 }
 
+/// Somebody's face, from whatever the server sent for it — `photo`,
+/// `photoUrl` or `avatar`, depending on the read — or nil for "draw their
+/// initials".
+///
+/// Most people have no photo, and several reads then send
+/// `/api/avatar?name=…&color=…`: the server's picture of their initials, which
+/// the web and notifications show. The app draws initials itself, crisp at any
+/// size and with no download, so that one is not a photo here (the same rule
+/// as `ChatFace`). Anything else is a real photo, resolved like every other
+/// stored file.
+func facePhotoURL(_ raw: String?) -> URL? {
+    guard let url = resolvedMediaURL(raw), url.path != "/api/avatar" else { return nil }
+    return url
+}
+
 let projectStages = [
     "CONCEPT", "DESIGN", "VISUALIZATION", "TECHNICAL_DRAWINGS",
     "BOQ", "PRICING", "APPROVAL", "HANDOVER",

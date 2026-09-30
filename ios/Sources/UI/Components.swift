@@ -293,7 +293,11 @@ struct AvatarView: View {
             Text(Self.initials(name, size: size))
                 .font(.system(size: size * 0.4, weight: .bold))
                 .foregroundStyle(style == .solid ? Color.white : hue.deep)
-            if let url {
+            // Laid over the initials rather than instead of them: the circle
+            // is right from the first paint, and a photo that never loads
+            // leaves the initials. The server's own initials picture
+            // (`/api/avatar`) is not a photo — those are drawn right here.
+            if let url, url.path != "/api/avatar" {
                 PipelineImage(url: url, points: size)
             }
         }
@@ -349,7 +353,7 @@ struct AccountMenu: View {
                 Label(L("Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
             }
         } label: {
-            AvatarView(url: nil, name: accountName, size: 30, ring: true)
+            AvatarView(url: facePhotoURL(api.myPhoto), name: accountName, size: 30, ring: true)
                 .neonShadow(.low)
                 .accessibilityLabel(L("Account"))
         }
