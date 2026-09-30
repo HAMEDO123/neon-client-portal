@@ -16,15 +16,17 @@ struct ReviewsRootView: View {
         } content: { data in
             ScrollViewReader { proxy in
                 NeonScroll {
-                    Text(L("Work your team says is finished, with the proof attached. Approving marks the task complete on the board; sending it back returns it to In Progress with your reason."))
-                        .font(.neonFootnote)
+                    Text(L("Proof your team sent, waiting for your decision."))
+                        .font(.neonSubtitle)
                         .foregroundStyle(Color.neonTextSecondary)
 
                     if data.submissions.isEmpty {
+                        // One hue and glyph for reviews everywhere: the same
+                        // amber star Home's own Reviews card draws.
                         EmptyState(
-                            symbol: "checkmark.seal", title: L("Nothing waiting"),
-                            detail: L("When someone finishes a task and sends a photo of it, it appears here."),
-                            hue: .indigo, card: true
+                            symbol: "star.fill", title: L("Nothing waiting"),
+                            detail: L("When someone sends proof for a task, it waits here for you to approve or send back."),
+                            hue: .amber, card: true
                         )
                     } else {
                         ForEach(Array(data.submissions.enumerated()), id: \.element.id) { index, submission in
@@ -39,6 +41,8 @@ struct ReviewsRootView: View {
             }
         }
         .navigationTitle(L("Reviews"))
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(Color.neonBgSoft, for: .navigationBar)
         .task { await load() }
     }
 

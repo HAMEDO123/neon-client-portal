@@ -139,13 +139,157 @@ No sheets in this area. No new ids were needed; all three existed already in
   fold this in, a `points:` chart with an `onSelect: (Int) -> Void` would
   let this move over without losing the feature.
 
+## Round 2 — design critique fixes
+
+A critic reviewed live screenshots of all three screens (`ux-shots/round1`)
+against the mockups' page grammar. Every issue below is that review's; fixed
+unless marked skipped, with the reason.
+
+**Analytics** — the big one, fixed:
+- **Nested cards (issue 5).** Flattened to the kit's rhythm: `SectionCard`
+  now holds only the team's own progress; every person's daily card and
+  every employee's monthly card are page-level siblings in `NeonScroll`, not
+  cards inside the section card. Fixes the `.id("rows")` bug too (issue 17):
+  it's now on a direct child of the scroll, since nothing wraps it.
+- **The bar contradicted the numbers (issue 1).** `SegmentedProgress` painted
+  every state (including "in progress") as a vivid solid fill, so "0 done,
+  15 in progress" read as mostly finished. Both the team card and every
+  person card now draw `ProgressBar(progress: done/total, tint: .neonSuccess)`
+  — about done work only — with the full split kept in `ProgressLegend`
+  underneath, exactly as the mockups' own "Project Progress" card does.
+  Same fix for the monthly cards (`insightsMonthSegments`, one vocabulary —
+  Done/In review/In progress/Pending — for both the daily and monthly split,
+  replacing the old six-chip `LazyVGrid`).
+- **"Late 1" beside "On time 100%" (issue 4).** Renamed to what they measure:
+  "Overdue now" (open overdue work) and "Finished on time" (only of finished
+  work). Below 3 finished items, "Finished on time" now shows "—" and
+  `MetaLabel(L("Too few to tell"))` instead of a possibly-100%-from-one-item
+  figure — the platform's own MIN_SAMPLE rule, approximated here from
+  `counts.completed` since this read has no "finished-with-a-deadline" count
+  of its own (documented as a gap below).
+- **September 1, 2026 as a month label (issue 6).** `insightsPeriodLabel`
+  (local; `homePeriodLabel` is the Home area's own file) starts from
+  `date: .omitted` rather than `.long`, so no day survives. Every `%.2f JOD`
+  string is now `NeonFormat.money(_, decimals: 0)` passed as `%@` — locale-
+  correct digits and currency order in Arabic, not just a suffix.
+- **Wrapping headings (issue 7).** Day subtitle is now a short
+  `weekday(.abbreviated).month(.abbreviated).day()` ("Wed, Sep 30"). Both
+  sections use the same stepper — two `IconButton` chevrons at
+  `NeonSize.circleButton` in `trailing` — with the "Today"/"This month"
+  return moved into the header's own row instead of a third trailing
+  control. (Monthly gained a real "next month" it never had before, since
+  paging only ever went backward — computed locally, see below.)
+- **9 pt text, faint grey (issue 8).** Fixed sizes → `.neonLabel`/`.neonMeta`
+  for small labels, `.neonNumberSmall` for figures. Roles moved from
+  `.neonCaption`/`.neonTextFaint` to `.neonSubtitle`/`.neonTextSecondary`.
+  Both explainer paragraphs are gone from the daily card (pure methodology
+  jargon, no numbers, deleted outright) and reworded/restyled on the monthly
+  card rather than deleted outright — it is the one place the deduction
+  rule's actual numbers live, so it moved to `.neonCaption`/
+  `.neonTextSecondary` instead of `.neonTextFaint`, shortened, with its
+  money format fixed (issue 6), rather than being removed and losing that
+  information.
+- **Person colours disagreeing (issue 9).** Every dot (`employeeFill`) is
+  gone from `DayPersonCard` and `EmployeeProgressCard`; both now draw
+  `AvatarView(url: nil, name:, size: 36)`, coloured by `NeonPalette.hue(for:)`
+  like Home's own avatars. (Photo URLs aren't in this read's employee
+  shape, so `url: nil` — initials only, as Home shows before a photo loads.)
+- **The strip with no numbers (issue 14).** Each bar is now labelled with its
+  own "3/4" above it (`.neonMeta`), and the selected day is a small
+  `.neonAccent` capsule under the weekday label rather than a sunken fill
+  that swallowed a sunken bar. **Not done:** distinguishing a non-working day
+  from a working day nobody planned — this read's `DayHistoryPoint` carries
+  only `{dayKey, done, total}`, no `isWorkingDay`; adding it is a
+  `src/lib/mobile/registry` change, and only the home/projects/chatlist
+  agents may touch those files this round.
+- **Flat KPI tiles (issue 13).** Rebuilt with `KPICard` directly: "Average
+  progress" now carries a real `trend` (`.rising`/`.falling`/`.steady`
+  against the previous period's own average — fetched for real via a second
+  `fetchHomeAnalytics(period: previousPeriod)` call, never invented; `nil`
+  until it answers, so no trend shows rather than a wrong one). "Below 90%"
+  and "Deducted" (renamed from "Deductions applied", one line now) carry the
+  captions and hues asked for. The "Team" tile is gone from the grid; its
+  count now reads in the section's own subtitle ("4 people · September
+  2026"). **Not done:** the six-month mini-bars — real bars would need five
+  more `fetchHomeAnalytics` round trips just to draw a sparkline, which felt
+  like the wrong trade for this pass; skipped rather than invented.
+- **Ghosting under the collapsed title (issue 12).** All three screens now
+  set `.toolbarBackground(.visible, for: .navigationBar)` +
+  `.toolbarBackground(Color.neonBgSoft, …)`, so scrolled content has a solid
+  bar over it instead of showing through. The stray top-of-page intro line
+  is gone from Analytics outright (redundant with "Daily progress"/"Monthly
+  progress" already saying what the cards are).
+
+**Alerts**, renamed from "Activity" to "Alerts" (issue 16 — Home's own
+"Unread alerts" row/wording is `AdminHomeView.swift`/`HomeDashboardCards.swift`,
+outside this area's files, so only this half of the fix could be made here):
+- **Broken bidi (issue 3).** `task-status.ts`'s one fixed English shape,
+  `"<title>[ — <project>] moved from <From> to <To>."`, is now parsed back
+  (`parseInsightsStateChange`) into the task's own title on its own `DirText`
+  line and two `StateBadge`s joined by `arrow.forward` — no more a full
+  English sentence laid out right-to-left around an Arabic name. Every other
+  TASK_STATUS_CHANGED message (a daily report, a site visit, an automation
+  rule) fails this parse on purpose and falls back to plain text, now capped
+  at `.lineLimit(3)` (issue 11) rather than pushing the feed down eight lines.
+- **"Finished a task" for a submission, forever "waiting" (issue 2).**
+  TASK_SUBMITTED rows now read `L("%@ sent proof for review", employee.name)`
+  — sending proof starts a check, it doesn't finish one — and the fixed "is
+  waiting" sentence is gone entirely (only the task's own name is recovered
+  from the message and shown). A trailing `BadgeView(L("Waiting for you"))`
+  appears only when a second, best-effort `fetchHomeReviews()` confirms the
+  entry is still actually in the queue. **Not done:** "Approved"/"Sent back"
+  once decided — this screen has no way to tell those apart from here. The
+  home/alerts payload has no submission outcome, and adding one is a
+  `src/lib/mobile/home-reads.ts` change, which (like issue 14's gap above)
+  is out of this area's files this round. Silence (no badge) rather than a
+  guessed verdict once a submission is no longer pending.
+- **Row anatomy (issue 10).** Padding is `NeonSpace.card` now, not `.sm`. The
+  loose employee-colour corner dot is now a small `IconTile` badge (colour by
+  destination state for a status change, per issue 11's own hue list — Done
+  green, In review purple, In progress cyan, Pending grey — otherwise the
+  per-type hue as before) sitting on a real `AvatarView` of the employee, not
+  beside an unrelated icon tile. The trailing time is just "9:44 PM"
+  (`shortTime`), and rows are grouped under `SectionLabel(Today/Yesterday/
+  a date)`. Actionable rows (`parseAdminLink` resolves to something this app
+  opens) get a `chevron.forward`.
+- **A noisy, undifferentiated feed (issue 11).** Added a `PillFilterBar`
+  (All · Needs you · Tasks · Reports) above the list, with a live count on
+  "Needs you". **Not done:** collapsing consecutive same-task events into
+  one row with an "Earlier: …" note. It's a materially bigger feature (it
+  changes what a row even is), and the debug router's scroll anchors are
+  defined against `data.alerts`' own index — reworking the list into merged
+  rows and keeping "row-5" meaningful for the harness felt like the wrong
+  thing to rush in the same pass as everything else here. The filter and
+  destination-coloured tiles cover the "what needs the manager" complaint
+  without it.
+
+**Reviews:**
+- **One hue everywhere (issue 15).** The empty state's tile is now
+  `symbol: "star.fill", hue: .amber` — Home's own Reviews card, not an
+  indigo checkmark.seal. Header shortened to one line, `L("Proof your team
+  sent, waiting for your decision.")`; the approve/send-back rule moved into
+  the empty state's own detail text, reworded off "finishes a task" onto
+  "sends proof". **Not done:** the "Recently decided" section for a filled
+  screen when the queue is empty. `homeReviews()` only ever returns pending
+  submissions (`pendingSubmissions()`); a decided list needs a new server
+  read, out of this area's files this round.
+
+**Skipped outright, both explained in the issue list above:**
+- Issue 17's "seed one pending submission for the debug router" — this
+  session has no sign-in to the live studio and does no UI automation (see
+  the task rules), so there is no way to create a real submission to seed;
+  inventing one would be exactly the placeholder content the platform's own
+  rules forbid. The `.ar` screenshots it also asks for are the
+  orchestrator's re-screenshot pass, not this agent's.
+
 ## Open issues
 
-- None known. Clean build (`xcodegen generate` + the Debug/iphonesimulator
-  build) succeeds. All screens were read/reasoned through against
-  `ios/Sources/Features/Home/FEATURES.md` line by line to confirm nothing
-  built there was dropped.
-- Live screenshots of `home-alerts` / `home-reviews` / `home-analytics`
-  need real signed-in data (see FEATURES.md/AGENTS notes on not signing in
-  to the live studio from this session) — left for the orchestrator's pass,
-  as instructed.
+- Clean build (`xcodegen generate` + the Debug/iphonesimulator build)
+  succeeds after this round's changes too.
+- Real gaps, all noted above rather than worked around with invented data:
+  a submission's decided outcome isn't in the home/alerts payload; a day's
+  `isWorkingDay` isn't in the analytics history read; there's no "recently
+  decided" read for Reviews. All three are `src/lib/mobile/registry` changes
+  outside this area's files this round.
+- Live screenshots need real signed-in data — left for the orchestrator's
+  pass, as instructed.
