@@ -1,5 +1,6 @@
 import crypto from "crypto";
-import { getSetting, setSetting } from "@/lib/settings";
+import { prisma } from "@/lib/db";
+import { setSetting } from "@/lib/settings";
 import { open, seal } from "@/lib/secret-box";
 import { STORED_ID_PATTERN, cameraIp, newCameraIdFrom, type StoredCamera } from "@/lib/cameras";
 
@@ -44,7 +45,16 @@ function valid(item: unknown): item is StoredCamera {
 export async function storedCameras(): Promise<StoredCameras> {
   if (held && Date.now() - held.at < KEEP_MS) return held.read;
 
-  const sealed = await getSetting(KEY);
+  // Read directly rather than through getSetting, which answers a database
+  // error as "nothing stored" — and nothing stored would mean no cameras, and
+  // the relay told to forget them all. A blip serves the list last read.
+  let sealed: string | null;
+  try {
+    sealed = (await prisma.appSetting.findUnique({ where: { key: KEY } }))?.value ?? null;
+  } catch (error) {
+    if (held) return held.read;
+    throw error;
+  }
   let read: StoredCameras;
   if (!sealed) {
     read = { cameras: [], readable: true };

@@ -144,12 +144,12 @@ export async function listCameras(): Promise<CameraList> {
   const keys = streamKeys(relay);
   relayKnown = { at: Date.now(), keys };
 
-  if (keys) {
+  if (keys && store.readable) {
+    // Ours, for a camera the database no longer has (removed while the relay
+    // was down): its password should not outlive it in the relay's memory.
     const stored = new Set(store.cameras.map((camera) => camera.id));
-    for (const key of keys) {
-      const owner = ownStreamCamera(key);
-      if (key.startsWith(OWN_STREAM_PREFIX) && owner && !stored.has(owner)) await unregister(owner);
-    }
+    const gone = new Set([...keys].map(ownStreamCamera).filter((owner): owner is string => owner !== null && !stored.has(owner)));
+    for (const owner of gone) await unregister(owner);
     for (const camera of store.cameras) await ensureRegistered(camera);
   }
 

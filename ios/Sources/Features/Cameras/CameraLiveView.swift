@@ -302,7 +302,6 @@ private struct CameraStick: View {
 
     private let size: CGFloat = 128
     private let knobSize: CGFloat = 50
-    private let keepAlive = Timer.publish(every: 0.45, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -327,10 +326,15 @@ private struct CameraStick: View {
                 .onChanged { value in drag(to: value.location) }
                 .onEnded { _ in release() }
         )
-        .onReceive(keepAlive) { _ in
-            // Each move lasts about a second on the camera; while a finger is
-            // held, the same move is sent again before it runs out.
-            if holding, let lastSent, Date().timeIntervalSince(lastSentAt) > 0.4 { send(lastSent) }
+        // Each move lasts about a second on the camera; while a finger is held
+        // still, the same move is sent again before it runs out. A task, not a
+        // timer kept on the view: the live picture redraws this view many
+        // times a second, and a timer made with it would be made again each time.
+        .task(id: holding) {
+            while holding, !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                if holding, let lastSent, Date().timeIntervalSince(lastSentAt) > 0.4 { send(lastSent) }
+            }
         }
         .environment(\.layoutDirection, .leftToRight)
         .accessibilityElement()
