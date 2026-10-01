@@ -172,6 +172,15 @@ final class NetworkCameraSource: CameraFeedSource {
 
     private var api: APIClient { APIClient.shared }
     private var lastSignOutCheck = Date.distantPast
+    /// Where the pictures come from, and with what token: the studio and the
+    /// signed-in person, except for a Debug check against a server on this Mac.
+    private let origin: URL
+    private let fixedToken: String?
+
+    init(origin: URL = portalOrigin, token: String? = nil) {
+        self.origin = origin
+        self.fixedToken = token
+    }
 
     func list() async throws -> Loaded<CameraList> { try await api.camerasList() }
     func controls(id: String) async throws -> CameraControls { try await api.cameraControls(id: id) }
@@ -188,8 +197,8 @@ final class NetworkCameraSource: CameraFeedSource {
     /// The pictures are fetched outside APIClient (they are bytes, not JSON),
     /// with its token, the way `send` attaches it.
     private func request(_ id: String, _ kind: String, query: [URLQueryItem] = []) -> URLRequest? {
-        guard let token = api.token else { return nil }
-        let url = portalOrigin
+        guard let token = fixedToken ?? api.token else { return nil }
+        let url = origin
             .appendingPathComponent("api/mobile/cameras")
             .appendingPathComponent(id)
             .appendingPathComponent(kind)
@@ -206,7 +215,7 @@ final class NetworkCameraSource: CameraFeedSource {
     /// do what it always does then — sign out, with the notice — rather than
     /// the picture code deciding that by itself.
     func signedOut() {
-        guard Date().timeIntervalSince(lastSignOutCheck) > 30 else { return }
+        guard fixedToken == nil, Date().timeIntervalSince(lastSignOutCheck) > 30 else { return }
         lastSignOutCheck = Date()
         Task { _ = try? await APIClient.shared.fetchMe() }
     }

@@ -82,7 +82,10 @@ struct CameraLiveView: View {
             feed.stop()
             mover.release()
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+        // Not willEnterForeground: the app is still "in the background" then.
+        // Starting twice is harmless — the feed ignores a start for what it is
+        // already showing.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             begin()
         }
     }

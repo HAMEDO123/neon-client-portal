@@ -19,11 +19,16 @@ import UIKit
 /// - camera-live-lost: the stream refused
 /// - camera-live-landscape: watching one with the phone turned (the scene is
 ///   asked for landscape; the simulator turns with it)
+/// - camera-net-check: the real network path — NetworkCameraSource,
+///   MJPEGConnection, the scanner and the feed — against a server on this Mac
+///   (never the studio's): SIMCTL_CHILD_NEON_CAMERAS_CHECK_ORIGIN (e.g.
+///   http://127.0.0.1:3999), …_CHECK_TOKEN and …_CHECK_ID. The feed prints
+///   "[cameras] live …" lines to the console.
 enum CamerasScreens {
     static let ids: [String] = [
         "cameras", "cameras-empty", "cameras-relay-down", "cameras-loading",
         "camera-add", "camera-edit", "camera-added", "camera-add-failed",
-        "camera-live", "camera-live-fixed", "camera-live-lost", "camera-live-landscape",
+        "camera-live", "camera-live-fixed", "camera-live-lost", "camera-live-landscape", "camera-net-check",
     ]
 
     @MainActor static func view(_ id: String) -> AnyView? {
@@ -62,6 +67,15 @@ enum CamerasScreens {
             return live(CameraFixtureSource(), at: 1)
         case "camera-live-lost":
             return live(CameraFixtureSource(liveRefusal: "The camera isn't sending a live picture."), at: 0)
+        case "camera-net-check":
+            let environment = ProcessInfo.processInfo.environment
+            guard let origin = environment["NEON_CAMERAS_CHECK_ORIGIN"].flatMap(URL.init(string:)),
+                  origin.host == "127.0.0.1" || origin.host == "localhost",
+                  let token = environment["NEON_CAMERAS_CHECK_TOKEN"],
+                  let id = environment["NEON_CAMERAS_CHECK_ID"] else { return nil }
+            let camera = CameraItem(id: id, name: "Network check", ip: nil, username: nil, hasPassword: nil,
+                                    login: "camera-account", editable: true, ptz: false, online: true)
+            return AnyView(CameraNetworkCheckHost(source: NetworkCameraSource(origin: origin, token: token), camera: camera))
         case "camera-live-landscape":
             return AnyView(CameraLiveFixtureHost(source: CameraFixtureSource(), start: CameraFixtureSource.sample[0].id, landscape: true))
         default:
@@ -102,6 +116,31 @@ private struct CameraLiveFixtureHost: View {
                 try? await Task.sleep(nanoseconds: 600_000_000)
                 let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
                 scene?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+            }
+    }
+}
+
+/// The live view over the real network source, pointed at this Mac.
+private struct CameraNetworkCheckHost: View {
+    let source: NetworkCameraSource
+    let camera: CameraItem
+    @StateObject private var wall = CameraWall()
+
+    var body: some View {
+        Color.black
+            .ignoresSafeArea()
+            .fullScreenCover(isPresented: .constant(true)) {
+                CameraLiveView(cameras: [camera], startAt: camera.id, source: source, wall: wall)
+                    .neonLanguage()
+            }
+            .task {
+                // One snapshot through the same source, as a tile would ask.
+                do {
+                    let picture = try await source.snapshot(id: camera.id, width: 640)
+                    print("[cameras] snapshot \(camera.id): \(Int(picture.size.width * picture.scale))×\(Int(picture.size.height * picture.scale))")
+                } catch {
+                    print("[cameras] snapshot \(camera.id) failed: \(error)")
+                }
             }
     }
 }

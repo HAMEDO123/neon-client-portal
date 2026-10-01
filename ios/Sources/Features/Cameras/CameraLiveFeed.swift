@@ -39,6 +39,11 @@ final class CameraLiveFeed: ObservableObject {
     private var task: Task<Void, Never>?
     private var lastFrameAt = Date()
     private var hadFrame = false
+    #if DEBUG
+    /// Pictures shown, for the console line a Debug check reads.
+    private var shownCount = 0
+    private var countedSince = Date()
+    #endif
 
     init(source: CameraFeedSource) {
         self.source = source
@@ -61,6 +66,9 @@ final class CameraLiveFeed: ObservableObject {
     }
 
     func stop() {
+        #if DEBUG
+        if task != nil { print("[cameras] live \(cameraId ?? "?"): stopped") }
+        #endif
         task?.cancel()
         task = nil
         phase = .idle
@@ -155,6 +163,14 @@ final class CameraLiveFeed: ObservableObject {
                 image = decoded
                 jpeg = picture
                 shownAt = Date()
+                #if DEBUG
+                shownCount += 1
+                if shownAt.timeIntervalSince(countedSince) >= 5 {
+                    print(String(format: "[cameras] live %@: %d pictures in %.1f s, %d×%d", id, shownCount, shownAt.timeIntervalSince(countedSince), Int(decoded.size.width * decoded.scale), Int(decoded.size.height * decoded.scale)))
+                    shownCount = 0
+                    countedSince = shownAt
+                }
+                #endif
                 lastFrameAt = shownAt
                 hadFrame = true
                 if phase != .live { phase = .live }
