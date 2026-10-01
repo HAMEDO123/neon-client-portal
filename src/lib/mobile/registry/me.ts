@@ -25,7 +25,8 @@ import {
 import { guarded, guardedAction, param, optParam, str, oneOf, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { shoppingDedupeKey, shoppingLabel, shoppingMessage } from "@/lib/office-shopping";
-import { recordShopFetch, shopAccount } from "@/lib/office-shop-account";
+import { recordShopFetch, saveShopSession, shopSession, type ShopCookie } from "@/lib/office-shop-account";
+import { requireAdmin } from "@/lib/admin-guard";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // The "me" area of the phone API: the signed-in employee's own things. See
@@ -42,28 +43,28 @@ export const reads: ReadRegistry = {
     canLogSiteVisits: me.canLogSiteVisits,
   })),
 
-  // The office shop account, so the phone can sign the web view in to the one
-  // cart instead of the manager typing it on every handset.
+  // The office's shop sign-in, so a phone opens the shop already signed in to
+  // the manager's account and the one cart.
   //
-  // **This hands over a real password**, which is not something any other read
-  // here does. It is the studio's decision, taken with the trade-off stated:
-  // the phone fills the shop's own sign-in form, so a hash is no use, and
-  // anybody the app answers to can therefore read it. See the comment at the
-  // top of lib/office-shop-account.ts.
+  // A session, not a password: Yaser Mall signs in with a phone number and an
+  // SMS code, so there is nothing else to hand over. lib/office-shop-account.ts
+  // has the whole of why.
   //
   // Every fetch is recorded against the person who asked. That record is the
-  // actual protection — the encryption only covers a stolen database copy.
-  "me/shopping/account": guarded(requireEmployee, async (_params, me) => {
-    const account = await shopAccount();
-    if (!account) {
-      // Not an error: an installation where the manager has not set one, or
-      // where SESSION_SECRET has changed since, and the app says so rather
-      // than failing on the tap.
-      return { account: null, why: "The office shop account isn't set up yet. Ask the manager." };
+  // real protection — encryption only covers a stolen database copy.
+  "me/shopping/session": guarded(requireEmployee, async (_params, me) => {
+    const session = await shopSession();
+    if (!session) {
+      // Not an error: nobody has shared one yet, or SESSION_SECRET has changed
+      // since. The app says so rather than failing on the tap.
+      return {
+        session: null,
+        why: "The office isn't signed in to the shop yet. Ask the manager to sign in and share it.",
+      };
     }
 
     await recordShopFetch(me.id, me.name);
-    return { account, why: null };
+    return { session, why: null };
   }),
 
   // Jobs handed out by hand (AssignedTask): src/lib/assigned-tasks.ts
@@ -223,6 +224,22 @@ export const actions: ActionRegistry = {
   // employee without the permission is refused by the action itself.
   "me/assign/create": async (input) => createAssignedTask(input.form),
   "me/assign/update": async (input) => updateAssignedTask(str(input.args[0], "id"), input.form),
+  // The manager hands their signed-in shop session to the rest of the office.
+  //
+  // `requireAdmin`, not `requireStaff`: this *is* the office's sign-in. An
+  // employee's phone reads it; only the manager's may replace it, or anybody
+  // could point the whole studio at an account of their own.
+  "me/shopping/share": guardedAction(requireAdmin, async (input) => {
+    const cookies = readCookies(input.args[0]);
+    if (cookies.length === 0) {
+      throw new RpcError("Sign in to the shop first — there is no session to share yet.", 400);
+    }
+
+    const site = typeof input.args[1] === "string" ? input.args[1].slice(0, 200) : null;
+    await saveShopSession(cookies, "Manager", site);
+    return { ok: true, cookies: cookies.length };
+  }),
+
   "me/assign/delete": async (input) => deleteAssignedTask(str(input.args[0], "id")),
   "me/assign/state": async (input) =>
     setAssignedTaskState(str(input.args[0], "id"), oneOf(input.args[1], ["TODO", "IN_PROGRESS", "DONE"], "state")),
@@ -244,3 +261,36 @@ export const actions: ActionRegistry = {
     return { ok: true };
   }),
 };
+
+/**
+ * The cookies a web view handed over, kept to the fields that go back in.
+ *
+ * Anything missing a name or a domain is dropped rather than stored: a cookie
+ * that cannot be put back is weight in the row and a puzzle on the phone. The
+ * cap is there because this comes from a client and a settings row should not
+ * be a place to put a megabyte.
+ */
+function readCookies(raw: unknown): ShopCookie[] {
+  if (!Array.isArray(raw)) return [];
+
+  const cookies: ShopCookie[] = [];
+  for (const item of raw.slice(0, 100)) {
+    if (!item || typeof item !== "object") continue;
+    const one = item as Record<string, unknown>;
+    const name = typeof one.name === "string" ? one.name.slice(0, 200) : "";
+    const domain = typeof one.domain === "string" ? one.domain.slice(0, 200) : "";
+    if (!name || !domain) continue;
+
+    cookies.push({
+      name,
+      value: typeof one.value === "string" ? one.value.slice(0, 4096) : "",
+      domain,
+      path: typeof one.path === "string" ? one.path.slice(0, 200) : "/",
+      expires: typeof one.expires === "number" && Number.isFinite(one.expires) ? one.expires : null,
+      secure: one.secure === true,
+      httpOnly: one.httpOnly === true,
+    });
+  }
+
+  return cookies;
+}

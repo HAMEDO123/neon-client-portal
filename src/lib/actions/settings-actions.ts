@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { PLANNING_NOTES_KEY, WORK_HOURS_KEYS, setSetting } from "@/lib/settings";
 import { parseWorkHours } from "@/lib/work-hours";
-import { clearShopAccount, saveShopAccount } from "@/lib/office-shop-account";
+import { clearShopSession } from "@/lib/office-shop-account";
 
 // The studio's own rules, kept beside the timezone in the settings table.
 // Admin only: these are public POST endpoints, and the layout's redirect is a
@@ -69,30 +69,14 @@ export async function savePlanningNotes(formData: FormData) {
 }
 
 /**
- * The office's shop account, so every phone signs in to the one cart.
+ * Signs the whole office out of the shop.
  *
- * **The manager's alone to set.** Reading it is the team's — that is the whole
- * point, and `lib/office-shop-account.ts` is blunt about what that means — but
- * writing it is not, and neither is clearing it.
- *
- * An empty password box leaves the stored one alone, so the email can be
- * corrected without retyping it.
+ * The only half of this that lives on the dashboard. Signing *in* happens on
+ * the manager's own phone, because Yaser Mall sends a code by SMS and that SMS
+ * arrives there — `lib/office-shop-account.ts` says why that shaped everything.
  */
-export async function saveOfficeShopAccount(formData: FormData) {
-  await requireAdmin();
-
-  const email = String(formData.get("email") ?? "").trim().slice(0, 200);
-  const password = String(formData.get("password") ?? "");
-  const site = String(formData.get("site") ?? "").trim().slice(0, 200) || null;
-
-  if (!email) throw new Error("Enter the email the shop account signs in with.");
-
-  await saveShopAccount(email, password || null, site);
-  revalidatePath("/admin/settings");
-}
-
 export async function clearOfficeShopAccount() {
   await requireAdmin();
-  await clearShopAccount();
+  await clearShopSession();
   revalidatePath("/admin/settings");
 }

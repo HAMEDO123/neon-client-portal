@@ -2,15 +2,14 @@ import { CalendarClock, Clock, NotebookPen, Send, ShoppingCart, Sparkles, Triang
 import { saveTimezone } from "@/lib/actions/whatsapp-actions";
 import {
   clearOfficeShopAccount,
-  saveOfficeShopAccount,
   savePlanningNotes,
   saveWorkHours,
 } from "@/lib/actions/settings-actions";
-import { shopAccountState } from "@/lib/office-shop-account";
+import { shopSessionState } from "@/lib/office-shop-account";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
 import { capacityMinutes, minutesOf, spanMinutes, timeOf } from "@/lib/work-hours";
-import { TextArea, TextInput } from "@/components/admin/fields";
+import { TextArea } from "@/components/admin/fields";
 import { isAiConfigured } from "@/lib/ai/client";
 import { getPublicKey, isPushConfigured } from "@/lib/notifications/push";
 import { managerEmployeeId } from "@/lib/manager-account";
@@ -53,9 +52,10 @@ export default async function AdminSettingsPage({
   const { preview } = await searchParams;
   const timezone = await getTimezone();
   const planningNotes = await getPlanningNotes();
-  // Whether the office shop account is set, and who last took it — never the
-  // password itself: a settings page left open on a desk is the other leak.
-  const shop = await shopAccountState();
+  // Whether the office is signed in to the shop, when, and who last took it.
+  // Never the session itself: a settings page left open on a desk is the other
+  // way a sign-in walks out of the building.
+  const shop = await shopSessionState();
   const workHours = await getWorkHours();
   const transport = activeTransport();
   const cloud = getCloudCredentials();
@@ -226,69 +226,81 @@ export default async function AdminSettingsPage({
         </form>
       </section>
 
-      {/* --- The office's shop account -------------------------------------- */}
+      {/* --- The office's shop sign-in --------------------------------------- */}
       <section className="glass rounded-2xl p-6">
         <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
           <ShoppingCart size={16} strokeWidth={2} />
-          Sign in to the office shop
+          The office shop sign-in
         </h2>
         <p className="mt-1 text-sm text-ink/50">
-          Sign in here once, and every employee&apos;s phone is signed in to the same account and the same
-          cart — nobody on the team types anything, and you never touch their handset. Only you can sign in
-          or sign out.
+          You sign in to the shop once, on your own phone, and every employee&apos;s phone opens the shop on
+          your account and your cart. Nobody on the team signs in to anything, and you never touch their
+          handset.
         </p>
 
-        {/* Said on the screen, not only in the code: whoever sits here next is
-            the person who needs to know what keeping this costs. */}
-        <div className="mt-4 flex gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3">
-          <TriangleAlert size={15} strokeWidth={2} className="mt-0.5 shrink-0 text-amber-700" />
-          <p className="text-xs leading-relaxed text-ink/70">
-            <span className="font-semibold text-ink">Everyone on the team can read this password.</span> Their
-            phone has to type it into the shop&apos;s own sign-in page, so the platform hands it over whenever
-            one asks. It is encrypted here, which protects a copy of the database and nothing else. Use an
-            account that only buys the office&apos;s shopping — never one that shares a password with anything
-            that matters.
+        {/* Why the sign-in is not on this page. The shop sends a code by SMS
+            and the SMS arrives on the manager's phone — no screen here can
+            receive it, so the act has to happen where the message lands. */}
+        <div className="mt-4 rounded-xl border border-ink/10 bg-white/50 p-3.5">
+          <p className="text-xs font-semibold text-ink">How to sign the office in</p>
+          <ol className="mt-1.5 flex list-decimal flex-col gap-1 pl-4 text-xs leading-relaxed text-ink/60">
+            <li>Open <span className="font-medium text-ink/80">Office shopping</span> in the NEON app on your phone.</li>
+            <li>Sign in to the shop as you normally would — the code comes to your phone by SMS.</li>
+            <li>Tap <span className="font-medium text-ink/80">Share with the office</span>.</li>
+          </ol>
+          <p className="mt-2 text-xs text-ink/45">
+            It cannot be done from this page: the shop sends the code to your phone, and no screen here can
+            receive it.
           </p>
         </div>
 
-        <form action={saveOfficeShopAccount} className="mt-4 max-w-xl">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput label="Shop email" name="email" defaultValue={shop.email ?? ""} />
-            <TextInput
-              label={shop.hasPassword ? "Password (blank keeps the current one)" : "Password"}
-              name="password"
-              type="password"
-            />
-          </div>
-          <div className="mt-3">
-            <TextInput label="Shop website (optional)" name="site" defaultValue={shop.site ?? ""} />
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <SaveButton label={shop.hasPassword ? "Update the sign-in" : "Sign in for the office"} />
-            {shop.hasPassword && (
-              <span className="text-xs text-ink/45">
-                {shop.readable
-                  ? "Signed in — every phone uses this."
-                  : "Signed in, but it can no longer be read: SESSION_SECRET has changed since. Sign in again."}
-              </span>
+        {shop.readable ? (
+          <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5">
+            <p className="text-sm font-medium text-ink">The office is signed in.</p>
+            <p className="mt-1 text-xs text-ink/60">
+              {shop.shared
+                ? `Shared by ${shop.shared.name} · ${formatDayIn(timezone, new Date(shop.shared.at))} ${formatTimeIn(timezone, new Date(shop.shared.at))}`
+                : "Shared from your phone."}
+            </p>
+            {shop.lastFetch && (
+              <p className="mt-0.5 text-xs text-ink/45">
+                Last used by {shop.lastFetch.name} · {formatDayIn(timezone, new Date(shop.lastFetch.at))}{" "}
+                {formatTimeIn(timezone, new Date(shop.lastFetch.at))}
+              </p>
             )}
+            {/* The one thing nobody can predict: only the shop knows when it
+                will end the session, so this says what to do rather than
+                pretending to know. */}
+            <p className="mt-2 text-xs text-ink/50">
+              The shop ends a sign-in on its own schedule. When phones start asking for a login again, sign in
+              on yours and share it once more.
+            </p>
           </div>
-        </form>
-
-        {shop.lastFetch && (
-          <p className="mt-3 text-xs text-ink/45">
-            Last taken by a phone: {shop.lastFetch.name} · {formatDayIn(timezone, new Date(shop.lastFetch.at))}{" "}
-            {formatTimeIn(timezone, new Date(shop.lastFetch.at))}
-          </p>
+        ) : (
+          <div className="mt-4 rounded-xl border border-ink/12 bg-ink/[0.02] p-3.5">
+            <p className="text-sm font-medium text-ink/70">The office is not signed in yet.</p>
+            <p className="mt-1 text-xs text-ink/50">
+              {shop.shared
+                ? "A sign-in was shared, but it can no longer be read — SESSION_SECRET has changed since. Share it again from your phone."
+                : "Phones will ask whoever is holding them to log in until you share yours."}
+            </p>
+          </div>
         )}
 
-        {(shop.email || shop.hasPassword) && (
+        {/* Said on the screen, not only in the code: whoever sits here next is
+            the person who needs to know what sharing this means. */}
+        <div className="mt-3 flex gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3">
+          <TriangleAlert size={15} strokeWidth={2} className="mt-0.5 shrink-0 text-amber-700" />
+          <p className="text-xs leading-relaxed text-ink/70">
+            Every phone on the team can use this sign-in, and that means ordering on your account. It is not
+            the account itself — nobody can change your phone number or read the SMS codes — and signing out
+            at the shop ends every copy of it at once.
+          </p>
+        </div>
+
+        {(shop.readable || shop.shared) && (
           <form action={clearOfficeShopAccount} className="mt-3">
-            <button
-              type="submit"
-              className="text-xs font-medium text-ink/40 hover:text-red-600"
-            >
+            <button type="submit" className="text-xs font-medium text-ink/40 hover:text-red-600">
               Sign the office out — every phone stops being able to shop
             </button>
           </form>

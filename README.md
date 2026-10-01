@@ -371,31 +371,11 @@ shared cart: everybody adds, only the manager orders. The cart lives at the
 shop; what the platform keeps is the telling (`lib/office-shopping.ts`, pure —
 `me/shopping/added` notifies the manager, once per person per thing per ten
 minutes, so five taps on the same coffee is one alert).
-- **The sign-in is stored centrally, and it is a password the platform can read
-  back.** Nothing else in this codebase does that — the admin's password is a
-  bcrypt hash and an employee's is too — and it is deliberate: the phone fills
-  in the shop's own sign-in form, so a hash is no use. The manager sets it on
-  `/admin/settings`; `requireAdmin` to write, any employee to read.
-  - **The trade-off was put to the studio before it was built, and taken.**
-    Every employee can read that password: the server has to hand over the real
-    thing for a phone to type it, so anybody with an employee login can call
-    `me/shopping/account` and have it. **Encryption protects a stolen database
-    copy and nothing else** — `lib/secret-box.ts` says so at the top, and the
-    settings page says it on screen, because the next person to read either
-    needs to know what keeping this costs.
-  - **The record of who fetched it is the actual protection**, not the
-    encryption (`recordShopFetch`; shown in Settings as "Last taken by…").
-    One row, overwritten — a full trail is a table and a screen, worth building
-    the day it is ever in doubt.
-  - `lib/secret-box.ts` is AES-256-GCM with a key derived from `SESSION_SECRET`
-    by scrypt, so one secret is not the key for two different things. **Changing
-    `SESSION_SECRET` makes it unreadable** — one more thing that already
-    signs out every employee and the iOS app. It reads back as "not set up",
-    and the settings page says which it is, rather than handing a phone
-    something broken.
-  - Use an account that only buys the office's shopping. The reason this is a
-    reasonable thing to do at all is that it is a supermarket; the same
-    arrangement must not be copied for anything that matters more.
+- **One sign-in for the whole office, and it is a session rather than a password — because the shop has no password.** Yaser Mall signs in with a phone number and an SMS code (`أدخل رقم الهاتف` → `متابعة`), so there is nothing to store and the code lands on the manager's own phone. The first build of this kept an email and a password and was wrong about the shop, which a screenshot of an employee's phone is what caught.
+  - **The manager signs in on their own phone** — where the SMS arrives — and taps *Share with the office* (`me/shopping/share`, `requireAdmin`: an employee's token is refused, or anybody could point the studio at an account of their own). Every other phone reads it (`me/shopping/session`, any employee) and loads the cookies before opening the shop.
+  - **It cannot be done from the dashboard, and the settings page says so** rather than offering a form that could not work: the code arrives by SMS and no screen here can receive it. `/admin/settings` shows whether the office is signed in, who shared it, who last used it, and a button to sign everybody out.
+  - **A session is the weaker thing to share, which is the good half.** It is not the account — nobody can change the phone number or read the codes — and signing out at the shop ends every copy at once. The bad half is that it expires on the shop's own schedule, and nothing here can know when; the screen says what to do instead of pretending to.
+  - Encrypted at rest (`lib/secret-box.ts`, AES-256-GCM keyed off `SESSION_SECRET` through scrypt) because the daily database dumps leave this machine. **It protects a stolen copy and nothing else** — anybody the app answers to can read it, so `recordShopFetch` keeps who asked and when, and that record is the actual protection. Changing `SESSION_SECRET` makes it unreadable, which reads back as "not signed in" and says which it is.
 - `ios/Sources/Features/Shopping/SHARED-ACCOUNT.md` is the brief for the app
   side, including the bit that matters: the view's comment currently claims the
   team never needs the password, and that claim has to go.

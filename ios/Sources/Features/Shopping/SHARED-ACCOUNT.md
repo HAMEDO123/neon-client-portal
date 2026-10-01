@@ -1,81 +1,82 @@
-# Office shopping: the shared sign-in (server side is done)
+# Office shopping: one sign-in for the whole office (server side is done)
 
 Hand this to Claude on the Mac. The server half is live on
-`https://clients.neonjo.com`; what is left is the app filling the form.
+`https://clients.neonjo.com`.
 
-## What changed and why
+## What the studio asked for
 
-`OfficeShoppingView` today says *"The manager signs the office account in once
-on each phone (the web view keeps its own cookies), so nobody on the team needs
-the password."* That was the right design, and the studio has chosen a different
-one: the manager sets the shop account **once**, centrally, and every phone
-signs itself in.
+> I sign in to the shop from my account, and the shopping on every employee's
+> phone uses my account.
 
-The trade-off was put to Hamed plainly before this was built, and he took it:
+## Why it is a session and not a password
 
-> Everyone on the team can read that password. For a phone to type it into the
-> shop's sign-in page the server has to hand over the real thing, so any
-> employee can call the endpoint with their own token and read it. Encryption
-> protects a stolen database copy and nothing else.
+The first attempt stored an email and a password, because that is what a shop
+account usually is. **Yaser Mall has neither.** Its sign-in is a phone number
+and an SMS code — `أدخل رقم الهاتف` → `متابعة`. There is nothing to store, and
+the code arrives on the manager's phone, so nothing an employee's handset could
+type would ever get in.
 
-So **delete the "nobody on the team needs the password" claim from the view's
-comment and from the on-screen copy** — it is no longer true, and a comment that
-says a secret is safe when it is not is worse than no comment.
+So: the manager signs in on **their own phone**, where the SMS lands, and hands
+that signed-in session to the office. Every other phone loads it before opening
+the shop and is already in.
 
-## The endpoint
+`OfficeShoppingView`'s comment still says *"The manager signs the office account
+in once on each phone … so nobody on the team needs the password."* **Both
+halves of that are now wrong** — it is once in total, not once per phone, and
+there is no password in it at all. Fix the comment and the on-screen copy.
 
-    GET /api/mobile/get/me/shopping/account
-    Authorization: Bearer <the employee's existing token>
+## The endpoints
 
-Signed in, and set up:
+**Read, any signed-in employee:**
 
-    { "account": { "email": "...", "password": "...", "site": "https://www.yasermallonline.com/" },
+    GET /api/mobile/get/me/shopping/session
+
+    { "session": { "cookies": [ … ], "site": "https://www.yasermallonline.com/" },
       "why": null }
 
-Not set up, or stored under a `SESSION_SECRET` that has since changed:
+    { "session": null,
+      "why": "The office isn't signed in to the shop yet. Ask the manager to sign in and share it." }
 
-    { "account": null,
-      "why": "The office shop account isn't set up yet. Ask the manager." }
+`why` is a sentence to put on the screen, not a code to branch on. Show it where
+the web view would have been, with no retry button — nothing the person can do
+from their phone will fix it, and the sentence says who can.
 
-`site` is optional and may be null — fall back to `OfficeShop.home`.
+**Share, the manager only** (an admin token; an employee's gets 403):
 
-**`why` is a sentence to show, not a code to branch on.** Put it on the screen
-where the web view would have been, with no retry button: nothing the person can
-do from their phone will fix it, and the sentence already says who can.
+    POST /api/mobile/do/me/shopping/share
+    { "args": [ [ …cookies… ], "https://www.yasermallonline.com/" ] }
 
-**Every fetch is recorded** against the person who asked, and the manager sees
-"Last taken by …" in Settings. So fetch it when the shop screen opens and the
-web view is not already signed in — not on every app launch, and not on a timer.
+A cookie is `{ name, value, domain, path, expires, secure, httpOnly }` —
+`expires` in seconds since the epoch, or null for a session cookie. Anything
+without a name or a domain is dropped; at most 100 are kept.
 
-## Filling the form
+## The app's half
 
-The account is for the supermarket's own site, so the app has to drive that
-site's sign-in page. Nothing about it is ours, which means:
+- **On the manager's phone:** after they sign in, a **Share with the office**
+  button. Read `WKWebsiteDataStore.default().httpCookieStore.getAllCookies()`,
+  keep the shop's own domain and nothing else, POST them. Confirm with what came
+  back (`cookies: N`), because a share that silently sent nothing is the failure
+  nobody would notice until the team could not shop.
+- **On everybody's phone:** before the first load of the shop, fetch the session
+  and `setCookie` each one into the same store, then load. The store persists, so
+  this is once per phone per session rather than once per visit.
+- **When the shop logs the office out**, phones see its login page again. Detect
+  it if you can and say "Ask the manager to sign in again"; if you cannot, the
+  login page itself is not a disaster — it is what happens today.
 
-- **Find the fields rather than assuming them.** A selector hard-coded today is
-  a silent breakage the next time the shop redesigns, and the symptom is a blank
-  web view that reads as a broken app.
-- **Only ever on the shop's own origin.** Check the host before injecting
-  anything; a redirect to a payment provider must never be typed into.
-- **If it cannot be filled, leave the page alone** and let the person sign in by
-  hand — the password is on the screen in front of them. Say that, rather than
-  spinning.
-- The web view keeps its cookies, so this is once per phone per session, not
-  once per visit.
-
-## Still true, and still the point
+## Still true, and now carrying more weight
 
 Only the manager places the order. `OfficeShop.isCheckout` and the blocked
-handler stay exactly as they are — the shared sign-in means every phone is now
-on an account that *could* order, so that block is carrying more weight than it
-did before, not less.
+handler stay exactly as they are: every phone is now on an account that *could*
+order, so that block matters more than it did, not less.
 
-## Where the manager sets it
+## Where the manager sees it
 
-`/admin/settings` → **The office shop account**: email, password, optional site,
-and a Remove button. Manager only (`requireAdmin`); the password box left blank
-keeps the stored one. The page carries the warning above, on screen.
+`/admin/settings` → **The office shop sign-in**: whether the office is signed
+in, who shared it and when, who last used it, and a button to sign the whole
+office out. The sign-in itself is not on that page, and the page says why.
 
-Server files, for reference: `src/lib/office-shop-account.ts` (the store and the
-fetch record), `src/lib/secret-box.ts` (encryption at rest, and an honest
-comment about what it does not protect), `src/lib/actions/settings-actions.ts`.
+Server files: `src/lib/office-shop-account.ts` (the store, the record of who
+used it, and the whole of why it is a session), `src/lib/secret-box.ts`
+(encryption at rest, and an honest comment about what it does not protect),
+`src/lib/mobile/registry/me.ts`.
