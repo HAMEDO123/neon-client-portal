@@ -64,6 +64,7 @@ struct ChatCameraView: View {
                     .position(focusPoint)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
+                    .environment(\.layoutDirection, .leftToRight)
                     .transition(.scale(scale: 1.4).combined(with: .opacity))
             }
 
@@ -298,7 +299,7 @@ struct ChatCameraView: View {
     }
 
     private var showsStrip: Bool {
-        !recording && mode != .videoNote && library.canRead && (!library.recent.isEmpty || library.isLimited)
+        !recording && mode != .videoNote && library.canRead && library.hasStrip
     }
 
     private var strip: some View {
@@ -315,6 +316,15 @@ struct ChatCameraView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 4) {
+                    #if DEBUG
+                    ForEach(library.fixtureThumbs.indices, id: \.self) { index in
+                        Image(uiImage: library.fixtureThumbs[index])
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 64, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    #endif
                     ForEach(library.recent, id: \.localIdentifier) { asset in
                         Button {
                             Haptic.tap()

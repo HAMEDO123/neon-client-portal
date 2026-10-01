@@ -26,9 +26,30 @@ final class ChatRecentPhotos: NSObject, ObservableObject {
 
     var canRead: Bool { status == .authorized || status == .limited }
     var isLimited: Bool { status == .limited }
+    /// Something to put in the strip.
+    var hasStrip: Bool {
+        #if DEBUG
+        if !fixtureThumbs.isEmpty { return true }
+        #endif
+        return !recent.isEmpty || isLimited
+    }
+
+    #if DEBUG
+    /// The debug router's stand-in for the library, so the strip can be
+    /// screenshotted where Photos cannot be granted without a tap.
+    static var fixtures: [UIImage] = []
+    @Published private(set) var fixtureThumbs: [UIImage] = []
+    #endif
 
     /// Asks once, the first time the camera opens; reads what it may.
     func start() {
+        #if DEBUG
+        if !Self.fixtures.isEmpty {
+            status = .authorized
+            fixtureThumbs = Self.fixtures
+            return
+        }
+        #endif
         status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         if status == .notDetermined {
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] answer in

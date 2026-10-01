@@ -24,12 +24,14 @@ import SwiftUI
 /// - camera-story-editor: a story photo (cut to the screen's shape) in the
 ///   editor, with Next instead of the caption and send
 /// - camera-story-video: a story recording in review, cut to the screen
+/// - camera-strip: the camera with drawn stand-ins in the recent strip (a
+///   simulator cannot be given full Photos access without a tap)
 enum CameraScreens {
     static let ids: [String] = [
         "camera", "camera-note", "camera-editor", "camera-editor-marked", "camera-editor-draw",
         "camera-editor-text", "camera-editor-crop", "camera-editor-stickers", "camera-editor-hd",
         "camera-video", "camera-note-review", "camera-video-export",
-        "camera-story", "camera-story-editor", "camera-story-video",
+        "camera-story", "camera-story-editor", "camera-story-video", "camera-strip",
     ]
 
     static let chatName = "NEON Team"
@@ -64,6 +66,9 @@ enum CameraScreens {
             return covered(NeonCameraView(purpose: .story) { _ in } onVideo: { _ in })
         case "camera-story-editor":
             return covered(CameraEditorFixture(story: true))
+        case "camera-strip":
+            ChatRecentPhotos.fixtures = CameraFixtures.thumbs
+            return covered(ChatCameraScreen(chatName: chatName) { _, _ in })
         case "camera-story-video":
             return covered(CameraVideoFixture(note: false, story: true))
         default:
@@ -166,6 +171,20 @@ enum CameraFixtures {
             gradient(UIColor(red: 0.55, green: 0.42, blue: 0.85, alpha: 1), UIColor(red: 0.35, green: 0.62, blue: 0.95, alpha: 1), CGRect(x: 236, y: 396, width: 268, height: 188))
         }
     }()
+
+    /// Squares cut from the photo, tinted, for the recent strip.
+    static let thumbs: [UIImage] = (0..<8).map { index in
+        let side: CGFloat = 400
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            let x = -CGFloat(index % 4) * 220
+            let y = -CGFloat(index / 2 % 3) * 300
+            photo.draw(in: CGRect(x: x, y: y, width: 1200, height: 1600))
+            UIColor(NeonPalette.color(at: index)).withAlphaComponent(0.18).setFill()
+            UIRectFillUsingBlendMode(CGRect(x: 0, y: 0, width: side, height: side), .multiply)
+        }
+    }
 
     /// Three seconds panning across the photo, as an H.264 MP4 in the
     /// temporary folder.
