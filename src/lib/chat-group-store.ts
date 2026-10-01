@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { avatarUrl } from "@/lib/avatar";
+import { facesFor } from "@/lib/faces";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { cleanGroupName, groupAvatar } from "@/lib/chat-groups";
 import {
@@ -117,7 +118,7 @@ export async function groupEmployees(groupId: string) {
   const members = await prisma.chatGroupMember.findMany({
     where: { groupId, employee: { active: true, accessRole: "EMPLOYEE" } },
     orderBy: { employee: { order: "asc" } },
-    select: { employee: { select: { id: true, name: true, color: true } } },
+    select: { employee: { select: { id: true, name: true, color: true, photoUrl: true } } },
   });
   return members.map((member) => member.employee);
 }
@@ -231,7 +232,7 @@ export async function groupDetail(viewer: ChatViewer, slug: string) {
       createdAt: true,
       members: {
         orderBy: { employee: { order: "asc" } },
-        select: { employee: { select: { id: true, name: true, color: true, active: true } } },
+        select: { employee: { select: { id: true, name: true, color: true, active: true, photoUrl: true } } },
       },
     },
   });
@@ -250,7 +251,7 @@ export async function groupDetail(viewer: ChatViewer, slug: string) {
         id: employee.id,
         name: employee.name,
         color: employee.color,
-        avatar: avatarUrl(employee.name, employee.color),
+        avatar: employee.photoUrl ?? avatarUrl(employee.name, employee.color),
       })),
     canManage: viewer.type === "ADMIN",
   };
@@ -269,9 +270,24 @@ export async function chatPeople(viewer: ChatViewer) {
       ...(viewer.type === "EMPLOYEE" ? { NOT: { id: viewer.id } } : {}),
     },
     orderBy: { order: "asc" },
-    select: { id: true, name: true, role: true, color: true },
+    select: { id: true, name: true, role: true, color: true, photoUrl: true },
   });
-  const team = people.map((person) => ({ ...person, avatar: avatarUrl(person.name, person.color) }));
+  const team = people.map((person) => ({
+    ...person,
+    avatar: person.photoUrl ?? avatarUrl(person.name, person.color),
+  }));
   if (viewer.type === "ADMIN") return team;
-  return [{ id: "manager", name: "Manager", role: null, color: "ink", avatar: avatarUrl("Manager", "ink") }, ...team];
+
+  const faces = await facesFor(["admin"]);
+  return [
+    {
+      id: "manager",
+      name: "Manager",
+      role: null,
+      color: "ink",
+      photoUrl: faces.admin ?? null,
+      avatar: faces.admin ?? avatarUrl("Manager", "ink"),
+    },
+    ...team,
+  ];
 }

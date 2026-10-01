@@ -101,7 +101,7 @@ export async function homeNow() {
     orderBy: [{ order: "asc" }, { name: "asc" }],
     // No avatar image exists anywhere on Employee — every screen in this
     // codebase draws people from their initials and colour instead.
-    select: { id: true, name: true, color: true },
+    select: { id: true, name: true, color: true, photoUrl: true },
   });
 
   const onlineKeys = new Set((await onlineNow()).map((row) => row.memberKey));
@@ -119,6 +119,7 @@ export async function homeNow() {
       id: employee.id,
       name: employee.name,
       color: employee.color,
+      photo: employee.photoUrl,
       avatar: null as string | null,
       online: onlineKeys.has(employee.id),
       now: slot(state.now, state.leftOfBlock),

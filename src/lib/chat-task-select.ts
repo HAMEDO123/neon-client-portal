@@ -25,7 +25,7 @@ export const chatTaskSelect = {
       // Which version of the part a screen last saw, so a status shown ahead of
       // the server is dropped the moment the part changes for any reason.
       updatedAt: true,
-      employee: { select: { name: true, color: true } },
+      employee: { select: { name: true, color: true, photoUrl: true } },
       // The photo waiting for the manager, if there is one: what the review is of.
       submissions: {
         where: { status: "PENDING" },

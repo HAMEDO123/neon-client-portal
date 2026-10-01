@@ -10,6 +10,17 @@ import { assignedKey } from "@/lib/notifications/types";
 import { periodOf } from "@/lib/payroll";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey, tomorrowKey } from "@/lib/time";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // Integration tests against a real database — these are the guarantees that
 // cannot be proven with pure functions: that one employee's id genuinely

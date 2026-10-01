@@ -44,3 +44,8 @@
 /* Sign-in */
 "Sign in with your work email and password." = "سجّل الدخول ببريد العمل وكلمة المرور.";
 "Enter the studio's admin password." = "أدخل كلمة مرور الإدارة الخاصة بالاستوديو.";
+
+/* FacePicker: changing somebody's face */
+"Choose from library" = "اختر من الصور";
+"Photo saved" = "تم حفظ الصورة";
+"Photo removed" = "تمت إزالة الصورة";

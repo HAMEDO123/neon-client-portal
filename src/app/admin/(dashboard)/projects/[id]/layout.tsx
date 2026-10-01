@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getProjectById } from "@/lib/queries";
 import { ProjectTabs } from "@/components/admin/project-tabs";
 import { LinkActions } from "@/components/admin/link-actions";
+import { ensureAccessCode } from "@/lib/client-access";
 import { isWhatsAppAvailable } from "@/lib/whatsapp";
 import { PublishControls } from "@/components/admin/publish-controls";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ export default async function ProjectLayout({
           canSendDirect={isWhatsAppAvailable()}
           projectId={project.id}
           token={project.token}
+          accessCode={await ensureAccessCode(project.id)}
           clientName={project.clientName}
           clientPhone={project.clientPhone}
         />

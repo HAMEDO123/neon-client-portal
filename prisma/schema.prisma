@@ -188,6 +188,11 @@ enum DeliveryStatus {
 model Project {
   id          String  @id @default(cuid())
   token       String  @unique
+  /// The code a client types into the app, instead of following a link. A
+  /// second credential of the same standing as `token` and revoked the same
+  /// way; `lib/client-codes.ts` says why it is shaped as it is. Nullable only
+  /// because projects existed before it — `ensureAccessCode` fills one in.
+  accessCode  String? @unique
   name        String
   clientName  String
   clientEmail String?
@@ -447,6 +452,11 @@ model Employee {
   role   String?
   // Accent used for this employee's column group on the board.
   color  String  @default("cyan")
+  // Their face. Null for anybody who has not been given one, which is every
+  // employee until somebody uploads one — `PersonAvatar` then draws initials
+  // on `color` as it always has, so a studio that never uses this looks
+  // exactly as it did.
+  photoUrl String?
   order  Int     @default(0)
   // Doubles as the account status: a disabled employee cannot sign in.
   active Boolean @default(true)
@@ -1961,10 +1971,13 @@ model SupplyRequestLine {
   request   SupplyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   name     String
-  /// "2 boxes", "5m" — words, because a quantity here is written the way
-  /// somebody would say it at the counter, not as a number to compute with.
-  quantity String?
-  /// What it is expected to cost, in JOD. The request's own total is the sum.
+  /// How many of them. A number, which replaced the free text it used to be
+  /// ("2 boxes"): a count is what somebody actually types on a phone, and
+  /// anything needing words goes in the request's own note.
+  count    Int?
+  /// What this line is expected to cost **altogether**, in JOD — not each, so
+  /// nothing anywhere multiplies it by the count. The studio chose that way
+  /// round. The request's own total is the sum of its lines.
   estimatedCost Float?
 
   /// The order they were typed in, which is the order they will be bought in.

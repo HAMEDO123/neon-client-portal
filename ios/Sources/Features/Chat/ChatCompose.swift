@@ -53,7 +53,8 @@ struct ChatTaskComposeSheet: View {
                 } else if members.isEmpty {
                     StatusNote(symbol: "person.slash", tone: .warning, title: L("Nobody to hand this to"), detail: L("There is nobody else in this chat."))
                 } else {
-                    SelectField(L("People"), selection: $assignees, options: members, title: \.name, isRequired: true)
+                    SelectField(L("People"), selection: $assignees, options: members, title: \.name,
+                                avatar: { facePhotoURL($0.photoUrl) }, isRequired: true)
                 }
                 if let loadError { ValidationMessage(loadError) }
             }
@@ -224,7 +225,8 @@ struct ChatMeetingComposeSheet: View {
                 } else if members.isEmpty {
                     StatusNote(symbol: "person.slash", tone: .warning, title: L("Nobody to ask"), detail: L("There is nobody else in this chat."))
                 } else {
-                    SelectField(L("People"), selection: $attendees, options: members, title: \.name, isRequired: true)
+                    SelectField(L("People"), selection: $attendees, options: members, title: \.name,
+                                avatar: { facePhotoURL($0.photo) }, isRequired: true)
                 }
                 if let loadError { ValidationMessage(loadError) }
                 MenuField(L("Where"), selection: $mode,

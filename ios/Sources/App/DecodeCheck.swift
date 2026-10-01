@@ -58,16 +58,19 @@ enum DecodeCheck {
                 // One file missing from storage is a placeholder, not a broken
                 // gallery; most of them missing is.
                 var missing = 0
+                var loaded: [URL] = []
                 for url in urls {
                     guard let thumb = await ImagePipeline.shared.image(url, pixels: 390) else {
                         missing += 1
                         print("DECODE note  thumbnail did not load: \(url)")
                         continue
                     }
+                    loaded.append(url)
                     guard thumb.size.width <= 640 else { throw DecodeCheckError("thumbnail is \(thumb.size.width)px wide: the server is not resizing (media route not deployed?)") }
                 }
                 if missing * 2 > urls.count { throw DecodeCheckError("\(missing) of \(urls.count) thumbnails did not load") }
-                guard await ImagePipeline.shared.image(urls[urls.startIndex], pixels: 1600) != nil else {
+                guard let first = loaded.first else { return }
+                guard await ImagePipeline.shared.image(first, pixels: 1600) != nil else {
                     throw DecodeCheckError("full-screen picture did not load")
                 }
             }

@@ -187,6 +187,56 @@ deploy/cloudflared/   the tunnel's config inside Docker (no secrets)
   - The manager is told after the fact — not a gate, since the studio chose immediate, but it means an upload is learned from the platform rather than from the client. Photos are keyed on the room and the day, so eight from one site visit arrive as one notification.
 - **Language:** the client page is English and Arabic (`lib/client-i18n.tsx`; the English strings are the keys, with an `AR` dictionary). Every new client string needs an `AR` entry. The admin is English only.
 
+### The client's own app
+A second iOS app, for the studio's clients rather than its staff: one project
+each, from the App Store. `ios/CLIENT-APP.md` is the brief it is built from.
+- **The code is the link in another shape.** `Project.accessCode` is eight
+  characters shown as `W8BZ-49S2`, and `POST /api/client/login` exchanges it for
+  the project's **token** — which is what the app keeps and sends on every later
+  call. So nothing new grants access: there is no session, nothing expires, and
+  the manager revokes it exactly as they already revoke a link.
+  - `lib/client-codes.ts` is pure and tested. Crockford's alphabet, without
+    `I`, `L`, `O` or `U`: the first three because a code is read down the phone
+    and heard as `1`, `1` and `0` — `normaliseCode` folds each onto the
+    character the alphabet has — and `U` so no code spells anything. It takes
+    the code in any case, with or without its dash, and refuses anything else
+    rather than guessing at it.
+  - **A draft or archived project is not a wrong code**, and the three answers
+    say so separately. Reporting "that code is not right" for a project that is
+    simply not ready is what makes a client ring the studio about a code that
+    works perfectly.
+  - A short code invites being guessed at, so `lib/client-access.ts` holds an
+    attempt limit — ten wrong tries per address in ten minutes, in this
+    process's memory. The comment there is honest about what that is and is not:
+    32^8 makes guessing hopeless anyway, and the limit is there so the attempt
+    is not free and the log is not filled by it.
+  - Every project gets a code when it is created; `ensureAccessCode` fills one
+    in for the projects that existed before codes did, the first time the
+    manager opens one. Regenerating it is `requireStaff`, like regenerating the
+    link, and `tests/admin-guard.test.ts` pins that choice by name.
+- **`GET /api/client/project` is the whole project in one answer**, because a
+  phone on a mobile connection pays for every round trip and the server already
+  reads it all in one query.
+  - **The visibility switches are enforced by leaving things out of it**
+    (`lib/client-payload.ts`, pure and tested) — never by sending a figure with
+    a flag asking the app not to draw it. A client's app is on a phone the
+    studio does not control and the answer is one `curl` away from anybody
+    holding the code, so "the app hides it" is a request, not a setting.
+    `showPricing` off means a material's price and a sofa's price go too, and
+    `showBoqPrices` on with `showPricing` off is not a way round it.
+  - The payload still *says* which switches are on, so a screen can write "NEON
+    hasn't shared pricing yet" rather than showing a blank tab that reads as a
+    broken app — and `allowDownloads` is there so the app draws no button that
+    the download routes would answer 404 to.
+- The two things a client can do — answering an approval and writing to the
+  studio — call the website's own `respondToApproval` and `createComment`, which
+  are already scoped by the token in their `where`. A second copy would be a
+  second place for the access check to be forgotten.
+- **The manager hands the code out beside the link** (`LinkActions`): shown
+  grouped, copied without its dash, regenerated with a warning, and carried in
+  the WhatsApp message alongside the link — a client given one and not the other
+  is a phone call either way.
+
 ### Team operations
 The domain vocabulary, as the code defines it:
 - **ProcessSection → ProcessTask:** the shared delivery process. Each task is one step of it, common to every project.
@@ -349,6 +399,16 @@ The domain vocabulary, as the code defines it:
   - Live like a task card: `meetingSignature`/`meetingSnapshot` drive a third SSE event, `meetings`, so an answer reaches every open chat without a new message. `?meeting=<id>` opens the chat scrolled to the card.
   - **The card wears the task card's palette, not the studio's**, because `meeting-card.tsx` and `meeting-sheet.tsx` are rendered by both portals — the manager and the person on a phone must be looking at the same card. Nothing in them may use a warm token.
   - UI: `components/chat/{meeting-card,meeting-sheet}.tsx`. Silence is never read as a refusal anywhere: `INVITED` means asked and not yet answered, and the card and the copy both say exactly that.
+- **Faces** — `Employee.photoUrl`, set by the manager on `/admin/employees/[id]` and by the person themselves on `/employee/profile` (`components/employee/photo-picker.tsx`, one component for both sides; `lib/employee-photo.ts` stores it) — and the same three ways in the app (below).
+  - **`PersonAvatar` is still the only place a face is drawn**, and it draws the photo *over* the initials in the same box rather than instead of them: the circle is the right size and colour from the first paint, and a photo that fails to load leaves the initials showing rather than a broken-image icon.
+  - **A face is looked up, never copied onto a row.** `CallParticipant`, `ChatMeetingAttendee` and a chat message each carry a copied name — right, because what somebody was called at the time is a fact about that call or message. A face is not: it is a current fact about a person, and a copy would be wrong the moment they changed it. `lib/faces.ts` `facesFor` turns member keys into photos in one query, and is the second place after `manager-account.ts` that knows `"admin"` means the manager's own row.
+  - **A conversation resolves its faces once and publishes them** (`FacesProvider`, `keysInMessages`): a message row and a meeting card's attendees hold a key, not a picture, and threading a map through every one of them would be a prop on a dozen components for one photo. The keys include the people *in* the conversation as well as whoever has written, so a first message arriving over the stream comes with its face instead of waiting for a reload.
+  - **Stored as a 512px centre square** (`squareImage` in `lib/storage.ts`), shrunk in the browser first. The ordinary image rule fits a photo inside 2400px, which is right for a render on a client's page and absurd for a circle 28 pixels across — every chat row would fetch a megabyte to draw a thumbnail. `tests/faces.test.ts` pins the square, the size and the turning; get any of them wrong and the platform looks exactly as it did before, with nothing to say why.
+  - Where a notification already carried the initials picture (`avatarUrl`), it now carries the photo where there is one. An iPhone still draws the app's own icon and ignores it.
+  - **In the app, somebody sets their own face and only the manager sets anybody else's.** Your own — a team member's in Profile, the manager's at the top of More — goes to `POST /api/mobile/me/photo`, where **the token decides whose**: an employee's token writes its own row, the manager's writes the manager's own row (`managerEmployeeId`, the row `facesFor` reads "admin"'s face from), and a studio with no such row gets a 409 with a sentence, as `/api/mobile/devices` does. Anybody's, from an employee's page (the manager's own row included), is the registry action `team/employees/photo` — the website's own `setEmployeePhoto`, `requireAdmin` and all. Neither reads an id from the body; `tests/mobile-photos.test.ts` pins both. `/api/mobile/me` hands back `photoUrl` (and `canSetPhoto`, false for a manager with no row).
+  - **One control for all three** (`ios/Sources/UI/FacePicker.swift`): the face with a camera badge; a tap offers the library, the camera and Remove. An absent `photo` field means "take it off", on both routes, exactly as the web's Remove button posts it.
+  - **Every screen in the app that draws a person draws their face**, from whichever field its read carries — `photo`, `photoUrl` or `avatar` — through `facePhotoURL`, which reads the server's own initials picture (`/api/avatar?…`) as "no photo" and lets the app draw initials itself, as `ChatFace` always did. Reads that carried no face got one added beside what was there (optional in the app, so an old answer still decodes offline), looked up through `facesFor` rather than by widening a lib query the website also reads. A chat room looks its people's faces up once, with their colours (`ChatRoomPalette`, the app's `FacesProvider`), because a message, a comment and a meeting attendee carry a key and never a picture.
+  - **A new face shows without a restart.** Saving one posts `.neonDataChanged` (`me/photo` or `team/employees/photo` — `isFaceChange` in `APIClient.swift`) and the screens that draw people re-read; each upload has its own URL, so the image cache never serves the old face under the new one. `APIClient.myPhoto` is the signed-in person's own face, from `/me` and set the moment it is saved, for "My Story" and the account buttons.
 - **Calls** — audio and video, from the phone and camera buttons in any conversation's header: the team's group, where a call rings everybody and carries on while anybody is in it, and the private chats (`mayCallIn` in `lib/calls.ts`):
   - **The server only introduces the devices.** Sound and pictures go straight between them over WebRTC, one connection per pair; the database holds who was asked and who is in (`Call`, `CallParticipant`) and the messages two devices trade to connect (`CallSignal`, deleted when the call ends). Rules are pure in `lib/calls.ts`; the database side is `lib/call-store.ts`.
   - **Route handlers, not server actions**: `POST /api/calls` (start, join, decline, leave, heartbeat), `POST /api/calls/signal`, and `GET /api/calls/stream?as=` (SSE: `ready` with the ICE servers, `calls`, and `signals` carrying their id so a reconnect resumes through Last-Event-ID). A page runs its server actions one at a time, which would hold a call's connection up behind anything else, and a closing tab can only say it is leaving with `sendBeacon`. Route handlers get no origin check of their own, so every POST calls `sameOrigin` (`lib/request-origin.ts`).
@@ -454,7 +514,7 @@ The domain vocabulary, as the code defines it:
 
 ### Tests
 - `npm test` runs `node --test` over `tests/**/*.test.ts` through tsx, loading `.env` and `.env.local`.
-- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`, `sales`, `performance`, `task-types`, `automation`, `admin-guard`.
+- Pure-logic tests: `analytics`, `payroll`, `progress`, `daily-progress`, `stage-schedule`, `week`, `notifications`, `devices`, `chat-*`, `group-members`, `voice`, `sound-cues`, `viewport`, `client-image`, `image-orientation`, `whatsapp`, `avatar`, `warnings`, `sales`, `performance`, `task-types`, `automation`, `admin-guard`, `mobile-photos`.
 - Database tests use the real local database and skip when it is unreachable: `employee-access`, `task-submissions`, `assigned-evidence`, `device-ownership`, `chat-access`, `warnings`, `sales`, `performance`. A run showing `pass 0 … skipped N` with exit 0 never means the tests passed — but it has **two** causes, and they look identical.
 
 - **Run them the way `package.json` does.** `npm test` and `npm run test:db` pass `--env-file-if-exists=.env --env-file-if-exists=.env.local`; a bare `npx tsx --test tests/x.db.test.ts` passes neither, so `DATABASE_URL` is unset, every test skips itself as "no database", and a perfectly healthy database is blamed. Running one file at a time is the documented recovery from a suite that dies mid-run, so the wrong command is reached for at exactly the moment its output is most likely to be believed.
@@ -464,6 +524,12 @@ The domain vocabulary, as the code defines it:
 
 ## Gotchas that have cost time
 
+- **`.env.local` pointed at the studio's live database, and the tests wrote to it.** Found on 2026-10-01. `DATABASE_URL` had been rebuilt from `.env.docker` during an earlier session when the development database would not start, which put it on `127.0.0.1:55432` — the one behind `clients.neonjo.com`. Every `npm test` after that created and deleted rows in the database clients use.
+  - **What it left behind:** 55 ENDED calls on pair chats between employees who never existed (`ztest-call-…`). Nothing was damaged, nobody could see them — `callsFor` reads only non-ENDED calls the viewer is a participant of — and the real data was intact. But none of that was true *on purpose*, and the next test written might not tidy up at all.
+  - **Nothing could have caught it.** The tests pass against either database; the only difference is whose rows they churn. A run against the live one looks exactly like a run against the right one.
+  - **So it is checked now, not commented.** `tests/db-target.ts` is an allow-list — the `prisma dev` ports, 51213–51216 — and every `*.db.test.ts` refuses anything else **at module scope**, with `tests/db-target.test.ts` as a tripwire that fails rather than skips.
+  - **The guard has to sit above the file's own try/catch.** Inside `before`, the throw was swallowed by the "is there a database" handler and came back as 12 *skipped* tests — `pass 0 … skipped N`, the exact reading this file already warns is believed as "everything is fine". A refusal that looks like an ordinary skip is worse than no refusal at all.
+  - A backup is in `local-backup/docker/before-fixture-cleanup.dump`, taken before anything was deleted.
 - **The local `prisma dev` database dies.** Symptoms are `P1001`, "Server has closed the connection", or DB tests cancelled en masse. Recover like this:
   1. Kill whatever listens on ports 51213–51216. In PowerShell: `Get-NetTCPConnection -LocalPort 51213 -State Listen | % { Stop-Process -Id $_.OwningProcess }`.
   2. If you see "Lock file is already being held", delete `%LOCALAPPDATA%\prisma-dev-nodejs\Data\durable-streams\neon-client-portal\server.lock.lock`. This is a marker, not your data.
@@ -496,6 +562,12 @@ The domain vocabulary, as the code defines it:
 - **`.dockerignore` must keep `whatsapp-worker/`.** `next build` type-checks every `.ts` file, and `tests/whatsapp-queue.test.ts` imports the worker's vendored library — leave the folder out of the image and the build fails with `TS2307`. Render never shows this because it builds from the whole repository.
 - **A `$` in `.env.docker` needs single quotes or `$$`.** Inside double quotes Compose substitutes, and the admin password hash arrives three characters short — admin login would fail with nothing wrong in the code. **`docker compose config` prints a literal `$` as `$$`**, so it reports a mismatch even when the value is right: check what a container actually receives (a fingerprint of the value from `docker exec`), never the rendered config.
 - **Inserting text with JavaScript's `String.replace` corrupts it when the text contains `$`.** In a replacement string `` $` `` means "everything before the match" and `$$` means `$` — adding the gotcha above that way pasted the whole README into itself twice. Use `split`/`join`, or pass a function as the replacement.
+- **A form's field names are a contract, and nothing we run checks it.** `createSupplyRequest` was rewritten to take a list of things to buy (`lineName`/`lineCount`/`lineCost`) in place of one (`item`/`quantity`/`estimatedCost`). The website was changed with it; the iOS app, the only other caller, was not — so every purchase request sent from a phone came back **"Add at least one thing to buy"** with nothing wrong at the sending end.
+  - It typechecks, lints, builds and passes every other test, because `FormData` is untyped: `formData.getAll("lineName")` on a form that has no such field is simply an empty list, which is indistinguishable from a form somebody left blank.
+  - **So a changed form is a changed API.** Before renaming a field, grep for the action's name across `src/lib/mobile/` and `ios/` — the registry hands a form straight through (`"me/requests/supply/create": (input) => createSupplyRequest(input.form)`), so the app is a caller even though nothing in TypeScript says so.
+  - The reading now lives in `lib/supply-requests.ts`, pure, and takes **both** shapes: the single-item form is read as a list of one. `tests/supply-requests.test.ts` pins both, which is the only place either is checked. It also still reads a count posted under the box's old name (`lineQuantity`), so a page left open across a deploy does not lose it — the same trap, declined a second time.
+  - **A line's price is what the line costs altogether, never what one costs.** The studio chose that way round, so nothing in the reading, the total or either screen multiplies it by the count beside it, and the form says so under the boxes. A test pins it, because the opposite is the arrangement most shop lists use and so the one somebody will reach for.
+
 - **Phone layout:** see "Phone frame". Never stretch the frame past the visual viewport, and use the readout.
 
 ## Known issues (open)

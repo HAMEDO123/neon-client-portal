@@ -828,11 +828,17 @@ struct CallScreenView: View {
 
     private var ringing: Bool { session.people.isEmpty && call?.status == "RINGING" }
 
+    /// Somebody's face on the stage, as the call read it — the server looks
+    /// it up for every participant (lib/faces.ts) — or nil for initials.
+    private func photo(for key: String) -> URL? {
+        call?.participants.first { $0.memberKey == key }?.photoURL
+    }
+
     private var model: CallStageModel {
         let others = session.people.map { person in
             let video = person.sharing ? person.screenTrack : (person.videoOff ? nil : person.cameraTrack)
             return CallTileModel(
-                id: person.key, name: person.name, color: person.color, video: video,
+                id: person.key, name: person.name, color: person.color, avatarURL: photo(for: person.key), video: video,
                 audioMuted: person.audioMuted, sharing: person.sharing && person.screenTrack != nil,
                 speaking: person.speaking, quality: person.quality, connection: person.connection,
                 stalled: person.connectingSince.map { now.timeIntervalSince($0) > 20 } ?? false
@@ -840,6 +846,7 @@ struct CallScreenView: View {
         }
         let mine = CallTileModel(
             id: me, name: center.ready?.name ?? L("You"), color: call?.participants.first { $0.memberKey == me }?.color,
+            avatarURL: photo(for: me),
             video: session.cameraTrack, mirror: session.mirrorSelf,
             audioMuted: session.audioMuted || session.micTrack == nil, isSelf: true
         )

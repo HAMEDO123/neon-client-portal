@@ -173,6 +173,16 @@ NavigationStack {
 `AvatarView(…, style: .solid)` draws white initials on the person's colour, as
 the chat list does; `.soft` (the default) is the quiet pastel one.
 
+**Faces.** Give any avatar `facePhotoURL(raw)` for whatever face field a read
+sends (`photo`, `photoUrl`, `avatar`): it resolves a real photo and returns nil
+for the server's own initials picture (`/api/avatar?…`), which the app draws
+itself. A photo is always laid *over* the initials, so one that fails to load
+leaves them. To let somebody change a face, use `FacePicker(name:photo:size:)
+{ file in try await … }` — the face with a camera badge, and on a tap the
+library, the camera and Remove (`nil`); the screen decides whose face the
+closure writes. On a `HeroHeader` without a cover, `.heroLeading { … }` puts it
+where the icon tile goes.
+
 ---
 
 ## Surfaces and cards

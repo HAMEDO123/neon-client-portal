@@ -57,6 +57,7 @@ struct FollowUpAnswerResult: Decodable {
 struct SupplyRequestRow: Decodable, Identifiable {
     let id: String
     let item: String
+    let lines: [SupplyLine]?
     let quantity: String?
     let note: String?
     let estimatedCost: Double?
@@ -122,6 +123,8 @@ struct ProfileEmployee: Decodable {
     let email: String?
     let phone: String?
     let employeeCode: String?
+    /// Their own face, or nil — `AvatarView` then draws initials, as it always did.
+    let photoUrl: String?
 }
 
 struct ProfileResponse: Decodable {
@@ -138,6 +141,8 @@ struct AssignTeamMember: Decodable, Identifiable {
     let name: String
     let color: String?
     let role: String?
+    /// Their face, or nil for initials.
+    let photoUrl: String?
 }
 
 struct AssignTeamResponse: Decodable { let team: [AssignTeamMember] }

@@ -11,6 +11,10 @@ struct AdminMoreView: View {
                     AccountMenu()
                 }
 
+                // Who is signed in, first — with their own face, which the
+                // whole studio sees in chat, calls and stories.
+                ManagerFaceCard()
+
                 // Six tiles fill two full rows; the old five-tile "Team" card
                 // left an empty sixth slot that read as a missing tile.
                 MoreDestinationGroup(L("Work"), symbol: "briefcase.fill", hue: .blue) {
@@ -32,6 +36,8 @@ struct AdminMoreView: View {
                 // near-empty card — they read better as plain rows on the
                 // account card than as two tiles rattling around a grid.
                 AccountCard {
+                    MoreDestinationListRow(L("Office shopping"), subtitle: L("One shop cart for the whole office"), leading: .icon("cart.fill", tint: .neonSuccessStrong)) { OfficeShoppingView() }
+                    NeonDivider()
                     MoreDestinationListRow(L("Analytics"), leading: .icon("chart.bar.fill", tint: .neonBlueStrong)) { AnalyticsRootView() }
                     NeonDivider()
                     MoreDestinationListRow(L("Settings"), leading: .icon("gearshape.fill", tint: .neonTextSecondary)) { SettingsRootView() }
@@ -94,8 +100,11 @@ struct EmployeeMoreView: View {
                     MoreDestinationListRow(
                         api.identity?.name ?? L("Profile"),
                         subtitle: L("Profile, notifications, devices"),
-                        leading: .avatar(url: nil, name: api.identity?.name ?? L("Profile"))
+                        leading: .avatar(url: facePhotoURL(api.myPhoto), name: api.identity?.name ?? L("Profile"))
                     ) { ProfileRootView() }
+
+                    NeonDivider()
+                    MoreDestinationListRow(L("Office shopping"), subtitle: L("Add what the office needs"), leading: .icon("cart.fill", tint: .neonSuccessStrong)) { OfficeShoppingView() }
 
                     if givenToCount > 0 && givenToCount < 3 {
                         if permissions.canAssignTasks {
@@ -121,6 +130,55 @@ struct EmployeeMoreView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - The manager's own face
+
+/// The top of the manager's More tab: their own face, which they set here
+/// the way somebody on the team sets theirs in Profile — the same control
+/// (`FacePicker`: library, camera, Remove) and the same route, `me/photo`,
+/// which the manager's token writes to the manager's own row. It is the face
+/// the studio sees for "Manager" in every chat, call tile and story.
+///
+/// A studio with no row for the manager has nowhere to keep one; the card
+/// says so plainly rather than offering a button the server would refuse.
+private struct ManagerFaceCard: View {
+    @EnvironmentObject var api: APIClient
+
+    var body: some View {
+        NeonCard {
+            HStack(spacing: 14) {
+                if api.canSetMyPhoto {
+                    FacePicker(name: L("Manager"), photo: facePhotoURL(api.myPhoto)) { file in
+                        try await api.setMyPhoto(file)
+                    }
+                } else {
+                    AvatarView(url: nil, name: L("Manager"), size: 56, style: .solid)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("Manager"))
+                        .font(.neonTitle3)
+                        .foregroundStyle(Color.neonInk)
+                    Text(L("Your photo shows in chat, calls and stories"))
+                        .font(.neonSubtitle)
+                        .foregroundStyle(Color.neonTextSecondary)
+                    Text(hint)
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextTertiary)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .neonAppear()
+        // `/me` carries the face; the manager's side reads it nowhere else.
+        .task { _ = try? await api.fetchMe() }
+    }
+
+    private var hint: String {
+        if !api.canSetMyPhoto { return L("There is no employee record for the manager to keep a photo on.") }
+        return api.myPhoto == nil ? L("Tap your picture to add a photo") : L("Tap your picture to change or remove it")
     }
 }
 

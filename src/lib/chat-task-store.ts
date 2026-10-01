@@ -23,7 +23,7 @@ import { daysBetween } from "@/lib/week";
 // Not "use server": every export of one of those is callable over the network,
 // and these trust their caller to have checked who is asking.
 
-const memberSelect = { id: true, name: true, color: true } as const;
+const memberSelect = { id: true, name: true, color: true, photoUrl: true } as const;
 
 /**
  * The people a task in this conversation can go to: everyone on the team in
@@ -199,7 +199,7 @@ const listSelect = {
   createdAt: true,
   assignments: {
     orderBy: { createdAt: "asc" },
-    select: { id: true, employeeId: true, state: true, employee: { select: { name: true, color: true } } },
+    select: { id: true, employeeId: true, state: true, employee: { select: { name: true, color: true, photoUrl: true } } },
   },
   _count: { select: { comments: true } },
   channel: { select: { key: true, name: true } },

@@ -14,6 +14,17 @@ import { peerChannelKey, peerConversation } from "@/lib/chat-conversations";
 import { getEmployeeBadges } from "@/lib/employee-badges";
 import { getAdminBadges } from "@/lib/admin-badges";
 import { latestCues } from "@/lib/cues";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // Private conversations against a real database: that one employee's private
 // chat with the manager cannot be opened by another employee, that its

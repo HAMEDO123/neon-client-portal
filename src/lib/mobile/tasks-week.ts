@@ -29,6 +29,8 @@ export async function mobileWeekBoard(week: string | null) {
       name: employee.name,
       role: employee.role,
       color: employee.color,
+      // Their face, or null for initials on `color` (lib/faces.ts).
+      photoUrl: employee.photoUrl,
     }));
 
   const jobs = await assignedTasksForWeek(anchor);

@@ -45,6 +45,7 @@ type Tile = {
   /** Whose initials to draw when there is no picture: "You" is a label, not a name. */
   avatarName: string;
   color: string | null;
+  photo: string | null;
   track: MediaStreamTrack | null;
   screen: boolean;
   mine: boolean;
@@ -169,7 +170,12 @@ export function CallScreen({
     return () => window.removeEventListener("keydown", onKey);
   }, [view, session, panel, onViewChange, toggleCamera, toggleShare]);
 
-  const tiles = useMemo(() => buildTiles(state, me, mine), [state, me, mine]);
+  // Who has a face, keyed as everything in a call is keyed.
+  const faces = useMemo(
+    () => Object.fromEntries((call?.participants ?? []).map((part) => [part.memberKey, part.photo])),
+    [call]
+  );
+  const tiles = useMemo(() => buildTiles(state, me, mine, faces), [state, me, mine, faces]);
   const screenTile = tiles.find((tile) => tile.screen);
   const cameraTiles = tiles.filter((tile) => !tile.screen);
   const selfTile = cameraTiles.find((tile) => tile.mine)!;
@@ -355,13 +361,22 @@ export function CallScreen({
   );
 }
 
-function buildTiles(state: SessionState, me: string, mine: { name: string; color: string | null } | undefined): Tile[] {
+function buildTiles(
+  state: SessionState,
+  me: string,
+  mine: { name: string; color: string | null; photo: string | null } | undefined,
+  // Faces come off the call's participants rather than the live peer state:
+  // the browser's peer objects carry what is needed to connect, and a face is
+  // not one of those things.
+  faces: Record<string, string | null>
+): Tile[] {
   const tiles: Tile[] = [
     {
       id: me,
       name: "You",
       avatarName: mine?.name ?? "You",
       color: mine?.color ?? null,
+      photo: mine?.photo ?? null,
       track: state.camera,
       screen: false,
       mine: true,
@@ -381,6 +396,7 @@ function buildTiles(state: SessionState, me: string, mine: { name: string; color
       name: person.name,
       avatarName: person.name,
       color: person.color,
+      photo: faces[person.key] ?? null,
       track: person.videoOff ? null : person.camera,
       screen: false,
       mine: false,
@@ -395,6 +411,7 @@ function buildTiles(state: SessionState, me: string, mine: { name: string; color
         name: `${person.name}'s screen`,
         avatarName: person.name,
         color: person.color,
+        photo: faces[person.key] ?? null,
         track: person.screen,
         screen: true,
         mine: false,
@@ -448,6 +465,7 @@ function TileView({ tile, large = false, compact = false }: { tile: Tile; large?
         <div className="flex h-full w-full items-center justify-center">
           <PersonAvatar
             name={tile.avatarName}
+            photo={tile.photo}
             color={tile.color}
             size={compact ? 44 : large ? 112 : 56}
             // A dark face on the dark call background still needs an edge.
@@ -530,7 +548,7 @@ function Waiting({ call, me }: { call: CallView | undefined; me: string }) {
         {asked.slice(0, 4).map((part) => (
           <span key={part.memberKey} className="relative flex rounded-full ring-4 ring-[#0e0d14]">
             {ringing && part.state === "INVITED" && <span aria-hidden className="call-pulse absolute inset-0 rounded-full" />}
-            <PersonAvatar name={part.name} color={part.color} size={88} className="relative" />
+            <PersonAvatar name={part.name} photo={part.photo} color={part.color} size={88} className="relative" />
           </span>
         ))}
       </div>
@@ -620,7 +638,7 @@ function PeoplePanel({
         const muted = part.memberKey === me ? state.audioMuted || !state.mic : person?.audioMuted;
         return (
           <li key={part.memberKey} className="flex items-center gap-3 rounded-xl px-2 py-2">
-            <PersonAvatar name={part.name} color={part.color} size={34} />
+            <PersonAvatar name={part.name} photo={part.photo} color={part.color} size={34} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{part.memberKey === me ? `${part.name} (you)` : part.name}</p>
               <p className="text-xs text-white/50">{label[part.state]}</p>
@@ -655,7 +673,7 @@ function PeoplePanel({
  */
 function AddPeople({ callId, side }: { callId: string; side: ChatSide }) {
   const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState<{ key: string; name: string; color: string }[] | null>(null);
+  const [options, setOptions] = useState<{ key: string; name: string; color: string; photo: string | null }[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -742,7 +760,7 @@ function AddPeople({ callId, side }: { callId: string; side: ChatSide }) {
                 onClick={() => void invite(member.key)}
                 className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-white/10 disabled:opacity-50"
               >
-                <PersonAvatar name={member.name} color={member.color} size={34} />
+                <PersonAvatar name={member.name} photo={member.photo} color={member.color} size={34} />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">{member.name}</span>
                 <span className="text-xs text-white/40">{busy === member.key ? "Ringing…" : "Add"}</span>
               </button>

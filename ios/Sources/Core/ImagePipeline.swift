@@ -55,8 +55,12 @@ final class ImagePipeline: @unchecked Sendable {
         let absolute = url.absoluteURL
         guard let width, absolute.host == portalOrigin.host, absolute.path == "/api/media",
               var components = URLComponents(url: absolute, resolvingAgainstBaseURL: false) else { return absolute }
-        var items = (components.queryItems ?? []).filter { $0.name != "w" }
+        var items = (components.queryItems ?? []).filter { $0.name != "w" && $0.name != "v" }
         items.append(URLQueryItem(name: "w", value: String(width)))
+        // Phones that asked for a width before the server resized kept the
+        // full-size answer under that address for good (it is immutable);
+        // `v` gives sized requests a fresh address the server ignores.
+        items.append(URLQueryItem(name: "v", value: "2"))
         components.queryItems = items
         return components.url ?? absolute
     }

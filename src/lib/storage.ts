@@ -80,6 +80,28 @@ export async function compressImage(buffer: Buffer): Promise<{ buffer: Buffer; e
   return { buffer: output, ext: "jpg" };
 }
 
+// A face, at the size a face is actually drawn.
+//
+// The ordinary image rule fits a photo inside 2400px, which is right for a
+// render on a client's page and absurd for a circle 28 pixels across: every
+// chat row, task card and call tile would fetch a megabyte to draw a thumbnail.
+// This crops to the middle square and stores 512px — big enough for the largest
+// place one appears (a call tile at 88, a profile at 96 on a retina screen).
+const AVATAR_SIZE = 512;
+
+export async function squareImage(buffer: Buffer): Promise<{ buffer: Buffer; ext: string }> {
+  // rotate() first for the same reason compressImage does it: a phone's
+  // portrait photo is landscape pixels plus a tag, and cropping the middle of
+  // the untuned pixels takes the middle of the wrong rectangle.
+  const output = await sharp(buffer)
+    .rotate()
+    .resize({ width: AVATAR_SIZE, height: AVATAR_SIZE, fit: "cover", position: "attention" })
+    .jpeg({ quality: 86, mozjpeg: true })
+    .toBuffer();
+
+  return { buffer: output, ext: "jpg" };
+}
+
 function extFromFile(file: File) {
   const name = file.name || "";
   const dot = name.lastIndexOf(".");

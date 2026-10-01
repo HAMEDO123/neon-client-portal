@@ -49,6 +49,19 @@ Source of truth read: `src/app/admin/(dashboard)/employees/page.tsx`,
 - [x] Receipts: list with photo, summary, counted amount; correct vendor/
       amount in a sheet
 
+## Faces
+- [x] Employees list: each row draws the person's photo (`team/employees`
+      `photoUrl`), initials where there is none.
+- [x] Employee detail: the header *is* the face, and the manager changes it
+      there — `FacePicker` (library, camera, Remove) through
+      `team/employees/photo`, the website's own `setEmployeePhoto` behind
+      `requireAdmin`. The manager's own row ("You · manager") works the same
+      way and is the manager's own face everywhere, so saving it there also
+      updates `APIClient.myPhoto`.
+- [x] Payroll: pay-sheet rows and the device-pairing list draw faces
+      (`team/payroll` rows' `employee.photoUrl`, its `employees`' `photoUrl`).
+- [x] A face saved anywhere re-reads the list and payroll (`isFaceChange`).
+
 ## Kept out of scope, with reasons (see `notImplemented` in the run's report)
 - The attendance *device* screen itself (sync now, pair by uid, wipe log,
   set clock) is `AttendanceRootView`, owned by the **ops** area per

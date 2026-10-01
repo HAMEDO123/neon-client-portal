@@ -67,6 +67,16 @@ final class APIClient: ObservableObject {
     /// Set when a request was refused mid-session, so the sign-in screen can
     /// say why the person is looking at it instead of treating it as an error.
     @Published var signedOutNotice = false
+    /// The signed-in person's own face, as the server stores it (a URL to go
+    /// through `facePhotoURL`), or nil for their initials. From `/me`, and set
+    /// the moment a new one is saved, so "My Story", the account button and
+    /// the profile all change together without anybody pulling to refresh.
+    @Published private(set) var myPhoto: String?
+    /// False only for a manager whose studio has no `Employee` row for them —
+    /// there is then nowhere to keep a photo, and the app says so instead of
+    /// offering a button the server would refuse.
+    @Published private(set) var canSetMyPhoto = true
+    private static let photoKey = "session_photo"
 
     #if DEBUG
     // CI screenshot fixture only — see Models.swift's DashboardResponse.preview.
@@ -77,6 +87,7 @@ final class APIClient: ObservableObject {
 
     private init() {
         token = TokenStore.read()
+        myPhoto = token == nil ? nil : UserDefaults.standard.string(forKey: Self.photoKey)
         if token != nil,
            let data = UserDefaults.standard.data(forKey: Self.identityKey),
            let saved = try? JSONDecoder().decode(Identity.self, from: data) {
@@ -137,6 +148,7 @@ final class APIClient: ObservableObject {
         let side = decoded.side ?? .admin
         signedOutNotice = false
         ResponseCache.clear()
+        setMyPhotoValue(nil)
         TokenStore.write(decoded.token)
         setIdentity(Identity(side: side, id: decoded.id, name: decoded.name ?? (side == .admin ? "Manager" : "")))
         token = decoded.token
@@ -157,9 +169,22 @@ final class APIClient: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.identityKey)
         // What the last person's screens showed is theirs, not the next person's.
         ResponseCache.clear()
+        setMyPhotoValue(nil)
+        canSetMyPhoto = true
         token = nil
         identity = nil
         signedOutNotice = notice
+    }
+
+    /// Keeps my own face, in memory and across a relaunch (so the first
+    /// paint already has it), never past a sign-out.
+    private func setMyPhotoValue(_ value: String?) {
+        myPhoto = value
+        if let value {
+            UserDefaults.standard.set(value, forKey: Self.photoKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.photoKey)
+        }
     }
 
     private func setIdentity(_ value: Identity) {
@@ -325,6 +350,10 @@ final class APIClient: ObservableObject {
     func fetchMe() async throws -> Me {
         let me = try await get("me", as: Me.self)
         setIdentity(Identity(side: me.side, id: me.id ?? identity?.id, name: me.name))
+        // A server from before faces sends neither field; nothing is known
+        // then, and what was last known stays.
+        if me.photoUrl != nil || me.canSetPhoto != nil { setMyPhotoValue(me.photoUrl) }
+        if let canSet = me.canSetPhoto { canSetMyPhoto = canSet }
         return me
     }
 
@@ -384,6 +413,40 @@ final class APIClient: ObservableObject {
             fields: fields,
             files: images.map { UploadFile(field: "image", filename: "photo.jpg", mimeType: "image/jpeg", data: $0) }
         )
+    }
+
+    /// The signed-in person's own face — somebody on the team, or the
+    /// manager, whose face lives on their own `Employee` row. `nil` takes it
+    /// off again — the same thing the website's Remove button does, and the
+    /// state everybody starts in, so there is no second call for it.
+    ///
+    /// Whose face it is comes from the token, never from anything sent here.
+    /// Posts `.neonDataChanged` ("me/photo") so screens that draw it re-read.
+    @discardableResult
+    func setMyPhoto(_ file: UploadFile?) async throws -> String? {
+        let data = try await postMultipart("me/photo", fields: [:], files: file.map { [$0] } ?? [])
+        struct Answer: Decodable { let photoUrl: String? }
+        let photo = (try? JSONDecoder().decode(Answer.self, from: data))?.photoUrl
+        setMyPhotoValue(photo)
+        NotificationCenter.default.post(name: .neonDataChanged, object: "me/photo")
+        return photo
+    }
+
+    /// Somebody's face, set by the manager (`team/employees/photo`, behind
+    /// the website's own `requireAdmin`). `nil` takes it off. Answers with the
+    /// new URL; `performUpload` has already announced the change.
+    @discardableResult
+    func setEmployeePhoto(employeeId: String, _ file: UploadFile?) async throws -> String? {
+        let outcome = try await performUpload("team/employees/photo", args: [employeeId], files: file.map { [$0] } ?? [])
+        struct Answer: Decodable { let photoUrl: String? }
+        return try outcome.result(Answer.self)?.photoUrl
+    }
+
+    /// Records that the manager changed their *own* row's face from the team
+    /// screens (it is the same row `me/photo` writes), so "My Story" and the
+    /// account button follow without waiting for the next `/me`.
+    func noteOwnPhoto(_ photo: String?) {
+        setMyPhotoValue(photo)
     }
 
     func uploadCover(projectId: String, image: Data) async throws {
@@ -588,4 +651,13 @@ extension Notification.Name {
     /// Posted after any successful action; `object` is the action's name
     /// ("projects/update"). Screens re-read when something they show changed.
     static let neonDataChanged = Notification.Name("neonDataChanged")
+}
+
+/// Whether an action (the `object` of `.neonDataChanged`) changed somebody's
+/// face: your own (`me/photo`), or the manager setting anybody's
+/// (`team/employees/photo`). Every screen that draws people re-reads on it,
+/// so a new photo shows without a restart — each upload has a URL of its own,
+/// so the re-read simply loads it and the image cache never serves the old one.
+func isFaceChange(_ actionName: String?) -> Bool {
+    actionName == "me/photo" || actionName == "team/employees/photo"
 }

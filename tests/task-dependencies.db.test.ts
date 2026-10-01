@@ -4,6 +4,17 @@ import { prisma } from "@/lib/db";
 import { acceptableDependencies } from "@/lib/task-graph";
 import { readinessOf } from "@/lib/task-readiness";
 import { generateProjectToken } from "@/lib/tokens";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // Dependencies against the real rows: what the manager's editor writes, and
 // what the employee's task then says about itself.

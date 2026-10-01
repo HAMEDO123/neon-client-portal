@@ -21,7 +21,7 @@ struct IncomingCallView: View {
     /// The caller's own face in their own colour; the group's, or the
     /// studio's mark for the team.
     private var face: CallFace {
-        call.isGroup ? faces.face(for: call, me: nil) : .person(callerName, color: caller?.color)
+        call.isGroup ? faces.face(for: call, me: nil) : .person(callerName, color: caller?.color, photo: caller?.photoURL)
     }
     /// Whole sentences, so a translation can say it the way its language
     /// does — Arabic puts the call first and the name after, with no verb to
@@ -67,7 +67,7 @@ struct IncomingCallView: View {
                     }
                     if call.isGroup, !inTheCall.isEmpty {
                         HStack(spacing: NeonSpace.sm) {
-                            CallFaceStack(faces: inTheCall.map { .person($0.name, color: $0.color) }, size: 28, limit: 4)
+                            CallFaceStack(faces: inTheCall.map { .person($0.name, color: $0.color, photo: $0.photoURL) }, size: 28, limit: 4)
                             Text(L("%@ in the call", NeonFormat.integer(inTheCall.count)))
                                 .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.9))

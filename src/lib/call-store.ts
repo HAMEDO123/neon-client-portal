@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { facesFor } from "@/lib/faces";
 import type { ChatViewer } from "@/lib/chat";
 import {
   adminChatUrl,
@@ -37,12 +38,22 @@ import { ringPhones } from "@/lib/call-ring-store";
 /** A reason a person can read: shown on the call screen as it is. */
 export class CallError extends Error {}
 
-type Member = { key: string; name: string; color: string };
+type Member = { key: string; name: string; color: string; photo: string | null };
 
 /** Everybody a call in this conversation is for, with how to draw them. */
 export async function callMembers(conversation: Conversation): Promise<Member[]> {
-  const manager: Member = { key: "admin", name: "Manager", color: "ink" };
-  const select = { id: true, name: true, color: true } as const;
+  // The manager's own face resolves through the same member key everything
+  // else uses; without a row, or without a photo, they keep their initials.
+  const faces = await facesFor(["admin"]);
+  const manager: Member = { key: "admin", name: "Manager", color: "ink", photo: faces.admin ?? null };
+  const select = { id: true, name: true, color: true, photoUrl: true } as const;
+
+  const asMember = (person: { id: string; name: string; color: string; photoUrl: string | null }): Member => ({
+    key: person.id,
+    name: person.name,
+    color: person.color,
+    photo: person.photoUrl,
+  });
 
   if (conversation.kind === "team") {
     const team = await prisma.employee.findMany({
@@ -50,13 +61,13 @@ export async function callMembers(conversation: Conversation): Promise<Member[]>
       orderBy: { order: "asc" },
       select,
     });
-    return [manager, ...team.map((person) => ({ key: person.id, name: person.name, color: person.color }))];
+    return [manager, ...team.map(asMember)];
   }
 
   // A group the manager made: the manager, who is in every group, and its members.
   if (conversation.kind === "group") {
     const members = await groupEmployees(conversation.groupId);
-    return [manager, ...members.map((person) => ({ key: person.id, name: person.name, color: person.color }))];
+    return [manager, ...members.map(asMember)];
   }
 
   const ids = conversation.kind === "direct" ? [conversation.employeeId] : conversation.employeeIds;
@@ -65,7 +76,7 @@ export async function callMembers(conversation: Conversation): Promise<Member[]>
     orderBy: { order: "asc" },
     select,
   });
-  const members = people.map((person) => ({ key: person.id, name: person.name, color: person.color }));
+  const members = people.map(asMember);
   return conversation.kind === "direct" ? [manager, ...members] : members;
 }
 
@@ -84,12 +95,17 @@ export async function addableToCall(viewer: ChatViewer, callId: string): Promise
   const team = await prisma.employee.findMany({
     where: { active: true, accessRole: "EMPLOYEE" },
     orderBy: { order: "asc" },
-    select: { id: true, name: true, color: true },
+    select: { id: true, name: true, color: true, photoUrl: true },
   });
 
   const everyone: Member[] = [
-    { key: "admin", name: "Manager", color: "ink" },
-    ...team.map((person) => ({ key: person.id, name: person.name, color: person.color })),
+    { key: "admin", name: "Manager", color: "ink", photo: null },
+    ...team.map((person) => ({
+      key: person.id,
+      name: person.name,
+      color: person.color,
+      photo: person.photoUrl,
+    })),
   ];
 
   return everyone.filter((member) => !already.has(member.key));
@@ -527,6 +543,10 @@ export async function callsFor(viewer: ChatViewer) {
     },
   });
 
+  // Faces, resolved rather than copied onto the participant rows — see
+  // lib/faces.ts. One query for every call this person is in, not one each.
+  const faces = await facesFor(calls.flatMap((call) => call.participants.map((part) => part.memberKey)));
+
   return calls.flatMap(({ channel, ...call }) => {
     const conversation = conversationFromKey(channel.key);
     // Already filtered to calls this person is a participant of, and being
@@ -538,6 +558,10 @@ export async function callsFor(viewer: ChatViewer) {
     return [
       {
         ...call,
+        participants: call.participants.map((part) => ({
+          ...part,
+          photo: faces[part.memberKey] ?? null,
+        })),
         conversationSlug: conversationSlug(conversation, viewer),
         title: isGroupConversation(conversation) ? channel.name : others.join(", "),
         isGroup: isGroupConversation(conversation),

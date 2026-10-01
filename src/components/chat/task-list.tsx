@@ -140,6 +140,7 @@ export function TaskList({
                           <PersonAvatar
                             key={part.id}
                             name={part.employee.name}
+                            photo={part.employee.photoUrl}
                             color={part.employee.color}
                             size={20}
                             className={studio ? "ring-2 ring-card" : "ring-2 ring-white"}

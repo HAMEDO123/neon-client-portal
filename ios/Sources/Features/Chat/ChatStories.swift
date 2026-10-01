@@ -22,6 +22,9 @@ struct ChatStoriesRail: View {
     let isLoading: Bool
     let myName: String
     let isManager: Bool
+    /// My own face (`APIClient.myPhoto`), or nil for my initials — or, for
+    /// the manager, the studio's mark.
+    var myPhoto: URL? = nil
     /// Every conversation without a live story, whoever is here first.
     let people: [ConversationSummary]
     /// Whether an author ("admin" or an employee id) is here right now.
@@ -99,6 +102,8 @@ struct ChatStoriesRail: View {
                 ChatStoryBubble(name: L("My Story"), ring: mine == nil ? .none : .unseen, showsAdd: true) { inner in
                     if let mine {
                         ChatStoryFace(ring: mine, size: inner)
+                    } else if let myPhoto {
+                        ChatAvatar(url: myPhoto, name: isManager ? L("Manager") : myName, size: inner)
                     } else if isManager {
                         ChatStudioMark(size: inner)
                     } else {

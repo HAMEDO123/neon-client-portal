@@ -6,6 +6,8 @@ import { requireAdmin, requireStaff } from "@/lib/admin-guard";
 import { refreshProject, refreshProjectLists } from "@/lib/project-paths";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { generateProjectToken } from "@/lib/tokens";
+import { generateAccessCode } from "@/lib/client-codes";
+import { regenerateAccessCode } from "@/lib/client-access";
 import { logActivity } from "@/lib/activity";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
@@ -51,6 +53,9 @@ export async function createProject(formData: FormData) {
     data: {
       name,
       token: generateProjectToken(name),
+      // The code for the client app, made with the link rather than later: a
+      // project the manager cannot hand over is a project half created.
+      accessCode: generateAccessCode(),
       clientName: String(formData.get("clientName") ?? ""),
       clientEmail: String(formData.get("clientEmail") ?? "") || null,
       clientPhone: String(formData.get("clientPhone") ?? "") || null,
@@ -137,6 +142,19 @@ export async function regenerateProjectLink(id: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id } });
   await prisma.project.update({ where: { id }, data: { token: generateProjectToken(project.name) } });
   refresh(id);
+}
+
+/**
+ * A new code for the client app, which stops the old one working.
+ *
+ * `requireStaff`, like `regenerateProjectLink` directly above: it is the same
+ * act on the same project, in the other shape the credential comes in.
+ */
+export async function regenerateProjectCode(id: string) {
+  await requireStaff();
+  const code = await regenerateAccessCode(id);
+  refresh(id);
+  return code;
 }
 
 export async function deleteProject(id: string) {

@@ -310,7 +310,7 @@ struct ProcessSettingsView: View {
         let role = member.role.flatMap { $0.isEmpty ? nil : $0 }
         Button { editingOwner = member } label: {
             HStack(spacing: 12) {
-                TasksAvatar(name: member.name, hue: hue, size: NeonSize.iconTile)
+                TasksAvatar(name: member.name, hue: hue, size: NeonSize.iconTile, photo: facePhotoURL(member.photoUrl))
                     .opacity(member.active ? 1 : 0.55)
                 VStack(alignment: .leading, spacing: 3) {
                     DirText(member.name, font: .system(.callout, weight: .semibold), fill: false, lineLimit: 1)

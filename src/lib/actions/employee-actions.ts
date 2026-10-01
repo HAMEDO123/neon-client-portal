@@ -6,6 +6,7 @@ import { requireEmployee } from "@/lib/employee-session";
 import { taskForEmployee } from "@/lib/employee-tasks";
 import type { TaskState } from "@/generated/prisma/enums";
 import { setEmployeeTaskState } from "@/lib/task-status";
+import { saveEmployeePhoto } from "@/lib/employee-photo";
 
 // Everything an employee is allowed to change, and nothing else.
 //
@@ -158,4 +159,22 @@ export async function removePushSubscription(endpoint: string) {
 
   revalidatePath("/employee/profile");
   return { ok: true as const };
+}
+
+/**
+ * The person's own face.
+ *
+ * Their own and nobody else's: the id comes from the session, as rule 1 at the
+ * top of this file requires, so there is no argument here that could name
+ * somebody else. An empty file removes it and the initials come back.
+ */
+export async function setMyPhoto(formData: FormData) {
+  const employee = await requireEmployee();
+
+  const photoUrl = await saveEmployeePhoto(employee.id, formData.get("photo"));
+  await prisma.employee.update({ where: { id: employee.id }, data: { photoUrl } });
+
+  // A face shows everywhere a name does, on both sides.
+  revalidatePath("/employee", "layout");
+  revalidatePath("/admin", "layout");
 }

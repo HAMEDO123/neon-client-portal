@@ -15,6 +15,10 @@ struct ProfileRootView: View {
     @State private var refusedMessage: String?
     @State private var saving = false
     @State private var forgetting: ProfileDevice?
+    /// Set the moment it is saved, so the new face is on screen before the
+    /// next read comes back — a picture that appears only after a pull-to-
+    /// refresh reads as nothing having happened.
+    @State private var photoUrl: String??
 
     var body: some View {
         ScrollView {
@@ -62,12 +66,24 @@ struct ProfileRootView: View {
     }
 
     private func identityCard(_ employee: ProfileEmployee, deviceCount: Int) -> some View {
-        NeonCard {
+        // What was just saved wins over what was last read.
+        let face = facePhotoURL(photoUrl ?? employee.photoUrl)
+
+        return NeonCard {
             HStack(spacing: 14) {
-                AvatarView(url: nil, name: employee.name, size: 56, style: .solid)
+                // The shared control (UI/FacePicker.swift): library, camera,
+                // Remove. Shrunk through UploadMaker like every other upload
+                // in the app — the server squares it to 512 afterwards.
+                FacePicker(name: employee.name, photo: face) { file in
+                    photoUrl = .some(try await api.setMyPhoto(file))
+                }
+
                 VStack(alignment: .leading, spacing: 2) {
                     DirText(employee.name, font: .neonTitle3)
                     DirText(employee.role ?? L("Employee"), font: .neonSubtitle, color: .neonTextSecondary)
+                    Text(face == nil ? L("Tap your picture to add a photo") : L("Tap your picture to change or remove it"))
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextTertiary)
                 }
                 Spacer(minLength: 0)
             }

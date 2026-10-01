@@ -53,6 +53,8 @@ struct TaskPerson: Decodable, Identifiable, Hashable {
     let name: String
     let role: String?
     let color: String
+    /// Their face, or nil for initials; nil too from a server before faces.
+    let photoUrl: String?
 }
 
 struct BoardProject: Decodable, Identifiable {
@@ -230,6 +232,8 @@ struct ProcessMember: Decodable, Identifiable, Hashable {
     let role: String?
     let color: String
     let active: Bool
+    /// Their face, or nil for initials.
+    let photoUrl: String?
 }
 
 // MARK: - The team's share of its work done (tasks/people)
@@ -263,7 +267,8 @@ struct TaskPeopleMember: Decodable, Identifiable {
     let name: String
     let role: String?
     let color: String
-    /// The studio's initials-on-colour face, web-relative.
+    /// Their photo, or the studio's initials-on-colour face (web-relative),
+    /// which `facePhotoURL` reads as "draw the initials".
     let avatar: String?
     let total: Int
     /// Approved by the manager. Sent for review is not done.

@@ -437,7 +437,7 @@ struct HomeReviewsCard: View {
                                 .lineLimit(1)
                         }
                     } else if !people.isEmpty {
-                        AvatarStack(people.map { AvatarItem(id: $0.id, name: $0.name) }, size: 28, limit: 4)
+                        AvatarStack(people.map { AvatarItem(id: $0.id, name: $0.name, url: facePhotoURL($0.photoUrl)) }, size: 28, limit: 4)
                     }
                     Spacer(minLength: 4)
                     IconButtonLabel("chevron.forward", look: .tinted, tint: .neonOrangeStrong, size: 32)

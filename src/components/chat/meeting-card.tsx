@@ -240,7 +240,7 @@ export function MeetingCard({
         <ul className="mt-1.5 flex flex-col divide-y divide-ink/[0.06]">
           {attendees.map((one) => (
             <li key={one.id} className="flex items-center gap-2.5 py-2">
-              <PersonAvatar name={one.name} color={one.color} size={28} />
+              <PersonAvatar name={one.name} personKey={one.memberKey} color={one.color} size={28} />
               <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
                 {one.memberKey === myKey ? "You" : one.name}
               </p>

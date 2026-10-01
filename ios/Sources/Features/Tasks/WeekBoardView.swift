@@ -280,7 +280,8 @@ struct WeekBoardView: View {
             editing = .existing(job)
         } label: {
             HStack(alignment: .center, spacing: 12) {
-                TasksAvatar(name: name, hue: hues.hue(job.employeeId, name: name, color: owner?.color), size: 42)
+                TasksAvatar(name: name, hue: hues.hue(job.employeeId, name: name, color: owner?.color), size: 42,
+                            photo: facePhotoURL(owner?.photoUrl))
                 // The title starts beside the face whichever way it is
                 // written, and the person and the span line up under it.
                 VStack(alignment: .leading, spacing: 3) {

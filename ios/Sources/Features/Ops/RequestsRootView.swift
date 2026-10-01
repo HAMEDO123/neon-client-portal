@@ -121,7 +121,7 @@ private struct TodaysReportsCard: View {
                                 pair.member.name,
                                 subtitle: pair.report.text,
                                 meta: shortTime(pair.report.updatedAt),
-                                leading: .avatar(url: nil, name: pair.member.name)
+                                leading: .avatar(url: facePhotoURL(pair.member.photoUrl), name: pair.member.name)
                             )
                             if index < written.count - 1 { NeonDivider() }
                         }
@@ -129,7 +129,7 @@ private struct TodaysReportsCard: View {
                 }
                 if !unwritten.isEmpty {
                     HStack(spacing: 10) {
-                        AvatarStack(unwritten.map { AvatarItem(id: $0.id, name: $0.name) }, size: 26, limit: 5)
+                        AvatarStack(unwritten.map { AvatarItem(id: $0.id, name: $0.name, url: facePhotoURL($0.photoUrl)) }, size: 26, limit: 5)
                         Text(L("%d haven't written today's report yet", unwritten.count))
                             .font(.neonSubheadline)
                             .foregroundStyle(Color.neonTextSecondary)
@@ -166,10 +166,14 @@ private struct SupplyRequestCard: View {
                     // Name and a relative date only — the role and a year
                     // nobody needs for "yesterday" were what wrapped this
                     // onto two lines.
-                    Text("\(request.employee.name) · \(relativeDayTime(request.createdAt) ?? "")")
-                        .font(.neonFootnote)
-                        .foregroundStyle(Color.neonTextTertiary)
-                        .lineLimit(1)
+                    // Who asked, by face as well as by name.
+                    HStack(spacing: 6) {
+                        AvatarView(url: facePhotoURL(request.employee.photoUrl), name: request.employee.name, size: 18)
+                        Text("\(request.employee.name) · \(relativeDayTime(request.createdAt) ?? "")")
+                            .font(.neonFootnote)
+                            .foregroundStyle(Color.neonTextTertiary)
+                            .lineLimit(1)
+                    }
                     if let note = request.note, !note.isEmpty {
                         DirText(note, font: .neonSubheadline, color: .neonTextSecondary, lineLimit: noteExpanded ? nil : 4)
                         if !noteExpanded && noteMayBeClamped(note) {
@@ -186,7 +190,9 @@ private struct SupplyRequestCard: View {
             // report mis-filed as one ("تقرير اليومي") has no quantity or
             // cost, and this line is what makes that obvious before Approve.
             SectionLabel(L("To buy"))
-            if request.quantity != nil || request.estimatedCost != nil {
+            if let lines = request.lines, !lines.isEmpty {
+                SupplyLinesList(lines: lines)
+            } else if request.quantity != nil || request.estimatedCost != nil {
                 if let quantity = request.quantity { KeyValueRow(L("Quantity"), value: quantity, symbol: "number") }
                 if let cost = request.estimatedCost {
                     KeyValueRow(L("Cost"), value: "≈ \(NeonFormat.money(cost, decimals: 2))", symbol: "banknote")

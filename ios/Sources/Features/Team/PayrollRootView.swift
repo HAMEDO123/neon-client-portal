@@ -64,6 +64,10 @@ struct PayrollRootView: View {
         .task {
             if response == nil { await load() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
+            guard isFaceChange(note.object as? String) else { return }
+            Task { await load() }
+        }
     }
 
     /// `team/payroll`'s own `employees` list already asks the server for
@@ -287,7 +291,7 @@ private struct PayrollRow: View {
                 ListRow(
                     row.employee.name,
                     subtitle: row.employee.role,
-                    leading: .avatar(url: nil, name: row.employee.name),
+                    leading: .avatar(url: facePhotoURL(row.employee.photoUrl), name: row.employee.name),
                     value: hasSalary ? NeonFormat.money(row.breakdown.finalPay, decimals: 2) : nil,
                     badge: hasSalary ? (isWeekly ? L("Weekly") : nil) : L("No salary set"),
                     badgeTone: hasSalary ? .info : .warning,
@@ -465,7 +469,7 @@ private struct DeviceIdsCard: View {
         VStack(alignment: .leading, spacing: 8) {
             ListRow(
                 employee.name,
-                leading: .avatar(url: nil, name: employee.name),
+                leading: .avatar(url: facePhotoURL(employee.photoUrl), name: employee.name),
                 value: saved,
                 badge: saved != nil ? L("Paired") : nil,
                 badgeTone: .success

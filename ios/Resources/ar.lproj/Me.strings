@@ -139,3 +139,12 @@
 "Report" = "التقرير";
 "Note for the manager" = "ملاحظة للمدير";
 "Profile, notifications, devices" = "الملف الشخصي، الإشعارات، الأجهزة";
+"Tap your picture to add a photo" = "اضغط على صورتك لإضافة صورة";
+"Remove photo" = "إزالة الصورة";
+"That photo could not be read." = "تعذّرت قراءة هذه الصورة.";
+"Tap your picture to change or remove it" = "اضغط على صورتك لتغييرها أو إزالتها";
+"The price is what that line costs altogether, not what one costs." = "السعر هو كلفة البند كاملاً، مش سعر القطعة الوحدة.";
+"Add another item" = "أضف غرضاً آخر";
+"Item %d" = "الغرض %d";
+"Remove this item" = "احذف هذا الغرض";
+"How many" = "العدد";

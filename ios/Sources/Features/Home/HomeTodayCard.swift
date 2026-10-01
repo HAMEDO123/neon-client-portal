@@ -130,6 +130,11 @@ struct HomeTodayRow: View {
         case "meeting":
             return .icon(item.mode == "IN_PERSON" ? "person.2.fill" : "video.fill", tint: .neonIndigoStrong)
         default:
+            // A job is somebody's: their face where they have one, else the
+            // job's tile in their colour.
+            if let person = item.person, let photo = facePhotoURL(person.photoUrl) {
+                return .avatar(url: photo, name: person.name)
+            }
             return .icon("checklist", tint: item.person.map { employeeTint($0.color) } ?? .neonPurpleStrong)
         }
     }

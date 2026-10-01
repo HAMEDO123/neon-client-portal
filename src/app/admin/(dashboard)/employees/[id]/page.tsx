@@ -6,8 +6,10 @@ import {
   resetEmployeePassword,
   revokeEmployeeAccount,
   setEmployeeActive,
+  setEmployeePhoto,
   updateEmployeeAccount,
 } from "@/lib/actions/admin-employee-actions";
+import { PhotoPicker } from "@/components/employee/photo-picker";
 import { Checkbox, TextInput, TextArea } from "@/components/admin/fields";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +92,16 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           Added {formatDate(employee.createdAt)} ·{" "}
           {employee.lastLoginAt ? `last signed in ${formatDate(employee.lastLoginAt)}` : "never signed in"}
         </p>
+      </div>
+
+      <div className="glass rounded-2xl p-6">
+        <PhotoPicker
+          name={employee.name}
+          photo={employee.photoUrl}
+          color={employee.color}
+          action={setEmployeePhoto.bind(null, employee.id)}
+          hint="Shown in chat, on task cards and in calls. They can change it themselves in their profile."
+        />
       </div>
 
       <form

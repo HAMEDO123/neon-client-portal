@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { channelFor, listMessages, parseConversation, recordChatRead, requireChatViewer } from "@/lib/chat";
+import { facesFor, keysInMessages } from "@/lib/faces";
 import { isGroupConversation, otherPeer } from "@/lib/chat-conversations";
 import { groupMemberNames } from "@/lib/chat-group-store";
 import { memberLine } from "@/lib/group-members";
@@ -34,6 +35,15 @@ export default async function EmployeeConversationPage({
 
   // One after the other, like the other multi-query pages here.
   const messages = await listMessages(viewer, channel.id);
+  // Every face this screenful will draw, resolved once — see lib/faces.ts.
+  // The people in the conversation are added to whoever has written, so a
+  // first message arriving over the stream comes with its face.
+  const faces = await facesFor([
+    ...keysInMessages(messages),
+    "admin",
+    viewer.id,
+    ...(conversation.kind === "peer" ? [otherPeer(conversation, viewer.id)] : []),
+  ]);
   const projects = await prisma.project.findMany({
     where: { publishState: { not: "ARCHIVED" } },
     orderBy: { updatedAt: "desc" },
@@ -53,7 +63,7 @@ export default async function EmployeeConversationPage({
     conversation.kind === "peer"
       ? await prisma.employee.findUnique({
           where: { id: otherPeer(conversation, viewer.id) },
-          select: { name: true, color: true },
+          select: { name: true, color: true, photoUrl: true },
         })
       : null;
   const timezone = await getTimezone();
@@ -71,6 +81,7 @@ export default async function EmployeeConversationPage({
     <div className="chat-screen fills-frame flex flex-col overflow-hidden">
       <ChatRoom
         initialMessages={messages}
+        faces={faces}
         viewerType="EMPLOYEE"
         viewerId={viewer.id}
         viewerName={viewer.name}
@@ -92,13 +103,13 @@ export default async function EmployeeConversationPage({
               ? {
                   name: withName,
                   subtitle: `Private · only you and ${withName}`,
-                  avatar: avatarUrl(withName, colleague?.color),
+                  avatar: colleague?.photoUrl ?? avatarUrl(withName, colleague?.color),
                   backHref: "/employee/chat",
                 }
               : {
                   name: "Manager",
                   subtitle: "Private · only you and the manager",
-                  avatar: avatarUrl("Manager", "ink"),
+                  avatar: faces.admin ?? avatarUrl("Manager", "ink"),
                   backHref: "/employee/chat",
                 }
         }

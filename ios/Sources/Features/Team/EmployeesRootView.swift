@@ -63,6 +63,12 @@ struct EmployeesRootView: View {
         .task {
             if response == nil { await load() }
         }
+        // Somebody's face (or account) changed on their page, or the manager
+        // changed their own — the rows under it are that person.
+        .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
+            guard let name = note.object as? String, name.hasPrefix("team/") || isFaceChange(name) else { return }
+            Task { await load() }
+        }
     }
 
     /// The team at a glance, above the list — real counts off what just
@@ -110,7 +116,7 @@ private struct EmployeeSummaryRow: View {
             ListRow(
                 employee.name,
                 subtitle: employee.role ?? employee.email ?? L("Board only — no login"),
-                leading: .avatar(url: nil, name: employee.name),
+                leading: .avatar(url: facePhotoURL(employee.photoUrl), name: employee.name),
                 value: soldText,
                 badge: exceptionBadge?.text,
                 badgeTone: exceptionBadge?.tone ?? .neutral,

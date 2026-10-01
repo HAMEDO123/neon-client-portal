@@ -115,7 +115,8 @@ struct ChatTaskCardView: View {
     private func assignmentRow(_ part: TaskCard.Assignment) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                ChatAvatar(url: nil, name: part.employee?.name ?? "—", size: 26,
+                ChatAvatar(url: facePhotoURL(part.employee?.photoUrl) ?? palette.photo(key: part.employeeId),
+                           name: part.employee?.name ?? "—", size: 26,
                            color: part.employee?.color ?? palette.color(key: part.employeeId, name: part.employee?.name))
                 DirText(part.employee?.name ?? "—", font: .system(.subheadline, weight: .semibold), fill: false, lineLimit: 1)
                 Spacer(minLength: 4)
@@ -179,7 +180,7 @@ struct ChatTaskCardView: View {
                     let key = chatAuthorKey(authorType: comment.authorType, authorId: comment.authorId)
                     let name = comment.authorType == "ADMIN" ? L("Manager") : comment.authorName
                     HStack(alignment: .top, spacing: 8) {
-                        ChatAvatar(url: nil, name: name, size: 22, color: palette.color(key: key, name: comment.authorName))
+                        ChatAvatar(url: palette.photo(key: key), name: name, size: 22, color: palette.color(key: key, name: comment.authorName))
                         // What they wrote sits under their name, on the same
                         // side, rather than across the card in its own direction.
                         VStack(alignment: .leading, spacing: 1) {
@@ -352,7 +353,7 @@ struct ChatMeetingCardView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(meeting.attendees) { person in
                         HStack(spacing: 8) {
-                            ChatAvatar(url: nil, name: chatMemberName(key: person.memberKey, name: person.name), size: 24,
+                            ChatAvatar(url: palette.photo(key: person.memberKey), name: chatMemberName(key: person.memberKey, name: person.name), size: 24,
                                        color: palette.color(key: person.memberKey, name: person.name))
                             DirText(chatMemberName(key: person.memberKey, name: person.name), font: .system(.subheadline, weight: .medium), fill: false, lineLimit: 1)
                             Spacer(minLength: 4)

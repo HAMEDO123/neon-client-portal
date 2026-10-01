@@ -397,7 +397,7 @@ function PartRow({ part, viewer, late, move }: { part: Part; viewer: ChatViewer;
   return (
     <li className="py-2">
       <div className="flex items-center gap-2.5">
-        <PersonAvatar name={part.employee.name} color={part.employee.color} size={28} />
+        <PersonAvatar name={part.employee.name} photo={part.employee.photoUrl} color={part.employee.color} size={28} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{own ? "You" : part.employee.name}</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-[11px]">

@@ -185,7 +185,7 @@ export function TaskSheet({
             <legend className={LABEL}>{single ? "For" : "Assign to"}</legend>
             {single ? (
               <p className="flex items-center gap-2 rounded-xl bg-ink/[0.04] px-3 py-2 text-sm font-medium">
-                <PersonAvatar name={setup.members[0].name} color={setup.members[0].color} size={26} />
+                <PersonAvatar name={setup.members[0].name} photo={setup.members[0].photoUrl} color={setup.members[0].color} size={26} />
                 {setup.members[0].name}
               </p>
             ) : (
@@ -209,7 +209,7 @@ export function TaskSheet({
                       onClick={() => toggle(member.id)}
                       className={cn(chip(chosen), "pl-1")}
                     >
-                      <PersonAvatar name={member.name} color={member.color} size={24} />
+                      <PersonAvatar name={member.name} photo={member.photoUrl} color={member.color} size={24} />
                       {member.name}
                       {chosen && <Check size={14} strokeWidth={2.75} aria-hidden />}
                     </button>

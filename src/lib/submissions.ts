@@ -10,7 +10,7 @@ export function pendingSubmissions(limit = 50) {
     orderBy: { createdAt: "asc" },
     take: limit,
     include: {
-      employee: { select: { id: true, name: true, color: true } },
+      employee: { select: { id: true, name: true, color: true, photoUrl: true } },
       // Evidence is for a cell on the board or for a job handed out by hand —
       // one of the two, never both.
       entry: {

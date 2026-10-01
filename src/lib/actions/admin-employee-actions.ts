@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { EMPLOYEE_COLORS } from "@/lib/task-board";
 import { DEFAULT_SALES_TARGET } from "@/lib/sales";
 import { dispatchNotification } from "@/lib/notifications/engine";
+import { saveEmployeePhoto } from "@/lib/employee-photo";
 
 // Admin-only management of employee accounts. Each action re-checks the admin
 // session: these are public POST endpoints, and the layout's redirect is a
@@ -15,6 +16,14 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 function refresh() {
   revalidatePath("/admin/employees");
   revalidatePath("/admin/tasks");
+}
+
+// A face shows on far more than the two pages above — every chat row, task
+// card, call tile and the person's own portal — so changing one refreshes both
+// portals whole.
+function refreshFace() {
+  revalidatePath("/admin", "layout");
+  revalidatePath("/employee", "layout");
 }
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -175,4 +184,19 @@ export async function revokeEmployeeAccount(id: string) {
   });
   await prisma.pushSubscription.updateMany({ where: { employeeId: id }, data: { active: false } });
   refresh();
+}
+
+/**
+ * Sets somebody's face, or takes it away again.
+ *
+ * An empty file means "remove": the column goes back to null and every screen
+ * draws their initials again, which is the state every employee starts in.
+ */
+export async function setEmployeePhoto(id: string, formData: FormData) {
+  await requireAdmin();
+
+  const photoUrl = await saveEmployeePhoto(id, formData.get("photo"));
+  await prisma.employee.update({ where: { id }, data: { photoUrl } });
+  refresh();
+  refreshFace();
 }

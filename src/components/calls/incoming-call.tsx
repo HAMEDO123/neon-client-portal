@@ -46,7 +46,13 @@ export function IncomingCall({
       <div className="flex items-center gap-3">
         <span className="relative flex shrink-0">
           <span aria-hidden className="call-pulse absolute inset-0 rounded-full" />
-          <PersonAvatar name={caller?.name ?? call.startedByName} color={caller?.color} size={48} className="relative" />
+          <PersonAvatar
+            name={caller?.name ?? call.startedByName}
+            photo={caller?.photo}
+            color={caller?.color}
+            size={48}
+            className="relative"
+          />
         </span>
         <div className="min-w-0 flex-1">
           <p id={`${ids}-title`} className="truncate text-base font-semibold">

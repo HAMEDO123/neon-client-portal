@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { avatarUrl } from "@/lib/avatar";
+import { facesFor } from "@/lib/faces";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { memberKeyFor } from "@/lib/presence-store";
 import type { ChatViewer } from "@/lib/chat-conversations";
@@ -18,15 +19,30 @@ import { cleanCaption, storyExpiry, storyMediaType, storyRings, type StoryRow } 
 
 const MANAGER_AVATAR = avatarUrl("Manager", "ink");
 
-/** Somebody's face, from their key: the manager's mark, or an employee's initials on their colour. */
-async function facesFor(keys: string[]) {
+/**
+ * Somebody's face, from their key: their photo where they have one, else the
+ * manager's mark or an employee's initials on their colour.
+ *
+ * The photos come from `lib/faces.ts`, which is the one place that knows
+ * "admin" means the manager's own row; the names and colours still need this
+ * read of their own, because a story bar prints them.
+ */
+async function storyFaces(keys: string[]) {
   const ids = [...new Set(keys.filter((key) => key !== "admin"))];
   const people = ids.length
     ? await prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, color: true } })
     : [];
-  const map = new Map(people.map((person) => [person.id, { name: person.name, avatar: avatarUrl(person.name, person.color) }]));
+  const photos = await facesFor(keys);
+  const map = new Map(
+    people.map((person) => [
+      person.id,
+      { name: person.name, avatar: photos[person.id] ?? avatarUrl(person.name, person.color) },
+    ])
+  );
   return (key: string, fallbackName: string) =>
-    key === "admin" ? { name: "Manager", avatar: MANAGER_AVATAR } : (map.get(key) ?? { name: fallbackName, avatar: avatarUrl(fallbackName) });
+    key === "admin"
+      ? { name: "Manager", avatar: photos.admin ?? MANAGER_AVATAR }
+      : (map.get(key) ?? { name: fallbackName, avatar: avatarUrl(fallbackName) });
 }
 
 /** The story bar: this viewer's ring and everybody else's, as storyRings orders them. */
@@ -53,7 +69,7 @@ export async function storiesFor(viewer: ChatViewer, now = new Date()) {
     },
   });
 
-  const face = await facesFor(rows.map((row) => row.authorKey));
+  const face = await storyFaces(rows.map((row) => row.authorKey));
   const prepared: StoryRow[] = rows.map((row) => {
     const who = face(row.authorKey, row.authorName);
     return {
@@ -152,7 +168,7 @@ export async function storyViewers(storyId: string) {
     orderBy: { viewedAt: "desc" },
     select: { viewerKey: true, viewerName: true, viewedAt: true },
   });
-  const face = await facesFor(views.map((view) => view.viewerKey));
+  const face = await storyFaces(views.map((view) => view.viewerKey));
   return views.map((view) => {
     const who = face(view.viewerKey, view.viewerName);
     return { key: view.viewerKey, name: who.name, avatar: who.avatar, viewedAt: view.viewedAt };

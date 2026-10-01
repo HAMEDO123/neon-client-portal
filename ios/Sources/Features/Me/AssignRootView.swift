@@ -75,6 +75,11 @@ struct AssignRootView: View {
         }
         .navigationDestination(for: JobRoute.self) { JobDetailView(jobId: $0.id) }
         .task(id: weekOffset) { await load() }
+        // A face changed (their own, from Profile): the rows draw it.
+        .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
+            guard isFaceChange(note.object as? String) else { return }
+            Task { await load() }
+        }
         .sheet(isPresented: $creating) {
             AssignJobFormSheet(team: team, job: nil) {
                 await load()
@@ -118,7 +123,7 @@ struct AssignRootView: View {
 
     private func assignedJobRow(_ job: MyAssignedJob) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            AvatarView(url: nil, name: name(for: job.employeeId), size: 40, style: .solid)
+            AvatarView(url: facePhotoURL(team.first { $0.id == job.employeeId }?.photoUrl), name: name(for: job.employeeId), size: 40, style: .solid)
             VStack(alignment: .leading, spacing: 5) {
                 // `fill: false`, so the title hugs the leading edge instead of
                 // stretching to sit flush against the trailing chevron in
@@ -217,6 +222,8 @@ private struct AssignJobFormSheet: View {
                 NeonTextField(L("Title"), text: $title, prompt: L("Negotiate with the marble supplier"), symbol: "textformat", isRequired: true)
                 SelectField(L("For"), selection: $employeeId, options: team.map(\.id), title: { id in
                     team.first(where: { $0.id == id })?.name ?? ""
+                }, avatar: { id in
+                    facePhotoURL(team.first(where: { $0.id == id })?.photoUrl)
                 }, isRequired: true)
             }
 

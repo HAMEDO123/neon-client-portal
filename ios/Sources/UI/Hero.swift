@@ -15,6 +15,9 @@ struct HeroHeader<Accessory: View>: View {
     var tint: Color
     var height: CGFloat
     let accessory: Accessory
+    /// Drawn instead of the icon tile on a page without a photo — a person's
+    /// face, say. Set with `.heroLeading { … }`.
+    var leading: AnyView?
 
     @State private var baseline: CGFloat?
     @State private var pull: CGFloat = 0
@@ -96,8 +99,14 @@ struct HeroHeader<Accessory: View>: View {
 
     private var plainHero: some View {
         VStack(alignment: .leading, spacing: 10) {
-            IconTile(symbol, tint: tint, size: 52, style: .filled)
-                .padding(.bottom, 4)
+            Group {
+                if let leading {
+                    leading
+                } else {
+                    IconTile(symbol, tint: tint, size: 52, style: .filled)
+                }
+            }
+            .padding(.bottom, 4)
             if let eyebrow {
                 Text(eyebrow.uppercased())
                     .font(.system(size: 11, weight: .bold))
@@ -125,6 +134,16 @@ struct HeroHeader<Accessory: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: NeonRadius.xxl, style: .continuous))
         )
         .neonSurface(.strong, radius: NeonRadius.xxl)
+    }
+}
+
+extension HeroHeader {
+    /// A view of your own where the icon tile goes, on a header without a
+    /// cover photo: `HeroHeader(name, …) { badges }.heroLeading { FacePicker(…) }`.
+    func heroLeading<Leading: View>(@ViewBuilder _ content: () -> Leading) -> HeroHeader {
+        var copy = self
+        copy.leading = AnyView(content())
+        return copy
     }
 }
 

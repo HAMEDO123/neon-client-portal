@@ -117,6 +117,7 @@ private struct VisitReadRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     DirText(visit.title, font: .neonHeadline)
                     HStack(spacing: 6) {
+                        AvatarView(url: facePhotoURL(visit.employee.photoUrl), name: visit.employee.name, size: 18)
                         Text(visit.employee.name).font(.neonFootnote).foregroundStyle(NeonPalette.color(for: visit.employee.name))
                         Text(formattedISODate(visit.scheduledAt) ?? "").font(.neonFootnote).foregroundStyle(Color.neonTextTertiary)
                     }

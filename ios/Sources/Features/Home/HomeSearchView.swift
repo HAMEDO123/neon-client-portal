@@ -6,6 +6,8 @@ struct HomeSearchPerson: Identifiable {
     let name: String
     let role: String?
     let online: Bool
+    /// Their face, or nil for initials.
+    var photo: URL? = nil
 }
 
 /// The team as Home already knows it: "Right now" has everybody active (and
@@ -13,9 +15,9 @@ struct HomeSearchPerson: Identifiable {
 func homeSearchPeople(now: HomeNow?, day: HomeDay?) -> [HomeSearchPerson] {
     let roles = Dictionary((day?.everyone ?? []).map { ($0.employeeId, $0.role) }, uniquingKeysWith: { first, _ in first })
     if let now {
-        return now.people.map { HomeSearchPerson(id: $0.id, name: $0.name, role: roles[$0.id] ?? nil, online: $0.online) }
+        return now.people.map { HomeSearchPerson(id: $0.id, name: $0.name, role: roles[$0.id] ?? nil, online: $0.online, photo: facePhotoURL($0.photo)) }
     }
-    return (day?.everyone ?? []).map { HomeSearchPerson(id: $0.employeeId, name: $0.name, role: $0.role, online: false) }
+    return (day?.everyone ?? []).map { HomeSearchPerson(id: $0.employeeId, name: $0.name, role: $0.role, online: false, photo: facePhotoURL($0.photo)) }
 }
 
 /// The header's search: projects (by name, client or place), the team (by
@@ -177,7 +179,7 @@ struct HomeSearchView: View {
                     ListCardRow(
                         person.name,
                         subtitle: person.role,
-                        leading: .avatar(url: nil, name: person.name, online: person.online)
+                        leading: .avatar(url: person.photo, name: person.name, online: person.online)
                     )
                 }
                 .buttonStyle(.pressableCard)

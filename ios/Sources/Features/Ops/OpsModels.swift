@@ -132,6 +132,9 @@ struct AttendanceMonth: Decodable {
     /// `AttendanceRecord.id`, keyed by `"<employeeId>|<dayKey>"` — what the
     /// correction sheet hands `opsDeleteAttendance` for a day it has open.
     let recordIds: [String: String]
+    /// Employee id → their photo, only for people who have one; nil from a
+    /// server before faces.
+    let photos: [String: String]?
 
     func recordId(employeeId: String, dayKey: String) -> String? {
         recordIds["\(employeeId)|\(dayKey)"]
@@ -150,6 +153,8 @@ struct OpsRequests: Decodable {
         let id: String
         let name: String
         let role: String?
+        /// Their face, or nil for initials.
+        let photoUrl: String?
     }
 
     struct DailyReportEntry: Decodable {
@@ -159,11 +164,25 @@ struct OpsRequests: Decodable {
     }
 }
 
+/// One thing on a purchase request. `estimatedCost` is what the line costs
+/// altogether, never each — nothing multiplies it by the count (the studio's
+/// rule, src/lib/supply-requests.ts).
+struct SupplyLine: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let count: Int?
+    let estimatedCost: Double?
+    let position: Int
+}
+
 struct SupplyRequest: Decodable, Identifiable {
-    struct Employee: Decodable { let id: String; let name: String; let role: String? }
+    struct Employee: Decodable { let id: String; let name: String; let role: String?; let photoUrl: String? }
 
     let id: String
+    /// The headline over `lines` ("Chairs and 2 more"); a request from before
+    /// lines existed has only this.
     let item: String
+    let lines: [SupplyLine]?
     let quantity: String?
     let note: String?
     let estimatedCost: Double?
@@ -211,7 +230,7 @@ func supplyStatusIconTint(_ status: String) -> Color {
 // MARK: - Site visits
 
 struct SiteVisit: Decodable, Identifiable {
-    struct Employee: Decodable { let id: String; let name: String; let color: String }
+    struct Employee: Decodable { let id: String; let name: String; let color: String; let photoUrl: String? }
     struct Project: Decodable { let id: String; let name: String; let clientName: String? }
 
     let id: String
@@ -307,6 +326,8 @@ struct OpsSettings: Decodable {
     let automationRules: [AutomationRule]
     let automationSwitchedOn: Bool
     let pushHealth: PushHealth
+    /// Employee id → photo, for the push list's people; nil from an older server.
+    let faces: [String: String]?
     let managerPaired: Bool
     let managerDevices: Int
     let whatsapp: WhatsApp
