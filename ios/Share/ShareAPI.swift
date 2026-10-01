@@ -98,12 +98,14 @@ enum ShareError: LocalizedError {
 
 /// A file ready to go up, already in the shape the server keeps.
 struct ShareUpload {
-    /// "photo" or "document" — the web chat box's field names, read by the
-    /// server's readChatAttachment.
+    /// "photo", "voice" or "document" — the web chat box's field names, read
+    /// by the server's readChatAttachment.
     let field: String
     let filename: String
     let mimeType: String
     let file: URL
+    /// Sent beside the file: a voice note's "durationSeconds".
+    var fields: [(String, String)] = []
 }
 
 final class ShareAPI {
@@ -175,6 +177,7 @@ final class ShareAPI {
 
         var fields = [("conversation", conversation)]
         if let caption, !caption.isEmpty { fields.append(("body", caption)) }
+        fields += upload.fields
         for (name, value) in fields {
             try write("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n")
         }

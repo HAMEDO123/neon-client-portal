@@ -278,6 +278,7 @@ struct ShareAttachmentTile: View {
         switch item.kind {
         case .photo: return "photo"
         case .video: return "film"
+        case .voice: return "waveform"
         case .file: return "doc.fill"
         }
     }

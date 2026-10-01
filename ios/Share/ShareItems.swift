@@ -14,7 +14,7 @@ import UniformTypeIdentifiers
 
 /// One thing being shared, as a file of our own.
 struct ShareItem: Identifiable, Equatable {
-    enum Kind: Equatable { case photo, video, file }
+    enum Kind: Equatable { case photo, video, voice, file }
 
     let id = UUID()
     var kind: Kind
@@ -41,6 +41,19 @@ enum ShareRules {
     static let photoMaxBytes: Int64 = 40 * 1024 * 1024
     /// Everything else goes as `document`.
     static let documentMaxBytes: Int64 = 50 * 1024 * 1024
+    /// A voice note goes as `voice`, up to the server's 15 MB for a recording.
+    /// The server turns an Ogg/WebM one (a WhatsApp .opus) into AAC, which an
+    /// iPhone plays (src/lib/voice-transcode.ts).
+    static let voiceMaxBytes: Int64 = 15 * 1024 * 1024
+    /// What it is sent as, by extension — the types the server keeps as audio.
+    static let voiceTypes: [String: String] = [
+        "opus": "audio/ogg", "ogg": "audio/ogg", "oga": "audio/ogg",
+        "m4a": "audio/mp4", "aac": "audio/aac", "mp4a": "audio/mp4",
+        "mp3": "audio/mpeg", "wav": "audio/wav", "webm": "audio/webm",
+    ]
+    /// Audio the phone can read but the server does not keep: written out as
+    /// an M4A on the way.
+    static let voiceConvertible: Set<String> = ["caf", "aif", "aiff", "amr", "3gp"]
     /// What `saveFile` takes as a document, by the type the upload declares.
     static let documentTypes: Set<String> = [
         "application/pdf",
@@ -187,9 +200,12 @@ enum ShareInbox {
     }
 
     private static func loadFile(_ provider: NSItemProvider) async -> ShareItem {
-        let kind: ShareItem.Kind
+        var kind: ShareItem.Kind
         let typeID: String?
-        if has(provider, .movie) {
+        if has(provider, .audio) {
+            kind = .voice
+            typeID = contentType(provider, conformingTo: .audio)
+        } else if has(provider, .movie) {
             kind = .video
             typeID = contentType(provider, conformingTo: .movie)
         } else if has(provider, .image) {
@@ -214,8 +230,16 @@ enum ShareInbox {
             return ShareItem(kind: kind, url: nowhere, name: name, bytes: 0, refusal: ShareError.unreadable(name).errorDescription)
         }
 
+        // A voice note from WhatsApp is an ".opus" file, which many phones
+        // have no audio type for: known by its extension instead.
+        if kind == .file, isVoice(url) { kind = .voice }
+
         let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
         var item = ShareItem(kind: kind, url: url, name: url.lastPathComponent, bytes: Int64(values?.fileSize ?? 0))
+        if kind == .voice {
+            item.refusal = voiceRefusal(item)
+            return item
+        }
         if values?.isDirectory == true {
             // A package (a Pages file kept as a folder, an app bundle): not one file.
             item.refusal = ShareError.unsupported(item.name).errorDescription
@@ -235,6 +259,24 @@ enum ShareInbox {
             return ShareError.unsupported(item.name).errorDescription
         }
         if item.bytes > ShareRules.documentMaxBytes {
+            return ShareError.tooLarge(item.name).errorDescription
+        }
+        return nil
+    }
+
+    static func isVoice(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return ShareRules.voiceTypes[ext] != nil || ShareRules.voiceConvertible.contains(ext)
+            || UTType(filenameExtension: ext)?.conforms(to: .audio) == true
+    }
+
+    private static func voiceRefusal(_ item: ShareItem) -> String? {
+        let ext = item.url.pathExtension.lowercased()
+        let known = ShareRules.voiceTypes[ext] != nil || ShareRules.voiceConvertible.contains(ext)
+            || UTType(filenameExtension: ext)?.conforms(to: .audio) == true
+        if !known { return ShareError.unsupported(item.name).errorDescription }
+        // A convertible one is measured after it is written out.
+        if ShareRules.voiceTypes[ext] != nil, item.bytes > ShareRules.voiceMaxBytes {
             return ShareError.tooLarge(item.name).errorDescription
         }
         return nil
@@ -340,6 +382,8 @@ enum ShareConverter {
         case .video:
             status(L("Preparing the video…"))
             return try await video(item)
+        case .voice:
+            return try await voice(item, status: status)
         case .file:
             if ShareInbox.isPicture(item.url), let upload = try? photo(item) { return upload }
             if ShareInbox.isMovie(item.url) {
@@ -381,6 +425,49 @@ enum ShareConverter {
         let size = (try? destination.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { $0 } ?? 0
         guard Int64(size) <= ShareRules.photoMaxBytes else { throw ShareError.tooLarge(item.name) }
         return ShareUpload(field: "photo", filename: baseName(item) + ".jpg", mimeType: "image/jpeg", file: destination)
+    }
+
+    /// A voice note, as the app's own recording is sent: the `voice` field
+    /// with its length when the phone can read one. An Ogg/WebM note (a
+    /// WhatsApp .opus) goes as it is — the phone cannot read it, the server
+    /// converts and measures it.
+    private static func voice(_ item: ShareItem, status: @escaping (String) -> Void) async throws -> ShareUpload {
+        var url = item.url
+        var ext = url.pathExtension.lowercased()
+        if ShareRules.voiceTypes[ext] == nil {
+            status(L("Preparing the voice message…"))
+            url = try await m4a(item)
+            ext = "m4a"
+        }
+        let bytes = Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { $0 } ?? 0)
+        guard bytes <= ShareRules.voiceMaxBytes else { throw ShareError.tooLarge(item.name) }
+        var fields: [(String, String)] = []
+        if ext != "opus" && ext != "ogg" && ext != "oga" && ext != "webm" {
+            let seconds = try? await AVURLAsset(url: url).load(.duration).seconds
+            if let seconds, seconds.isFinite, seconds > 0 { fields.append(("durationSeconds", String(max(1, Int(seconds.rounded()))))) }
+        }
+        let base = (item.name as NSString).deletingPathExtension
+        return ShareUpload(
+            field: "voice",
+            filename: (base.isEmpty ? "Voice message" : base) + "." + ext,
+            mimeType: ShareRules.voiceTypes[ext] ?? "audio/mp4",
+            file: url,
+            fields: fields
+        )
+    }
+
+    /// Audio the phone reads but the server does not keep (CAF, AIFF, AMR),
+    /// written out as an M4A.
+    private static func m4a(_ item: ShareItem) async throws -> URL {
+        let destination = item.url.deletingLastPathComponent().appendingPathComponent("voice-\(UUID().uuidString).m4a")
+        guard let export = AVAssetExportSession(asset: AVURLAsset(url: item.url), presetName: AVAssetExportPresetAppleM4A) else {
+            throw ShareError.unsupported(item.name)
+        }
+        export.outputURL = destination
+        export.outputFileType = .m4a
+        await export.export()
+        guard export.status == .completed else { throw ShareError.unsupported(item.name) }
+        return destination
     }
 
     private static func document(_ item: ShareItem) throws -> ShareUpload {

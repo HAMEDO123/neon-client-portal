@@ -46,7 +46,9 @@ The extension does not need the app's `Identity` (it lives in the app's UserDefa
 
 Multipart fields are the app's `sendAttachment` ones, read by the server's `readChatAttachment`: `conversation`, `body` (the caption — on the **first** attachment each chat receives only), and one file as `photo` or `document`. With several chats ticked, each attachment is prepared once and sent to each chat in turn, so every chat gets them in order. A caption with nothing sendable goes as a text message.
 
-**Limits (the server's `src/lib/storage.ts`)** are checked before anything uploads, so a refusal is explained on the spot: documents must be PDF, DOC/DOCX, XLS/XLSX, ZIP, MP4, JPEG/PNG/WebP or a generic file (CAD), ≤ 50 MB; photos ≤ 40 MB (ours are a few MB). Refused on the phone: PPTX, Keynote/Pages/Numbers, plain `.txt`, audio (WhatsApp voice notes), folders, anything over 50 MB. The server's own sentence is shown for anything it refuses anyway.
+**Limits (the server's `src/lib/storage.ts`)** are checked before anything uploads, so a refusal is explained on the spot: documents must be PDF, DOC/DOCX, XLS/XLSX, ZIP, MP4, JPEG/PNG/WebP or a generic file (CAD), ≤ 50 MB; photos ≤ 40 MB (ours are a few MB). Refused on the phone: PPTX, Keynote/Pages/Numbers, plain `.txt`, folders, anything over 50 MB.
+
+**Voice notes** (a WhatsApp `.opus`, a Voice Memos `.m4a`, MP3, WAV…) go as the `voice` field, ≤ 15 MB, exactly like a recording made in the app. CAF/AIFF/AMR are written out as M4A first; M4A/MP3/WAV carry their `durationSeconds`. An Ogg/WebM one is sent as it is — the phone cannot read it — and the server turns it into AAC and measures it (`src/lib/voice-transcode.ts`, needs `ffmpeg`, which the Dockerfile installs). The server's own sentence is shown for anything it refuses anyway.
 
 Memory: an extension is killed at a small fraction of an app's memory. Attachments are taken as files (`loadFileRepresentation`) into the extension's `tmp/NeonShare/`, handled one at a time, and each upload is streamed from a multipart body written to disk. The folder is cleared on launch and on finishing.
 

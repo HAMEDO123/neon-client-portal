@@ -49,3 +49,4 @@
 "Couldn't read “%@” on this iPhone." = "تعذّرت قراءة «%@» على هذا الآيفون.";
 "“%@” is over the chat's 50 MB limit, even made smaller." = "«%@» يتجاوز حد المحادثة البالغ 50 ميغابايت حتى بعد تصغيره.";
 "“%@” can't go in the chat. It takes photos, videos, PDF, Word, Excel, ZIP and DWG files." = "لا يمكن إرسال «%@» في المحادثة. تقبل المحادثة الصور والفيديو وملفات PDF وWord وExcel وZIP وDWG.";
+"Preparing the voice message…" = "جارٍ تجهيز الرسالة الصوتية…";
