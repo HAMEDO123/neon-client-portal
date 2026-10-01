@@ -277,45 +277,6 @@ enum ChatStoryVideo {
     }
 }
 
-/// The camera, for a photo or a short video there and then.
-struct ChatStoryCamera: UIViewControllerRepresentable {
-    let onPhoto: (UIImage) -> Void
-    let onVideo: (URL) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.mediaTypes = [UTType.image.identifier, UTType.movie.identifier]
-        picker.videoMaximumDuration = ChatStoryVideo.maxSeconds
-        picker.videoQuality = .typeHigh
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: ChatStoryCamera
-        init(_ parent: ChatStoryCamera) { self.parent = parent }
-
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let url = info[.mediaURL] as? URL {
-                parent.onVideo(url)
-            } else if let image = info[.originalImage] as? UIImage {
-                parent.onPhoto(image)
-            }
-            parent.dismiss()
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
-    }
-}
-
 struct ChatStoryComposer: View {
     var onPosted: () -> Void = {}
 
@@ -378,7 +339,11 @@ struct ChatStoryComposer: View {
         .animation(NeonMotion.smooth, value: preparing)
         .photosPicker(isPresented: $showLibrary, selection: $pickerItem, matching: .any(of: [.images, .videos]))
         .fullScreenCover(isPresented: $showCamera) {
-            ChatStoryCamera(
+            // The full-screen story camera: the photo it hands back is exactly
+            // what its preview showed, shaped like the screen, so the story
+            // fills the screen with nothing cut that wasn't seen.
+            NeonCameraView(
+                purpose: .story,
                 onPhoto: { image in withNeonAnimation(NeonMotion.smooth) { setMedia(.photo(image)) } },
                 onVideo: { url in Task { await prepareVideo(url) } }
             )
@@ -421,10 +386,14 @@ struct ChatStoryComposer: View {
     @ViewBuilder
     private func preview(_ media: ChatStoryMedia) -> some View {
         let shape = RoundedRectangle(cornerRadius: NeonRadius.xl, style: .continuous)
+        // Shaped like this phone's screen and drawn the way the story screen
+        // draws it, so what is shown here is what everybody will see — not a
+        // crop of it.
+        let screen = UIScreen.main.bounds.size
         Group {
             switch media {
             case .photo(let image):
-                Image(uiImage: image).resizable().scaledToFill()
+                ChatStoryPhoto(image: image)
             case .video:
                 if let player {
                     VideoPlayer(player: player)
@@ -433,8 +402,9 @@ struct ChatStoryComposer: View {
                 }
             }
         }
+        .aspectRatio(screen.width / max(screen.height, 1), contentMode: .fit)
+        .frame(maxHeight: 520)
         .frame(maxWidth: .infinity)
-        .frame(height: 420)
         .background(Color.black)
         .clipShape(shape)
         .overlay(shape.strokeBorder(Color.white, lineWidth: 2))
