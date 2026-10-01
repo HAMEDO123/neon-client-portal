@@ -128,7 +128,8 @@ final class ChatVoiceRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
 }
 
 /// Plays one voice note at a time. Tapping a second bubble stops the first —
-/// nothing here queues, which matches a chat bubble's own one-shot feel.
+/// nothing here queues, which matches a chat bubble's own one-shot feel. Plays
+/// at 1×, 1.5× or 2× (`rate`), one setting for every note.
 @MainActor
 final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = ChatVoicePlayer()
@@ -137,9 +138,25 @@ final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     /// Fetching the note before it can play.
     @Published var loadingURL: URL?
     @Published var progress: Double = 0
+    /// How far into the note it is, in the recording's own seconds — right at
+    /// any speed, since the player counts the recording, not the clock.
+    @Published private(set) var elapsed: TimeInterval = 0
+    /// How fast notes play: one choice for every note, WhatsApp's way, kept
+    /// until the app quits. Changing it changes the note playing now too.
+    @Published private(set) var rate: Float = 1
+
+    /// 1× → 1.5× → 2× → 1×.
+    static let rates: [Float] = [1, 1.5, 2]
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
+
+    /// The next speed along, for the note playing now and every one after it.
+    func cycleRate() {
+        let index = Self.rates.firstIndex(of: rate) ?? 0
+        rate = Self.rates[(index + 1) % Self.rates.count]
+        player?.rate = rate
+    }
 
     func toggle(url: URL) {
         if playingURL == url || loadingURL == url {
@@ -173,15 +190,24 @@ final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
             return
         }
         player.delegate = self
+        // Speed can only be changed on a player told so before it is prepared.
+        player.enableRate = true
+        player.prepareToPlay()
+        player.rate = rate
         player.play()
+        player.rate = rate
         self.player = player
         self.playingURL = url
         self.progress = 0
+        self.elapsed = 0
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let player = self.player, player.duration > 0 else { return }
-                self.progress = player.currentTime / player.duration
+                // The recording's position, not time since it started, so
+                // both stay right at 1.5× and 2×.
+                self.progress = min(1, player.currentTime / player.duration)
+                self.elapsed = player.currentTime
             }
         }
     }
@@ -194,6 +220,7 @@ final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
         playingURL = nil
         loadingURL = nil
         progress = 0
+        elapsed = 0
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
