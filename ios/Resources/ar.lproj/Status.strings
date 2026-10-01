@@ -1,0 +1,53 @@
+/* Status area: the manager's server and network status screen.
+   The pills avoid "OK", "Down" and "Unknown": those keys already mean
+   "Okay" (a button) and "move down" (Tasks) in earlier tables. */
+
+/* --- The screen --- */
+"Server & network" = "الخادم والشبكة";
+"Server" = "الخادم";
+"The site, its data and the PC" = "الموقع وبياناته والكمبيوتر";
+"Network" = "الشبكة";
+"Out to the internet and back in" = "الخروج إلى الإنترنت والعودة منه";
+"The server runs every check itself each time this page refreshes: every 15 seconds while it is open. Hold a row to copy it." = "يُجري الخادم كل فحص بنفسه عند كل تحديث لهذه الصفحة: كل ١٥ ثانية ما دامت مفتوحة. اضغط مطوّلًا على أي سطر لنسخه.";
+
+/* --- States --- */
+"Healthy" = "سليم";
+"Warning" = "تحذير";
+"Failing" = "متعطّل";
+"Can't tell" = "غير معروف";
+"All healthy" = "كله سليم";
+"To check: %@" = "للمراجعة: %@";
+
+/* --- The hero --- */
+"Everything is running" = "كل شيء يعمل";
+"Nothing could be checked" = "تعذّر فحص أي شيء";
+"1 thing needs attention" = "أمر واحد يحتاج انتباهك";
+"%d things need attention" = "يحتاج %d منها إلى انتباهك";
+"Checked just now" = "فُحص للتو";
+"Checked %@" = "آخر فحص %@";
+"Checking…" = "جارٍ الفحص…";
+
+/* --- When the server cannot be reached --- */
+"Can't reach the server" = "تعذّر الوصول إلى الخادم";
+"Can't reach the server right now" = "تعذّر الوصول إلى الخادم الآن";
+"The last check failed" = "فشل آخر فحص";
+"Below is the last answer it gave. %@" = "المعروض أدناه آخر جواب وصل منه. %@";
+"This phone could not reach clients.neonjo.com. Either the phone is offline, or the studio's PC, its internet or the tunnel is down — from here there is no telling which." = "لم يتمكن هذا الهاتف من الوصول إلى clients.neonjo.com. إما أن الهاتف غير متصل، أو أن كمبيوتر الاستوديو أو الإنترنت فيه أو النفق متوقف — ولا يمكن معرفة أيّها من هنا.";
+
+/* --- The checks: the titles the server sends (STATUS_TITLES in src/lib/status.ts) --- */
+"The site" = "الموقع";
+"Database" = "قاعدة البيانات";
+"Processor load" = "حمل المعالج";
+"Memory" = "الذاكرة";
+"Disk" = "القرص";
+"The PC's disk" = "قرص الكمبيوتر";
+"Scheduled jobs" = "المهام المجدولة";
+"Meeting reminders" = "تذكيرات الاجتماعات";
+"Database backups" = "نسخ قاعدة البيانات الاحتياطية";
+"WhatsApp worker" = "خدمة واتساب";
+"iPhone push" = "إشعارات الآيفون";
+"Web push" = "إشعارات المتصفح";
+"Internet" = "الإنترنت";
+"DNS" = "أسماء النطاقات (DNS)";
+"Public address" = "العنوان العام";
+"Office cameras" = "كاميرات المكتب";

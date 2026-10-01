@@ -4,8 +4,9 @@ import { runFollowUps } from "@/lib/notifications/follow-up-events";
 import { runRules } from "@/lib/notifications/automation-events";
 import { runMeetingReminders } from "@/lib/notifications/meeting-events";
 import { syncAttendance } from "@/lib/attendance-sync";
-import { getTimezone } from "@/lib/settings";
+import { getTimezone, setSetting } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
+import { cronStampKey, cronStampValue } from "@/lib/status";
 
 // The scheduled entry point. An external scheduler calls this every hour and
 // the endpoint decides whether it is time — that way the daily run follows the
@@ -37,6 +38,30 @@ async function handle(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Every run leaves a stamp: when it started, whether it finished, how long
+  // it took. It is the only way the manager's status screen can tell that
+  // neon-scheduler and neon-meeting-scheduler are alive — the site is not
+  // given the Docker socket, so it reads their health off what they do. The
+  // full pass and each forced job keep their own stamp, so the meeting pass
+  // calling every minute cannot hide a ten-minute pass that has stopped.
+  // Written after the run, and never allowed to fail it.
+  const startedAt = new Date();
+  const stampKey = cronStampKey(new URL(request.url).searchParams.get("job"));
+  let finished = false;
+  try {
+    const response = await run(request);
+    finished = true;
+    return response;
+  } finally {
+    if (stampKey) {
+      await setSetting(stampKey, cronStampValue(startedAt, finished)).catch((error) => {
+        console.error("[cron] could not record the run", error);
+      });
+    }
+  }
+}
+
+async function run(request: Request) {
   const url = new URL(request.url);
   const timezone = await getTimezone();
   const hour = hourIn(timezone);
