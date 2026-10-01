@@ -164,11 +164,25 @@ struct OpsRequests: Decodable {
     }
 }
 
+/// One thing on a purchase request. `estimatedCost` is what the line costs
+/// altogether, never each — nothing multiplies it by the count (the studio's
+/// rule, src/lib/supply-requests.ts).
+struct SupplyLine: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let count: Int?
+    let estimatedCost: Double?
+    let position: Int
+}
+
 struct SupplyRequest: Decodable, Identifiable {
     struct Employee: Decodable { let id: String; let name: String; let role: String?; let photoUrl: String? }
 
     let id: String
+    /// The headline over `lines` ("Chairs and 2 more"); a request from before
+    /// lines existed has only this.
     let item: String
+    let lines: [SupplyLine]?
     let quantity: String?
     let note: String?
     let estimatedCost: Double?

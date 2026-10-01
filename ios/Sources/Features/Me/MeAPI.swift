@@ -54,11 +54,17 @@ extension APIClient {
         try await read("me/requests", as: RequestsResponse.self)
     }
 
+    /// Everything to buy in one request, as the website's form posts it:
+    /// parallel `lineName`/`lineCount`/`lineCost` lists, an empty entry where a
+    /// box was left blank so the three stay lined up.
     @discardableResult
-    func createSupplyRequest(item: String, quantity: String, estimatedCost: String, note: String, urgent: Bool) async throws -> ActionOutcome {
-        var form: [String: Any] = ["item": item]
-        if !quantity.isEmpty { form["quantity"] = quantity }
-        if !estimatedCost.isEmpty { form["estimatedCost"] = estimatedCost }
+    func createSupplyRequest(lines: [SupplyLineDraft], note: String, urgent: Bool) async throws -> ActionOutcome {
+        let filled = lines.filter { !$0.trimmedName.isEmpty }
+        var form: [String: Any] = [
+            "lineName": filled.map(\.trimmedName),
+            "lineCount": filled.map { $0.count.map { String(Int($0)) } ?? "" },
+            "lineCost": filled.map { $0.cost.map { String($0) } ?? "" },
+        ]
         if !note.isEmpty { form["note"] = note }
         if urgent { form["urgent"] = "on" }
         return try await perform("me/requests/supply/create", form: form)

@@ -82,6 +82,8 @@ export const reads: ReadRegistry = {
       where: { employeeId: me.id },
       orderBy: { createdAt: "desc" },
       take: 50,
+      // `item` is a headline over these, as on the manager's list.
+      include: { lines: { orderBy: { position: "asc" } } },
     });
     const receipts = await getMyReceipts(me.id, period);
     const report = await prisma.dailyReport.findUnique({

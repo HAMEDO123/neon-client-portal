@@ -57,6 +57,7 @@ struct FollowUpAnswerResult: Decodable {
 struct SupplyRequestRow: Decodable, Identifiable {
     let id: String
     let item: String
+    let lines: [SupplyLine]?
     let quantity: String?
     let note: String?
     let estimatedCost: Double?
