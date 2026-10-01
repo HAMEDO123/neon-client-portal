@@ -88,9 +88,13 @@ struct MyRequestsRootView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 4) {
                             DirText(request.item, font: .system(.callout, weight: .semibold))
-                            if let quantity = request.quantity, !quantity.isEmpty {
+                            if (request.lines ?? []).isEmpty, let quantity = request.quantity, !quantity.isEmpty {
                                 DirText(quantity, font: .neonSubtitle, color: .neonTextSecondary)
                             }
+                        }
+                        if let lines = request.lines, !lines.isEmpty {
+                            SupplyLinesList(lines: lines)
+                                .padding(.vertical, 2)
                         }
                         if let note = request.note, !note.isEmpty {
                             DirText(note, font: .neonSubtitle, color: .neonTextSecondary)
@@ -106,7 +110,7 @@ struct MyRequestsRootView: View {
                 }
                 HStack(spacing: 8) {
                     BadgeView(text: supplyStatusLabel(request.status), tone: supplyStatusTone(request.status))
-                    if let cost = request.estimatedCost {
+                    if (request.lines ?? []).count < 2, let cost = request.estimatedCost {
                         Text(L("≈ %@", NeonFormat.money(cost)))
                             .font(.neonCaption)
                             .foregroundStyle(Color.neonTextTertiary)
@@ -282,13 +286,17 @@ private struct NewSupplyRequestSheet: View {
 
     @EnvironmentObject var api: APIClient
     @Environment(\.dismiss) private var dismiss
-    @State private var item = ""
-    @State private var quantity = ""
-    @State private var cost: Double?
+    @State private var lines: [SupplyLineDraft] = [SupplyLineDraft()]
     @State private var note = ""
     @State private var urgent = false
-    @State private var sending = false
     @State private var errorMessage: String?
+
+    private var hasSomething: Bool { lines.contains { !$0.trimmedName.isEmpty } }
+
+    private var total: Double? {
+        let sum = lines.filter { !$0.trimmedName.isEmpty }.compactMap(\.cost).reduce(0, +)
+        return sum > 0 ? sum : nil
+    }
 
     var body: some View {
         SheetScaffold(
@@ -296,14 +304,30 @@ private struct NewSupplyRequestSheet: View {
             subtitle: L("For the office"),
             symbol: "shippingbox",
             primaryTitle: L("Send request"),
-            isPrimaryEnabled: !item.trimmingCharacters(in: .whitespaces).isEmpty
+            isPrimaryEnabled: hasSomething
         ) {
             await send()
         } content: {
-            FormSection(L("What do you need?")) {
-                NeonTextField(L("Item"), text: $item, prompt: L("Coffee, A4 paper…"), symbol: "cart", isRequired: true)
-                NeonTextField(L("How much"), text: $quantity, prompt: L("2 boxes"), symbol: "number")
-                MoneyField(L("Approx. cost"), amount: $cost)
+            FormSection(L("What do you need?"), footer: L("The price is what that line costs altogether, not what one costs.")) {
+                ForEach($lines) { $line in
+                    lineEditor($line, index: lines.firstIndex(of: line) ?? 0)
+                }
+                Button {
+                    Haptic.tap()
+                    withNeonAnimation(NeonMotion.snappy) { lines.append(SupplyLineDraft()) }
+                } label: {
+                    Label(L("Add another item"), systemImage: "plus.circle.fill")
+                        .font(.neonLabel)
+                        .foregroundStyle(Color.neonPurpleStrong)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: NeonSize.touch)
+                }
+                .buttonStyle(.plain)
+                if let total {
+                    KeyValueRow(L("Total"), value: L("≈ %@", NeonFormat.money(total, decimals: total.rounded() == total ? 0 : 2)), symbol: "banknote")
+                }
+            }
+            FormSection {
                 NeonTextEditor(L("Anything else the manager should know"), text: $note, minLines: 2, maxLines: 5)
                 ToggleRow(L("We need this urgently"), symbol: "bolt.fill", isOn: $urgent)
             }
@@ -311,15 +335,46 @@ private struct NewSupplyRequestSheet: View {
                 Text(errorMessage).font(.footnote).foregroundStyle(.red)
             }
         }
-        .neonSheet([.medium, .large])
+        .neonSheet([.large])
+    }
+
+    @ViewBuilder
+    private func lineEditor(_ line: Binding<SupplyLineDraft>, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
+                NeonTextField(
+                    lines.count > 1 ? L("Item %d", index + 1) : L("Item"),
+                    text: line.name,
+                    prompt: L("Coffee, A4 paper…"),
+                    symbol: "cart",
+                    isRequired: index == 0
+                )
+                if lines.count > 1 {
+                    Button {
+                        Haptic.tap()
+                        withNeonAnimation(NeonMotion.snappy) { lines.removeAll { $0.id == line.wrappedValue.id } }
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Color.neonDanger.opacity(0.8))
+                            .frame(width: NeonSize.touch, height: NeonSize.touch)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L("Remove this item"))
+                }
+            }
+            HStack(alignment: .top, spacing: 8) {
+                NumberField(L("How many"), value: line.count, decimals: 0, prompt: "1", symbol: "number")
+                MoneyField(L("Price"), amount: line.cost)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func send() async {
         do {
             try await api.createSupplyRequest(
-                item: item.trimmingCharacters(in: .whitespaces),
-                quantity: quantity.trimmingCharacters(in: .whitespaces),
-                estimatedCost: cost.map { String($0) } ?? "",
+                lines: lines,
                 note: note.trimmingCharacters(in: .whitespaces),
                 urgent: urgent
             )

@@ -190,7 +190,9 @@ private struct SupplyRequestCard: View {
             // report mis-filed as one ("تقرير اليومي") has no quantity or
             // cost, and this line is what makes that obvious before Approve.
             SectionLabel(L("To buy"))
-            if request.quantity != nil || request.estimatedCost != nil {
+            if let lines = request.lines, !lines.isEmpty {
+                SupplyLinesList(lines: lines)
+            } else if request.quantity != nil || request.estimatedCost != nil {
                 if let quantity = request.quantity { KeyValueRow(L("Quantity"), value: quantity, symbol: "number") }
                 if let cost = request.estimatedCost {
                     KeyValueRow(L("Cost"), value: "≈ \(NeonFormat.money(cost, decimals: 2))", symbol: "banknote")
