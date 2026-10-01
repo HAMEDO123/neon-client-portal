@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from "@/lib/settings";
 import { open, seal } from "@/lib/secret-box";
+import type { ShopStorageItem } from "@/lib/office-shop-storage";
 
 // The office's shop sign-in, shared so every phone is on the one cart.
 //
@@ -49,7 +50,12 @@ export type ShopCookie = {
   httpOnly: boolean;
 };
 
-export type ShopSession = { cookies: ShopCookie[]; site: string | null };
+/**
+ * Cookies, and the shop's local-storage entries — where Yaser Mall actually
+ * keeps its sign-in (lib/office-shop-storage.ts). `storage` is empty for a
+ * session shared before it was carried.
+ */
+export type ShopSession = { cookies: ShopCookie[]; storage: ShopStorageItem[]; site: string | null };
 
 export type ShopSessionState = {
   site: string | null;
@@ -62,11 +68,11 @@ export type ShopSessionState = {
 /**
  * The manager's signed-in session, handed over for the rest of the office.
  *
- * Cookies only, and only the fields a web view needs to put them back. Anything
- * else the phone knows about the shop stays on the phone.
+ * The cookies, and the shop's local-storage entries (where Yaser Mall keeps
+ * its sign-in token), with only the fields a web view needs to put them back.
  */
-export async function saveShopSession(cookies: ShopCookie[], byName: string, site: string | null) {
-  await setSetting(SESSION_KEY, seal(JSON.stringify(cookies)));
+export async function saveShopSession(cookies: ShopCookie[], byName: string, site: string | null, storage: ShopStorageItem[] = []) {
+  await setSetting(SESSION_KEY, seal(JSON.stringify({ cookies, storage })));
   await setSetting(SHARED_KEY, JSON.stringify({ name: byName, at: new Date().toISOString() }));
   await setSetting(SITE_KEY, site ?? "");
   // A new sign-in starts a fresh record: who took the *old* one says nothing
@@ -92,9 +98,12 @@ export async function shopSession(): Promise<ShopSession | null> {
   if (!plain) return null;
 
   try {
-    const cookies = JSON.parse(plain) as ShopCookie[];
-    if (!Array.isArray(cookies) || cookies.length === 0) return null;
-    return { cookies, site: site || null };
+    // A list is a session shared before the storage entries were carried.
+    const parsed = JSON.parse(plain) as ShopCookie[] | { cookies?: ShopCookie[]; storage?: ShopStorageItem[] };
+    const cookies = Array.isArray(parsed) ? parsed : Array.isArray(parsed.cookies) ? parsed.cookies : [];
+    const storage = !Array.isArray(parsed) && Array.isArray(parsed.storage) ? parsed.storage : [];
+    if (cookies.length === 0 && storage.length === 0) return null;
+    return { cookies, storage, site: site || null };
   } catch {
     return null;
   }

@@ -6,13 +6,15 @@ import WebKit
 // adds to the same cart — the cart lives at the shop, on that account — and
 // only the manager orders.
 //
-// The office account is set once, centrally — the manager types it on the
-// website's Settings ("The office shop account") — and a team member's phone
-// signs itself in with it (`me/shopping/account`, read only when the shop's
-// sign-in is showing, never written to disk). That means everybody on the
-// team can read the password: the studio chose that, knowing it, and every
-// fetch is recorded against whoever asked. The manager's own phone signs in
-// by hand once (the web view keeps its cookies).
+// The shop signs in with a phone number and an SMS code, and keeps the result
+// as a token in local storage ("wk_token") — there is no password to share.
+// So the manager signs in once, on their own phone where the SMS arrives, and
+// presses "Share with the office": the shop's cookies and local-storage
+// entries go to the server (`me/shopping/share`, sealed there). Every team
+// member's phone puts them back before it opens the shop (`me/shopping/
+// session`, read without ever touching the disk cache) and is already in.
+// Everybody on the team holds that sign-in: the studio chose that, knowing
+// it, and every fetch is recorded against whoever asked.
 //
 // Ordering is blocked on a team member's phone three ways, because the shop's
 // site is not ours and any one of them can miss: a checkout-looking button is
@@ -134,7 +136,7 @@ enum OfficeShop {
         return String(array.dropFirst().dropLast())
     }
 
-    /// Only the shop's own pages are ever typed into — never a payment
+    /// Only the shop's own pages are ever written into — never a payment
     /// provider or anything a redirect lands on.
     static func isShopPage(_ url: URL?) -> Bool {
         guard let host = url?.host?.lowercased(), let shop = home.host?.lowercased() else { return false }
@@ -142,65 +144,53 @@ enum OfficeShop {
         return host == shop || host == bare || host.hasSuffix("." + bare)
     }
 
-    /// Is the shop asking somebody to sign in? A visible password field, or a
-    /// visible "sign in" control. Found, never assumed: the shop's own page.
-    static let detectScript = """
+    static func isShopCookie(_ cookie: HTTPCookie) -> Bool {
+        guard let shop = home.host?.lowercased() else { return false }
+        let bare = shop.hasPrefix("www.") ? String(shop.dropFirst(4)) : shop
+        let domain = cookie.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        return domain == bare || domain.hasSuffix("." + bare)
+    }
+
+    /// Is the shop asking this phone to sign in? Its sign-in is a phone-number
+    /// box under "تسجيل دخول أو إنشاء حساب جديد" (or `?showLogin=true`).
+    static let signedOutScript = """
     (function () {
       var visible = function (el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); };
-      var password = Array.prototype.some.call(document.querySelectorAll("input[type=password]"), visible);
-      var SIGN_IN = /^(sign ?in|log ?in|login|تسجيل الدخول|تسجيل دخول|دخول)$/i;
-      var signIn = Array.prototype.some.call(document.querySelectorAll("a, button, [role=button]"), function (el) {
-        return visible(el) && SIGN_IN.test((el.innerText || "").trim());
+      if (/[?&]showLogin=true/.test(location.search)) return true;
+      var phone = Array.prototype.some.call(document.querySelectorAll("input"), function (i) {
+        return visible(i) && (i.type === "tel" || /(هاتف|phone|mobile|جوال)/i.test(i.placeholder || ""));
       });
-      return JSON.stringify({ password: password, signIn: signIn });
+      return phone && /(تسجيل دخول|تسجيل الدخول|sign ?in|log ?in)/i.test(document.body ? document.body.innerText : "");
     })();
     """
 
-    /// Opens the shop's sign-in, by pressing its own "sign in" control.
-    static let openSignInScript = """
+    /// The shop's local-storage entries, on the manager's phone, to share.
+    static let readStorageScript = """
     (function () {
-      var visible = function (el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); };
-      var SIGN_IN = /^(sign ?in|log ?in|login|تسجيل الدخول|تسجيل دخول|دخول)$/i;
-      var el = Array.prototype.find.call(document.querySelectorAll("a, button, [role=button]"), function (el) {
-        return visible(el) && SIGN_IN.test((el.innerText || "").trim());
-      });
-      if (el) { el.click(); return true; }
-      return false;
+      var items = [];
+      for (var i = 0; i < localStorage.length && i < 50; i++) {
+        var key = localStorage.key(i);
+        items.push({ origin: location.origin, key: key, value: localStorage.getItem(key) });
+      }
+      return JSON.stringify(items);
     })();
     """
 
-    /// Fills the shop's sign-in form and presses its button. Run with
-    /// `callAsyncJavaScript`, so the email and password are arguments — never
-    /// pasted into the script's text. Typed the way a person types (input and
-    /// change events), which is what a framework form listens for.
-    static let fillScript = """
-    var visible = function (el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); };
-    var inputs = Array.prototype.filter.call(document.querySelectorAll("input"), visible);
-    var secret = inputs.find(function (i) { return i.type === "password"; });
-    if (!secret) return "no-password-field";
-    var describes = function (i) { return [i.name, i.id, i.placeholder, i.getAttribute("formcontrolname"), i.getAttribute("aria-label"), i.autocomplete].join(" "); };
-    var who = inputs.find(function (i) { return i !== secret && (i.type === "email" || /(mail|user|login|phone|mobile|بريد|هاتف|جوال|موبايل)/i.test(describes(i))); })
-      || inputs.filter(function (i) { return i !== secret && ["text", "email", "tel", ""].indexOf(i.type) >= 0; }).pop();
-    if (!who) return "no-account-field";
-    var type = function (el, value) {
-      var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
-      el.focus();
-      setter.call(el, value);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-      el.dispatchEvent(new Event("blur", { bubbles: true }));
-    };
-    type(who, email);
-    type(secret, password);
-    var SUBMIT = /(sign ?in|log ?in|login|تسجيل الدخول|تسجيل دخول|دخول|متابعة|continue)/i;
-    var form = secret.form;
-    var button = (form && form.querySelector("button[type=submit], input[type=submit]"))
-      || Array.prototype.filter.call(document.querySelectorAll("button, [role=button], input[type=submit]"), visible)
-        .find(function (b) { return SUBMIT.test(b.innerText || b.value || ""); });
-    if (button) { setTimeout(function () { button.click(); }, 250); return "submitted"; }
-    if (form && form.requestSubmit) { form.requestSubmit(); return "submitted"; }
-    return "filled";
-    """
+    /// Puts the shared entries back on the page's own origin before its code
+    /// runs — every load, so the office stays signed in on this phone even if
+    /// somebody presses the shop's own "log out".
+    static func restoreStorageScript(_ items: [OfficeShopStorageItem]) -> String {
+        let json = (try? JSONEncoder().encode(items)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        return """
+        (function () {
+          var items = \(json);
+          items.forEach(function (item) {
+            if (item.origin !== location.origin) return;
+            try { if (localStorage.getItem(item.key) !== item.value) localStorage.setItem(item.key, item.value); } catch (e) {}
+          });
+        })();
+        """
+    }
 
     static func isCheckout(_ url: URL) -> Bool {
         let text = url.path + "?" + (url.query ?? "") + "#" + (url.fragment ?? "")
@@ -208,14 +198,54 @@ enum OfficeShop {
     }
 }
 
-struct OfficeShopAccount: Decodable, Equatable {
-    let email: String
-    let password: String
-    let site: String?
+struct OfficeShopStorageItem: Codable, Equatable {
+    let origin: String
+    let key: String
+    let value: String
 }
 
-private struct OfficeShopAccountAnswer: Decodable {
-    let account: OfficeShopAccount?
+struct OfficeShopCookie: Codable {
+    let name: String
+    let value: String
+    let domain: String
+    let path: String
+    /// Seconds since the epoch, or nil for a cookie that dies with the session.
+    let expires: Double?
+    let secure: Bool
+    let httpOnly: Bool
+
+    init(_ cookie: HTTPCookie) {
+        name = cookie.name
+        value = cookie.value
+        domain = cookie.domain
+        path = cookie.path
+        expires = cookie.expiresDate?.timeIntervalSince1970
+        secure = cookie.isSecure
+        httpOnly = cookie.isHTTPOnly
+    }
+
+    var httpCookie: HTTPCookie? {
+        var properties: [HTTPCookiePropertyKey: Any] = [.name: name, .value: value, .domain: domain, .path: path.isEmpty ? "/" : path]
+        if let expires { properties[.expires] = Date(timeIntervalSince1970: expires) }
+        if secure { properties[.secure] = "TRUE" }
+        if httpOnly { properties[HTTPCookiePropertyKey("HttpOnly")] = "TRUE" }
+        return HTTPCookie(properties: properties)
+    }
+
+    var asJSON: [String: Any] {
+        var object: [String: Any] = ["name": name, "value": value, "domain": domain, "path": path, "secure": secure, "httpOnly": httpOnly]
+        object["expires"] = expires ?? NSNull()
+        return object
+    }
+}
+
+private struct OfficeShopSessionAnswer: Decodable {
+    struct Session: Decodable {
+        let cookies: [OfficeShopCookie]
+        let storage: [OfficeShopStorageItem]?
+        let site: String?
+    }
+    let session: Session?
     let why: String?
 }
 
@@ -224,78 +254,111 @@ final class OfficeShopModel: ObservableObject {
     @Published var progress: Double = 0
     @Published var canGoBack = false
     @Published var canGoForward = false
-    /// The server's own sentence when there is no account to sign in with —
+    /// The server's own sentence when the office hasn't shared a sign-in —
     /// shown where the shop would be, with nothing to retry.
     @Published var blocker: String?
-    /// The form could not be filled: the account, for signing in by hand.
-    @Published var manual: OfficeShopAccount?
-    @Published var signingIn = false
+    /// The shop is asking a team member's phone to sign in: the shared
+    /// sign-in has run out, or the office was signed out.
+    @Published var signedOut = false
+    @Published var sharing = false
     weak var webView: WKWebView?
 
-    /// Held in memory for this run of the app only, and fetched at most once
-    /// per run without being asked: every fetch is recorded on the server.
-    private static var account: OfficeShopAccount?
-    private static var triedThisRun = false
+    /// Fetched at most once per run of the app: every fetch is recorded.
+    private static var sessionThisRun: OfficeShopSessionAnswer.Session?
 
-    /// Signs this phone in to the office shop when the shop asks for it.
-    /// `force` is the person pressing "Sign in".
-    func signIn(force: Bool) async {
-        guard let webView, OfficeShop.isShopPage(webView.url), !signingIn else { return }
-        if !force && Self.triedThisRun { return }
+    // MARK: - A team member's phone
 
-        let state = await detect(webView)
-        if !force && !state.password && !state.signIn { return } // already signed in
-        Self.triedThisRun = true
-        signingIn = true
-        defer { signingIn = false }
-
-        if Self.account == nil {
+    /// Puts the office's shared sign-in into this phone's shop before the
+    /// first page loads, then opens the shop.
+    func prepareAndLoad(_ webView: WKWebView) async {
+        var session = Self.sessionThisRun
+        if session == nil {
             do {
-                let answer = try await APIClient.shared.readFresh("me/shopping/account", as: OfficeShopAccountAnswer.self)
-                guard let account = answer.account else {
-                    blocker = answer.why ?? L("The office shop account isn't set up yet. Ask the manager.")
+                let answer = try await APIClient.shared.readFresh("me/shopping/session", as: OfficeShopSessionAnswer.self)
+                guard let shared = answer.session else {
+                    blocker = answer.why ?? L("The office isn't signed in to the shop yet. Ask the manager to sign in and share it.")
                     return
                 }
-                Self.account = account
+                session = shared
+                Self.sessionThisRun = shared
             } catch {
-                Toast.error(error)
+                // Offline or refused: whatever this phone kept from last time
+                // may still be signed in — open the shop and let it say.
+                webView.load(URLRequest(url: OfficeShop.home))
                 return
             }
         }
-        guard let account = Self.account else { return }
+        guard let session else { return }
 
-        if !state.password {
-            _ = try? await webView.evaluateJavaScript(OfficeShop.openSignInScript)
-            for _ in 0..<16 {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                if !OfficeShop.isShopPage(webView.url) { break }
-                if await detect(webView).password { break }
-            }
+        let store = webView.configuration.websiteDataStore.httpCookieStore
+        for cookie in session.cookies.compactMap(\.httpCookie) {
+            await store.setCookie(cookie)
         }
-        guard OfficeShop.isShopPage(webView.url) else { return }
-
-        let result = try? await webView.callAsyncJavaScript(
-            OfficeShop.fillScript,
-            arguments: ["email": account.email, "password": account.password],
-            contentWorld: .page
-        )
-        guard (result as? String) == "submitted" || (result as? String) == "filled" else {
-            withNeonAnimation(NeonMotion.snappy) { manual = account }
-            return
+        let storage = session.storage ?? []
+        if !storage.isEmpty {
+            webView.configuration.userContentController.addUserScript(
+                WKUserScript(source: OfficeShop.restoreStorageScript(storage), injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            )
         }
-        // Still asking after a few seconds: wrong details, a code by SMS, or a
-        // form this could not read. The person finishes it by hand.
-        try? await Task.sleep(nanoseconds: 3_500_000_000)
-        if OfficeShop.isShopPage(webView.url), await detect(webView).password {
-            withNeonAnimation(NeonMotion.snappy) { manual = account }
-        }
+        let site = session.site.flatMap(URL.init(string:)).flatMap { OfficeShop.isShopPage($0) ? $0 : nil } ?? OfficeShop.home
+        webView.load(URLRequest(url: site))
     }
 
-    private func detect(_ webView: WKWebView) async -> (password: Bool, signIn: Bool) {
-        guard let json = try? await webView.evaluateJavaScript(OfficeShop.detectScript) as? String,
-              let data = json.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Bool] else { return (false, false) }
-        return (object["password"] ?? false, object["signIn"] ?? false)
+    /// After a page has drawn: is the shop asking this phone to sign in?
+    func checkSignedOut() async {
+        guard let webView, OfficeShop.isShopPage(webView.url) else { return }
+        let asking = (try? await webView.evaluateJavaScript(OfficeShop.signedOutScript) as? Bool) ?? false
+        if asking != signedOut { withNeonAnimation(NeonMotion.snappy) { signedOut = asking } }
+    }
+
+    // MARK: - The manager's phone
+
+    /// Hands this phone's shop sign-in to the office: the shop's cookies and
+    /// its local-storage entries (where the sign-in token lives). Says how
+    /// much went, because a share that sent nothing is the failure nobody
+    /// would notice until the team could not shop.
+    func shareWithOffice() async {
+        guard let webView, OfficeShop.isShopPage(webView.url), !sharing else {
+            Toast.info(L("Open the shop first"))
+            return
+        }
+        sharing = true
+        defer { sharing = false }
+
+        if (try? await webView.evaluateJavaScript(OfficeShop.signedOutScript) as? Bool) == true {
+            Toast.info(L("Sign in to the shop first"), detail: L("Use the office phone number and the code the shop sends by SMS, then share."))
+            return
+        }
+
+        let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+            .filter(OfficeShop.isShopCookie)
+            .map(OfficeShopCookie.init)
+        var storage: [[String: String]] = []
+        if let json = try? await webView.evaluateJavaScript(OfficeShop.readStorageScript) as? String,
+           let data = json.data(using: .utf8),
+           let items = try? JSONDecoder().decode([OfficeShopStorageItem].self, from: data) {
+            storage = items.filter { !$0.key.isEmpty }.map { ["origin": $0.origin, "key": $0.key, "value": $0.value] }
+        }
+        guard !cookies.isEmpty || !storage.isEmpty else {
+            Toast.info(L("Sign in to the shop first"))
+            return
+        }
+
+        struct Shared: Decodable { let cookies: Int?; let storage: Int? }
+        do {
+            let outcome = try await APIClient.shared.perform(
+                "me/shopping/share",
+                args: [cookies.map(\.asJSON), OfficeShop.home.absoluteString, storage]
+            )
+            let shared = try? outcome.result(Shared.self)
+            Haptic.success()
+            Toast.success(
+                L("Shared with the office"),
+                detail: L("%d cookies and %d saved items — every phone opens the shop signed in.", shared?.cookies ?? cookies.count, shared?.storage ?? storage.count)
+            )
+        } catch {
+            Toast.error(error)
+        }
     }
 }
 
@@ -312,9 +375,19 @@ struct OfficeShoppingView: View {
                 hint
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
-            if let manual = model.manual {
-                manualCard(manual)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+            if model.signedOut && !isManager {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle.badge.exclamationmark")
+                        .foregroundStyle(Color.neonWarningStrong)
+                    Text(L("The office is signed out of the shop. Ask the manager to sign in and share it again."))
+                        .font(.neonFootnote)
+                        .foregroundStyle(Color.neonInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(12)
+                .background(Color.neonAmber.opacity(0.14))
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
             ZStack(alignment: .top) {
                 OfficeShopWebView(model: model, isManager: isManager, onAdded: reportAdded)
@@ -334,8 +407,8 @@ struct OfficeShoppingView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.neonBg)
                 }
-                if model.signingIn {
-                    Label(L("Signing in to the office shop…"), systemImage: "person.badge.key.fill")
+                if model.sharing {
+                    Label(L("Sharing with the office…"), systemImage: "person.2.fill")
                         .font(.neonLabel)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(.ultraThinMaterial, in: Capsule())
@@ -354,55 +427,12 @@ struct OfficeShoppingView: View {
                     .accessibilityLabel(L("Shop home"))
                 Button { model.webView?.reload() } label: { Image(systemName: "arrow.clockwise") }
                     .accessibilityLabel(L("Reload"))
-                if !isManager {
-                    Button { Task { await model.signIn(force: true) } } label: { Image(systemName: "person.badge.key") }
-                        .disabled(model.signingIn)
-                        .accessibilityLabel(L("Sign in to the office shop"))
+                if isManager {
+                    Button { Task { await model.shareWithOffice() } } label: { Image(systemName: "person.2.badge.key") }
+                        .disabled(model.sharing)
+                        .accessibilityLabel(L("Share with the office"))
                 }
             }
-        }
-    }
-
-    /// The form could not be filled: the office account, to sign in by hand —
-    /// the studio chose that the team may see it (every fetch is recorded).
-    private func manualCard(_ account: OfficeShopAccount) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(L("Sign in to the office shop by hand"))
-                    .font(.neonLabel)
-                    .foregroundStyle(Color.neonInk)
-                Spacer()
-                Button {
-                    withNeonAnimation(NeonMotion.snappy) { model.manual = nil }
-                } label: {
-                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.neonTextTertiary)
-                        .frame(width: 32, height: 32)
-                }
-                .accessibilityLabel(L("Dismiss"))
-            }
-            Text(L("This phone couldn't fill in the shop's sign-in. Use these:"))
-                .font(.neonFootnote)
-                .foregroundStyle(Color.neonTextSecondary)
-            copyRow(L("Email or phone"), account.email)
-            copyRow(L("Password"), account.password)
-        }
-        .padding(12)
-        .background(Color.neonAmber.opacity(0.12))
-    }
-
-    private func copyRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label).font(.neonFootnote).foregroundStyle(Color.neonTextSecondary)
-            Spacer()
-            Text(verbatim: value).font(.neonLabel).foregroundStyle(Color.neonInk).environment(\.layoutDirection, .leftToRight)
-            Button {
-                UIPasteboard.general.string = value
-                Haptic.success()
-                Toast.success(L("Copied"))
-            } label: {
-                Image(systemName: "doc.on.doc").frame(width: 36, height: 36)
-            }
-            .accessibilityLabel(L("Copy"))
         }
     }
 
@@ -416,7 +446,7 @@ struct OfficeShoppingView: View {
                     .font(.neonLabel)
                     .foregroundStyle(Color.neonInk)
                 Text(isManager
-                     ? L("Set the office %@ account once in Settings on the website — the team's phones sign in with it by themselves. Sign in here by hand once. Everybody adds to this cart; only you place the order.", OfficeShop.name)
+                     ? L("Sign in here once with the office phone number and the SMS code, then press Share with the office (the people button above) — every employee's phone opens the shop already signed in. Everybody adds to this cart; only you place the order.")
                      : L("Everybody adds to the same cart. The manager checks it and places the order."))
                     .font(.neonFootnote)
                     .foregroundStyle(Color.neonTextSecondary)
@@ -465,7 +495,13 @@ private struct OfficeShopWebView: UIViewRepresentable {
         view.allowsBackForwardNavigationGestures = true
         context.coordinator.observe(view, model: model)
         model.webView = view
-        view.load(URLRequest(url: OfficeShop.home))
+        if isManager {
+            view.load(URLRequest(url: OfficeShop.home))
+        } else {
+            // The office's sign-in goes in first, so the very first page the
+            // shop draws is already signed in.
+            Task { @MainActor in await model.prepareAndLoad(view) }
+        }
         return view
     }
 
@@ -487,13 +523,13 @@ private struct OfficeShopWebView: UIViewRepresentable {
             self.onAdded = onAdded
         }
 
-        /// A team member's phone signs itself in once a page shows the shop's
-        /// sign-in — after the page (and its framework) has drawn.
+        /// On a team member's phone, once a page has drawn: is the shop
+        /// asking it to sign in? Then the shared sign-in has run out.
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard !isManager else { return }
             Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                await self?.model?.signIn(force: false)
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                await self?.model?.checkSignedOut()
             }
         }
 

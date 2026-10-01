@@ -80,3 +80,25 @@ Server files: `src/lib/office-shop-account.ts` (the store, the record of who
 used it, and the whole of why it is a session), `src/lib/secret-box.ts`
 (encryption at rest, and an honest comment about what it does not protect),
 `src/lib/mobile/registry/me.ts`.
+
+## Built (the Mac side) — and the one thing the cookies missed
+
+**Yaser Mall keeps its sign-in in local storage, not in a cookie.** Its own
+code: after the SMS code is accepted, `localStorage.setItem("wk_token",
+t.wk_token)`, and every API call carries it as the `wk_token` / `Wk-Token`
+headers. A share of cookies alone therefore signed nobody in.
+
+So the share carries the shop's local-storage entries too:
+`POST me/shopping/share` with `args: [cookies, site, storage]`, where
+`storage` is `[{ origin, key, value }]` (https origins only, ≤ 50 entries,
+values ≤ 8 KB — `src/lib/office-shop-storage.ts`, tested). They are sealed with
+the cookies, and `me/shopping/session` answers `{ cookies, storage, site }`. A
+session shared before this (cookies only) still reads.
+
+The app: the manager's phone has **Share with the office** (the people button
+in the shop's top bar) — it refuses while the shop is still asking to sign in,
+and says how many cookies and saved items went. A team member's phone fetches
+the session once per run (never into the disk cache), sets the cookies, adds a
+document-start script that puts the entries back on the shop's own origin on
+every load, then opens the shop. If the shop shows its phone-number sign-in
+anyway, a banner says "Ask the manager to sign in and share it again".

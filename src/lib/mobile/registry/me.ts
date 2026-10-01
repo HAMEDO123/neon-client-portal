@@ -26,6 +26,7 @@ import { guarded, guardedAction, param, optParam, str, oneOf, RpcError, type Act
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { shoppingDedupeKey, shoppingLabel, shoppingMessage } from "@/lib/office-shopping";
 import { recordShopFetch, saveShopSession, shopSession, type ShopCookie } from "@/lib/office-shop-account";
+import { readShopStorage } from "@/lib/office-shop-storage";
 import { requireAdmin } from "@/lib/admin-guard";
 import type { TaskState } from "@/generated/prisma/enums";
 
@@ -229,15 +230,19 @@ export const actions: ActionRegistry = {
   // `requireAdmin`, not `requireStaff`: this *is* the office's sign-in. An
   // employee's phone reads it; only the manager's may replace it, or anybody
   // could point the whole studio at an account of their own.
+  // args: [cookies, site, storage]. `storage` is the shop's local-storage
+  // entries — Yaser Mall keeps its sign-in token there, not in a cookie, so a
+  // share without it signs nobody in (lib/office-shop-storage.ts).
   "me/shopping/share": guardedAction(requireAdmin, async (input) => {
     const cookies = readCookies(input.args[0]);
-    if (cookies.length === 0) {
+    const storage = readShopStorage(input.args[2]);
+    if (cookies.length === 0 && storage.length === 0) {
       throw new RpcError("Sign in to the shop first — there is no session to share yet.", 400);
     }
 
     const site = typeof input.args[1] === "string" ? input.args[1].slice(0, 200) : null;
-    await saveShopSession(cookies, "Manager", site);
-    return { ok: true, cookies: cookies.length };
+    await saveShopSession(cookies, "Manager", site, storage);
+    return { ok: true, cookies: cookies.length, storage: storage.length };
   }),
 
   "me/assign/delete": async (input) => deleteAssignedTask(str(input.args[0], "id")),

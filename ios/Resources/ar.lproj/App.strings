@@ -19,10 +19,14 @@
 "Add what you need — the manager will check the cart and order it." = "أضف اللي بتحتاجه — المدير رح يراجع السلة ويطلبها.";
 "Shop home" = "الصفحة الرئيسية للمتجر";
 "Reload" = "إعادة تحميل";
-"The office shop account isn't set up yet. Ask the manager." = "حساب متجر المكتب ما انضبط لسا. اسأل المدير.";
-"Signing in to the office shop…" = "جارٍ تسجيل الدخول لمتجر المكتب…";
-"Sign in to the office shop" = "سجّل دخول متجر المكتب";
-"Sign in to the office shop by hand" = "سجّل دخول متجر المكتب يدوياً";
-"This phone couldn't fill in the shop's sign-in. Use these:" = "ما قدر الجوال يعبّي تسجيل دخول المتجر. استعمل هدول:";
-"Email or phone" = "الإيميل أو الهاتف";
-"Set the office %@ account once in Settings on the website — the team's phones sign in with it by themselves. Sign in here by hand once. Everybody adds to this cart; only you place the order." = "اضبط حساب المكتب في %@ مرة وحدة من الإعدادات على الموقع — جوالات الفريق بتسجّل دخول فيه لحالها. سجّل دخول هون يدوياً مرة وحدة. الكل بيضيف لهاي السلة، وإنت بس اللي بتطلب.";
+
+"The office isn't signed in to the shop yet. Ask the manager to sign in and share it." = "المكتب ما سجّل دخول للمتجر لسا. اطلب من المدير يسجّل دخول ويشاركه.";
+"The office is signed out of the shop. Ask the manager to sign in and share it again." = "المكتب طلع من حساب المتجر. اطلب من المدير يسجّل دخول ويشاركه مرة ثانية.";
+"Sharing with the office…" = "جارٍ المشاركة مع المكتب…";
+"Share with the office" = "شارك مع المكتب";
+"Open the shop first" = "افتح المتجر أولاً";
+"Sign in to the shop first" = "سجّل دخول المتجر أولاً";
+"Use the office phone number and the code the shop sends by SMS, then share." = "استعمل رقم هاتف المكتب والرمز اللي بيوصل برسالة، وبعدين شارك.";
+"Shared with the office" = "تمت المشاركة مع المكتب";
+"%d cookies and %d saved items — every phone opens the shop signed in." = "%d كوكيز و%d عناصر محفوظة — كل جوال بيفتح المتجر وهو مسجّل دخول.";
+"Sign in here once with the office phone number and the SMS code, then press Share with the office (the people button above) — every employee's phone opens the shop already signed in. Everybody adds to this cart; only you place the order." = "سجّل دخول هون مرة وحدة برقم هاتف المكتب والرمز اللي بيوصل برسالة، وبعدين اكبس «شارك مع المكتب» (زر الأشخاص فوق) — جوال كل موظف بيفتح المتجر وهو مسجّل دخول. الكل بيضيف لهاي السلة، وإنت بس اللي بتطلب.";

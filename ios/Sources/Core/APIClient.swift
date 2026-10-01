@@ -482,8 +482,8 @@ final class APIClient: ObservableObject {
     }
 
     /// A read that is never written to the on-disk cache — for an answer
-    /// that must not sit in a file, such as the office shop account's
-    /// password. No offline copy: it is the server's answer or an error.
+    /// that must not sit in a file, such as the office's shared shop sign-in.
+    /// No offline copy: it is the server's answer or an error.
     func readFresh<T: Decodable>(_ name: String, _ params: [String: String?] = [:], as type: T.Type = T.self) async throws -> T {
         let query = params
             .compactMap { key, value in value.map { URLQueryItem(name: key, value: $0) } }
