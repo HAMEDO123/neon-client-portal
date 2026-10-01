@@ -1,0 +1,95 @@
+/* The studio's cameras (ios/Sources/Features/Cameras). Keys that already
+   exist in an earlier table (Close, Edit, Saved to Photos, Connecting… …)
+   are not repeated here: L() finds those first. */
+
+/* The grid */
+"Cameras" = "الكاميرات";
+"Add camera" = "إضافة كاميرا";
+"No cameras yet" = "لا توجد كاميرات بعد";
+"Add the studio's Tapo cameras to watch them live from anywhere." = "أضف كاميرات Tapo الخاصة بالاستوديو لتشاهدها مباشرةً من أي مكان.";
+"The cameras are offline" = "الكاميرات غير متصلة";
+"The pictures come back as soon as it is started again." = "ستعود الصور بمجرد تشغيلها مجددًا.";
+"Loading cameras" = "جارٍ تحميل الكاميرات";
+"No picture" = "لا توجد صورة";
+"Not reachable" = "لا يمكن الوصول إليها";
+"Live" = "مباشر";
+"Watch live" = "مشاهدة مباشرة";
+"Test connection" = "اختبار الاتصال";
+"Added on the office PC" = "مُضافة على كمبيوتر المكتب";
+"Remove %@?" = "إزالة %@؟";
+"Nothing changes on the camera itself; it just leaves the app." = "لن يتغير شيء في الكاميرا نفسها؛ ستُزال من التطبيق فقط.";
+"%@ removed" = "أُزيلت الكاميرا %@";
+"Trying %@…" = "جارٍ تجربة %@…";
+"%@ is connected" = "الكاميرا %@ متصلة";
+"No picture from %@" = "لا صورة من %@";
+
+/* Adding and changing a camera */
+"Edit camera" = "تعديل الكاميرا";
+"A Tapo camera on the office network" = "كاميرا Tapo على شبكة المكتب";
+"Front door" = "الباب الأمامي";
+"IP address" = "عنوان IP";
+"Tapo app → the camera → ⚙︎ → Device Info → IP address." = "تطبيق Tapo ← الكاميرا ← ⚙︎ ← معلومات الجهاز ← عنوان IP.";
+"Four numbers with dots, like 192.168.1.20." = "أربعة أرقام بينها نقاط، مثل 192.168.1.20.";
+"How it signs in" = "طريقة الدخول";
+"Username or email" = "اسم المستخدم أو البريد الإلكتروني";
+"The Camera Account's username" = "اسم المستخدم في حساب الكاميرا";
+"Leave empty to keep the saved one" = "اتركها فارغة للإبقاء على المحفوظة";
+"Use the camera's Camera Account" = "استخدم حساب الكاميرا (Camera Account)";
+"In the Tapo app: the camera → ⚙︎ → Advanced Settings → Camera Account. Make any username and password there, and type them here. It is not your Tapo login." = "في تطبيق Tapo: الكاميرا ← ⚙︎ ← الإعدادات المتقدمة ← حساب الكاميرا (Camera Account). أنشئ هناك أي اسم مستخدم وكلمة مرور واكتبهما هنا. هذا ليس حساب دخولك إلى Tapo.";
+"That looks like the Tapo login" = "يبدو هذا حساب الدخول إلى Tapo";
+"With the Tapo email and password the picture can still come through, but the camera can't be moved from the app. A Camera Account does both." = "مع بريد Tapo وكلمة مروره قد تصل الصورة، لكن لا يمكن تحريك الكاميرا من التطبيق. حساب الكاميرا يتيح الأمرين.";
+"Give the camera a fixed address in the router (a DHCP reservation), so it keeps this one." = "ثبّت عنوان الكاميرا في الراوتر (حجز DHCP) حتى يبقى هذا العنوان نفسه.";
+"Save and test" = "حفظ واختبار";
+"Save and test again" = "حفظ واختبار مجددًا";
+"Not saved" = "لم تُحفظ";
+"Saved — and it's working" = "حُفظت — وهي تعمل";
+"Saved, but no picture yet" = "حُفظت، لكن لا صورة بعد";
+"It's working" = "الكاميرا تعمل";
+"No picture yet" = "لا صورة بعد";
+
+/* Watching one */
+"Connection lost — trying again" = "انقطع الاتصال — جارٍ إعادة المحاولة";
+"Paused" = "متوقف مؤقتًا";
+"Full quality is on" = "الجودة الكاملة مفعّلة";
+"Full quality is off" = "الجودة الكاملة متوقفة";
+"Save the picture to Photos" = "حفظ الصورة في الصور";
+"Move %@" = "تحريك %@";
+"Go to %@" = "الانتقال إلى %@";
+"Turn left" = "استدارة لليسار";
+"Turn right" = "استدارة لليمين";
+"Tilt up" = "إمالة للأعلى";
+"Tilt down" = "إمالة للأسفل";
+"The camera didn't move" = "لم تتحرك الكاميرا";
+
+/* The server's sentences (src/lib/cameras.ts, lib/mobile/cameras-service.ts),
+   shown through L() so the fixed ones read in Arabic. Those that carry an
+   address stay as the server wrote them. */
+"The cameras aren't connected yet." = "لم تُربط الكاميرات بعد.";
+"The camera relay on the office PC isn't running." = "خدمة الكاميرات على كمبيوتر المكتب متوقفة.";
+"The saved cameras can't be read since the server's secret changed. Add them again." = "تعذّرت قراءة الكاميرات المحفوظة لأن مفتاح الخادم تغيّر. أضفها مجددًا.";
+"There is no camera with that name." = "لا توجد كاميرا بهذا الاسم.";
+"The camera didn't send a picture." = "لم ترسل الكاميرا صورة.";
+"The camera isn't sending a live picture." = "الكاميرا لا ترسل بثًا مباشرًا.";
+"Only the manager can watch the cameras." = "المدير وحده يستطيع مشاهدة الكاميرات.";
+"This camera can't be moved from here." = "لا يمكن تحريك هذه الكاميرا من هنا.";
+"Moving the camera needs its Camera Account, not the Tapo login." = "تحريك الكاميرا يحتاج حساب الكاميرا، لا حساب Tapo.";
+"Give the camera a name." = "أعطِ الكاميرا اسمًا.";
+"Keep the camera's name under 40 characters." = "اجعل اسم الكاميرا أقل من 40 حرفًا.";
+"Type the camera's IP address, like 192.168.1.20." = "اكتب عنوان IP للكاميرا، مثل 192.168.1.20.";
+"Type the Camera Account's username (or the Tapo app's email)." = "اكتب اسم مستخدم حساب الكاميرا (أو بريد تطبيق Tapo).";
+"That password can't be right — check it and try again." = "لا يمكن أن تكون كلمة المرور هذه صحيحة — تحقّق منها وحاول مجددًا.";
+"Type the password." = "اكتب كلمة المرور.";
+"Connected — the picture is coming through." = "متصلة — الصورة تصل.";
+"Connected — the picture is coming through, and the camera can be moved from the app." = "متصلة — الصورة تصل، ويمكن تحريك الكاميرا من التطبيق.";
+"Connected — the picture is coming through. To move the camera from the app, use its Camera Account instead of the Tapo login." = "متصلة — الصورة تصل. لتحريك الكاميرا من التطبيق استخدم حساب الكاميرا بدل حساب Tapo.";
+"The camera answered, but no picture came through yet. Try again in a moment." = "ردّت الكاميرا، لكن لم تصل صورة بعد. حاول بعد لحظة.";
+"The camera refused the username or password. Use the Camera Account from the Tapo app (the camera → ⚙︎ → Advanced Settings → Camera Account), not the Tapo login." = "رفضت الكاميرا اسم المستخدم أو كلمة المرور. استخدم حساب الكاميرا من تطبيق Tapo (الكاميرا ← ⚙︎ ← الإعدادات المتقدمة ← حساب الكاميرا)، لا حساب الدخول إلى Tapo.";
+"The camera refused the Tapo password. Check it, or use the camera's Camera Account instead." = "رفضت الكاميرا كلمة مرور Tapo. تحقّق منها، أو استخدم حساب الكاميرا بدلًا منها.";
+"The camera closed the connection. It allows only a few viewers at once — close the Tapo app on other phones and try again." = "أغلقت الكاميرا الاتصال. لا تسمح إلا بعدد قليل من المشاهدين في الوقت نفسه — أغلق تطبيق Tapo على الهواتف الأخرى وحاول مجددًا.";
+"The camera didn't send a picture. Check the address, the account and that the camera is on." = "لم ترسل الكاميرا صورة. تحقّق من العنوان والحساب ومن أن الكاميرا تعمل.";
+"The camera refused its Camera Account for moving." = "رفضت الكاميرا حساب الكاميرا عند التحريك.";
+"The camera refused its Camera Account. Check the password." = "رفضت الكاميرا حساب الكاميرا. تحقّق من كلمة المرور.";
+"The camera didn't answer. Check that it is on." = "لم تردّ الكاميرا. تأكّد أنها تعمل.";
+"The camera didn't take that. Try again." = "لم تنفّذ الكاميرا ذلك. حاول مجددًا.";
+"That is not a direction." = "هذا ليس اتجاهًا.";
+"That is not one of the camera's positions." = "هذا ليس من المواضع المحفوظة في الكاميرا.";
