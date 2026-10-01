@@ -32,12 +32,17 @@ struct AdminMoreView: View {
                     MoreDestinationTile(L("Attendance"), symbol: "clock.badge.checkmark.fill", hue: .indigo) { AttendanceRootView() }
                 }
 
+                // The office itself: its shop cart and how its server and
+                // network are doing (the cameras join here).
+                MoreDestinationGroup(L("The office"), symbol: "building.2.fill", hue: .green) {
+                    MoreDestinationTile(L("Office shopping"), symbol: "cart.fill", hue: .green) { OfficeShoppingView() }
+                    MoreDestinationTile(L("Network & server"), symbol: "server.rack", hue: .cyan) { StatusRootView() }
+                }
+
                 // Analytics and Settings each stood alone in a third,
                 // near-empty card — they read better as plain rows on the
                 // account card than as two tiles rattling around a grid.
                 AccountCard {
-                    MoreDestinationListRow(L("Office shopping"), subtitle: L("One shop cart for the whole office"), leading: .icon("cart.fill", tint: .neonSuccessStrong)) { OfficeShoppingView() }
-                    NeonDivider()
                     MoreDestinationListRow(L("Analytics"), leading: .icon("chart.bar.fill", tint: .neonBlueStrong)) { AnalyticsRootView() }
                     NeonDivider()
                     MoreDestinationListRow(L("Settings"), leading: .icon("gearshape.fill", tint: .neonTextSecondary)) { SettingsRootView() }
