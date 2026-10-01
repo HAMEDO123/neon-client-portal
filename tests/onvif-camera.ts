@@ -21,6 +21,9 @@ export type StandInOptions = {
   skewMs?: number;
   /** A camera that cannot pan or tilt (C100, C110 …). */
   fixed?: boolean;
+  /** Where to listen; a camera's own address and 2020 when tried by hand. */
+  host?: string;
+  port?: number;
 };
 
 export type StandIn = {
@@ -90,13 +93,13 @@ export async function onvifStandIn(options: StandInOptions = {}): Promise<StandI
         return reply(400, NOT_AUTHORIZED);
       }
 
-      const service = `http://127.0.0.1:${state.port}/onvif/service`;
+      const service = `http://${host}:${state.port}/onvif/service`;
       if (raw.includes("GetCapabilities")) {
         return reply(
           200,
           soap(
             "<tds:GetCapabilitiesResponse><tds:Capabilities>" +
-              `<tt:Device><tt:XAddr>http://127.0.0.1:${state.port}/onvif/device_service</tt:XAddr></tt:Device>` +
+              `<tt:Device><tt:XAddr>${state.url}</tt:XAddr></tt:Device>` +
               `<tt:Events><tt:XAddr>${service}</tt:XAddr></tt:Events>` +
               `<tt:Imaging><tt:XAddr>${service}</tt:XAddr></tt:Imaging>` +
               `<tt:Media><tt:XAddr>${service}</tt:XAddr><tt:StreamingCapabilities><tt:RTPMulticast>false</tt:RTPMulticast></tt:StreamingCapabilities></tt:Media>` +
@@ -145,9 +148,10 @@ export async function onvifStandIn(options: StandInOptions = {}): Promise<StandI
     });
   });
 
-  await new Promise<void>((resolve) => server.listen(Number(process.env.ONVIF_STAND_IN_PORT ?? 0), "127.0.0.1", resolve));
+  const host = options.host ?? "127.0.0.1";
+  await new Promise<void>((resolve) => server.listen(options.port ?? 0, host, resolve));
   state.port = (server.address() as AddressInfo).port;
-  state.url = `http://127.0.0.1:${state.port}/onvif/device_service`;
+  state.url = `http://${host}:${state.port}/onvif/device_service`;
   state.close = async () => {
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
