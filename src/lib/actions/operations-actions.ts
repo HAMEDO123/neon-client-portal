@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { headlineOf, readSupplyLines, totalOf } from "@/lib/supply-requests";
+import { headlineOf, readSupplyLines, summaryOf, totalOf } from "@/lib/supply-requests";
 import { requireAdmin } from "@/lib/admin-guard";
 import { requireEmployee } from "@/lib/employee-session";
 import { saveFile } from "@/lib/storage";
@@ -108,7 +108,8 @@ export async function createSupplyRequest(formData: FormData) {
     data: {
       employeeId: employee.id,
       item: headlineOf(lines).slice(0, 200),
-      quantity: lines.length === 1 ? lines[0].quantity : `${lines.length} things`,
+      // The one line the notification and the decided table have room for.
+      quantity: summaryOf(lines),
       note: String(formData.get("note") ?? "").trim().slice(0, 1000) || null,
       estimatedCost: totalOf(lines),
       urgent: formData.get("urgent") === "on",

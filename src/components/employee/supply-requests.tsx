@@ -58,7 +58,7 @@ export function SupplyRequestForm() {
                 name="lineName"
                 required={index === 0}
                 dir="auto"
-                placeholder="What to buy — e.g. Coffee, A4 paper"
+                placeholder="What to buy — e.g. Coffee"
                 className="min-w-0 flex-1 rounded-lg border border-ink/12 bg-white/80 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
               />
               {lines.length > 1 && (
@@ -74,24 +74,40 @@ export function SupplyRequestForm() {
             </div>
 
             <div className="mt-2 grid grid-cols-2 gap-2 pl-5">
-              <input
-                name="lineQuantity"
-                dir="auto"
-                placeholder="How much (2 boxes)"
-                className="rounded-lg border border-ink/12 bg-white/80 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
-              />
-              <input
-                name="lineCost"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Approx. cost (JOD)"
-                className="rounded-lg border border-ink/12 bg-white/80 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
-              />
+              <label className="flex items-center gap-2 rounded-lg border border-ink/12 bg-white/80 px-3 py-2 focus-within:border-cyan-strong">
+                <span className="shrink-0 text-xs text-ink/40">How many</span>
+                <input
+                  name="lineCount"
+                  type="number"
+                  min="1"
+                  step="1"
+                  // A phone shows the number pad for this rather than the
+                  // keyboard, which is the whole reason it is a count.
+                  inputMode="numeric"
+                  placeholder="1"
+                  className="w-full min-w-0 bg-transparent text-sm tabular-nums outline-none"
+                />
+              </label>
+              <label className="flex items-center gap-2 rounded-lg border border-ink/12 bg-white/80 px-3 py-2 focus-within:border-cyan-strong">
+                <span className="shrink-0 text-xs text-ink/40">Price</span>
+                <input
+                  name="lineCost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  className="w-full min-w-0 bg-transparent text-sm tabular-nums outline-none"
+                />
+              </label>
             </div>
           </div>
         ))}
       </div>
+
+      <p className="-mt-1 pl-1 text-[11px] text-ink/40">
+        Price is for the whole line, not for one.
+      </p>
 
       <button
         type="button"
@@ -146,7 +162,7 @@ export function SupplyRequestList({
     status: SupplyRequestStatus;
     decisionNote: string | null;
     createdAt: Date;
-    lines: { id: string; name: string; quantity: string | null; estimatedCost: number | null }[];
+    lines: { id: string; name: string; count: number | null; estimatedCost: number | null }[];
   }[];
 }) {
   const [, startTransition] = useTransition();
@@ -181,7 +197,10 @@ export function SupplyRequestList({
                     {request.lines.map((line) => (
                       <li key={line.id} dir="auto" className="text-sm text-ink/60">
                         · {line.name}
-                        {line.quantity && <span className="text-ink/40"> {line.quantity}</span>}
+                        {line.count != null && <span className="text-ink/40"> &times;{line.count}</span>}
+                        {line.estimatedCost != null && (
+                          <span className="text-ink/40"> — {line.estimatedCost.toFixed(2)} JOD</span>
+                        )}
                       </li>
                     ))}
                   </ul>

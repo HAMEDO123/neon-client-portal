@@ -1966,10 +1966,13 @@ model SupplyRequestLine {
   request   SupplyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   name     String
-  /// "2 boxes", "5m" — words, because a quantity here is written the way
-  /// somebody would say it at the counter, not as a number to compute with.
-  quantity String?
-  /// What it is expected to cost, in JOD. The request's own total is the sum.
+  /// How many of them. A number, which replaced the free text it used to be
+  /// ("2 boxes"): a count is what somebody actually types on a phone, and
+  /// anything needing words goes in the request's own note.
+  count    Int?
+  /// What this line is expected to cost **altogether**, in JOD — not each, so
+  /// nothing anywhere multiplies it by the count. The studio chose that way
+  /// round. The request's own total is the sum of its lines.
   estimatedCost Float?
 
   /// The order they were typed in, which is the order they will be bought in.

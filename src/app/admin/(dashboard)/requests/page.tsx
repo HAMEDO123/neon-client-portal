@@ -130,8 +130,13 @@ export default async function AdminRequestsPage() {
                         >
                           <span className="w-4 shrink-0 text-xs tabular-nums text-ink/30">{index + 1}.</span>
                           <span dir="auto" className="min-w-0">{line.name}</span>
-                          {line.quantity && <span className="text-ink/45">{line.quantity}</span>}
+                          {line.count != null && (
+                            <span className="shrink-0 tabular-nums text-ink/45">&times;{line.count}</span>
+                          )}
                           {line.estimatedCost != null && (
+                            // The line's whole cost, by the studio's choice —
+                            // so it is printed as it was typed and nothing
+                            // here multiplies it by the count beside it.
                             <span className="ml-auto shrink-0 text-xs tabular-nums text-ink/45">
                               {line.estimatedCost.toFixed(2)}
                             </span>
