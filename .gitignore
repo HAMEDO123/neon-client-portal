@@ -61,3 +61,7 @@ next-env.d.ts
 ios/NeonAdmin.entitlements
 ios/NeonShare.entitlements
 /ios/NeonShare-Info.plist
+
+# The camera relay's own file: hand-written cameras with their passwords, and the
+# names go2rtc keeps connected. Never committed (deploy/go2rtc/README.md).
+/deploy/go2rtc/go2rtc.yaml
