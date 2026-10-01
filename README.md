@@ -365,6 +365,41 @@ The domain vocabulary, as the code defines it:
 - Admin: `tasks` (the board and the week board), `reviews`, `alerts`, `analytics` (`?day=`, `?period=`), `payroll`, `employees`, `requests`, and `settings` (process sections, stage periods, what each kind of work needs, the working day, how a day is planned, push health, timezone, WhatsApp).
 - Employee: `/employee` (today, or tomorrow with `?day=tomorrow`), `tasks`, `tasks/[id]`, `assigned/[id]`, `projects`, `projects/[id]`, `requests`, `notifications` and `profile` (push, preferences, devices, sounds, sign out). The tab bar carries six of them — it said five for a long time, and Projects was added deliberately rather than drifted into.
 
+### Office shopping
+The supermarket's own website in a web view in the app, one office account, one
+shared cart: everybody adds, only the manager orders. The cart lives at the
+shop; what the platform keeps is the telling (`lib/office-shopping.ts`, pure —
+`me/shopping/added` notifies the manager, once per person per thing per ten
+minutes, so five taps on the same coffee is one alert).
+- **The sign-in is stored centrally, and it is a password the platform can read
+  back.** Nothing else in this codebase does that — the admin's password is a
+  bcrypt hash and an employee's is too — and it is deliberate: the phone fills
+  in the shop's own sign-in form, so a hash is no use. The manager sets it on
+  `/admin/settings`; `requireAdmin` to write, any employee to read.
+  - **The trade-off was put to the studio before it was built, and taken.**
+    Every employee can read that password: the server has to hand over the real
+    thing for a phone to type it, so anybody with an employee login can call
+    `me/shopping/account` and have it. **Encryption protects a stolen database
+    copy and nothing else** — `lib/secret-box.ts` says so at the top, and the
+    settings page says it on screen, because the next person to read either
+    needs to know what keeping this costs.
+  - **The record of who fetched it is the actual protection**, not the
+    encryption (`recordShopFetch`; shown in Settings as "Last taken by…").
+    One row, overwritten — a full trail is a table and a screen, worth building
+    the day it is ever in doubt.
+  - `lib/secret-box.ts` is AES-256-GCM with a key derived from `SESSION_SECRET`
+    by scrypt, so one secret is not the key for two different things. **Changing
+    `SESSION_SECRET` makes it unreadable** — one more thing that already
+    signs out every employee and the iOS app. It reads back as "not set up",
+    and the settings page says which it is, rather than handing a phone
+    something broken.
+  - Use an account that only buys the office's shopping. The reason this is a
+    reasonable thing to do at all is that it is a supermarket; the same
+    arrangement must not be copied for anything that matters more.
+- `ios/Sources/Features/Shopping/SHARED-ACCOUNT.md` is the brief for the app
+  side, including the bit that matters: the view's comment currently claims the
+  team never needs the password, and that claim has to go.
+
 ### Chat, live updates and sounds
 - **Conversations:**
   - The team group is channel key `team`.

@@ -25,6 +25,7 @@ import {
 import { guarded, guardedAction, param, optParam, str, oneOf, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { shoppingDedupeKey, shoppingLabel, shoppingMessage } from "@/lib/office-shopping";
+import { recordShopFetch, shopAccount } from "@/lib/office-shop-account";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // The "me" area of the phone API: the signed-in employee's own things. See
@@ -40,6 +41,30 @@ export const reads: ReadRegistry = {
     canAssignTasks: me.canAssignTasks,
     canLogSiteVisits: me.canLogSiteVisits,
   })),
+
+  // The office shop account, so the phone can sign the web view in to the one
+  // cart instead of the manager typing it on every handset.
+  //
+  // **This hands over a real password**, which is not something any other read
+  // here does. It is the studio's decision, taken with the trade-off stated:
+  // the phone fills the shop's own sign-in form, so a hash is no use, and
+  // anybody the app answers to can therefore read it. See the comment at the
+  // top of lib/office-shop-account.ts.
+  //
+  // Every fetch is recorded against the person who asked. That record is the
+  // actual protection — the encryption only covers a stolen database copy.
+  "me/shopping/account": guarded(requireEmployee, async (_params, me) => {
+    const account = await shopAccount();
+    if (!account) {
+      // Not an error: an installation where the manager has not set one, or
+      // where SESSION_SECRET has changed since, and the app says so rather
+      // than failing on the tap.
+      return { account: null, why: "The office shop account isn't set up yet. Ask the manager." };
+    }
+
+    await recordShopFetch(me.id, me.name);
+    return { account, why: null };
+  }),
 
   // Jobs handed out by hand (AssignedTask): src/lib/assigned-tasks.ts
   // `myAssignedTasks`, the same rows `/employee/tasks` folds into its list —
