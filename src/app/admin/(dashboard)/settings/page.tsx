@@ -1,9 +1,16 @@
-import { CalendarClock, Clock, NotebookPen, Send, Sparkles } from "lucide-react";
+import { CalendarClock, Clock, NotebookPen, Send, ShoppingCart, Sparkles, TriangleAlert } from "lucide-react";
 import { saveTimezone } from "@/lib/actions/whatsapp-actions";
-import { savePlanningNotes, saveWorkHours } from "@/lib/actions/settings-actions";
+import {
+  clearOfficeShopAccount,
+  saveOfficeShopAccount,
+  savePlanningNotes,
+  saveWorkHours,
+} from "@/lib/actions/settings-actions";
+import { shopAccountState } from "@/lib/office-shop-account";
+import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
 import { capacityMinutes, minutesOf, spanMinutes, timeOf } from "@/lib/work-hours";
-import { TextArea } from "@/components/admin/fields";
+import { TextArea, TextInput } from "@/components/admin/fields";
 import { isAiConfigured } from "@/lib/ai/client";
 import { getPublicKey, isPushConfigured } from "@/lib/notifications/push";
 import { managerEmployeeId } from "@/lib/manager-account";
@@ -46,6 +53,9 @@ export default async function AdminSettingsPage({
   const { preview } = await searchParams;
   const timezone = await getTimezone();
   const planningNotes = await getPlanningNotes();
+  // Whether the office shop account is set, and who last took it — never the
+  // password itself: a settings page left open on a desk is the other leak.
+  const shop = await shopAccountState();
   const workHours = await getWorkHours();
   const transport = activeTransport();
   const cloud = getCloudCredentials();
@@ -214,6 +224,74 @@ export default async function AdminSettingsPage({
             <SaveButton label="Save the working day" />
           </div>
         </form>
+      </section>
+
+      {/* --- The office's shop account -------------------------------------- */}
+      <section className="glass rounded-2xl p-6">
+        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+          <ShoppingCart size={16} strokeWidth={2} />
+          The office shop account
+        </h2>
+        <p className="mt-1 text-sm text-ink/50">
+          One supermarket account for the whole office. Set it here and every phone signs itself in to the
+          same cart, instead of you typing it into each one. Only you can set or clear it.
+        </p>
+
+        {/* Said on the screen, not only in the code: whoever sits here next is
+            the person who needs to know what keeping this costs. */}
+        <div className="mt-4 flex gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3">
+          <TriangleAlert size={15} strokeWidth={2} className="mt-0.5 shrink-0 text-amber-700" />
+          <p className="text-xs leading-relaxed text-ink/70">
+            <span className="font-semibold text-ink">Everyone on the team can read this password.</span> Their
+            phone has to type it into the shop&apos;s own sign-in page, so the platform hands it over whenever
+            one asks. It is encrypted here, which protects a copy of the database and nothing else. Use an
+            account that only buys the office&apos;s shopping — never one that shares a password with anything
+            that matters.
+          </p>
+        </div>
+
+        <form action={saveOfficeShopAccount} className="mt-4 max-w-xl">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextInput label="Shop sign-in email" name="email" defaultValue={shop.email ?? ""} />
+            <TextInput
+              label={shop.hasPassword ? "Password (leave blank to keep it)" : "Password"}
+              name="password"
+              type="password"
+            />
+          </div>
+          <div className="mt-3">
+            <TextInput label="Shop website (optional)" name="site" defaultValue={shop.site ?? ""} />
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <SaveButton label="Save the account" />
+            {shop.hasPassword && (
+              <span className="text-xs text-ink/45">
+                {shop.readable
+                  ? "A password is stored."
+                  : "A password is stored but cannot be read — SESSION_SECRET has changed since. Set it again."}
+              </span>
+            )}
+          </div>
+        </form>
+
+        {shop.lastFetch && (
+          <p className="mt-3 text-xs text-ink/45">
+            Last taken by a phone: {shop.lastFetch.name} · {formatDayIn(timezone, new Date(shop.lastFetch.at))}{" "}
+            {formatTimeIn(timezone, new Date(shop.lastFetch.at))}
+          </p>
+        )}
+
+        {(shop.email || shop.hasPassword) && (
+          <form action={clearOfficeShopAccount} className="mt-3">
+            <button
+              type="submit"
+              className="text-xs font-medium text-ink/40 hover:text-red-600"
+            >
+              Remove it — phones stop being able to sign in
+            </button>
+          </form>
+        )}
       </section>
 
       {/* --- How a day is planned ------------------------------------------ */}
