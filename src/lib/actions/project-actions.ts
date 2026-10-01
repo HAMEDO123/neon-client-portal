@@ -44,8 +44,23 @@ async function saleFields(formData: FormData) {
   return { soldById, soldOn: dayKeyToDate(day) };
 }
 
+/**
+ * Starts a project.
+ *
+ * `requireStaff`, like the eleven tabs of a project itself. It was the
+ * manager's alone until now for one recorded reason — "it is not on the
+ * project screen, so nobody asked for it to be shared" — and the studio has
+ * now asked. Deleting one stays the manager's: that takes the project and
+ * every file it holds out of storage for good, which is a different kind of
+ * act from starting one.
+ *
+ * The form says which portal it was sent from, because an employee landing on
+ * `/admin/projects/<id>` would be turned away by a page they cannot open. A
+ * hidden field rather than a bound argument: a form action is handed its
+ * FormData first, so binding cannot put anything before it.
+ */
 export async function createProject(formData: FormData) {
-  await requireAdmin();
+  await requireStaff();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Project name is required.");
 
@@ -68,7 +83,8 @@ export async function createProject(formData: FormData) {
   });
 
   refresh();
-  redirect(`/admin/projects/${project.id}`);
+  const portal = formData.get("portal") === "employee" ? "employee" : "admin";
+  redirect(`/${portal}/projects/${project.id}`);
 }
 
 export async function updateProjectOverview(id: string, formData: FormData) {

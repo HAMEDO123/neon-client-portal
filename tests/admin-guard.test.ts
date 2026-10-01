@@ -54,7 +54,7 @@ const EXPECTED: Record<string, { admin: number; staff: number }> = {
   "approval-actions.ts": { admin: 0, staff: 2 },
   "comment-actions.ts": { admin: 0, staff: 2 },
   // Mixed on purpose — see NAMED below, which is the part that matters.
-  "project-actions.ts": { admin: 2, staff: 6 },
+  "project-actions.ts": { admin: 1, staff: 7 },
   "whatsapp-actions.ts": { admin: 6, staff: 1 },
   // The manager's alone.
   "analytics-actions.ts": { admin: 1, staff: 0 },
@@ -76,8 +76,8 @@ const NAMED: Record<string, { file: string; guard: string; why: string }> = {
   },
   createProject: {
     file: "project-actions.ts",
-    guard: ADMIN,
-    why: "it is not on the project screen, so nobody asked for it to be shared",
+    guard: STAFF,
+    why: "the studio asked for it: the team start their own projects, as they already work every tab of one",
   },
   regenerateProjectCode: {
     file: "project-actions.ts",
