@@ -187,6 +187,56 @@ deploy/cloudflared/   the tunnel's config inside Docker (no secrets)
   - The manager is told after the fact — not a gate, since the studio chose immediate, but it means an upload is learned from the platform rather than from the client. Photos are keyed on the room and the day, so eight from one site visit arrive as one notification.
 - **Language:** the client page is English and Arabic (`lib/client-i18n.tsx`; the English strings are the keys, with an `AR` dictionary). Every new client string needs an `AR` entry. The admin is English only.
 
+### The client's own app
+A second iOS app, for the studio's clients rather than its staff: one project
+each, from the App Store. `ios/CLIENT-APP.md` is the brief it is built from.
+- **The code is the link in another shape.** `Project.accessCode` is eight
+  characters shown as `W8BZ-49S2`, and `POST /api/client/login` exchanges it for
+  the project's **token** — which is what the app keeps and sends on every later
+  call. So nothing new grants access: there is no session, nothing expires, and
+  the manager revokes it exactly as they already revoke a link.
+  - `lib/client-codes.ts` is pure and tested. Crockford's alphabet, without
+    `I`, `L`, `O` or `U`: the first three because a code is read down the phone
+    and heard as `1`, `1` and `0` — `normaliseCode` folds each onto the
+    character the alphabet has — and `U` so no code spells anything. It takes
+    the code in any case, with or without its dash, and refuses anything else
+    rather than guessing at it.
+  - **A draft or archived project is not a wrong code**, and the three answers
+    say so separately. Reporting "that code is not right" for a project that is
+    simply not ready is what makes a client ring the studio about a code that
+    works perfectly.
+  - A short code invites being guessed at, so `lib/client-access.ts` holds an
+    attempt limit — ten wrong tries per address in ten minutes, in this
+    process's memory. The comment there is honest about what that is and is not:
+    32^8 makes guessing hopeless anyway, and the limit is there so the attempt
+    is not free and the log is not filled by it.
+  - Every project gets a code when it is created; `ensureAccessCode` fills one
+    in for the projects that existed before codes did, the first time the
+    manager opens one. Regenerating it is `requireStaff`, like regenerating the
+    link, and `tests/admin-guard.test.ts` pins that choice by name.
+- **`GET /api/client/project` is the whole project in one answer**, because a
+  phone on a mobile connection pays for every round trip and the server already
+  reads it all in one query.
+  - **The visibility switches are enforced by leaving things out of it**
+    (`lib/client-payload.ts`, pure and tested) — never by sending a figure with
+    a flag asking the app not to draw it. A client's app is on a phone the
+    studio does not control and the answer is one `curl` away from anybody
+    holding the code, so "the app hides it" is a request, not a setting.
+    `showPricing` off means a material's price and a sofa's price go too, and
+    `showBoqPrices` on with `showPricing` off is not a way round it.
+  - The payload still *says* which switches are on, so a screen can write "NEON
+    hasn't shared pricing yet" rather than showing a blank tab that reads as a
+    broken app — and `allowDownloads` is there so the app draws no button that
+    the download routes would answer 404 to.
+- The two things a client can do — answering an approval and writing to the
+  studio — call the website's own `respondToApproval` and `createComment`, which
+  are already scoped by the token in their `where`. A second copy would be a
+  second place for the access check to be forgotten.
+- **The manager hands the code out beside the link** (`LinkActions`): shown
+  grouped, copied without its dash, regenerated with a warning, and carried in
+  the WhatsApp message alongside the link — a client given one and not the other
+  is a phone call either way.
+
 ### Team operations
 The domain vocabulary, as the code defines it:
 - **ProcessSection → ProcessTask:** the shared delivery process. Each task is one step of it, common to every project.
@@ -473,6 +523,12 @@ The domain vocabulary, as the code defines it:
 
 ## Gotchas that have cost time
 
+- **`.env.local` pointed at the studio's live database, and the tests wrote to it.** Found on 2026-10-01. `DATABASE_URL` had been rebuilt from `.env.docker` during an earlier session when the development database would not start, which put it on `127.0.0.1:55432` — the one behind `clients.neonjo.com`. Every `npm test` after that created and deleted rows in the database clients use.
+  - **What it left behind:** 55 ENDED calls on pair chats between employees who never existed (`ztest-call-…`). Nothing was damaged, nobody could see them — `callsFor` reads only non-ENDED calls the viewer is a participant of — and the real data was intact. But none of that was true *on purpose*, and the next test written might not tidy up at all.
+  - **Nothing could have caught it.** The tests pass against either database; the only difference is whose rows they churn. A run against the live one looks exactly like a run against the right one.
+  - **So it is checked now, not commented.** `tests/db-target.ts` is an allow-list — the `prisma dev` ports, 51213–51216 — and every `*.db.test.ts` refuses anything else **at module scope**, with `tests/db-target.test.ts` as a tripwire that fails rather than skips.
+  - **The guard has to sit above the file's own try/catch.** Inside `before`, the throw was swallowed by the "is there a database" handler and came back as 12 *skipped* tests — `pass 0 … skipped N`, the exact reading this file already warns is believed as "everything is fine". A refusal that looks like an ordinary skip is worse than no refusal at all.
+  - A backup is in `local-backup/docker/before-fixture-cleanup.dump`, taken before anything was deleted.
 - **The local `prisma dev` database dies.** Symptoms are `P1001`, "Server has closed the connection", or DB tests cancelled en masse. Recover like this:
   1. Kill whatever listens on ports 51213–51216. In PowerShell: `Get-NetTCPConnection -LocalPort 51213 -State Listen | % { Stop-Process -Id $_.OwningProcess }`.
   2. If you see "Lock file is already being held", delete `%LOCALAPPDATA%\prisma-dev-nodejs\Data\durable-streams\neon-client-portal\server.lock.lock`. This is a marker, not your data.

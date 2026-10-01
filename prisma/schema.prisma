@@ -188,6 +188,11 @@ enum DeliveryStatus {
 model Project {
   id          String  @id @default(cuid())
   token       String  @unique
+  /// The code a client types into the app, instead of following a link. A
+  /// second credential of the same standing as `token` and revoked the same
+  /// way; `lib/client-codes.ts` says why it is shaped as it is. Nullable only
+  /// because projects existed before it — `ensureAccessCode` fills one in.
+  accessCode  String? @unique
   name        String
   clientName  String
   clientEmail String?

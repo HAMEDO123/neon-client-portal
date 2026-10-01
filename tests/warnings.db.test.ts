@@ -3,6 +3,17 @@ import { after, before, describe, it } from "node:test";
 import { prisma } from "@/lib/db";
 import { issueWarning, warningsFor, withdrawWarning } from "@/lib/employee-warnings";
 import { WARNING_LIMIT, warningKey } from "@/lib/warnings";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // Three warnings, against the real rows: the employee is told each time, the
 // warnings are theirs alone, and the last one closes the account only after
