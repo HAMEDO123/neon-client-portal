@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { headlineOf, readSupplyLines, totalOf } from "@/lib/supply-requests";
 import { requireAdmin } from "@/lib/admin-guard";
 import { requireEmployee } from "@/lib/employee-session";
 import { saveFile } from "@/lib/storage";
@@ -98,36 +99,18 @@ export async function saveDailyReport(formData: FormData) {
 export async function createSupplyRequest(formData: FormData) {
   const employee = await requireEmployee();
 
-  const names = formData.getAll("lineName").map((value) => String(value).trim().slice(0, 200));
-  const quantities = formData.getAll("lineQuantity").map((value) => String(value).trim().slice(0, 60));
-  const costs = formData.getAll("lineCost").map((value) => Number(value));
-
-  const lines = names
-    .map((name, index) => ({
-      name,
-      quantity: quantities[index] || null,
-      estimatedCost: Number.isFinite(costs[index]) && costs[index] > 0 ? costs[index] : null,
-      position: index,
-    }))
-    .filter((line) => line.name.length > 0)
-    // Re-numbered after the empties are gone, so the positions stay 0,1,2.
-    .map((line, index) => ({ ...line, position: index }));
-
+  // Both shapes of the form — the website's list and the one thing the app
+  // still sends. lib/supply-requests.ts says why that matters.
+  const lines = readSupplyLines(formData);
   if (lines.length === 0) throw new Error("Add at least one thing to buy.");
-
-  const total = lines.reduce((sum, line) => sum + (line.estimatedCost ?? 0), 0);
-  const headline =
-    lines.length === 1
-      ? lines[0].name
-      : `${lines[0].name} and ${lines.length - 1} more`;
 
   await prisma.supplyRequest.create({
     data: {
       employeeId: employee.id,
-      item: headline.slice(0, 200),
+      item: headlineOf(lines).slice(0, 200),
       quantity: lines.length === 1 ? lines[0].quantity : `${lines.length} things`,
       note: String(formData.get("note") ?? "").trim().slice(0, 1000) || null,
-      estimatedCost: total > 0 ? Math.round(total * 100) / 100 : null,
+      estimatedCost: totalOf(lines),
       urgent: formData.get("urgent") === "on",
       lines: { create: lines },
     },
