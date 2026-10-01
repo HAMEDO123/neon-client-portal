@@ -230,11 +230,12 @@ export default async function AdminSettingsPage({
       <section className="glass rounded-2xl p-6">
         <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
           <ShoppingCart size={16} strokeWidth={2} />
-          The office shop account
+          Sign in to the office shop
         </h2>
         <p className="mt-1 text-sm text-ink/50">
-          One supermarket account for the whole office. Set it here and every phone signs itself in to the
-          same cart, instead of you typing it into each one. Only you can set or clear it.
+          Sign in here once, and every employee&apos;s phone is signed in to the same account and the same
+          cart — nobody on the team types anything, and you never touch their handset. Only you can sign in
+          or sign out.
         </p>
 
         {/* Said on the screen, not only in the code: whoever sits here next is
@@ -252,9 +253,9 @@ export default async function AdminSettingsPage({
 
         <form action={saveOfficeShopAccount} className="mt-4 max-w-xl">
           <div className="grid gap-3 sm:grid-cols-2">
-            <TextInput label="Shop sign-in email" name="email" defaultValue={shop.email ?? ""} />
+            <TextInput label="Shop email" name="email" defaultValue={shop.email ?? ""} />
             <TextInput
-              label={shop.hasPassword ? "Password (leave blank to keep it)" : "Password"}
+              label={shop.hasPassword ? "Password (blank keeps the current one)" : "Password"}
               name="password"
               type="password"
             />
@@ -264,12 +265,12 @@ export default async function AdminSettingsPage({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <SaveButton label="Save the account" />
+            <SaveButton label={shop.hasPassword ? "Update the sign-in" : "Sign in for the office"} />
             {shop.hasPassword && (
               <span className="text-xs text-ink/45">
                 {shop.readable
-                  ? "A password is stored."
-                  : "A password is stored but cannot be read — SESSION_SECRET has changed since. Set it again."}
+                  ? "Signed in — every phone uses this."
+                  : "Signed in, but it can no longer be read: SESSION_SECRET has changed since. Sign in again."}
               </span>
             )}
           </div>
@@ -288,7 +289,7 @@ export default async function AdminSettingsPage({
               type="submit"
               className="text-xs font-medium text-ink/40 hover:text-red-600"
             >
-              Remove it — phones stop being able to sign in
+              Sign the office out — every phone stops being able to shop
             </button>
           </form>
         )}
