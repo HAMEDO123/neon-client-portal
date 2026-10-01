@@ -3,6 +3,9 @@ import UIKit
 
 // The kit's scales. Screens use these names instead of loose numbers, so the
 // whole app keeps one rhythm and one change moves every screen together.
+//
+// Also compiled into the share extension (ios/Share/README.md): extension-safe
+// APIs only, and nothing from the rest of the app beyond AppLanguage and L.
 
 // MARK: - Spacing, radii, sizes
 

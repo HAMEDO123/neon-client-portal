@@ -1,6 +1,9 @@
 import SwiftUI
 import UIKit
 
+// Also compiled into the share extension (ios/Share/README.md): extension-safe
+// APIs only, and nothing from the rest of the app beyond AppLanguage and L.
+
 // MARK: - Colour
 
 // The web app's brand hues, tuned to the owner's mockups: a cool near-black

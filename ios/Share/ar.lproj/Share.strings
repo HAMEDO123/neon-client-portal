@@ -1,0 +1,51 @@
+/* The share extension ("NEON" in the share sheet). English is the key; this
+   is its Arabic. Counts with a noun are in Share.stringsdict. */
+
+/* The screen */
+"Send to…" = "إرسال إلى…";
+"Choose who gets it" = "اختر لمن تُرسل";
+"%d chosen" = "المختارة: %d";
+"Cancel" = "إلغاء";
+"Close" = "إغلاق";
+"Search" = "بحث";
+"Clear" = "مسح";
+"Chats" = "المحادثات";
+"Pinned" = "مثبّتة";
+"No chats yet." = "لا محادثات بعد.";
+"No chat matches “%@”." = "لا محادثة تطابق «%@».";
+"Remove %@" = "إزالة %@";
+
+/* What is being shared */
+"Getting it ready" = "جارٍ التجهيز";
+"Leave this out" = "استبعاد هذا";
+"An attachment" = "مرفق";
+"Only the first %d are sent." = "تُرسَل أول %d فقط.";
+
+/* The caption and Send */
+"Add a caption…" = "أضف تعليقًا…";
+"Message" = "الرسالة";
+"Send" = "إرسال";
+
+/* Sending */
+"Sending…" = "جارٍ الإرسال…";
+"Sending %d of %d…" = "جارٍ إرسال %d من %d…";
+"To %@" = "إلى %@";
+"Preparing the video…" = "جارٍ تجهيز الفيديو…";
+"Sent" = "تم الإرسال";
+"Not sent" = "لم تُرسَل";
+"Try again" = "حاول مرة أخرى";
+"Skip it" = "تخطَّه";
+
+/* Nobody signed in */
+"Open NEON and sign in first" = "افتح NEON وسجّل الدخول أولًا";
+"Sharing sends from the account signed in to the NEON app on this iPhone. Open NEON and sign in — or, just after an update, simply open it once — then share again." = "المشاركة تُرسِل من الحساب المسجّل في تطبيق NEON على هذا الآيفون. افتح NEON وسجّل الدخول — أو افتحه مرة واحدة فقط إن كنت حدّثته للتو — ثم شارك من جديد.";
+
+/* What went wrong */
+"Can't reach the studio server. Check the connection and try again." = "تعذّر الوصول إلى خادم الاستوديو. تحقّق من الاتصال وحاول مجددًا.";
+"You have been signed out. Open NEON and sign in again." = "تم تسجيل خروجك. افتح NEON وسجّل الدخول من جديد.";
+"The server had a problem (%d). Try again." = "حدثت مشكلة في الخادم (%d). حاول مجددًا.";
+"The server answered in a shape this version doesn't understand. Update NEON." = "ردّ الخادم بصيغة لا يفهمها هذا الإصدار. حدّث NEON.";
+"That file is too large for the server." = "هذا الملف أكبر مما يقبله الخادم.";
+"Couldn't read “%@” on this iPhone." = "تعذّرت قراءة «%@» على هذا الآيفون.";
+"“%@” is over the chat's 50 MB limit, even made smaller." = "«%@» يتجاوز حد المحادثة البالغ 50 ميغابايت حتى بعد تصغيره.";
+"“%@” can't go in the chat. It takes photos, videos, PDF, Word, Excel, ZIP and DWG files." = "لا يمكن إرسال «%@» في المحادثة. تقبل المحادثة الصور والفيديو وملفات PDF وWord وExcel وZIP وDWG.";

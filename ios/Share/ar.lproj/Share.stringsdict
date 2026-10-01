@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%lld member</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا أعضاء</string>
+			<key>one</key>
+			<string>عضو واحد</string>
+			<key>two</key>
+			<string>عضوان</string>
+			<key>few</key>
+			<string>%lld أعضاء</string>
+			<key>many</key>
+			<string>%lld عضوًا</string>
+			<key>other</key>
+			<string>%lld عضو</string>
+		</dict>
+	</dict>
+	<key>%lld members</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>zero</key>
+			<string>لا أعضاء</string>
+			<key>one</key>
+			<string>عضو واحد</string>
+			<key>two</key>
+			<string>عضوان</string>
+			<key>few</key>
+			<string>%lld أعضاء</string>
+			<key>many</key>
+			<string>%lld عضوًا</string>
+			<key>other</key>
+			<string>%lld عضو</string>
+		</dict>
+	</dict>
+</dict>
+</plist>
