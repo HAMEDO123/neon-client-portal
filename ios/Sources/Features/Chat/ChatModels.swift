@@ -166,7 +166,8 @@ struct LastMessage: Decodable {
         let what: String
         switch kind {
         case "IMAGE": what = L("📷 Photo")
-        case "FILE": what = "📎 " + (attachmentName ?? L("File"))
+        case "FILE":
+            what = chatIsVideoAttachment(type: nil, name: attachmentName) ? L("🎥 Video") : "📎 " + (attachmentName ?? L("File"))
         case "VOICE": what = L("🎤 Voice message")
         case "TASK": what = "✅ " + (body ?? L("Task"))
         case "MEETING": what = "📅 " + (body ?? L("Meeting"))

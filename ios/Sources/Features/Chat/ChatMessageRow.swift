@@ -233,6 +233,10 @@ struct ChatMessageRow: View {
     var onRetry: (() -> Void)?
     var onDiscard: (() -> Void)?
     var onMediaResize: (() -> Void)?
+    /// Plays a video full screen.
+    var openVideo: (() -> Void)?
+    /// Shows a sender's picture full screen, from their face beside a group's message.
+    var openFace: ((ChatFacePayload) -> Void)?
 
     @Environment(\.chatRoomPalette) private var palette
 
@@ -264,6 +268,9 @@ struct ChatMessageRow: View {
         default:
             if message.isPicture && (message.attachmentURL != nil || outgoing?.localImage != nil) {
                 aligned(authorAbove: true) { photo }
+            } else if message.isVideo && (message.attachmentURL != nil || outgoing?.videoUpload != nil) {
+                // A video is drawn as a video, the way a photo is — never as a file to open.
+                aligned(authorAbove: true) { video }
             } else if message.kind == "TEXT", let text = message.body, message.project == nil, chatIsJumboEmoji(text) {
                 aligned(metaBelow: true, authorAbove: true) { jumbo(text) }
             } else {
@@ -318,9 +325,9 @@ struct ChatMessageRow: View {
     private func aligned<Content: View>(metaBelow: Bool = false, authorAbove: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 6) {
             if inGroup && !mine {
-                ChatAuthorBadge(name: message.authorName, key: message.authorKey, isAgent: isAgent)
+                ChatAuthorBadge(name: message.authorName, key: message.authorKey, isAgent: isAgent, onOpen: showAuthor ? openFace : nil)
                     .opacity(showAuthor ? 1 : 0)
-                    .accessibilityHidden(true)
+                    .accessibilityHidden(!showAuthor || openFace == nil || isAgent)
             }
             VStack(alignment: mine ? .trailing : .leading, spacing: 0) {
                 if authorAbove, showAuthor, !mine, let name = message.authorName {
@@ -534,17 +541,68 @@ struct ChatMessageRow: View {
             .contextMenu { menu }
             .accessibilityLabel(L("Photo"))
 
-            if let caption = message.body, !caption.isEmpty {
-                let captionShape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-                DirText(caption, font: .neonCallout, color: bubbleText, fill: true)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .frame(width: ChatPhotoLayout.width)
-                    .background(captionShape.fill(bubbleFill))
-                    .overlay { if !mine { captionShape.strokeBorder(Color.neonLine, lineWidth: 0.75) } }
-                    .neonContextShape(radius: 14)
-                    .contextMenu { menu }
+            mediaCaption
+        }
+    }
+
+    /// A photo's or a video's caption, in a slim bubble under it.
+    @ViewBuilder
+    private var mediaCaption: some View {
+        if let caption = message.body, !caption.isEmpty {
+            let captionShape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+            DirText(caption, font: .neonCallout, color: bubbleText, fill: true)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .frame(width: ChatPhotoLayout.width)
+                .background(captionShape.fill(bubbleFill))
+                .overlay { if !mine { captionShape.strokeBorder(Color.neonLine, lineWidth: 0.75) } }
+                .neonContextShape(radius: 14)
+                .contextMenu { menu }
+        }
+    }
+
+    // MARK: A video, WhatsApp's way
+
+    /// Like a photo: no bubble, its own frame at its own shape, the play
+    /// button, its length in one bottom corner and the time and ticks in the
+    /// other, the project over its top corner, the caption underneath. A tap
+    /// plays it full screen.
+    @ViewBuilder
+    private var video: some View {
+        let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
+        VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
+            Button {
+                openVideo?()
+            } label: {
+                ChatVideoFrame(
+                    url: message.attachmentURL,
+                    upload: outgoing?.videoUpload,
+                    sending: outgoing != nil && outgoing?.failure == nil,
+                    onResize: onMediaResize
+                )
+                .overlay(alignment: .topLeading) {
+                    if let project = message.project {
+                        projectTag(project, onPhoto: true)
+                            .padding(8)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    ChatPhotoMeta(time: chatClock(message.createdAt), delivery: delivery, pinned: isPinned)
+                }
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
+                .contentShape(shape)
             }
+            .buttonStyle(PressableStyle(scale: 0.98))
+            .neonShadow(.low)
+            .disabled(message.attachmentURL == nil || openVideo == nil)
+            .neonContextShape(radius: NeonRadius.md)
+            .contextMenu { menu }
+            .accessibilityLabel(L("Video"))
+            .accessibilityHint(message.attachmentURL == nil ? "" : L("Plays the video"))
+
+            mediaCaption
         }
     }
 }
@@ -559,12 +617,31 @@ struct ChatAuthorBadge: View {
     /// Who they are — "admin" or the employee id — which their colour is kept under.
     var key: String?
     var isAgent = false
+    /// Shows their picture full screen when the face is tapped; nil leaves it
+    /// a picture only (the assistant's sparkles always are).
+    var onOpen: ((ChatFacePayload) -> Void)?
 
     @Environment(\.chatRoomPalette) private var palette
 
     static let size: CGFloat = 28
 
     var body: some View {
+        if let onOpen, !isAgent, let name {
+            Button {
+                Haptic.tap()
+                onOpen(ChatFacePayload(name: name, url: palette.photo(key: key, name: name), color: palette.color(key: key, name: name)))
+            } label: {
+                face.contentShape(Circle())
+            }
+            .buttonStyle(PressableStyle(scale: 0.9))
+            .accessibilityLabel(L("Photo of %@", name))
+            .accessibilityHint(L("Shows the photo full screen"))
+        } else {
+            face
+        }
+    }
+
+    private var face: some View {
         Group {
             if isAgent {
                 IconTile("sparkles", hue: .purple, size: Self.size, style: .filled)
@@ -699,12 +776,22 @@ struct ChatVoiceNoteView: View {
                     track: mine ? Color.white.opacity(0.38) : Color.neonIndigo.opacity(0.2)
                 )
                 .frame(width: 150)
-                // "0:12" — nothing until the length is known, never a guess.
-                Text(timeText ?? "0:00")
-                    .font(.neonMeta)
-                    .monospacedDigit()
-                    .foregroundStyle(mine ? Color.white.opacity(0.85) : Color.neonTextSecondary)
-                    .opacity(timeText == nil ? 0 : 1)
+                HStack(spacing: 6) {
+                    // "0:12" — nothing until the length is known, never a guess.
+                    Text(timeText ?? "0:00")
+                        .font(.neonMeta)
+                        .monospacedDigit()
+                        .foregroundStyle(mine ? Color.white.opacity(0.85) : Color.neonTextSecondary)
+                        .opacity(timeText == nil ? 0 : 1)
+                    Spacer(minLength: 4)
+                    if url != nil {
+                        ChatVoiceSpeedPill(rate: player.rate, mine: mine, emphasised: playing || player.rate != 1) {
+                            Haptic.selection()
+                            player.cycleRate()
+                        }
+                    }
+                }
+                .frame(width: 150)
             }
         }
         .task(id: message.attachmentUrl ?? outgoing?.id) { await loadShape() }
@@ -717,7 +804,8 @@ struct ChatVoiceNoteView: View {
 
     private var timeText: String? {
         guard let seconds, seconds > 0 else { return nil }
-        if playing { return chatDuration(seconds * player.progress) }
+        // Where the recording is, by its own clock — right at 1.5× and 2×.
+        if playing { return chatDuration(min(player.elapsed, seconds)) }
         return chatDuration(seconds)
     }
 
@@ -738,6 +826,51 @@ struct ChatVoiceNoteView: View {
             levels = await ChatVoiceNotes.shared.shape(of: file.data, key: outgoing.id)
             fileSeconds = ChatVoiceNotes.shared.cachedDuration(outgoing.id)
         }
+    }
+}
+
+/// The speed voice notes play at — 1×, 1.5×, 2× — on every note, WhatsApp's
+/// way: one choice for all of them, for as long as the app is open. A tap
+/// moves it along, for the note playing now and the next.
+struct ChatVoiceSpeedPill: View {
+    let rate: Float
+    let mine: Bool
+    /// Playing, or off 1×: drawn a little stronger.
+    var emphasised = false
+    let action: () -> Void
+
+    static func label(_ rate: Float) -> String {
+        rate == rate.rounded() ? "\(Int(rate))×" : String(format: "%.1f×", rate)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(verbatim: Self.label(rate))
+                .font(.system(.caption2, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(mine ? Color.white : NeonHue.indigo.deep)
+                .padding(.horizontal, 7)
+                .frame(minWidth: 34, minHeight: 18)
+                .background(Capsule().fill(fill))
+                .environment(\.layoutDirection, .leftToRight)
+                // A finger's worth to hit, without making the pill any bigger.
+                .padding(.vertical, 10)
+                .padding(.horizontal, 6)
+                .contentShape(Rectangle())
+                .padding(.vertical, -10)
+                .padding(.horizontal, -6)
+        }
+        .buttonStyle(PressableStyle(scale: 0.88))
+        .animation(NeonMotion.resolved(NeonMotion.snappy), value: rate)
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
+        .accessibilityLabel(L("Playback speed"))
+        .accessibilityValue(Text(verbatim: Self.label(rate)))
+        .accessibilityHint(L("Changes how fast voice messages play"))
+    }
+
+    private var fill: Color {
+        if mine { return Color.white.opacity(emphasised ? 0.3 : 0.18) }
+        return Color.neonIndigo.opacity(emphasised ? 0.18 : 0.09)
     }
 }
 
@@ -827,6 +960,8 @@ struct ChatAlbumRow: View {
     let onPin: (ChatMessage) -> Void
     let canDelete: (ChatMessage) -> Bool
     let onDelete: (ChatMessage) -> Void
+    /// Shows the sender's picture full screen, from their face beside the grid.
+    var openFace: ((ChatFacePayload) -> Void)?
 
     @Environment(\.chatRoomPalette) private var palette
 
@@ -837,9 +972,9 @@ struct ChatAlbumRow: View {
         let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
         HStack(alignment: .top, spacing: 6) {
             if inGroup && !mine {
-                ChatAuthorBadge(name: photos.first?.authorName, key: photos.first?.authorKey)
+                ChatAuthorBadge(name: photos.first?.authorName, key: photos.first?.authorKey, onOpen: showAuthor ? openFace : nil)
                     .opacity(showAuthor ? 1 : 0)
-                    .accessibilityHidden(true)
+                    .accessibilityHidden(!showAuthor || openFace == nil)
             }
             VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
                 if showAuthor && !mine, let name = photos.first?.authorName {

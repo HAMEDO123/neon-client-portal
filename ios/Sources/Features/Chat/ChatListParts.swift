@@ -264,7 +264,8 @@ struct ChatListPreview: Equatable {
     private static func what(_ last: LastMessage) -> String {
         switch last.kind {
         case "IMAGE": return L("📷 Photo")
-        case "FILE": return "📎 " + (last.attachmentName ?? L("File"))
+        case "FILE":
+            return chatIsVideoAttachment(type: nil, name: last.attachmentName) ? L("🎥 Video") : "📎 " + (last.attachmentName ?? L("File"))
         case "VOICE": return L("🎤 Voice message")
         case "TASK": return "✅ " + (last.body ?? L("Task"))
         case "MEETING": return "📅 " + (last.body ?? L("Meeting"))
