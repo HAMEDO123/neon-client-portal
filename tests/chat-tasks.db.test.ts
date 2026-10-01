@@ -13,6 +13,17 @@ import {
 } from "@/lib/chat-task-store";
 import { myAssignedTasks } from "@/lib/assigned-tasks";
 import { dateToDayKey } from "@/lib/time";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // Task cards against a real database: that a card hands each person on it an
 // ordinary job, all at once or not at all; that the live stream's signature

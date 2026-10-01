@@ -8,6 +8,17 @@ import { getEmployeeProgress } from "@/lib/analytics-queries";
 import { runPerformanceReview } from "@/lib/analytics-run";
 import { planForProjects } from "@/lib/stage-deadlines";
 import { PERFORMANCE_KIND, PERFORMANCE_PENALTY } from "@/lib/analytics";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // The evidence loop, the manager's feed and the month's numbers, against a
 // real database — the guarantees that only a unique index can actually make.

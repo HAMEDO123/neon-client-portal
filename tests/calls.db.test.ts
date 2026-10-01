@@ -20,6 +20,17 @@ import {
   sweepStale,
 } from "@/lib/call-store";
 import { AWAY_GRACE_MS, RING_MS, STALE_MS } from "@/lib/calls";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // Calls against a real database: ringing the other person, answering,
 // declining, hanging up, ringing out, going quiet; the line each leaves in the

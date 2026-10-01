@@ -523,6 +523,12 @@ The domain vocabulary, as the code defines it:
 
 ## Gotchas that have cost time
 
+- **`.env.local` pointed at the studio's live database, and the tests wrote to it.** Found on 2026-10-01. `DATABASE_URL` had been rebuilt from `.env.docker` during an earlier session when the development database would not start, which put it on `127.0.0.1:55432` — the one behind `clients.neonjo.com`. Every `npm test` after that created and deleted rows in the database clients use.
+  - **What it left behind:** 55 ENDED calls on pair chats between employees who never existed (`ztest-call-…`). Nothing was damaged, nobody could see them — `callsFor` reads only non-ENDED calls the viewer is a participant of — and the real data was intact. But none of that was true *on purpose*, and the next test written might not tidy up at all.
+  - **Nothing could have caught it.** The tests pass against either database; the only difference is whose rows they churn. A run against the live one looks exactly like a run against the right one.
+  - **So it is checked now, not commented.** `tests/db-target.ts` is an allow-list — the `prisma dev` ports, 51213–51216 — and every `*.db.test.ts` refuses anything else **at module scope**, with `tests/db-target.test.ts` as a tripwire that fails rather than skips.
+  - **The guard has to sit above the file's own try/catch.** Inside `before`, the throw was swallowed by the "is there a database" handler and came back as 12 *skipped* tests — `pass 0 … skipped N`, the exact reading this file already warns is believed as "everything is fine". A refusal that looks like an ordinary skip is worse than no refusal at all.
+  - A backup is in `local-backup/docker/before-fixture-cleanup.dump`, taken before anything was deleted.
 - **The local `prisma dev` database dies.** Symptoms are `P1001`, "Server has closed the connection", or DB tests cancelled en masse. Recover like this:
   1. Kill whatever listens on ports 51213–51216. In PowerShell: `Get-NetTCPConnection -LocalPort 51213 -State Listen | % { Stop-Process -Id $_.OwningProcess }`.
   2. If you see "Lock file is already being held", delete `%LOCALAPPDATA%\prisma-dev-nodejs\Data\durable-streams\neon-client-portal\server.lock.lock`. This is a marker, not your data.

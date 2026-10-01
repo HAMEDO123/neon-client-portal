@@ -3,6 +3,17 @@ import { after, before, describe, it } from "node:test";
 import { prisma } from "@/lib/db";
 import { myAssignedTask, myAssignedTasks } from "@/lib/assigned-tasks";
 import { pendingSubmissions, submissionsForAssignedTask, submissionsForEntry } from "@/lib/submissions";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // A job the manager hands out by hand follows the same rule as a board cell:
 // the employee sends a photo, and only the manager's approval makes it done.

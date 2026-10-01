@@ -20,6 +20,17 @@ import { getEmployeeBadges } from "@/lib/employee-badges";
 import { latestCues } from "@/lib/cues";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyIn, instantAt, shiftDayKey } from "@/lib/time";
+import { databaseTarget } from "./db-target";
+
+// Refuses the studio's live database outright — see tests/db-target.ts.
+//
+// At the top of the file on purpose: inside `before`'s try/catch this throw was
+// swallowed by the "is there a database" handler and came back as 12 skipped
+// tests, which reads as the development database being down. A refusal that
+// looks like an ordinary skip is worse than no refusal at all.
+const target = databaseTarget(process.env.DATABASE_URL);
+if (!target.safe) throw new Error(target.why);
+
 
 // Groups, per-person settings, streaks, presence and stories against a real
 // database: that a group opens for the manager and its members and nobody
