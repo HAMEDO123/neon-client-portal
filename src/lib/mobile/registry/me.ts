@@ -22,7 +22,9 @@ import {
   deleteAssignedTask,
   setAssignedTaskState,
 } from "@/lib/actions/assigned-task-actions";
-import { guarded, param, optParam, str, oneOf, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { guarded, guardedAction, param, optParam, str, oneOf, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { notifyAdmin } from "@/lib/admin-notifications";
+import { shoppingDedupeKey, shoppingLabel, shoppingMessage } from "@/lib/office-shopping";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // The "me" area of the phone API: the signed-in employee's own things. See
@@ -199,4 +201,21 @@ export const actions: ActionRegistry = {
   "me/assign/delete": async (input) => deleteAssignedTask(str(input.args[0], "id")),
   "me/assign/state": async (input) =>
     setAssignedTaskState(str(input.args[0], "id"), oneOf(input.args[1], ["TODO", "IN_PROGRESS", "DONE"], "state")),
+
+  // Somebody put something in the office's shared shop cart (the app's
+  // "Office shopping" web view). The cart is the shop's; this only tells the
+  // manager it moved — lib/office-shopping.ts.
+  "me/shopping/added": guardedAction(requireEmployee, async (input, me) => {
+    const label = shoppingLabel(input.args[0]);
+    const { title, message } = shoppingMessage(me.name, label);
+    await notifyAdmin({
+      type: "SUPPLY_REQUEST",
+      title,
+      message,
+      url: "/admin/requests",
+      dedupeKey: shoppingDedupeKey(me.id, label, new Date()),
+      employeeId: me.id,
+    });
+    return { ok: true };
+  }),
 };

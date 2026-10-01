@@ -36,6 +36,8 @@ struct AdminMoreView: View {
                 // near-empty card — they read better as plain rows on the
                 // account card than as two tiles rattling around a grid.
                 AccountCard {
+                    MoreDestinationListRow(L("Office shopping"), subtitle: L("One shop cart for the whole office"), leading: .icon("cart.fill", tint: .neonSuccessStrong)) { OfficeShoppingView() }
+                    NeonDivider()
                     MoreDestinationListRow(L("Analytics"), leading: .icon("chart.bar.fill", tint: .neonBlueStrong)) { AnalyticsRootView() }
                     NeonDivider()
                     MoreDestinationListRow(L("Settings"), leading: .icon("gearshape.fill", tint: .neonTextSecondary)) { SettingsRootView() }
@@ -100,6 +102,9 @@ struct EmployeeMoreView: View {
                         subtitle: L("Profile, notifications, devices"),
                         leading: .avatar(url: facePhotoURL(api.myPhoto), name: api.identity?.name ?? L("Profile"))
                     ) { ProfileRootView() }
+
+                    NeonDivider()
+                    MoreDestinationListRow(L("Office shopping"), subtitle: L("Add what the office needs"), leading: .icon("cart.fill", tint: .neonSuccessStrong)) { OfficeShoppingView() }
 
                     if givenToCount > 0 && givenToCount < 3 {
                         if permissions.canAssignTasks {

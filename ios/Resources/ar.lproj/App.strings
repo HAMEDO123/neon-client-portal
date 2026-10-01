@@ -9,3 +9,13 @@
 /* The manager's own face, at the top of More */
 "Your photo shows in chat, calls and stories" = "صورتك تظهر في المحادثات والمكالمات والقصص";
 "There is no employee record for the manager to keep a photo on." = "لا يوجد سجل موظف للمدير لحفظ صورة عليه.";
+"Office shopping" = "مشتريات المكتب";
+"One shop cart for the whole office" = "سلة مشتريات واحدة لكل المكتب";
+"Add what the office needs" = "أضف ما يحتاجه المكتب";
+"One cart for the whole office" = "سلة واحدة لكل المكتب";
+"Sign in to the office's %@ account once on each phone — the team never needs the password. Everybody adds to this cart; only you place the order." = "سجّل دخول حساب المكتب في %@ مرة واحدة على كل جوال — الفريق ما بيحتاج كلمة السر. الكل بيضيف لهاي السلة، وإنت بس اللي بتطلب.";
+"Everybody adds to the same cart. The manager checks it and places the order." = "الكل بيضيف لنفس السلة. المدير بيراجعها وبيطلب.";
+"Only the manager places the order" = "المدير وحده اللي بيطلب";
+"Add what you need — the manager will check the cart and order it." = "أضف اللي بتحتاجه — المدير رح يراجع السلة ويطلبها.";
+"Shop home" = "الصفحة الرئيسية للمتجر";
+"Reload" = "إعادة تحميل";
