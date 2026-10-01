@@ -22,6 +22,12 @@ struct ChatCameraView: View {
     let onGallery: () -> Void
     /// The strip swiped up: every photo the app may see.
     let onLibrary: () -> Void
+    /// The modes on offer (a story has no video note).
+    var modes: [ChatCameraMode] = ChatCameraMode.allCases
+    /// A shorter longest recording than the mode's own (a story keeps a minute).
+    var maxVideoSeconds: Double?
+    /// Photos cut to exactly what the full-screen preview showed (a story).
+    var cropsToPreview = false
 
     @State private var focusPoint: CGPoint?
     @State private var focusShown = false
@@ -276,7 +282,7 @@ struct ChatCameraView: View {
             }
             controls
             if !recording {
-                modes
+                modeSwitcher
                     .transition(.opacity)
             } else {
                 Color.clear.frame(height: 30)
@@ -390,9 +396,9 @@ struct ChatCameraView: View {
         return String(format: "%.1f×", tenth)
     }
 
-    private var modes: some View {
+    private var modeSwitcher: some View {
         HStack(spacing: 26) {
-            ForEach(ChatCameraMode.allCases) { option in
+            ForEach(modes) { option in
                 Button {
                     Haptic.selection()
                     mode = option
@@ -413,7 +419,7 @@ struct ChatCameraView: View {
     }
 
     private func step(mode delta: Int) {
-        let all = ChatCameraMode.allCases
+        let all = modes
         guard let index = all.firstIndex(of: mode) else { return }
         let next = index + delta
         guard all.indices.contains(next) else { return }
@@ -489,7 +495,7 @@ struct ChatCameraView: View {
                 holdRecording = true
                 holdZoomStart = camera.zoom
                 Haptic.impact(.medium)
-                camera.startRecording(mode: .video) { url in
+                camera.startRecording(mode: .video, maxSeconds: maxVideoSeconds) { url in
                     holdRecording = false
                     if let url { onVideo(url, false) }
                 }
@@ -534,7 +540,7 @@ struct ChatCameraView: View {
                 return
             }
             Haptic.impact(.light)
-            camera.takePhoto { image in
+            camera.takePhoto(cropToPreview: cropsToPreview) { image in
                 if let image {
                     onPhoto(image)
                 } else {
@@ -548,7 +554,7 @@ struct ChatCameraView: View {
             } else {
                 Haptic.impact(.medium)
                 let note = mode == .videoNote
-                camera.startRecording(mode: mode) { url in
+                camera.startRecording(mode: mode, maxSeconds: maxVideoSeconds) { url in
                     if let url { onVideo(url, note) }
                 }
             }

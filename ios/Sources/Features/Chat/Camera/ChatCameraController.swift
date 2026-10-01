@@ -134,6 +134,11 @@ final class ChatCameraController: NSObject, ObservableObject, @unchecked Sendabl
     func start() {
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         if observers.isEmpty { observe() }
+        // No camera at all (the simulator): nothing to ask permission for.
+        guard Self.camera(.back) != nil || Self.camera(.front) != nil else {
+            access = .unavailable
+            return
+        }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             run()
@@ -379,10 +384,15 @@ final class ChatCameraController: NSObject, ObservableObject, @unchecked Sendabl
     /// Takes a photo, upright and at most 4096 pixels on its longest side,
     /// and hands it over on the main thread (nil if it failed).
     @MainActor
-    func takePhoto(_ completion: @escaping (UIImage?) -> Void) {
+    ///
+    /// `cropToPreview` cuts it to exactly what the full-screen preview showed
+    /// (for a story, which is shown full screen): the sensor's photo is wider
+    /// than the video the preview draws, and the screen is narrower still.
+    func takePhoto(cropToPreview: Bool = false, _ completion: @escaping (UIImage?) -> Void) {
         guard access == .granted, !busy, !isRecording else { return }
         busy = true
         let angle = captureAngle()
+        let screen = cropToPreview ? previewSize : nil
         let flash = flash
         let lowLight = lowLight
         let front = position == .front
@@ -403,12 +413,16 @@ final class ChatCameraController: NSObject, ObservableObject, @unchecked Sendabl
                     }
                 }
                 let id = settings.uniqueID
+                let video = videoInput.map { Self.videoSize(of: $0.device) }
                 let delegate = ChatPhotoCaptureDelegate(
                     willCapture: {
                         DispatchQueue.main.async { self.shutterCount += 1 }
                     },
                     finished: { [weak self] data in
-                        let image = data.flatMap(UIImage.init(data:))?.chatUpright(maxDimension: 4096)
+                        var image = data.flatMap(UIImage.init(data:))?.chatUpright(maxDimension: 4096)
+                        if let screen, let photo = image {
+                            image = photo.chatCropped(to: Self.visibleRect(photo: photo.size, video: video, screen: screen))
+                        }
                         DispatchQueue.main.async {
                             guard let self else { return }
                             self.busy = false
@@ -437,6 +451,46 @@ final class ChatCameraController: NSObject, ObservableObject, @unchecked Sendabl
         }
     }
 
+    /// The preview's size on screen: the shape of what the camera shows.
+    var previewSize: CGSize? {
+        guard let bounds = previewLayer?.bounds, bounds.width > 0, bounds.height > 0 else { return nil }
+        return bounds.size
+    }
+
+    /// The lens's video frame (what the preview draws), in pixels.
+    static func videoSize(of device: AVCaptureDevice) -> CGSize {
+        let dimensions = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+        return CGSize(width: CGFloat(dimensions.width), height: CGFloat(dimensions.height))
+    }
+
+    /// The part of an upright photo the full-screen preview showed. The
+    /// preview draws the video frame (16:9, a centred cut of the 4:3 photo)
+    /// filling the screen (a centred cut of that again); both are fixed to
+    /// the phone, so turned with the photo when it was taken on its side.
+    static func visibleRect(photo: CGSize, video: CGSize?, screen: CGSize) -> CGRect {
+        let portrait = photo.height >= photo.width
+        func shape(_ size: CGSize) -> CGFloat? {
+            let short = min(size.width, size.height)
+            let long = max(size.width, size.height)
+            guard short > 0 else { return nil }
+            return portrait ? short / long : long / short
+        }
+        let whole = CGRect(origin: .zero, size: photo)
+        let shown = video.flatMap(shape).map { centred(aspect: $0, in: whole) } ?? whole
+        return shape(screen).map { centred(aspect: $0, in: shown) } ?? shown
+    }
+
+    /// The largest rectangle of a shape (width over height) in the middle of another.
+    static func centred(aspect: CGFloat, in rect: CGRect) -> CGRect {
+        guard aspect > 0, rect.height > 0 else { return rect }
+        if rect.width / rect.height > aspect {
+            let width = rect.height * aspect
+            return CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: rect.height)
+        }
+        let height = rect.width / aspect
+        return CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+    }
+
     private func restoreBrightness() {
         if screenLight { screenLight = false }
         if let savedBrightness {
@@ -456,7 +510,7 @@ final class ChatCameraController: NSObject, ObservableObject, @unchecked Sendabl
     /// Starts recording. `completion` gets the finished file, or nil when it
     /// failed or was too short to be meant (a tap that brushed the shutter).
     @MainActor
-    func startRecording(mode: ChatCameraMode, completion: @escaping (URL?) -> Void) {
+    func startRecording(mode: ChatCameraMode, maxSeconds: Double? = nil, completion: @escaping (URL?) -> Void) {
         guard access == .granted, !isRecording, !busy else { return }
         let angle = captureAngle()
         // A call has the microphone: the video is recorded without sound
@@ -464,7 +518,7 @@ final class ChatCameraController: NSObject, ObservableObject, @unchecked Sendabl
         let inCall = CallCenter.shared.session != nil
         // The flash, for a video, is the torch: on, or on when it is dark.
         let torch: AVCaptureDevice.TorchMode = position == .front ? .off : (flash == .on ? .on : flash == .auto ? .auto : .off)
-        let seconds = mode.maxSeconds
+        let seconds = min(maxSeconds ?? mode.maxSeconds, mode.maxSeconds)
 
         // A stop from here on is about this recording (one left over from a
         // recording that already ended is forgotten).
@@ -642,6 +696,15 @@ final class ChatPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
 }
 
 extension UIImage {
+    /// A part of an upright, one-pixel-per-point picture.
+    func chatCropped(to rect: CGRect) -> UIImage {
+        guard let cg = cgImage else { return self }
+        let bounds = CGRect(x: 0, y: 0, width: cg.width, height: cg.height)
+        let cut = rect.integral.intersection(bounds)
+        guard !cut.isNull, cut.width >= 1, cut.height >= 1, cut != bounds, let cropped = cg.cropping(to: cut) else { return self }
+        return UIImage(cgImage: cropped, scale: 1, orientation: .up)
+    }
+
     /// The picture turned upright (its orientation tag applied to the pixels)
     /// at one pixel per point, no larger than `maxDimension` — what the editor
     /// crops, draws on and sends.

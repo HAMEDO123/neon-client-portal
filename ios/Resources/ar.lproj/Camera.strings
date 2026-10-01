@@ -1,0 +1,100 @@
+/* The chat's camera and photo editor (Features/Chat/Camera): taking a photo
+   or a video, the recent photos strip, the editor's tools, the video review
+   and sending. Keys shared with other tables are repeated here so the camera
+   never depends on another area's file. */
+
+/* The camera */
+"Camera" = "الكاميرا";
+"Photo" = "صورة";
+"Video" = "فيديو";
+"Video note" = "رسالة فيديو";
+"Close" = "إغلاق";
+"Flash off" = "الفلاش متوقف";
+"Flash on" = "الفلاش مفعَّل";
+"Flash auto" = "الفلاش تلقائي";
+"Gallery" = "المعرض";
+"Low light" = "إضاءة منخفضة";
+"Photos take a moment longer and come out cleaner in the dark." = "تستغرق الصورة لحظة أطول، وتخرج أنقى في العتمة.";
+"Zoom" = "التكبير";
+"Switch camera" = "تبديل الكاميرا";
+"Take photo" = "التقاط صورة";
+"Record video" = "تسجيل فيديو";
+"Record video note" = "تسجيل رسالة فيديو";
+"Stop recording" = "إيقاف التسجيل";
+"Recording" = "جارٍ التسجيل";
+"Tap for a photo, hold for a video" = "انقر لالتقاط صورة، واضغط مطوّلًا لتسجيل فيديو";
+"Tap to focus, pinch to zoom" = "انقر للتركيز، وباعد بإصبعين للتكبير";
+"Camera access is off" = "الوصول إلى الكاميرا متوقف";
+"Allow it in Settings to take photos and videos here. You can still send one from your library." = "اسمح به من الإعدادات لالتقاط الصور والفيديو هنا. ويمكنك إرسال صورة من مكتبتك في الأثناء.";
+"Open Settings" = "فتح الإعدادات";
+"The camera is paused" = "الكاميرا متوقفة مؤقتًا";
+"Another app or a call is using it." = "يستخدمها تطبيق آخر أو مكالمة.";
+"There is no camera on this device" = "لا توجد كاميرا في هذا الجهاز";
+"The photo could not be taken." = "تعذّر التقاط الصورة.";
+
+/* The recent photos */
+"All photos" = "كل الصور";
+"Recents" = "الأحدث";
+"More" = "المزيد";
+"Share more" = "مشاركة المزيد";
+"Share more photos with NEON" = "مشاركة صور أكثر مع NEON";
+"NEON can see only the photos you shared with it." = "لا يرى NEON إلا الصور التي شاركتها معه.";
+"No photos to show" = "لا توجد صور لعرضها";
+
+/* The editor */
+"Save to Photos" = "حفظ في الصور";
+"Saved to Photos" = "حُفظت في الصور";
+"NEON can't save to Photos" = "لا يستطيع NEON الحفظ في الصور";
+"Allow it in Settings › NEON › Photos." = "اسمح بذلك من الإعدادات › NEON › الصور.";
+"HD" = "HD";
+"Sent at the size it was taken, not shrunk for the chat." = "تُرسل بالحجم الذي التُقطت به، دون تصغيرها للمحادثة.";
+"On" = "مفعَّلة";
+"Off" = "متوقفة";
+"Crop and rotate" = "قص وتدوير";
+"Stickers" = "الملصقات";
+"Text" = "نص";
+"Draw" = "رسم";
+"Undo" = "تراجع";
+"Finish editing" = "إنهاء التعديل";
+"Apply" = "تطبيق";
+"Cancel" = "إلغاء";
+"Reset" = "إعادة ضبط";
+"Rotate" = "تدوير";
+"Free" = "حر";
+"Square" = "مربع";
+"Drop here to remove" = "أفلِت هنا للحذف";
+"Sticker %@" = "ملصق %@";
+"Text: %@" = "نص: %@";
+"Text on a box" = "نص على خلفية";
+"Type something" = "اكتب شيئًا";
+"Thin" = "رفيع";
+"Thick" = "عريض";
+"White" = "أبيض";
+"Black" = "أسود";
+"Red" = "أحمر";
+"Orange" = "برتقالي";
+"Yellow" = "أصفر";
+"Green" = "أخضر";
+"Cyan" = "سماوي";
+"Blue" = "أزرق";
+"Purple" = "بنفسجي";
+"Pink" = "وردي";
+"Work" = "العمل";
+"Hands" = "الأيدي";
+"Faces" = "الوجوه";
+"Hearts" = "القلوب";
+
+/* Sending */
+"Add a caption…" = "أضف تعليقًا…";
+"Take another" = "التقاط غيرها";
+"To %@" = "إلى %@";
+"Send" = "إرسال";
+"That photo could not be prepared." = "تعذّر تجهيز هذه الصورة.";
+"That photo could not be read." = "تعذّرت قراءة هذه الصورة.";
+
+/* Videos */
+"Trim" = "قص الفيديو";
+"%@ of %@" = "%@ من %@";
+"That video could not be read." = "تعذّرت قراءة هذا الفيديو.";
+"That video could not be prepared." = "تعذّر تجهيز هذا الفيديو.";
+"This video is too long to send. Trim it shorter." = "هذا الفيديو أطول من أن يُرسل. قصّه ليصبح أقصر.";

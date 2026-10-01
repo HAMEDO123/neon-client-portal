@@ -40,7 +40,7 @@ enum ChatVideoExport {
         }
         let tracks = try await asset.loadTracks(withMediaType: .video)
         guard !presets.isEmpty, !tracks.isEmpty else { throw Failure.unreadable }
-        let composition = square ? try await squareComposition(for: asset, side: noteSide) : nil
+        let composition = square ? try await cropComposition(for: asset, shape: 1, longSide: noteSide) : nil
         let budget = Int64(ChatCameraUpload.fileLimit)
 
         for (index, preset) in presets.enumerated() {
@@ -110,20 +110,28 @@ enum ChatVideoExport {
         }
     }
 
-    /// The middle square of the picture, turned upright, at `side` pixels.
-    private static func squareComposition(for asset: AVAsset, side: CGFloat) async throws -> AVMutableVideoComposition? {
+    /// A centred cut of the picture, turned upright: `shape` is its width
+    /// over height for an upright (portrait) video, turned for one taken on
+    /// its side, so a cut fixed to the phone's screen stays fixed to it. The
+    /// cut is scaled so its long side is at most `longSide`.
+    private static func cropComposition(for asset: AVAsset, shape: CGFloat, longSide: CGFloat) async throws -> AVMutableVideoComposition? {
         guard let track = try await asset.loadTracks(withMediaType: .video).first else { return nil }
         let (natural, transform, rate) = try await track.load(.naturalSize, .preferredTransform, .nominalFrameRate)
         let duration = try await asset.load(.duration)
         let oriented = CGRect(origin: .zero, size: natural).applying(transform)
-        let width = abs(oriented.width)
-        let height = abs(oriented.height)
-        let crop = min(width, height)
-        guard crop > 0 else { return nil }
-        let scale = side / crop
+        let frame = CGRect(x: 0, y: 0, width: abs(oriented.width), height: abs(oriented.height))
+        guard frame.width > 0, frame.height > 0, shape > 0 else { return nil }
+        let portrait = frame.height >= frame.width
+        let cut = ChatCameraController.centred(aspect: portrait ? shape : 1 / shape, in: frame)
+        let scale = min(1, longSide / max(cut.width, cut.height))
+        // Even sizes: H.264 wants them.
+        let render = CGSize(
+            width: max(2, (cut.width * scale / 2).rounded(.down) * 2),
+            height: max(2, (cut.height * scale / 2).rounded(.down) * 2)
+        )
         let placed = transform
-            .concatenating(CGAffineTransform(translationX: -oriented.minX - (width - crop) / 2, y: -oriented.minY - (height - crop) / 2))
-            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: -oriented.minX - cut.minX, y: -oriented.minY - cut.minY))
+            .concatenating(CGAffineTransform(scaleX: render.width / cut.width, y: render.height / cut.height))
 
         let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
         layer.setTransform(placed, at: .zero)
@@ -132,11 +140,47 @@ enum ChatVideoExport {
         instruction.layerInstructions = [layer]
 
         let composition = AVMutableVideoComposition()
-        composition.renderSize = CGSize(width: side, height: side)
+        composition.renderSize = render
         let fps = rate > 0 ? Int32(rate.rounded()) : 30
         composition.frameDuration = CMTime(value: 1, timescale: max(1, fps))
         composition.instructions = [instruction]
         return composition
+    }
+
+    // MARK: Stories
+
+    /// A video for a story: an H.264 MP4 at most 1280 pixels on its long
+    /// side, cut to what the full-screen preview showed when `screenShape`
+    /// (the screen's short side over its long side) is given, else kept to
+    /// its own shape. A story has no 50 MB budget of its own here — the
+    /// story composer makes its own copy for the server.
+    static func storyMP4(
+        from asset: AVAsset,
+        range: CMTimeRange?,
+        screenShape: CGFloat?,
+        progress: @escaping @MainActor (Double) -> Void
+    ) async throws -> URL {
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        guard !tracks.isEmpty else { throw Failure.unreadable }
+        var composition: AVMutableVideoComposition?
+        if let screenShape { composition = try await cropComposition(for: asset, shape: screenShape, longSide: 1280) }
+        let wanted = composition != nil
+            ? [AVAssetExportPresetHighestQuality, AVAssetExportPreset1280x720]
+            : [AVAssetExportPreset1280x720, AVAssetExportPresetMediumQuality]
+        for preset in wanted where await AVAssetExportSession.compatibility(ofExportPreset: preset, with: asset, outputFileType: .mp4) {
+            guard let session = AVAssetExportSession(asset: asset, presetName: preset) else { continue }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("story-video-\(UUID().uuidString)")
+                .appendingPathExtension("mp4")
+            session.outputURL = url
+            session.outputFileType = .mp4
+            session.shouldOptimizeForNetworkUse = true
+            if let range { session.timeRange = range }
+            if let composition { session.videoComposition = composition }
+            try await run(session, progress: progress)
+            return url
+        }
+        throw Failure.unreadable
     }
 
     /// A few frames across a video, for the trim bar.

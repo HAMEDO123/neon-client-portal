@@ -196,3 +196,45 @@ struct ChatCameraSendButton: View {
         .accessibilityLabel(isSending ? L("Sending") : L("Send"))
     }
 }
+
+/// A story's foot instead of the caption bar: one Next button, which hands
+/// the photo or video to the story composer (that writes the caption and
+/// posts it). A ring fills round it while a video is made ready.
+struct ChatCameraNextBar: View {
+    var isWorking = false
+    var progress: Double?
+    let action: () -> Void
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 0)
+            Button {
+                Haptic.impact(.medium)
+                action()
+            } label: {
+                HStack(spacing: 8) {
+                    if isWorking {
+                        ProgressView().tint(.black)
+                        if let progress {
+                            Text(verbatim: NeonFormat.percent(progress * 100))
+                                .monospacedDigit()
+                        }
+                    } else {
+                        Text(L("Next"))
+                        Image(systemName: "chevron.forward")
+                    }
+                }
+                .font(.system(.headline, weight: .bold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 22)
+                .frame(minWidth: 120, minHeight: 52)
+                .background(Capsule().fill(Color.white))
+                .neonShadow(.floating)
+            }
+            .buttonStyle(PressableStyle(scale: 0.92))
+            .disabled(isWorking)
+            .accessibilityLabel(L("Next"))
+        }
+        .padding(.horizontal, 16)
+    }
+}

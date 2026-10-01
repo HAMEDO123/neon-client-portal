@@ -77,6 +77,12 @@ targets:
         # Proof of finished work is usually a photo taken on site, there and
         # then. The picker for existing photos needs no permission at all.
         NSCameraUsageDescription: "NEON uses the camera to photograph finished work, and for video calls with the studio."
+        # The chat's camera shows the newest photos above the shutter, as
+        # WhatsApp does — asked for only when the camera opens, and the strip
+        # is simply not drawn without it (the gallery button's system picker
+        # needs no permission). Its editor's Save button adds to the library.
+        NSPhotoLibraryUsageDescription: "NEON shows your latest photos and videos under the chat camera, so you can send one in a tap."
+        NSPhotoLibraryAddUsageDescription: "NEON saves the photos and videos you choose to save from a chat to your library."
         # A call keeps its sound when somebody switches to another app, as a
         # phone call does (audio), and rings a closed or locked phone through
         # a VoIP push and CallKit (voip); nothing else runs in the background.

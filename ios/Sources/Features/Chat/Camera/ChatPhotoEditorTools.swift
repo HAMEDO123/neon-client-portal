@@ -38,15 +38,7 @@ struct ChatEditTextEntry: View {
                         }
                         .accessibilityValue(current.boxed ? L("On") : L("Off"))
                         Spacer(minLength: 4)
-                        Button(action: finish) {
-                            Text(L("Done"))
-                                .font(.system(.subheadline, weight: .bold))
-                                .foregroundStyle(.black)
-                                .padding(.horizontal, 18)
-                                .frame(height: 36)
-                                .background(Capsule().fill(Color.white))
-                        }
-                        .buttonStyle(PressableStyle(scale: 0.9))
+                        ChatCameraButton("checkmark", label: L("Finish editing"), isOn: true, action: finish)
                     }
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
@@ -275,6 +267,7 @@ struct ChatCropView: View {
     @State private var dragStart: CGRect?
 
     private var shown: UIImage { preview ?? image }
+    private var isUntouched: Bool { turns == 0 && rect == CGRect(x: 0, y: 0, width: 1, height: 1) }
     private var aspect: CGFloat { shown.size.height > 0 ? shown.size.width / shown.size.height : 1 }
 
     var body: some View {
@@ -291,9 +284,10 @@ struct ChatCropView: View {
                 }
                 .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(.white)
-                .disabled(turns == 0 && rect == CGRect(x: 0, y: 0, width: 1, height: 1))
+                .opacity(isUntouched ? 0.4 : 1)
+                .disabled(isUntouched)
                 Spacer()
-                ChatCameraButton("checkmark", label: L("Done"), isOn: true) { onDone(rect, turns) }
+                ChatCameraButton("checkmark", label: L("Apply"), isOn: true) { onDone(rect, turns) }
             }
             .padding(.horizontal, 12)
             .padding(.top, 6)

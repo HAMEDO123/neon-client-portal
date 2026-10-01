@@ -19,6 +19,9 @@ struct ChatPhotoEditor: View {
     let onSend: (UploadFile) -> Void
     /// A tool already out when it opens (the debug router's screenshots).
     var opening: Opening?
+    /// For a story: no caption, chat or HD — a Next button hands back the
+    /// photo with everything burned in, for the story composer.
+    var forStory: ((UIImage) -> Void)?
 
     enum Opening {
         case stickers
@@ -54,7 +57,7 @@ struct ChatPhotoEditor: View {
                     withNeonAnimation(NeonMotion.quick) { model.tool = nil }
                 }
                 .transition(.opacity)
-            } else {
+            } else if textDraft == nil {
                 chrome
                     .transition(.opacity)
             }
@@ -251,6 +254,11 @@ struct ChatPhotoEditor: View {
                 ChatEditPaletteRow(color: $model.penColor, width: $model.penWidth)
                     .padding(.bottom, 8)
                     .transition(.neonRise)
+            } else if let forStory {
+                ChatCameraNextBar {
+                    forStory(model.flattened())
+                }
+                .padding(.bottom, 4)
             } else {
                 ChatCameraCaptionBar(
                     caption: $caption,
@@ -273,13 +281,15 @@ struct ChatPhotoEditor: View {
             Spacer(minLength: 4)
             ChatCameraButton(saving ? "ellipsis" : "arrow.down.to.line", label: L("Save to Photos")) { save() }
                 .disabled(saving)
-            ChatCameraWordButton(word: "HD", label: L("HD"), isOn: model.hd) {
-                model.hd.toggle()
-                if model.hd {
-                    Toast.info(L("HD"), detail: L("Sent at the size it was taken, not shrunk for the chat."))
+            if forStory == nil {
+                ChatCameraWordButton(word: "HD", label: L("HD"), isOn: model.hd) {
+                    model.hd.toggle()
+                    if model.hd {
+                        Toast.info(L("HD"), detail: L("Sent at the size it was taken, not shrunk for the chat."))
+                    }
                 }
+                .accessibilityValue(model.hd ? L("On") : L("Off"))
             }
-            .accessibilityValue(model.hd ? L("On") : L("Off"))
             ChatCameraButton("crop.rotate", label: L("Crop and rotate")) {
                 captionFocused = false
                 model.tool = .crop
@@ -306,18 +316,11 @@ struct ChatPhotoEditor: View {
             .disabled(model.strokes.isEmpty)
             .opacity(model.strokes.isEmpty ? 0.45 : 1)
             Spacer(minLength: 4)
-            Button {
-                Haptic.tap()
+            // "Done" is a task's state in the app's Arabic, so the finish
+            // button is a tick, as the photo editors on the phone draw it.
+            ChatCameraButton("checkmark", label: L("Finish editing"), isOn: true) {
                 model.tool = nil
-            } label: {
-                Text(L("Done"))
-                    .font(.system(.subheadline, weight: .bold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 18)
-                    .frame(height: 36)
-                    .background(Capsule().fill(Color.white))
             }
-            .buttonStyle(PressableStyle(scale: 0.9))
         }
         .padding(.horizontal, 12)
     }

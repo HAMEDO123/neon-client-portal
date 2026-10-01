@@ -17,13 +17,19 @@ import SwiftUI
 /// - camera-editor-hd: HD switched on
 /// - camera-video: a recorded video waiting to be sent, with the trim bar
 /// - camera-note-review: a video note waiting to be sent
-/// - camera-video-export: makes the MP4s the chat would send from a video
-///   drawn here, and says what came out (size, shape, codec)
+/// - camera-video-export: makes the MP4s the chat (and a story) would send
+///   from a video drawn here, says what came out (size, shape, codec), and
+///   works out what part of a photo a full-screen preview shows
+/// - camera-story: `NeonCameraView(purpose: .story)` — VIDEO · PHOTO only
+/// - camera-story-editor: a story photo (cut to the screen's shape) in the
+///   editor, with Next instead of the caption and send
+/// - camera-story-video: a story recording in review, cut to the screen
 enum CameraScreens {
     static let ids: [String] = [
         "camera", "camera-note", "camera-editor", "camera-editor-marked", "camera-editor-draw",
         "camera-editor-text", "camera-editor-crop", "camera-editor-stickers", "camera-editor-hd",
         "camera-video", "camera-note-review", "camera-video-export",
+        "camera-story", "camera-story-editor", "camera-story-video",
     ]
 
     static let chatName = "NEON Team"
@@ -31,32 +37,60 @@ enum CameraScreens {
     @MainActor static func view(_ id: String) -> AnyView? {
         switch id {
         case "camera":
-            return AnyView(ChatCameraScreen(chatName: chatName) { _, _ in })
+            return covered(ChatCameraScreen(chatName: chatName) { _, _ in })
         case "camera-note":
-            return AnyView(ChatCameraScreen(chatName: chatName, mode: .videoNote) { _, _ in })
+            return covered(ChatCameraScreen(chatName: chatName, mode: .videoNote) { _, _ in })
         case "camera-editor":
-            return AnyView(CameraEditorFixture())
+            return covered(CameraEditorFixture())
         case "camera-editor-marked":
-            return AnyView(CameraEditorFixture(marked: true))
+            return covered(CameraEditorFixture(marked: true))
         case "camera-editor-draw":
-            return AnyView(CameraEditorFixture(marked: true, tool: .draw))
+            return covered(CameraEditorFixture(marked: true, tool: .draw))
         case "camera-editor-text":
-            return AnyView(CameraEditorFixture(opening: .text("Kitchen — final")))
+            return covered(CameraEditorFixture(opening: .text("Kitchen — final")))
         case "camera-editor-crop":
-            return AnyView(CameraEditorFixture(tool: .crop))
+            return covered(CameraEditorFixture(tool: .crop))
         case "camera-editor-stickers":
-            return AnyView(CameraEditorFixture(opening: .stickers))
+            return covered(CameraEditorFixture(opening: .stickers))
         case "camera-editor-hd":
-            return AnyView(CameraEditorFixture(hd: true))
+            return covered(CameraEditorFixture(hd: true))
         case "camera-video":
-            return AnyView(CameraVideoFixture(note: false))
+            return covered(CameraVideoFixture(note: false))
         case "camera-note-review":
-            return AnyView(CameraVideoFixture(note: true))
+            return covered(CameraVideoFixture(note: true))
         case "camera-video-export":
             return AnyView(CameraExportCheck())
+        case "camera-story":
+            return covered(NeonCameraView(purpose: .story) { _ in } onVideo: { _ in })
+        case "camera-story-editor":
+            return covered(CameraEditorFixture(story: true))
+        case "camera-story-video":
+            return covered(CameraVideoFixture(note: false, story: true))
         default:
             return nil
         }
+    }
+
+    /// Presented full screen, as the chat presents the camera, so its dark
+    /// scheme and status bar are the presentation's own.
+    @MainActor private static func covered<V: View>(_ view: V) -> AnyView {
+        AnyView(CameraCoverHost(content: AnyView(view)))
+    }
+}
+
+private struct CameraCoverHost: View {
+    let content: AnyView
+    @State private var shown = false
+
+    var body: some View {
+        Color.black
+            .ignoresSafeArea()
+            .fullScreenCover(isPresented: $shown) { content }
+            .onAppear {
+                var plain = Transaction()
+                plain.disablesAnimations = true
+                withTransaction(plain) { shown = true }
+            }
     }
 }
 
@@ -188,8 +222,17 @@ private struct CameraEditorFixture: View {
     @State private var caption = ""
     let opening: ChatPhotoEditor.Opening?
 
-    init(marked: Bool = false, tool: ChatPhotoEditModel.Tool? = nil, opening: ChatPhotoEditor.Opening? = nil, hd: Bool = false) {
-        let model = ChatPhotoEditModel(image: CameraFixtures.photo)
+    let story: Bool
+
+    init(marked: Bool = false, tool: ChatPhotoEditModel.Tool? = nil, opening: ChatPhotoEditor.Opening? = nil, hd: Bool = false, story: Bool = false) {
+        var picture = CameraFixtures.photo
+        if story {
+            // As the story camera hands it over: cut to the screen's shape.
+            let screen = UIScreen.main.bounds.size
+            picture = picture.chatCropped(to: ChatCameraController.visibleRect(photo: picture.size, video: nil, screen: screen))
+        }
+        self.story = story
+        let model = ChatPhotoEditModel(image: picture)
         if marked {
             var title = ChatEditOverlay(kind: .text("Living room ✓"), color: 0, boxed: true, center: CGPoint(x: 0.5, y: 0.2))
             title.rotation = .degrees(-4)
@@ -220,7 +263,8 @@ private struct CameraEditorFixture: View {
             onClose: {},
             onRetake: {},
             onSend: { _ in },
-            opening: opening
+            opening: opening,
+            forStory: story ? { _ in } : nil
         )
         .preferredColorScheme(.dark)
         .neonLanguage()
@@ -229,6 +273,7 @@ private struct CameraEditorFixture: View {
 
 private struct CameraVideoFixture: View {
     let note: Bool
+    var story = false
     @State private var video: ChatCameraVideo?
     @State private var caption = ""
 
@@ -237,7 +282,7 @@ private struct CameraVideoFixture: View {
             Color.black.ignoresSafeArea()
             if let video {
                 ChatVideoReview(video: video, chatName: CameraScreens.chatName, caption: $caption,
-                                onClose: {}, onRetake: {}, onSend: { _ in })
+                                onClose: {}, onRetake: {}, onSend: { _ in }, forStory: story ? { _ in } : nil)
             } else {
                 ProgressView().tint(.white)
             }
@@ -246,7 +291,9 @@ private struct CameraVideoFixture: View {
         .neonLanguage()
         .task {
             guard let url = await CameraFixtures.video() else { return }
-            video = ChatCameraVideo(asset: AVURLAsset(url: url), fileURL: url, isNote: note, fromLibrary: false)
+            let screen = UIScreen.main.bounds.size
+            video = ChatCameraVideo(asset: AVURLAsset(url: url), fileURL: url, isNote: note, fromLibrary: false,
+                                    screenShape: story ? min(screen.width, screen.height) / max(screen.width, screen.height) : nil)
         }
     }
 }
@@ -288,6 +335,20 @@ private struct CameraExportCheck: View {
                 lines.append("\(square ? "note" : "video"): \(error.localizedDescription)")
             }
         }
+        if let url = try? await ChatVideoExport.storyMP4(from: AVURLAsset(url: source), range: nil, screenShape: 9 / 19.5, progress: { _ in }) {
+            lines.append("story 9:19.5: \(await describe(url))")
+            try? FileManager.default.removeItem(at: url)
+        }
+        // What a full-screen preview shows of a 12 MP photo, with the 1080p
+        // video frame the preview draws and a 393×852 screen.
+        let shown = ChatCameraController.visibleRect(
+            photo: CGSize(width: 3024, height: 4032), video: CGSize(width: 1920, height: 1080), screen: CGSize(width: 393, height: 852)
+        )
+        lines.append("upright photo 3024×4032 shows \(Int(shown.minX)),\(Int(shown.minY)) \(Int(shown.width))×\(Int(shown.height))")
+        let sideways = ChatCameraController.visibleRect(
+            photo: CGSize(width: 4032, height: 3024), video: CGSize(width: 1920, height: 1080), screen: CGSize(width: 393, height: 852)
+        )
+        lines.append("sideways photo 4032×3024 shows \(Int(sideways.minX)),\(Int(sideways.minY)) \(Int(sideways.width))×\(Int(sideways.height))")
         let trimmed = CMTimeRange(start: CMTime(seconds: 1, preferredTimescale: 600), end: CMTime(seconds: 2.5, preferredTimescale: 600))
         if let url = try? await ChatVideoExport.mp4(from: AVURLAsset(url: source), range: trimmed, square: false, progress: { _ in }) {
             lines.append("trim 1–2.5 s: \(await describe(url))")

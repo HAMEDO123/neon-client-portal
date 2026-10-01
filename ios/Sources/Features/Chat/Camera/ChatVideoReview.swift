@@ -12,6 +12,9 @@ struct ChatCameraVideo: Identifiable {
     let isNote: Bool
     /// From the library: no "save to Photos", it is already there.
     let fromLibrary: Bool
+    /// Recorded for a story: the screen's short side over its long side,
+    /// to cut it to what the full-screen preview showed.
+    var screenShape: CGFloat?
 }
 
 /// The video after it is recorded or picked: it plays on a loop, a strip of
@@ -25,6 +28,12 @@ struct ChatVideoReview: View {
     let onClose: () -> Void
     let onRetake: () -> Void
     let onSend: (UploadFile) -> Void
+    /// For a story: no caption or chat, a Next button that hands back the
+    /// video as an MP4 (cut to the preview's shape when recorded here).
+    var forStory: ((URL) -> Void)?
+
+    /// A story keeps a minute (ChatStoryVideo.maxSeconds).
+    static let storySeconds: Double = 60
 
     @StateObject private var player = ChatLoopingPlayer()
     @State private var duration: Double = 0
@@ -80,7 +89,7 @@ struct ChatVideoReview: View {
                 .padding(.horizontal, 12)
 
                 if duration > 1.5 {
-                    ChatTrimBar(duration: duration, range: $trim, frames: frames) {
+                    ChatTrimBar(duration: duration, range: $trim, frames: frames, longest: forStory == nil ? nil : Self.storySeconds) {
                         player.loop(range: trimmed ? cmRange : nil)
                     }
                     .padding(.horizontal, 16)
@@ -89,19 +98,24 @@ struct ChatVideoReview: View {
 
                 Spacer(minLength: 0)
 
-                ChatCameraCaptionBar(
-                    caption: $caption,
-                    chatName: chatName,
-                    isSending: sending,
-                    progress: sending ? progress : nil,
-                    focused: $captionFocused,
-                    onRetake: {
-                        work?.cancel()
-                        onRetake()
-                    },
-                    onSend: send
-                )
-                .padding(.bottom, 4)
+                if forStory != nil {
+                    ChatCameraNextBar(isWorking: sending, progress: sending ? progress : nil, action: send)
+                        .padding(.bottom, 4)
+                } else {
+                    ChatCameraCaptionBar(
+                        caption: $caption,
+                        chatName: chatName,
+                        isSending: sending,
+                        progress: sending ? progress : nil,
+                        focused: $captionFocused,
+                        onRetake: {
+                            work?.cancel()
+                            onRetake()
+                        },
+                        onSend: send
+                    )
+                    .padding(.bottom, 4)
+                }
             }
             .padding(.top, 6)
             .padding(.bottom, 4)
@@ -110,7 +124,12 @@ struct ChatVideoReview: View {
         .task {
             player.start(video.asset)
             duration = (try? await video.asset.load(.duration))?.seconds ?? 0
-            if duration.isFinite, duration > 0 { trim = 0...duration } else { duration = 0 }
+            if duration.isFinite, duration > 0 {
+                trim = 0...(forStory == nil ? duration : min(duration, Self.storySeconds))
+                if trimmed { player.loop(range: cmRange) }
+            } else {
+                duration = 0
+            }
             frames = await ChatVideoExport.frames(of: video.asset, count: 10, height: 44)
         }
         .onDisappear {
@@ -131,7 +150,8 @@ struct ChatVideoReview: View {
                     .position(x: geo.size.width / 2, y: geo.size.height * 0.42)
             }
         } else {
-            ChatPlayerSurface(player: player.player, fill: false)
+            // A story recorded here is shown as it will be: cut to the screen.
+            ChatPlayerSurface(player: player.player, fill: forStory != nil && video.screenShape != nil)
         }
     }
 
@@ -151,6 +171,25 @@ struct ChatVideoReview: View {
         let range = trimmed ? cmRange : nil
         let square = video.isNote
         let asset = video.asset
+        if let forStory {
+            let shape = video.screenShape
+            work = Task {
+                do {
+                    let url = try await ChatVideoExport.storyMP4(from: asset, range: range, screenShape: shape) { value in
+                        progress = value
+                    }
+                    sending = false
+                    forStory(url)
+                } catch is CancellationError {
+                    sending = false
+                } catch {
+                    sending = false
+                    Haptic.error()
+                    Toast.error(error)
+                }
+            }
+            return
+        }
         work = Task {
             do {
                 let url = try await ChatVideoExport.mp4(from: asset, range: range, square: square) { value in
@@ -267,6 +306,8 @@ struct ChatTrimBar: View {
     let duration: Double
     @Binding var range: ClosedRange<Double>
     let frames: [UIImage]
+    /// The longest part that may be kept, if there is a limit.
+    var longest: Double?
     /// The ends were let go: play the new part.
     let onCommit: () -> Void
 
@@ -355,10 +396,13 @@ struct ChatTrimBar: View {
                 let moved = start + Double(value.translation.width / width) * duration
                 if isLower {
                     let lower = min(max(0, moved), range.upperBound - shortest)
-                    range = lower...range.upperBound
+                    // Past the limit, the other end follows.
+                    let upper = longest.map { min(range.upperBound, lower + $0) } ?? range.upperBound
+                    range = lower...upper
                 } else {
                     let upper = max(min(duration, moved), range.lowerBound + shortest)
-                    range = range.lowerBound...upper
+                    let lower = longest.map { max(range.lowerBound, upper - $0) } ?? range.lowerBound
+                    range = lower...upper
                 }
             }
             .onEnded { _ in
