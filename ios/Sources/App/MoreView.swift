@@ -32,11 +32,12 @@ struct AdminMoreView: View {
                     MoreDestinationTile(L("Attendance"), symbol: "clock.badge.checkmark.fill", hue: .indigo) { AttendanceRootView() }
                 }
 
-                // The office itself: its shop cart and how its server and
-                // network are doing (the cameras join here).
+                // The office itself: its cameras, how its server and network
+                // are doing, and its shared shop cart.
                 MoreDestinationGroup(L("The office"), symbol: "building.2.fill", hue: .green) {
-                    MoreDestinationTile(L("Office shopping"), symbol: "cart.fill", hue: .green) { OfficeShoppingView() }
+                    MoreDestinationTile(L("Cameras"), symbol: "video.fill", hue: .red) { CamerasRootView() }
                     MoreDestinationTile(L("Network & server"), symbol: "server.rack", hue: .cyan) { StatusRootView() }
+                    MoreDestinationTile(L("Office shopping"), symbol: "cart.fill", hue: .green) { OfficeShoppingView() }
                 }
 
                 // Analytics and Settings each stood alone in a third,

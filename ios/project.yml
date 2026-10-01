@@ -82,7 +82,7 @@ targets:
         # is simply not drawn without it (the gallery button's system picker
         # needs no permission). Its editor's Save button adds to the library.
         NSPhotoLibraryUsageDescription: "NEON shows your latest photos and videos under the chat camera, so you can send one in a tap."
-        NSPhotoLibraryAddUsageDescription: "NEON saves the photos and videos you choose to save from a chat to your library."
+        NSPhotoLibraryAddUsageDescription: "NEON saves the photos and videos you choose to save — from a chat or a camera snapshot — to your library."
         # A call keeps its sound when somebody switches to another app, as a
         # phone call does (audio), and rings a closed or locked phone through
         # a VoIP push and CallKit (voip); nothing else runs in the background.

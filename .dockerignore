@@ -25,3 +25,7 @@ whatsapp-worker/data
 ios
 public/uploads
 *.log
+
+# The camera relay's file holds camera passwords; the site's image has no use
+# for it (deploy/go2rtc/README.md).
+deploy/go2rtc/go2rtc.yaml

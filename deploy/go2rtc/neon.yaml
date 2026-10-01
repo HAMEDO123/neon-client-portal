@@ -1,0 +1,22 @@
+# NEON's settings for the camera relay (go2rtc). Committed: nothing secret in it.
+#
+# The cameras are NOT in here, or in any file. The manager adds them in the app;
+# the site keeps them in its database (passwords sealed) and tells the relay
+# about each one at run time. See deploy/go2rtc/README.md.
+#
+# docker-compose.yml loads this after go2rtc.yaml, so these win where both say
+# something.
+
+api:
+  # The site reaches the relay here over the Compose network; the PC reaches
+  # it on 127.0.0.1:1984. Nothing publishes it beyond this PC.
+  listen: ":1984"
+
+ffmpeg:
+  # go2rtc's own RTSP input, told to look at half a second of video before it
+  # starts rather than five: the live picture opens about two seconds sooner.
+  rtsp: "-fflags nobuffer -flags low_delay -analyzeduration 500000 -probesize 500000 -timeout {timeout} -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i {input}"
+  # The app's HD live picture: the camera's full picture, scaled to 1280 wide
+  # by the site's source address, at ten frames a second. A 2K picture as
+  # MJPEG at full rate would be tens of megabits — too much for a phone.
+  mjpeg/hd: "-c:v mjpeg -r 10 -q:v 7"

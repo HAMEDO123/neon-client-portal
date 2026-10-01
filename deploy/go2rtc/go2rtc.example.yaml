@@ -1,0 +1,28 @@
+# OPTIONAL — cameras written by hand, for anything the app cannot add.
+#
+# Cameras are normally added in the app (Cameras → +). Only if you need one the
+# app can't handle, copy this file to go2rtc.yaml in this folder (git-ignored:
+# it holds passwords), fill it in, and restart the relay:
+#
+#   docker compose --env-file .env.docker restart neon-cameras
+#
+# The app lists these too, by their name here (front_door → "Front Door";
+# an Arabic name works; a number in front, like 2_studio, only sets the order),
+# but cannot edit them, and cannot move them.
+#
+# Each camera needs two lines: where its video is, and the MJPEG picture the
+# app's live view plays — which must name the camera again, exactly.
+# Tapo: rtsp://<camera-account-user>:<password>@<camera-ip>:554/stream2 is the
+# small picture (640×360, cheap to convert); /stream1 is the full one.
+# A password with @ # : / ? or a space in it must be percent-encoded (@ → %40).
+#
+# Never use stream1 or stream2 as a camera's NAME here: go2rtc would confuse it
+# with the cameras the app adds.
+#
+# go2rtc itself also writes into go2rtc.yaml: the names of the app's cameras it
+# keeps connected (`preload:`). Leave those lines alone.
+
+streams:
+  front_door:
+    - rtsp://CAMERA_ACCOUNT_USER:CAMERA_ACCOUNT_PASSWORD@192.168.1.21:554/stream2
+    - ffmpeg:front_door#video=mjpeg
