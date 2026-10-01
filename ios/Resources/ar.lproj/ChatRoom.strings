@@ -129,3 +129,21 @@
 "No private chat on the server to open" = "لا توجد محادثة خاصة على الخادم لفتحها";
 "No group on the server to open" = "لا توجد مجموعة على الخادم لفتحها";
 "Nothing on the server to open this with." = "لا يوجد على الخادم ما يُفتح به هذا.";
+
+/* Videos in a conversation (ChatVideo.swift) */
+"🎥 Video" = "🎥 فيديو";
+"Video" = "فيديو";
+"Plays the video" = "يشغّل الفيديو";
+"Share or save" = "مشاركة أو حفظ";
+"Downloading…" = "جارٍ التنزيل…";
+"This video couldn't be played." = "تعذّر تشغيل هذا الفيديو.";
+"The video could not be downloaded." = "تعذّر تنزيل الفيديو.";
+
+/* Voice note speed */
+"Playback speed" = "سرعة التشغيل";
+"Changes how fast voice messages play" = "يغيّر سرعة تشغيل الرسائل الصوتية";
+
+/* Pictures full screen (ChatFaceViewer.swift) */
+"View photo" = "عرض الصورة";
+"Shows the photo full screen" = "يعرض الصورة بملء الشاشة";
+"Photo of %@" = "صورة %@";

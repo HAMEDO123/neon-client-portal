@@ -313,6 +313,11 @@ final class ChatConversationStore: ObservableObject {
                     if let image = item.localImage, let url = message.attachmentURL {
                         ChatPhotoCache.shared.store(image, for: url)
                     }
+                    // The same for a video: the frame read from this phone's
+                    // own copy is the frame of the server's.
+                    if let upload = item.videoUpload, let url = message.attachmentURL {
+                        ChatVideoPosters.shared.adopt(upload.key, as: url)
+                    }
                     // Swapped in one step, not animated: two rows crossfading
                     // would briefly take the space of both.
                     messages = list

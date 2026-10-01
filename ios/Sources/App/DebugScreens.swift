@@ -56,14 +56,14 @@ enum DebugScreens {
         [
             HomeScreens.view, HomeInsightsScreens.view, ProjectsScreens.view, ProjectFilesScreens.view,
             TasksScreens.view, TeamScreens.view, OpsScreens.view, WhatsAppScreens.view, ChatScreens.view,
-            ChatRoomScreens.view, MeScreens.view, CallsScreens.view,
+            ChatRoomScreens.view, MeScreens.view, CallsScreens.view, CameraScreens.view,
         ]
     }
 
     static var allIds: [String] {
         tabs.keys.sorted() + appIds + HomeScreens.ids + HomeInsightsScreens.ids + ProjectsScreens.ids
             + ProjectFilesScreens.ids + TasksScreens.ids + TeamScreens.ids + OpsScreens.ids + WhatsAppScreens.ids
-            + ChatScreens.ids + ChatRoomScreens.ids + MeScreens.ids + CallsScreens.ids
+            + ChatScreens.ids + ChatRoomScreens.ids + MeScreens.ids + CallsScreens.ids + CameraScreens.ids
     }
 }
 

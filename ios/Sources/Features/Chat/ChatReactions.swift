@@ -168,7 +168,8 @@ struct ChatPinnedStrip: View {
     private func pinnedPreview(_ item: ChatReactionSnapshot.Pinned) -> String {
         switch item.kind {
         case "IMAGE": return L("📷 Photo")
-        case "FILE": return "📎 " + (item.attachmentName ?? L("File"))
+        case "FILE":
+            return chatIsVideoAttachment(type: nil, name: item.attachmentName) ? L("🎥 Video") : "📎 " + (item.attachmentName ?? L("File"))
         case "VOICE": return L("🎤 Voice message")
         case "TASK": return "✅ " + (item.body ?? L("Task"))
         case "MEETING": return "📅 " + (item.body ?? L("Meeting"))

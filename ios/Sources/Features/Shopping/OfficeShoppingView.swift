@@ -6,13 +6,19 @@ import WebKit
 // adds to the same cart — the cart lives at the shop, on that account — and
 // only the manager orders.
 //
-// The manager signs the office account in once on each phone (the web view
-// keeps its own cookies), so nobody on the team needs the password. On a
-// team member's phone, ordering is blocked here three ways, because the shop's
+// The office account is set once, centrally — the manager types it on the
+// website's Settings ("The office shop account") — and a team member's phone
+// signs itself in with it (`me/shopping/account`, read only when the shop's
+// sign-in is showing, never written to disk). That means everybody on the
+// team can read the password: the studio chose that, knowing it, and every
+// fetch is recorded against whoever asked. The manager's own phone signs in
+// by hand once (the web view keeps its cookies).
+//
+// Ordering is blocked on a team member's phone three ways, because the shop's
 // site is not ours and any one of them can miss: a checkout-looking button is
 // not let through, an in-page route to checkout is refused, and a request that
-// would place an order is not sent (`OfficeShop.blockingScript`). That guard
-// lives in this app only; the password is what keeps it.
+// would place an order is not sent (`OfficeShop.script`). With every phone on
+// an account that could order, that block carries the rule.
 //
 // "Who added what" is read the same best-effort way: a successful write to the
 // shop's cart is reported with the name of the product last tapped, and the
@@ -128,10 +134,89 @@ enum OfficeShop {
         return String(array.dropFirst().dropLast())
     }
 
+    /// Only the shop's own pages are ever typed into — never a payment
+    /// provider or anything a redirect lands on.
+    static func isShopPage(_ url: URL?) -> Bool {
+        guard let host = url?.host?.lowercased(), let shop = home.host?.lowercased() else { return false }
+        let bare = shop.hasPrefix("www.") ? String(shop.dropFirst(4)) : shop
+        return host == shop || host == bare || host.hasSuffix("." + bare)
+    }
+
+    /// Is the shop asking somebody to sign in? A visible password field, or a
+    /// visible "sign in" control. Found, never assumed: the shop's own page.
+    static let detectScript = """
+    (function () {
+      var visible = function (el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); };
+      var password = Array.prototype.some.call(document.querySelectorAll("input[type=password]"), visible);
+      var SIGN_IN = /^(sign ?in|log ?in|login|تسجيل الدخول|تسجيل دخول|دخول)$/i;
+      var signIn = Array.prototype.some.call(document.querySelectorAll("a, button, [role=button]"), function (el) {
+        return visible(el) && SIGN_IN.test((el.innerText || "").trim());
+      });
+      return JSON.stringify({ password: password, signIn: signIn });
+    })();
+    """
+
+    /// Opens the shop's sign-in, by pressing its own "sign in" control.
+    static let openSignInScript = """
+    (function () {
+      var visible = function (el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); };
+      var SIGN_IN = /^(sign ?in|log ?in|login|تسجيل الدخول|تسجيل دخول|دخول)$/i;
+      var el = Array.prototype.find.call(document.querySelectorAll("a, button, [role=button]"), function (el) {
+        return visible(el) && SIGN_IN.test((el.innerText || "").trim());
+      });
+      if (el) { el.click(); return true; }
+      return false;
+    })();
+    """
+
+    /// Fills the shop's sign-in form and presses its button. Run with
+    /// `callAsyncJavaScript`, so the email and password are arguments — never
+    /// pasted into the script's text. Typed the way a person types (input and
+    /// change events), which is what a framework form listens for.
+    static let fillScript = """
+    var visible = function (el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); };
+    var inputs = Array.prototype.filter.call(document.querySelectorAll("input"), visible);
+    var secret = inputs.find(function (i) { return i.type === "password"; });
+    if (!secret) return "no-password-field";
+    var describes = function (i) { return [i.name, i.id, i.placeholder, i.getAttribute("formcontrolname"), i.getAttribute("aria-label"), i.autocomplete].join(" "); };
+    var who = inputs.find(function (i) { return i !== secret && (i.type === "email" || /(mail|user|login|phone|mobile|بريد|هاتف|جوال|موبايل)/i.test(describes(i))); })
+      || inputs.filter(function (i) { return i !== secret && ["text", "email", "tel", ""].indexOf(i.type) >= 0; }).pop();
+    if (!who) return "no-account-field";
+    var type = function (el, value) {
+      var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+      el.focus();
+      setter.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      el.dispatchEvent(new Event("blur", { bubbles: true }));
+    };
+    type(who, email);
+    type(secret, password);
+    var SUBMIT = /(sign ?in|log ?in|login|تسجيل الدخول|تسجيل دخول|دخول|متابعة|continue)/i;
+    var form = secret.form;
+    var button = (form && form.querySelector("button[type=submit], input[type=submit]"))
+      || Array.prototype.filter.call(document.querySelectorAll("button, [role=button], input[type=submit]"), visible)
+        .find(function (b) { return SUBMIT.test(b.innerText || b.value || ""); });
+    if (button) { setTimeout(function () { button.click(); }, 250); return "submitted"; }
+    if (form && form.requestSubmit) { form.requestSubmit(); return "submitted"; }
+    return "filled";
+    """
+
     static func isCheckout(_ url: URL) -> Bool {
         let text = url.path + "?" + (url.query ?? "") + "#" + (url.fragment ?? "")
         return text.range(of: checkoutPattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
+}
+
+struct OfficeShopAccount: Decodable, Equatable {
+    let email: String
+    let password: String
+    let site: String?
+}
+
+private struct OfficeShopAccountAnswer: Decodable {
+    let account: OfficeShopAccount?
+    let why: String?
 }
 
 @MainActor
@@ -139,7 +224,79 @@ final class OfficeShopModel: ObservableObject {
     @Published var progress: Double = 0
     @Published var canGoBack = false
     @Published var canGoForward = false
+    /// The server's own sentence when there is no account to sign in with —
+    /// shown where the shop would be, with nothing to retry.
+    @Published var blocker: String?
+    /// The form could not be filled: the account, for signing in by hand.
+    @Published var manual: OfficeShopAccount?
+    @Published var signingIn = false
     weak var webView: WKWebView?
+
+    /// Held in memory for this run of the app only, and fetched at most once
+    /// per run without being asked: every fetch is recorded on the server.
+    private static var account: OfficeShopAccount?
+    private static var triedThisRun = false
+
+    /// Signs this phone in to the office shop when the shop asks for it.
+    /// `force` is the person pressing "Sign in".
+    func signIn(force: Bool) async {
+        guard let webView, OfficeShop.isShopPage(webView.url), !signingIn else { return }
+        if !force && Self.triedThisRun { return }
+
+        let state = await detect(webView)
+        if !force && !state.password && !state.signIn { return } // already signed in
+        Self.triedThisRun = true
+        signingIn = true
+        defer { signingIn = false }
+
+        if Self.account == nil {
+            do {
+                let answer = try await APIClient.shared.readFresh("me/shopping/account", as: OfficeShopAccountAnswer.self)
+                guard let account = answer.account else {
+                    blocker = answer.why ?? L("The office shop account isn't set up yet. Ask the manager.")
+                    return
+                }
+                Self.account = account
+            } catch {
+                Toast.error(error)
+                return
+            }
+        }
+        guard let account = Self.account else { return }
+
+        if !state.password {
+            _ = try? await webView.evaluateJavaScript(OfficeShop.openSignInScript)
+            for _ in 0..<16 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if !OfficeShop.isShopPage(webView.url) { break }
+                if await detect(webView).password { break }
+            }
+        }
+        guard OfficeShop.isShopPage(webView.url) else { return }
+
+        let result = try? await webView.callAsyncJavaScript(
+            OfficeShop.fillScript,
+            arguments: ["email": account.email, "password": account.password],
+            contentWorld: .page
+        )
+        guard (result as? String) == "submitted" || (result as? String) == "filled" else {
+            withNeonAnimation(NeonMotion.snappy) { manual = account }
+            return
+        }
+        // Still asking after a few seconds: wrong details, a code by SMS, or a
+        // form this could not read. The person finishes it by hand.
+        try? await Task.sleep(nanoseconds: 3_500_000_000)
+        if OfficeShop.isShopPage(webView.url), await detect(webView).password {
+            withNeonAnimation(NeonMotion.snappy) { manual = account }
+        }
+    }
+
+    private func detect(_ webView: WKWebView) async -> (password: Bool, signIn: Bool) {
+        guard let json = try? await webView.evaluateJavaScript(OfficeShop.detectScript) as? String,
+              let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Bool] else { return (false, false) }
+        return (object["password"] ?? false, object["signIn"] ?? false)
+    }
 }
 
 struct OfficeShoppingView: View {
@@ -155,12 +312,34 @@ struct OfficeShoppingView: View {
                 hint
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
+            if let manual = model.manual {
+                manualCard(manual)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             ZStack(alignment: .top) {
                 OfficeShopWebView(model: model, isManager: isManager, onAdded: reportAdded)
                 if model.progress > 0 && model.progress < 1 {
                     ProgressView(value: model.progress)
                         .progressViewStyle(.linear)
                         .tint(.neonPurpleStrong)
+                }
+                if let blocker = model.blocker {
+                    // Where the shop would be: nothing on this phone fixes
+                    // it, and the sentence already says who can.
+                    VStack(spacing: NeonSpace.md) {
+                        IconTile("cart.badge.questionmark", hue: .amber, size: 56, style: .soft)
+                        Text(blocker).font(.neonHeadline).multilineTextAlignment(.center)
+                    }
+                    .padding(NeonSpace.xl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.neonBg)
+                }
+                if model.signingIn {
+                    Label(L("Signing in to the office shop…"), systemImage: "person.badge.key.fill")
+                        .font(.neonLabel)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.top, 12)
                 }
             }
         }
@@ -175,7 +354,55 @@ struct OfficeShoppingView: View {
                     .accessibilityLabel(L("Shop home"))
                 Button { model.webView?.reload() } label: { Image(systemName: "arrow.clockwise") }
                     .accessibilityLabel(L("Reload"))
+                if !isManager {
+                    Button { Task { await model.signIn(force: true) } } label: { Image(systemName: "person.badge.key") }
+                        .disabled(model.signingIn)
+                        .accessibilityLabel(L("Sign in to the office shop"))
+                }
             }
+        }
+    }
+
+    /// The form could not be filled: the office account, to sign in by hand —
+    /// the studio chose that the team may see it (every fetch is recorded).
+    private func manualCard(_ account: OfficeShopAccount) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L("Sign in to the office shop by hand"))
+                    .font(.neonLabel)
+                    .foregroundStyle(Color.neonInk)
+                Spacer()
+                Button {
+                    withNeonAnimation(NeonMotion.snappy) { model.manual = nil }
+                } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Color.neonTextTertiary)
+                        .frame(width: 32, height: 32)
+                }
+                .accessibilityLabel(L("Dismiss"))
+            }
+            Text(L("This phone couldn't fill in the shop's sign-in. Use these:"))
+                .font(.neonFootnote)
+                .foregroundStyle(Color.neonTextSecondary)
+            copyRow(L("Email or phone"), account.email)
+            copyRow(L("Password"), account.password)
+        }
+        .padding(12)
+        .background(Color.neonAmber.opacity(0.12))
+    }
+
+    private func copyRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).font(.neonFootnote).foregroundStyle(Color.neonTextSecondary)
+            Spacer()
+            Text(verbatim: value).font(.neonLabel).foregroundStyle(Color.neonInk).environment(\.layoutDirection, .leftToRight)
+            Button {
+                UIPasteboard.general.string = value
+                Haptic.success()
+                Toast.success(L("Copied"))
+            } label: {
+                Image(systemName: "doc.on.doc").frame(width: 36, height: 36)
+            }
+            .accessibilityLabel(L("Copy"))
         }
     }
 
@@ -189,7 +416,7 @@ struct OfficeShoppingView: View {
                     .font(.neonLabel)
                     .foregroundStyle(Color.neonInk)
                 Text(isManager
-                     ? L("Sign in to the office's %@ account once on each phone — the team never needs the password. Everybody adds to this cart; only you place the order.", OfficeShop.name)
+                     ? L("Set the office %@ account once in Settings on the website — the team's phones sign in with it by themselves. Sign in here by hand once. Everybody adds to this cart; only you place the order.", OfficeShop.name)
                      : L("Everybody adds to the same cart. The manager checks it and places the order."))
                     .font(.neonFootnote)
                     .foregroundStyle(Color.neonTextSecondary)
@@ -221,7 +448,7 @@ private struct OfficeShopWebView: UIViewRepresentable {
     let isManager: Bool
     let onAdded: (String?) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(isManager: isManager, onAdded: onAdded) }
+    func makeCoordinator() -> Coordinator { Coordinator(isManager: isManager, model: model, onAdded: onAdded) }
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -250,12 +477,24 @@ private struct OfficeShopWebView: UIViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let isManager: Bool
+        weak var model: OfficeShopModel?
         let onAdded: (String?) -> Void
         private var observations: [NSKeyValueObservation] = []
 
-        init(isManager: Bool, onAdded: @escaping (String?) -> Void) {
+        init(isManager: Bool, model: OfficeShopModel, onAdded: @escaping (String?) -> Void) {
             self.isManager = isManager
+            self.model = model
             self.onAdded = onAdded
+        }
+
+        /// A team member's phone signs itself in once a page shows the shop's
+        /// sign-in — after the page (and its framework) has drawn.
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard !isManager else { return }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                await self?.model?.signIn(force: false)
+            }
         }
 
         @MainActor func observe(_ view: WKWebView, model: OfficeShopModel) {

@@ -149,23 +149,8 @@ struct ChatStoryPlayer: View {
             if story.isVideo, let player {
                 ChatStoryVideoLayer(player: player).ignoresSafeArea()
             } else if let image {
-                ZStack {
-                    // The bands a fitted photo leaves are the same photo,
-                    // filled, blurred and dimmed — not dead black.
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .blur(radius: 40)
-                        .overlay(Color.black.opacity(0.35))
-                        .clipped()
-                        .accessibilityHidden(true)
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .ignoresSafeArea()
+                ChatStoryPhoto(image: image)
+                    .ignoresSafeArea()
             } else if mediaFailed {
                 VStack(spacing: NeonSpace.md) {
                     IconTile("exclamationmark.triangle.fill", hue: .orange, size: 56, style: .filled)
@@ -509,17 +494,73 @@ private struct ChatStoryVideoLayer: UIViewRepresentable {
     final class LayerView: UIView {
         override static var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        private var sizeWatch: NSKeyValueObservation?
+
+        /// A video shaped like the screen (what the story camera records)
+        /// fills it; any other shape is shown whole.
+        func watch(_ player: AVPlayer) {
+            playerLayer.player = player
+            sizeWatch = player.currentItem?.observe(\.presentationSize, options: [.initial, .new]) { [weak self] item, _ in
+                let size = item.presentationSize
+                DispatchQueue.main.async {
+                    guard let self, size.width > 0, size.height > 0 else { return }
+                    self.playerLayer.videoGravity = ChatStoryPhoto.fills(content: size, frame: self.bounds.size) ? .resizeAspectFill : .resizeAspect
+                }
+            }
+        }
     }
 
     func makeUIView(context: Context) -> LayerView {
         let view = LayerView()
         view.backgroundColor = .black
         view.playerLayer.videoGravity = .resizeAspect
-        view.playerLayer.player = player
+        view.watch(player)
         return view
     }
 
     func updateUIView(_ uiView: LayerView, context: Context) {
-        if uiView.playerLayer.player !== player { uiView.playerLayer.player = player }
+        if uiView.playerLayer.player !== player { uiView.watch(player) }
+    }
+}
+
+/// A story photo as the story screen draws it. Shaped like a phone screen —
+/// as the story camera takes them — it fills the screen; any other shape (a
+/// 4:3 photo from the library, a landscape one) is shown whole, over a
+/// blurred and dimmed copy of itself, so nothing is ever cut by surprise.
+struct ChatStoryPhoto: View {
+    let image: UIImage
+
+    /// Close enough to the frame's shape that filling it cuts only a sliver:
+    /// within a quarter, which also covers a story shot on a phone with a
+    /// differently shaped screen.
+    static func fills(content: CGSize, frame: CGSize) -> Bool {
+        guard content.width > 0, frame.width > 0 else { return false }
+        let contentRatio = content.height / content.width
+        let frameRatio = frame.height / frame.width
+        guard frameRatio > 0 else { return false }
+        return abs(contentRatio - frameRatio) / frameRatio < 0.25
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let fills = Self.fills(content: image.size, frame: geo.size)
+            ZStack {
+                if !fills {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .blur(radius: 40)
+                        .overlay(Color.black.opacity(0.35))
+                        .clipped()
+                        .accessibilityHidden(true)
+                }
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: fills ? .fill : .fit)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+            }
+        }
     }
 }

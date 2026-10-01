@@ -19,3 +19,10 @@
 "Add what you need — the manager will check the cart and order it." = "أضف اللي بتحتاجه — المدير رح يراجع السلة ويطلبها.";
 "Shop home" = "الصفحة الرئيسية للمتجر";
 "Reload" = "إعادة تحميل";
+"The office shop account isn't set up yet. Ask the manager." = "حساب متجر المكتب ما انضبط لسا. اسأل المدير.";
+"Signing in to the office shop…" = "جارٍ تسجيل الدخول لمتجر المكتب…";
+"Sign in to the office shop" = "سجّل دخول متجر المكتب";
+"Sign in to the office shop by hand" = "سجّل دخول متجر المكتب يدوياً";
+"This phone couldn't fill in the shop's sign-in. Use these:" = "ما قدر الجوال يعبّي تسجيل دخول المتجر. استعمل هدول:";
+"Email or phone" = "الإيميل أو الهاتف";
+"Set the office %@ account once in Settings on the website — the team's phones sign in with it by themselves. Sign in here by hand once. Everybody adds to this cart; only you place the order." = "اضبط حساب المكتب في %@ مرة وحدة من الإعدادات على الموقع — جوالات الفريق بتسجّل دخول فيه لحالها. سجّل دخول هون يدوياً مرة وحدة. الكل بيضيف لهاي السلة، وإنت بس اللي بتطلب.";

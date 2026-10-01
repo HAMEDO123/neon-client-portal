@@ -15,7 +15,9 @@ enum ChatRoomStatus: Equatable {
 /// The top of a conversation, drawn by the screen itself rather than the
 /// system bar, so nothing floats over the messages: back, the picture and
 /// name with the line under it, and the round white buttons on the trailing
-/// side. A group the manager made opens its info from the name.
+/// side. The picture and the name open the picture full screen (WhatsApp's
+/// way); a group the manager made keeps its info one tap away on that page,
+/// in the room's ⋯ menu, and on a long press here.
 struct ChatRoomHeader<Trailing: View>: View {
     let title: String
     let avatarURL: URL?
@@ -25,6 +27,9 @@ struct ChatRoomHeader<Trailing: View>: View {
     var isGroup = false
     let online: Bool
     let status: ChatRoomStatus?
+    /// Shows the picture full screen.
+    var onOpenFace: (() -> Void)?
+    /// A group the manager made: its info.
     var onOpenInfo: (() -> Void)?
     let onBack: () -> Void
     @ViewBuilder let trailing: Trailing
@@ -33,7 +38,22 @@ struct ChatRoomHeader<Trailing: View>: View {
         HStack(spacing: 8) {
             IconButton("chevron.backward", label: L("Back"), size: NeonSize.circleButton, action: onBack)
 
-            if let onOpenInfo {
+            if let onOpenFace {
+                Button {
+                    Haptic.tap()
+                    onOpenFace()
+                } label: {
+                    identity(showsChevron: false)
+                }
+                .buttonStyle(PressableStyle(scale: 0.97))
+                .accessibilityHint(L("Shows the photo full screen"))
+                .contextMenu {
+                    Button(action: onOpenFace) { Label(L("View photo"), systemImage: "person.crop.circle") }
+                    if let onOpenInfo {
+                        Button(action: onOpenInfo) { Label(L("Group info"), systemImage: "info.circle") }
+                    }
+                }
+            } else if let onOpenInfo {
                 Button {
                     Haptic.tap()
                     onOpenInfo()

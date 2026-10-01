@@ -481,6 +481,17 @@ final class APIClient: ObservableObject {
         return try await load("get/\(name)", query: query, as: T.self)
     }
 
+    /// A read that is never written to the on-disk cache — for an answer
+    /// that must not sit in a file, such as the office shop account's
+    /// password. No offline copy: it is the server's answer or an error.
+    func readFresh<T: Decodable>(_ name: String, _ params: [String: String?] = [:], as type: T.Type = T.self) async throws -> T {
+        let query = params
+            .compactMap { key, value in value.map { URLQueryItem(name: key, value: $0) } }
+            .sorted { $0.name < $1.name }
+        let data = try await send(URLRequest(url: url("get/\(name)", query)))
+        return try decode(T.self, from: data)
+    }
+
     /// An action with JSON arguments (in the order the server action takes
     /// them) and/or the fields a website form would post. Use `NSNull()` for
     /// a null argument. Posts `.neonDataChanged` on success so open screens

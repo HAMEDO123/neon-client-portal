@@ -12,7 +12,11 @@ import SwiftUI
 ///   how many of them are here;
 /// - my own messages carry WhatsApp's ticks (ChatReceipts.swift);
 /// - photos are drawn without a bubble, four or more in a row as a grid
-///   (ChatPhotos.swift, ChatMessageRow.swift);
+///   (ChatPhotos.swift, ChatMessageRow.swift), and videos the same way, with
+///   a play button, playing full screen (ChatVideo.swift);
+/// - the picture and the name in the header — and a sender's face beside
+///   their message in a group — open that picture full screen
+///   (ChatFaceViewer.swift);
 /// - "typing…" is a bubble at the foot of the conversation and a line under
 ///   the name in the header (ChatTyping.swift);
 /// - a new message scrolls into view only when I am already at the bottom —
@@ -34,6 +38,12 @@ struct ChatRoomView: View {
     @State private var showCamera = false
     @State private var showFiles = false
     @State private var viewer: ImageViewerPayload?
+    /// A video playing full screen.
+    @State private var video: ChatVideoPayload?
+    /// Somebody's picture full screen, and what to do once it has closed
+    /// (the page's Group info button).
+    @State private var face: ChatFacePayload?
+    @State private var afterFace: (() -> Void)?
     @State private var proofFor: ProofTarget?
     @State private var showTaskCompose = false
     @State private var showMeetingCompose = false
@@ -172,11 +182,14 @@ struct ChatRoomView: View {
             Task { await sendPhotos(items) }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { image in
-                guard let file = UploadMaker.photo(image) else { return }
-                send(file: file)
+            // The chat's own camera and editor (Camera/); what is in the box
+            // starts as the caption, and goes with what is sent.
+            ChatCameraScreen(chatName: headerTitle, caption: draft) { file, caption in
+                draft = ""
+                sendError = nil
+                sentCount += 1
+                store.sendFile(file, caption: caption, project: taggedProject)
             }
-            .ignoresSafeArea()
         }
         .fileImporter(isPresented: $showFiles, allowedContentTypes: UploadMaker.documentTypes) { result in
             guard case .success(let url) = result else { return }
@@ -206,6 +219,7 @@ struct ChatRoomView: View {
                     isGroup: route.isGroup,
                     online: otherIsHere,
                     status: status(now: context.date),
+                    onOpenFace: { openHeaderFace() },
                     onOpenInfo: isCustomGroup ? { showGroupInfo = true } : nil,
                     onBack: { dismissRoom() }
                 ) {
@@ -231,6 +245,49 @@ struct ChatRoomView: View {
         .padding(.bottom, 6)
         .animation(NeonMotion.resolved(NeonMotion.snappy), value: searching)
         .animation(NeonMotion.resolved(NeonMotion.snappy), value: matchCount)
+        .fullScreenCover(item: $face, onDismiss: {
+            // The page's own action (Group info) waits until the page has
+            // gone: a sheet cannot open while the cover is still on screen.
+            let next = afterFace
+            afterFace = nil
+            next?()
+        }) { payload in
+            ChatFaceViewer(payload: payload).neonLanguage()
+        }
+    }
+
+    /// The conversation's picture full screen — the person's, the group's,
+    /// or the studio's mark for the team — with the line under the name, and
+    /// for a group the manager made, its info one tap away.
+    private func openHeaderFace() {
+        var payload = ChatFacePayload(
+            name: headerTitle,
+            subtitle: faceSubtitle,
+            url: resolvedMediaURL(headerAvatar),
+            isGroup: route.isGroup,
+            studioMark: route.slug == "team"
+        )
+        if isCustomGroup {
+            payload.action = ChatFaceAction(title: L("Group info"), symbol: "info.circle") {
+                afterFace = { showGroupInfo = true }
+            }
+        }
+        face = payload
+    }
+
+    /// What the viewer says under the name: the header's own line, without
+    /// "typing…" (gone by the time anybody reads it).
+    private var faceSubtitle: String? {
+        switch status(now: Date()) {
+        case .online: return L("online now")
+        case .line(let text): return text
+        case .typing, .hint, nil: return nil
+        }
+    }
+
+    /// A sender's picture, from their face beside their message.
+    private func openFace(_ payload: ChatFacePayload) {
+        face = payload
     }
 
     @ViewBuilder
@@ -245,11 +302,17 @@ struct ChatRoomView: View {
             .neonShadow(.low)
         if searching {
             IconButton("xmark", label: L("Close search"), size: NeonSize.circleButton) { toggleSearch() }
-        } else if hasAssistant {
-            // Search and the assistant share one button, so the name keeps its room.
+        } else if hasAssistant || isCustomGroup {
+            // Search shares one button with the assistant — and in a group the
+            // manager made, with its info — so the name keeps its room.
             Menu {
                 Button { toggleSearch() } label: { Label(L("Search"), systemImage: "magnifyingglass") }
-                Button { showAssistant = true } label: { Label(L("Ask the assistant"), systemImage: "sparkles") }
+                if hasAssistant {
+                    Button { showAssistant = true } label: { Label(L("Ask the assistant"), systemImage: "sparkles") }
+                }
+                if isCustomGroup {
+                    Button { showGroupInfo = true } label: { Label(L("Group info"), systemImage: "info.circle") }
+                }
             } label: {
                 IconButtonLabel("ellipsis")
             }
@@ -284,7 +347,6 @@ struct ChatRoomView: View {
                 let here = members.filter { $0.online == true }.count
                 return .line(here > 0 ? L("%d people · %d here", everybody, here + 1) : L("%d people", everybody))
             }
-            if isCustomGroup { return .hint(L("Group info")) }
         } else {
             if otherIsHere { return .online }
             if let seen = chatLastSeen(store.people.members.first?.seenAt, now: now) { return .line(seen) }
@@ -460,6 +522,9 @@ struct ChatRoomView: View {
                 flash(rowId)
             }
         }
+        .fullScreenCover(item: $video) { payload in
+            ChatVideoPlayerScreen(payload: payload).neonLanguage()
+        }
     }
 
     private var emptyState: some View {
@@ -542,7 +607,9 @@ struct ChatRoomView: View {
                 onPin: { pin in Task { try? await api.setChatPinned(messageId: message.id, pin: pin) } },
                 onDelete: canDelete(message) ? { deleteTarget = message } : nil,
                 onCardChanged: { Task { await store.load() } },
-                onMediaResize: { keepBottom(proxy) }
+                onMediaResize: { keepBottom(proxy) },
+                openVideo: { openVideo(message) },
+                openFace: { openFace($0) }
             )
             .transition(.neonRise)
         case .album(let photos, let showAuthor):
@@ -557,7 +624,8 @@ struct ChatRoomView: View {
                 onReact: { message, emoji in react(message, emoji) },
                 onPin: { message in Task { try? await api.setChatPinned(messageId: message.id, pin: true) } },
                 canDelete: { canDelete($0) },
-                onDelete: { deleteTarget = $0 }
+                onDelete: { deleteTarget = $0 },
+                openFace: { openFace($0) }
             )
             .transition(.neonRise)
         case .outgoing(let item, let firstInRun):
@@ -627,6 +695,20 @@ struct ChatRoomView: View {
         viewer = ImageViewerPayload(
             items: photos.map { ImageViewerItem(id: $0.id, url: $0.attachmentURL, caption: $0.body) },
             startIndex: photos.firstIndex { $0.id == message.id } ?? 0
+        )
+    }
+
+    /// A video, full screen: who sent it and when over it, its caption under it.
+    private func openVideo(_ message: ChatMessage) {
+        guard let url = message.attachmentURL else { return }
+        Haptic.tap()
+        video = ChatVideoPayload(
+            id: message.id,
+            url: url,
+            title: message.isMine(api.identity) ? L("You") : message.authorName,
+            subtitle: formattedISODate(message.createdAt),
+            caption: message.body,
+            fileName: message.attachmentName
         )
     }
 
