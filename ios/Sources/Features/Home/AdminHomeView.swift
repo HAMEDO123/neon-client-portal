@@ -15,6 +15,7 @@ enum HomeRoute: Hashable {
     case search
     case projectList(HomeProjectFilter)
     case chat(ChatRoute)
+    case cameras
 }
 
 /// Another tab, opened the way a tapped notification opens one: the shell
@@ -44,6 +45,7 @@ struct AdminHomeView: View {
     @State private var overview: HomeOverview?
     @State private var overviewCachedAt: Date?
     @State private var overviewError: String?
+    @StateObject private var cameraFeed = HomeCamerasModel()
     @State private var pulse: HomePulse?
     @State private var pulseError: String?
     @State private var today: HomeToday?
@@ -69,6 +71,13 @@ struct AdminHomeView: View {
                     }
 
                     hero
+
+                    // The studio's cameras, live, when there are any.
+                    if !cameraFeed.cameras.isEmpty {
+                        HomeCamerasCard(model: cameraFeed, onViewAll: { path.append(.cameras) })
+                            .id("cameras")
+                            .transition(.neonRise)
+                    }
 
                     figures.id("kpis")
 
@@ -339,6 +348,7 @@ struct AdminHomeView: View {
         case .projectList(let filter):
             HomeProjectListView(filter: filter, projects: overview?.projects ?? []) { path.append(.project($0)) }
         case .chat(let route): ChatRoomView(route: route)
+        case .cameras: CamerasRootView()
         }
     }
 
@@ -350,7 +360,8 @@ struct AdminHomeView: View {
         async let todayTask: Void = loadToday()
         async let dayTask: Void = loadDay()
         async let nowTask: Void = loadNow()
-        _ = await (overviewTask, pulseTask, todayTask, dayTask, nowTask)
+        async let camerasTask: Void = cameraFeed.load()
+        _ = await (overviewTask, pulseTask, todayTask, dayTask, nowTask, camerasTask)
     }
 
     private func loadOverview() async {

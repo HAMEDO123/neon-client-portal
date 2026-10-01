@@ -220,11 +220,11 @@ final class CameraWall: ObservableObject {
     /// Fetches this camera's picture again and again — one request at a
     /// time, about every two seconds, less often while it fails — until the
     /// calling task is cancelled.
-    func poll(_ id: String, source: CameraFeedSource) async {
+    func poll(_ id: String, source: CameraFeedSource, width: Int = 640, every interval: Double = 2) async {
         while !Task.isCancelled {
             let started = Date()
             do {
-                let image = try await source.snapshot(id: id, width: 640)
+                let image = try await source.snapshot(id: id, width: width)
                 if Task.isCancelled { return }
                 images[id] = image
                 failures[id] = 0
@@ -238,7 +238,7 @@ final class CameraWall: ObservableObject {
                 if let status = (error as? CameraFeedError)?.status, [401, 403, 404].contains(status) { return }
             }
             let failing = failures[id] ?? 0
-            let every: Double = failing == 0 ? 2 : (failing < 3 ? 4 : 10)
+            let every: Double = failing == 0 ? interval : (failing < 3 ? interval * 2 : 10)
             let wait = max(0.25, every - Date().timeIntervalSince(started))
             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
         }
@@ -254,7 +254,7 @@ final class CameraWall: ObservableObject {
 
 // MARK: - A tile
 
-private struct CameraTile: View {
+struct CameraTile: View {
     let camera: CameraItem
     let image: UIImage?
     let failures: Int

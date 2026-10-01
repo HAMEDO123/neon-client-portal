@@ -29,12 +29,15 @@ enum CamerasScreens {
         "cameras", "cameras-empty", "cameras-relay-down", "cameras-loading",
         "camera-add", "camera-edit", "camera-added", "camera-add-failed",
         "camera-live", "camera-live-fixed", "camera-live-lost", "camera-live-landscape", "camera-net-check",
+        "home-cameras",
     ]
 
     @MainActor static func view(_ id: String) -> AnyView? {
         switch id {
         case "cameras":
             return debugPushed(CamerasRootView(source: CameraFixtureSource()))
+        case "home-cameras":
+            return AnyView(HomeCamerasFixtureHost())
         case "cameras-empty":
             return debugPushed(CamerasRootView(source: CameraFixtureSource(cameras: [])))
         case "cameras-relay-down":
@@ -98,6 +101,21 @@ enum CamerasScreens {
 }
 
 /// The live view as the grid presents it: full screen over the page.
+/// The Home card over the fixture cameras, loaded as Home loads it.
+private struct HomeCamerasFixtureHost: View {
+    @StateObject private var model = HomeCamerasModel(source: CameraFixtureSource())
+
+    var body: some View {
+        NeonScroll(spacing: NeonSpace.stack) {
+            if !model.cameras.isEmpty {
+                HomeCamerasCard(model: model, onViewAll: {})
+            }
+        }
+        .neonAmbientBackground()
+        .task { await model.load() }
+    }
+}
+
 private struct CameraLiveFixtureHost: View {
     let source: CameraFixtureSource
     let start: String
