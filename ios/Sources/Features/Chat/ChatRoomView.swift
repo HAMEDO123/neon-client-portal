@@ -172,11 +172,14 @@ struct ChatRoomView: View {
             Task { await sendPhotos(items) }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { image in
-                guard let file = UploadMaker.photo(image) else { return }
-                send(file: file)
+            // The chat's own camera and editor (Camera/); what is in the box
+            // starts as the caption, and goes with what is sent.
+            ChatCameraScreen(chatName: headerTitle, caption: draft) { file, caption in
+                draft = ""
+                sendError = nil
+                sentCount += 1
+                store.sendFile(file, caption: caption, project: taggedProject)
             }
-            .ignoresSafeArea()
         }
         .fileImporter(isPresented: $showFiles, allowedContentTypes: UploadMaker.documentTypes) { result in
             guard case .success(let url) = result else { return }
