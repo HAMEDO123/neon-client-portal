@@ -10,6 +10,7 @@ import { chatCopy, chatKey, chatPreview } from "@/lib/notifications/types";
 import { avatarUrl } from "@/lib/avatar";
 import { facesFor } from "@/lib/faces";
 import { saveFile } from "@/lib/storage";
+import { playableVoice } from "@/lib/voice-transcode";
 import type { ChatMessageKind } from "@/generated/prisma/enums";
 
 // What happens when a message is posted, wherever it was posted from.
@@ -183,7 +184,10 @@ export async function readChatAttachment(formData: FormData): Promise<{
   };
 
   if (voice instanceof File && voice.size > 0) {
-    const saved = await saveFile(voice, "chat/voice", "audio", false);
+    // Made playable on an iPhone first (a WhatsApp .opus, a Chrome webm), and
+    // measured: a voice note shared from another app has no length of its own.
+    const prepared = await playableVoice(voice);
+    const saved = await saveFile(prepared.file, "chat/voice", "audio", false);
     const durationRaw = Number(formData.get("durationSeconds") ?? 0);
     return {
       ...none,
@@ -192,7 +196,7 @@ export async function readChatAttachment(formData: FormData): Promise<{
       attachmentName: "Voice message",
       attachmentType: saved.fileType,
       attachmentSize: saved.fileSize,
-      durationSeconds: Number.isFinite(durationRaw) && durationRaw > 0 ? Math.round(durationRaw) : null,
+      durationSeconds: Number.isFinite(durationRaw) && durationRaw > 0 ? Math.round(durationRaw) : prepared.seconds,
     };
   }
 

@@ -27,6 +27,7 @@ const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: stri
       "audio/aac",
       "audio/wav",
       "audio/x-m4a",
+      "audio/opus", // a WhatsApp voice note shared from the phone
       "video/webm", // MediaRecorder labels an audio-only webm this way
     ],
     maxBytes: 15 * 1024 * 1024,

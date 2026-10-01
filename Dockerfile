@@ -13,11 +13,14 @@ FROM node:22-bookworm-slim
 # it cannot encode rather than embedding a font through fontkit: fontkit draws
 # the glyphs but joins nothing and reverses nothing, producing a file that
 # builds and is still wrong to anybody who reads Arabic.
+# ffmpeg turns voice notes an iPhone cannot play (a WhatsApp .opus, a Chrome
+# webm) into AAC — lib/voice-transcode.ts. Without it they are kept as they came.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       openssl \
       ca-certificates \
       fontconfig \
       fonts-noto-core \
+      ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
