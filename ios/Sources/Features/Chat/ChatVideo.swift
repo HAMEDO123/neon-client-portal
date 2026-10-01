@@ -52,6 +52,19 @@ func chatIsVideoAttachment(type: String?, name: String?, url: String? = nil) -> 
     return false
 }
 
+/// The video at `url`, as AVFoundation reads it. The media route's address
+/// (`/api/media?u=…`) has no extension of its own, so where the system lets
+/// us (iOS 17) it is told what the file is rather than left to the answer's
+/// headers.
+func chatVideoAsset(_ url: URL) -> AVURLAsset {
+    var options: [String: Any] = [:]
+    let ext = chatFileExtension(url.absoluteString)
+    if #available(iOS 17.0, *), chatVideoExtensions.contains(ext) {
+        options[AVURLAssetOverrideMIMETypeKey] = ext == "mov" ? "video/quicktime" : "video/mp4"
+    }
+    return AVURLAsset(url: url, options: options)
+}
+
 extension ChatMessage {
     /// A video attachment — drawn as a video, not as a file.
     var isVideo: Bool {
@@ -127,14 +140,7 @@ final class ChatVideoPosters: @unchecked Sendable {
     /// The frame and length of the video at `url`. nil when it could not be read.
     func info(for url: URL) async -> ChatVideoInfo? {
         await load(Self.key(url), persist: true) {
-            var options: [String: Any] = [:]
-            let ext = chatFileExtension(url.absoluteString)
-            if #available(iOS 17.0, *), chatVideoExtensions.contains(ext) {
-                // The media route's address has no extension of its own; say
-                // what it is rather than leave it to the answer's headers.
-                options[AVURLAssetOverrideMIMETypeKey] = ext == "mov" ? "video/quicktime" : "video/mp4"
-            }
-            return await Self.read(AVURLAsset(url: url, options: options))
+            await Self.read(chatVideoAsset(url))
         }
     }
 
@@ -519,7 +525,7 @@ final class ChatVideoPlayback: ObservableObject {
             name += "." + (ext.isEmpty ? "mp4" : ext)
         }
         self.fileName = name
-        let item = AVPlayerItem(url: url)
+        let item = AVPlayerItem(asset: chatVideoAsset(url))
         player = AVPlayer(playerItem: item)
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let failed = item.status == .failed
