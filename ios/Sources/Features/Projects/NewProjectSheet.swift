@@ -60,6 +60,9 @@ struct NewProjectSheet: View {
             "area": projectAreaValue(area),
             "projectType": projectType,
             "description": description,
+            // Which portal the server sends the new project's page to — the
+            // team's, or the manager's (createProject reads it).
+            "portal": api.side == .employee ? "employee" : "admin",
         ]
         if let deliveryDate { fields["deliveryDate"] = NeonFormat.dayKey(deliveryDate) }
         do {

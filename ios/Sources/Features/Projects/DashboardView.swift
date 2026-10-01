@@ -50,7 +50,9 @@ struct ProjectListView: View {
         }
         .overlay(alignment: .top) { ProjectStatusBarScrim() }
         .toolbar(.hidden, for: .navigationBar)
-        .floatingActionButton("plus", label: L("New Project"), isVisible: api.side == .admin && data != nil) {
+        // The whole studio starts projects now (createProject is requireStaff);
+        // deleting one stays the manager's.
+        .floatingActionButton("plus", label: L("New Project"), isVisible: data != nil) {
             showNewProject = true
         }
         .navigationDestination(isPresented: Binding(
@@ -142,11 +144,9 @@ struct ProjectListView: View {
             EmptyState(
                 symbol: "folder",
                 title: L("No projects yet"),
-                detail: api.side == .admin
-                    ? L("Create the first one and it shows here.")
-                    : L("When the studio starts a project, it shows here."),
-                actionTitle: api.side == .admin ? L("New Project") : nil,
-                action: api.side == .admin ? { showNewProject = true } : nil,
+                detail: L("Create the first one and it shows here."),
+                actionTitle: L("New Project"),
+                action: { showNewProject = true },
                 hue: .blue,
                 card: true
             )
@@ -193,10 +193,8 @@ struct ProjectListView: View {
                 }
             }
 
-            if api.side == .admin {
-                // Room for the floating "New Project" button over the last card.
-                Color.clear.frame(height: NeonSize.fab)
-            }
+            // Room for the floating "New Project" button over the last card.
+            Color.clear.frame(height: NeonSize.fab)
         }
     }
 
