@@ -6,6 +6,7 @@ import { allSiteVisits, projectsForVisits, siteVisitsFor } from "@/lib/site-visi
 import { VISIT_STATES } from "@/lib/site-visits";
 import { attendanceMonthFor, attendanceOverview } from "@/lib/mobile/ops-attendance";
 import { opsAutomationPreview, opsSettings } from "@/lib/mobile/ops-settings";
+import { gatherStatus } from "@/lib/status-checks";
 import {
   addDeviceUser,
   clearDeviceAttendanceLog,
@@ -93,6 +94,16 @@ export const reads: ReadRegistry = {
   // The rules preview: runs today's rules and writes nothing (?preview=rules
   // on the website). A read, not an action, for exactly that reason.
   "ops/automationPreview": guarded(requireAdmin, async () => opsAutomationPreview()),
+
+  // The manager's network and server status: the site, its database, the PC,
+  // the scheduled jobs, the backups, WhatsApp, push, and the way in and out
+  // of the office — each a row with a state and the fact behind it
+  // (lib/status-checks.ts; README, "Status screen"). The manager's alone: it
+  // names the office's public IP and the shape of the machine. No website
+  // page mirrors it, so the guard is the one the settings page is behind.
+  // `{ checkedAt, server: [row], network: [row] }`, a row being
+  // `{ id, title, state: "up" | "degraded" | "down" | "unknown", detail, value? }`.
+  "ops/status": guarded(requireAdmin, async () => gatherStatus()),
 };
 
 export const actions: ActionRegistry = {

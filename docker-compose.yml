@@ -48,6 +48,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      # The daily database backups (scripts/backup-docker-db.ps1 writes them
+      # here on the PC), so the manager's status screen can say when the last
+      # one ran and what backup.log said. Read-only: the site can look at
+      # them and can never change or delete one.
+      - ./local-backup/docker:/backups:ro
     ports:
       # This PC only, for testing. The public way in is the tunnel.
       - "127.0.0.1:3011:3000"
