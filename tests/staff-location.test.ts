@@ -454,7 +454,12 @@ describe("the silent push that asks a phone for its position", () => {
 
 describe("the wiring the map depends on", () => {
   const root = process.cwd();
-  const read = (...path: string[]) => readFileSync(join(root, ...path), "utf8");
+  // Line endings normalised: git checks this repository out with CRLF on
+  // Windows, where the office PC verifies every deploy, and a pattern written
+  // with a newline escape then matches nothing. These assertions are about the
+  // code, not about which machine read it.
+  const read = (...path: string[]) =>
+    readFileSync(join(root, ...path), "utf8").replace(/\r\n/g, "\n");
 
   it("gives the phone's side to the employee and the map to the manager alone", () => {
     const me = read("src", "lib", "mobile", "registry", "me.ts");
