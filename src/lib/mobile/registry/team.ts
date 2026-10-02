@@ -29,6 +29,7 @@ import { isAiConfigured } from "@/lib/ai/client";
 import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-queries";
 import { facesFor } from "@/lib/faces";
 import { refreshTeamLocations, setLocationRequired, setOfficeLocation, teamLocations } from "@/lib/mobile/location-service";
+import { forgiveLocationDay, setLocationFine } from "@/lib/location-fine-store";
 import { bool, guarded, guardedAction, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 
 // The "team" area of the phone API: employees, payroll, and the map of where
@@ -153,9 +154,17 @@ export const reads: ReadRegistry = {
   // them clock out. A state says what the phone or the device reported, never
   // that anybody is absent. A read and nothing more: it changes no row, not
   // even a phone's "last asked".
-  // → { open, required, startsAt, endsAt, nextStartsAt, office: { latitude, longitude } | null,
+  // `fine` is the 1 JOD a working day without location (lib/location-fine.ts):
+  // whether it is on, what a day costs, and the first working day that counts
+  // since it was announced (YYYY-MM-DD, null until then or while off). Each
+  // person's `sharedToday` says whether one position from their phone got
+  // through today, and `finedThisMonth` which days this month cost (charged,
+  // not cancelled), oldest first.
+  // → { open, required, fine: { on, amount, startsOn }, startsAt, endsAt, nextStartsAt,
+  //     office: { latitude, longitude } | null,
   //     people: [{ id, name, photoUrl, role, state, latitude, longitude, accuracy,
-  //     fixedAt, precise, permission, atOffice, metresFromOffice, arrivedAt, departedAt }] }
+  //     fixedAt, precise, permission, atOffice, metresFromOffice, arrivedAt, departedAt,
+  //     sharedToday, finedThisMonth: ["YYYY-MM-DD", …] }] }
   "team/locations": guarded(requireAdmin, async () => teamLocations()),
 
   // Mirrors src/app/admin/(dashboard)/payroll/page.tsx.
@@ -265,6 +274,19 @@ export const actions: ActionRegistry = {
   // to use the app at all: args [true | false] → { required }. On until the
   // manager turns it off; what is shared, and when, is the same either way.
   "team/locations/required": guardedAction(requireAdmin, async ({ args }) => setLocationRequired(args)),
+
+  // The 1 JOD a working day without location: args [true | false] turns it on
+  // or off — nothing else is read as either. Off also clears the announcement,
+  // so turning it on again tells everybody again and only days after that
+  // count. → { fine: { on, amount, startsOn } }
+  "team/locations/fine": guardedAction(requireAdmin, async ({ args }) => setLocationFine(args)),
+
+  // Cancels one charged day: args [employeeId, "YYYY-MM-DD"]. The month's
+  // deduction is counted again from the days and the person is told; a day
+  // that was never charged is a 404 with a sentence, and one already cancelled
+  // answers as the first time did. → { finedThisMonth: ["YYYY-MM-DD", …] }
+  // (that person's, this month's).
+  "team/locations/forgive": guardedAction(requireAdmin, async ({ args }) => forgiveLocationDay(args)),
 
   "team/setEmployeePay": async (input) => setEmployeePay(str(input.args[0], "id"), input.form),
   "team/setAttendance": async (input) => setAttendance(input.form),

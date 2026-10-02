@@ -1,5 +1,6 @@
 import { hasClockedOut, isOpen, KEEPER_MINUTES, whoToPing } from "@/lib/staff-location";
 import { locationDay, pingCandidates, wakePhones, wipePositions } from "@/lib/mobile/location-service";
+import { runLocationFines } from "@/lib/notifications/location-fines";
 
 // The scheduler's half of the manager's map (lib/staff-location.ts decides,
 // lib/mobile/location-service.ts reads and writes).
@@ -15,12 +16,25 @@ import { locationDay, pingCandidates, wakePhones, wipePositions } from "@/lib/mo
 //   outlive the working day. Somebody the device has seen clock out is wiped
 //   at once, inside the window too.
 //
+// Then, on the same pass, the 1 JOD a working day without location
+// (lib/notifications/location-fines.ts): the notice, the day's warnings while
+// the window is open, and the day's charges once it has closed.
+//
 // Departures are read as the device sync stored them; the device itself is
 // never asked from here.
 
 export async function runLocationKeeper(now: Date = new Date()) {
   const today = await locationDay(now);
+  const map = await keepPositions(now, today);
+  // After the map's own work, and failing on its own: a charge that could not
+  // be decided must never be the reason a position outlived the day.
+  const fine = await runLocationFines(now, today).catch((error) => ({
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  return { ...map, fine };
+}
 
+async function keepPositions(now: Date, today: Awaited<ReturnType<typeof locationDay>>) {
   if (!isOpen(today.window, now)) {
     return { open: false, wiped: await wipePositions() };
   }

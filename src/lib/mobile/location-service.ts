@@ -2,7 +2,10 @@ import { prisma } from "@/lib/db";
 import { bool } from "@/lib/mobile/rpc";
 import { getSetting, getTimezone, getWorkHours, setSetting } from "@/lib/settings";
 import { dayKeyIn, dayKeyToDate } from "@/lib/time";
+import type { WorkHours } from "@/lib/work-hours";
 import { deviceOutcome, isApnsConfigured, sendBackground, type ApnsResult } from "@/lib/notifications/apns";
+import { countFix, locationDaysOn, mapFine, phoneFine, type PhoneFine } from "@/lib/location-fine-store";
+import type { FineDay } from "@/lib/location-fine";
 import {
   byStateThenName,
   insideWindow,
@@ -35,6 +38,11 @@ import {
 // office (registry/team.ts, requireAdmin); and the scheduler's keeper
 // (lib/notifications/location-keeper.ts).
 //
+// The 1 JOD a working day without location rides on the same reads and
+// reports (lib/location-fine.ts decides, lib/location-fine-store.ts keeps):
+// a kept position is counted on that day's LocationDay, and the plan and the
+// map say whether today's got through and which days this month cost.
+//
 // Not "use server": every export of one of those is callable over the network.
 
 /**
@@ -46,9 +54,12 @@ const TRACKED = { active: true, accessRole: "EMPLOYEE" } as const;
 
 export const OFFICE_KEY = "office_location";
 
-/** Today as the map sees it: the studio's window, and when the next one opens. */
+/** Today as the map sees it: the studio's window, when the next one opens, and what they were worked out from. */
 export async function locationDay(now: Date = new Date()): Promise<{
+  dayKey: string;
   day: Date;
+  timeZone: string;
+  hours: WorkHours;
   window: LocationWindow | null;
   nextStartsAt: Date | null;
 }> {
@@ -56,7 +67,10 @@ export async function locationDay(now: Date = new Date()): Promise<{
   const hours = await getWorkHours();
   const dayKey = dayKeyIn(timeZone, now);
   return {
+    dayKey,
     day: dayKeyToDate(dayKey),
+    timeZone,
+    hours,
     window: locationWindow(hours, dayKey, timeZone),
     nextStartsAt: nextWindowStart(hours, now, timeZone),
   };
@@ -90,17 +104,22 @@ async function planNow(employeeId: string, now: Date) {
 
 // --- The phone's side ------------------------------------------------------------
 
-/** A plan as the phone receives it: with whether the studio requires location at all. */
-export type PhonePlan = SharePlan & { required: boolean };
+/**
+ * A plan as the phone receives it: with whether the studio requires location
+ * at all, and the 1 JOD a day without it — the rule, whether a position got
+ * through today, and which days this month cost.
+ */
+export type PhonePlan = SharePlan & { required: boolean } & PhoneFine;
 
 /** Whether everybody on the team must allow their location to use the app (AppSetting `location_required`). */
 export async function locationRequired(): Promise<boolean> {
   return readRequired(await getSetting(REQUIRED_KEY));
 }
 
-/** `me/location`: whether this phone should be sharing now, and when that changes. */
+/** `me/location`: whether this phone should be sharing now, and when that changes. A read and nothing else. */
 export async function locationPlanFor(employeeId: string, now: Date = new Date()): Promise<PhonePlan> {
-  return { ...(await planNow(employeeId, now)).plan, required: await locationRequired() };
+  const { today, plan } = await planNow(employeeId, now);
+  return { ...plan, required: await locationRequired(), ...(await phoneFine(employeeId, today)) };
 }
 
 /** `team/locations/required`: args [true | false] → { required }. */
@@ -117,15 +136,17 @@ export async function setLocationRequired(args: unknown[]) {
  */
 export async function reportLocation(employeeId: string, args: unknown[], now: Date = new Date()): Promise<PhonePlan> {
   const { today, plan: shared } = await planNow(employeeId, now);
-  const plan = { ...shared, required: await locationRequired() };
+  const required = await locationRequired();
+  // Read last, so the answer to the day's first position already says it got through.
+  const answer = async (): Promise<PhonePlan> => ({ ...shared, required, ...(await phoneFine(employeeId, today)) });
   // Not sharing: nothing in the request is even read, because there is
   // nothing it could be kept as.
-  if (!plan.sharing) return plan;
+  if (!shared.sharing) return answer();
 
   const report = parseReport(args, now);
   // A fix from 10:58 sent at 11:01 says where somebody was before the day
   // began, which is not the map's to know.
-  if (!insideWindow(report.fixedAt, today.window)) return plan;
+  if (!insideWindow(report.fixedAt, today.window)) return answer();
 
   const position = {
     latitude: report.latitude,
@@ -142,12 +163,18 @@ export async function reportLocation(employeeId: string, args: unknown[], now: D
     where: { employeeId, OR: [{ fixedAt: null }, { fixedAt: { lt: report.fixedAt } }] },
     data: position,
   });
-  if (moved.count === 0) {
+  let kept = moved.count > 0;
+  if (!kept) {
     // No row yet — or a newer fix already in it, which this leaves alone.
-    await prisma.staffLocation.createMany({ data: [{ employeeId, ...position }], skipDuplicates: true });
+    const made = await prisma.staffLocation.createMany({ data: [{ employeeId, ...position }], skipDuplicates: true });
+    kept = made.count > 0;
   }
 
-  return plan;
+  // Counted only once kept: today's count is what the 1 JOD a day without
+  // location is decided on, and one position is all a day needs.
+  if (kept) await countFix(employeeId, today.day, report.fixedAt);
+
+  return answer();
 }
 
 /** `me/location/permission`: the phone's switch, at any hour — a setting, not a position. */
@@ -176,22 +203,27 @@ export async function teamLocations(now: Date = new Date()) {
     select: { id: true, name: true, role: true, photoUrl: true, staffLocation: true },
   });
   const attendance = await attendanceOn(today.day, people.map((person) => person.id));
+  const fine = await mapFine(people.map((person) => person.id), today);
 
-  const rows = people.map((person) =>
-    personRow({
+  const rows = people.map((person) => ({
+    ...personRow({
       person: { id: person.id, name: person.name, photoUrl: person.photoUrl, role: person.role },
       stored: person.staffLocation,
       attendance: attendance.get(person.id) ?? null,
       now,
       window: today.window,
       office,
-    })
-  );
+    }),
+    // Not a position: whether one got through today at all, and which days
+    // this month cost 1 JOD for want of one.
+    ...(fine.people.get(person.id) ?? { sharedToday: false, finedThisMonth: [] }),
+  }));
   rows.sort(byStateThenName);
 
   return {
     open: isOpen(today.window, now),
     required: await locationRequired(),
+    fine: fine.fine,
     startsAt: today.window?.start ?? null,
     endsAt: today.window?.end ?? null,
     nextStartsAt: today.nextStartsAt,
@@ -338,4 +370,34 @@ export async function wipePositions(employeeIds?: string[]): Promise<number> {
     data: { latitude: null, longitude: null, accuracy: null, fixedAt: null },
   });
   return result.count;
+}
+
+// --- The 1 JOD a day without location (the keeper) ------------------------------------
+
+/**
+ * Everybody tracked, with what the 1 JOD a day without location is decided on
+ * (`warningsDue`, `finesDue` in lib/location-fine.ts): the device's arrival
+ * and departure today, as the sync stored them, and today's LocationDay. When
+ * each was told about the rule is the caller's to add.
+ */
+export async function fineCandidates(day: Date): Promise<(Omit<FineDay, "announcedAt"> & { name: string })[]> {
+  const people = await prisma.employee.findMany({ where: TRACKED, select: { id: true, name: true } });
+  const ids = people.map((person) => person.id);
+  const attendance = await attendanceOn(day, ids);
+  const days = await locationDaysOn(day, ids);
+
+  return people.map((person) => {
+    const stored = days.get(person.id);
+    return {
+      id: person.id,
+      name: person.name,
+      arrivedAt: attendance.get(person.id)?.arrivedAt ?? null,
+      departedAt: attendance.get(person.id)?.departedAt ?? null,
+      fixes: stored?.fixes ?? 0,
+      warnedAt: stored?.warnedAt ?? null,
+      warned2At: stored?.warned2At ?? null,
+      finedAt: stored?.finedAt ?? null,
+      forgivenAt: stored?.forgivenAt ?? null,
+    };
+  });
 }
