@@ -185,7 +185,12 @@ export const reads: ReadRegistry = {
   // → { sharing, reason: "before-hours" | "after-hours" | "day-off" |
   //   "clocked-out" | null (null exactly when sharing), startsAt, endsAt
   //   (today's window, null on a day off), nextStartsAt (the next start after now),
-  //   required (whether the studio requires location to use the app at all) }
+  //   required (whether the studio requires location to use the app at all),
+  //   fine: { on, amount, startsOn } (the 1 JOD a working day without location;
+  //   startsOn is this person's first working day that counts, YYYY-MM-DD, null
+  //   until they have been told or while it is off), sharedToday (a position from
+  //   this phone got through today), finedThisMonth: ["YYYY-MM-DD", …] (charged,
+  //   not cancelled) }
   "me/location": guarded(requireEmployee, async (_params, me) => locationPlanFor(me.id)),
 
   // That week's jobs, whoever they are for — the same week `assignedTasksForWeek`
@@ -264,7 +269,8 @@ export const actions: ActionRegistry = {
   // longitude, accuracy (metres), fixedAt (ISO), precise]. Kept only while
   // the plan says sharing and only if it was taken inside the window — the
   // latest one, never a trail. Answers with the same plan as `me/location`,
-  // so the phone stops the moment `sharing` is false.
+  // so the phone stops the moment `sharing` is false — `fine`, `sharedToday`
+  // and `finedThisMonth` included, read after this position was counted.
   "me/location/report": guardedAction(requireEmployee, async ({ args }, me) => reportLocation(me.id, args)),
 
   // The phone's location permission as iOS reports it: args [permission,

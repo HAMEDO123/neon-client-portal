@@ -83,6 +83,9 @@ enum AdminNotificationType {
   CHAT_MESSAGE
   // The device has not seen somebody clock in (or out) after an hour of reminders.
   ATTENDANCE
+  // Who was charged 1 JOD today because no location from their phone reached
+  // NEON during working hours (lib/location-fine.ts) — once an evening.
+  LOCATION
 }
 
 enum TaskPriority {
@@ -104,6 +107,10 @@ enum NotificationType {
   // "Clock in" / "Clock out" on the fingerprint device (lib/clock-reminders.ts).
   // The studio's own rule about the working day, so preferences don't silence it.
   ATTENDANCE_REMINDER
+  // The 1 JOD a working day without location (lib/location-fine.ts): the
+  // notice, the day's two warnings, the deduction and its cancelling. Money is
+  // never something to opt out of hearing about, so preferences don't silence it.
+  LOCATION_REMINDER
 }
 
 enum PayBasis {
@@ -570,6 +577,8 @@ model Employee {
   clockReminders  ClockReminder[]
   // Where their phone last said it was, during working hours only.
   staffLocation   StaffLocation?
+  // Whether their phone shared its position on each working day — never where.
+  locationDays    LocationDay[]
 }
 
 // A formal warning from the manager, with the reason the employee is shown at
@@ -2033,4 +2042,25 @@ model StaffLocation {
   precise    Boolean   @default(true)
   pingedAt   DateTime? // when the server last asked this phone for a fresh position
   updatedAt  DateTime  @updatedAt
+}
+
+/// Whether somebody's phone shared its position on a working day — never where:
+/// a count and two times. What the 1 JOD a day without location is decided on
+/// (lib/location-fine.ts). One row per person per day.
+model LocationDay {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  day         DateTime  @db.Date
+  fixes       Int       @default(0)
+  firstAt     DateTime?
+  lastAt      DateTime?
+  warnedAt    DateTime? // the first warning
+  warned2At   DateTime? // the second
+  finedAt     DateTime?
+  forgivenAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  @@unique([employeeId, day])
+  @@index([day])
 }

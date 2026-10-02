@@ -42,6 +42,9 @@ const PREFERENCE_BY_TYPE: Record<NotificationType, keyof PreferenceFlags | null>
   WARNING: null,
   // The studio's rule about clocking in and out: not something to opt out of.
   ATTENDANCE_REMINDER: null,
+  // The 1 JOD a working day without location — the notice, the warnings, the
+  // deduction and its cancelling. Money is never something to opt out of hearing about.
+  LOCATION_REMINDER: null,
 };
 
 export function isTypeEnabled(type: NotificationType, preferences: PreferenceFlags): boolean {

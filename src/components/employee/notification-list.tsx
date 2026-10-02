@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Fingerprint,
   Info,
+  MapPin,
   MessageSquare,
   RefreshCw,
   TriangleAlert,
@@ -37,6 +38,7 @@ const ICONS: Record<NotificationType, typeof BellRing> = {
   SYSTEM_NOTIFICATION: Info,
   WARNING: TriangleAlert,
   ATTENDANCE_REMINDER: Fingerprint,
+  LOCATION_REMINDER: MapPin,
 };
 
 function ago(date: Date) {
