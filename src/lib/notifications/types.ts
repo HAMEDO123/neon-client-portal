@@ -40,6 +40,8 @@ const PREFERENCE_BY_TYPE: Record<NotificationType, keyof PreferenceFlags | null>
   CHAT_MESSAGE: "chatMessages",
   SYSTEM_NOTIFICATION: null,
   WARNING: null,
+  // The studio's rule about clocking in and out: not something to opt out of.
+  ATTENDANCE_REMINDER: null,
 };
 
 export function isTypeEnabled(type: NotificationType, preferences: PreferenceFlags): boolean {

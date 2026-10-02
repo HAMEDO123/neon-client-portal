@@ -104,6 +104,37 @@ export async function dispatchNotification(input: DispatchInput): Promise<Dispat
   return { created: true, notificationId: notification.id, ...delivery };
 }
 
+/**
+ * Pushes a notification that already exists again — the same row, so the
+ * person's alerts list holds it once, and the same tag, so a phone shows the
+ * fresh banner in place of the last one rather than a stack of them. For
+ * reminders that repeat ("Clock in" every two minutes). The title and message
+ * can move on (the time in them), and the row follows so the list shows the
+ * latest.
+ */
+export async function repeatPush(
+  notificationId: string,
+  update: { title?: string; message?: string } = {}
+): Promise<{ pushed: number; failed: number }> {
+  const row = await prisma.notification.findUnique({ where: { id: notificationId } });
+  if (!row) return { pushed: 0, failed: 0 };
+  const employee = await prisma.employee.findFirst({ where: { id: row.employeeId, active: true }, select: { id: true } });
+  if (!employee) return { pushed: 0, failed: 0 };
+
+  const title = update.title ?? row.title;
+  const message = update.message ?? row.message;
+  if (title !== row.title || message !== row.message) {
+    await prisma.notification.update({ where: { id: row.id }, data: { title, message, readAt: null } });
+  }
+
+  const preferences = await getPreferences(row.employeeId);
+  return deliverPush(
+    row.id,
+    { employeeId: row.employeeId, type: row.type, title, message, url: row.url ?? "/employee", dedupeKey: row.dedupeKey ?? row.id },
+    preferences
+  );
+}
+
 async function deliverPush(
   notificationId: string,
   input: DispatchInput,

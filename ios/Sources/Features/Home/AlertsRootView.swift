@@ -209,6 +209,7 @@ private func insightsAlertHue(_ type: String) -> NeonHue {
     case "TASK_OVERDUE": return .orange
     case "SUPPLY_REQUEST": return .amber
     case "CHAT_MESSAGE": return .indigo
+    case "ATTENDANCE": return .red
     default: return .grey
     }
 }

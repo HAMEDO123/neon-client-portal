@@ -405,6 +405,7 @@ func homeAlertSymbol(_ type: String) -> String {
     case "TASK_OVERDUE": return "clock.badge.exclamationmark.fill"
     case "SUPPLY_REQUEST": return "shippingbox.fill"
     case "CHAT_MESSAGE": return "bubble.left.fill"
+    case "ATTENDANCE": return "touchid"
     default: return "bell.fill"
     }
 }

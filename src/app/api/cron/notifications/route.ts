@@ -4,6 +4,7 @@ import { runFollowUps } from "@/lib/notifications/follow-up-events";
 import { runRules } from "@/lib/notifications/automation-events";
 import { runMeetingReminders } from "@/lib/notifications/meeting-events";
 import { syncAttendance } from "@/lib/attendance-sync";
+import { runClockReminders } from "@/lib/notifications/clock-events";
 import { getTimezone, setSetting } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
 import { cronStampKey, cronStampValue } from "@/lib/status";
@@ -115,6 +116,15 @@ async function run(request: Request) {
   // that is unplugged must not take the rest of this pass down with it.
   if (forced === "attendance" || !forced) {
     ran.attendance = await syncAttendance();
+  }
+
+  // "Clock in" / "Clock out" on the fingerprint device, every two minutes in
+  // their windows (lib/clock-reminders.ts). Called every minute by the meeting
+  // scheduler; outside the windows it returns without touching the device.
+  if (forced === "clock" || !forced) {
+    ran.clock = await runClockReminders(new Date()).catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    }));
   }
 
   // Chasing against the stage periods is a daily conversation, not an hourly

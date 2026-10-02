@@ -1,7 +1,7 @@
 import { attendanceFromPunches, cutoffFor } from "@/lib/attendance";
 import { deviceAddress, readClock, readPunches } from "@/lib/attendance-device";
 import { applyAttendance, type SyncOutcome } from "@/lib/attendance-store";
-import { getTimezone, getWorkHours } from "@/lib/settings";
+import { getSetting, getTimezone, getWorkHours, setSetting } from "@/lib/settings";
 import { dayKeyIn } from "@/lib/time";
 
 // One pass of "ask the machine what it saw, and write it down".
@@ -53,7 +53,43 @@ export type SyncOptions = {
   since?: string;
 };
 
+/** When a sync last read the device and wrote what it saw (an ISO moment). */
+export const LAST_SYNC_KEY = "attendance_last_sync_ok";
+
+// The device takes one conversation at a time, and the clock reminders now
+// read it every minute or two beside the ten-minute pass: two syncs asked for
+// at once share the one already running rather than talking over each other.
+let running: Promise<SyncReport> | null = null;
+
 export async function syncAttendance(options: SyncOptions = {}, now = new Date()): Promise<SyncReport> {
+  if (options.since) return syncOnce(options, now);
+  if (!running) {
+    running = syncOnce(options, now).finally(() => {
+      running = null;
+    });
+  }
+  return running;
+}
+
+/**
+ * A sync, unless one finished within `maxAgeSeconds` — for the clock
+ * reminders, which must not tell somebody to clock in a minute after they did,
+ * and must not read the device sixty times an hour either. Answers when the
+ * device was last read successfully, which is what decides whether anything
+ * may be said at all.
+ */
+export async function syncAttendanceIfStale(maxAgeSeconds: number, now = new Date()): Promise<Date | null> {
+  const last = await getSetting(LAST_SYNC_KEY);
+  const lastAt = last ? new Date(last) : null;
+  if (lastAt && !Number.isNaN(lastAt.getTime()) && (now.getTime() - lastAt.getTime()) / 1000 < maxAgeSeconds) {
+    return lastAt;
+  }
+  const report = await syncAttendance({}, now);
+  if (report.ran) return new Date();
+  return lastAt && !Number.isNaN(lastAt.getTime()) ? lastAt : null;
+}
+
+async function syncOnce(options: SyncOptions, now: Date): Promise<SyncReport> {
   const at = deviceAddress();
   // No address means the studio has no device, or this is somebody's laptop.
   // Silence is the right answer, the same as an absent ANTHROPIC_API_KEY.
@@ -87,6 +123,7 @@ export async function syncAttendance(options: SyncOptions = {}, now = new Date()
     const since = cutoffFor(options.since, dayKeyIn(timeZone, now));
     const days = all.filter((day) => day.dayKey >= since);
     const outcome = await applyAttendance(days);
+    await setSetting(LAST_SYNC_KEY, new Date().toISOString()).catch(() => undefined);
 
     return {
       ran: true,

@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CheckCheck,
   ClipboardList,
+  Fingerprint,
   Info,
   MessageSquare,
   RefreshCw,
@@ -35,6 +36,7 @@ const ICONS: Record<NotificationType, typeof BellRing> = {
   CHAT_MESSAGE: MessageSquare,
   SYSTEM_NOTIFICATION: Info,
   WARNING: TriangleAlert,
+  ATTENDANCE_REMINDER: Fingerprint,
 };
 
 function ago(date: Date) {

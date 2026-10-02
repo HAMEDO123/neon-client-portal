@@ -143,7 +143,9 @@ services:
       # One line per run, like the other scheduler: a service that says nothing
       # cannot be trusted, and `docker logs neon-meeting-scheduler` is the only
       # window onto whether reminders are actually going out.
-      - 'while true; do status=$$(curl -sS -o /tmp/ran.json -w "%{http_code}" --max-time 50 -H "Authorization: Bearer $$CRON_SECRET" "http://app:3000/api/cron/notifications?job=meetings" || echo 000); echo "$$(date -u +%FT%TZ) HTTP $$status $$(head -c 200 /tmp/ran.json)"; sleep 60; done'
+      # The clock reminders ride the same minute: "Clock in" every two minutes
+      # is worth little on a ten-minute pass (lib/clock-reminders.ts).
+      - 'while true; do for job in meetings clock; do status=$$(curl -sS -o /tmp/ran.json -w "%{http_code}" --max-time 50 -H "Authorization: Bearer $$CRON_SECRET" "http://app:3000/api/cron/notifications?job=$$job" || echo 000); echo "$$(date -u +%FT%TZ) $$job HTTP $$status $$(head -c 200 /tmp/ran.json)"; done; sleep 60; done'
     depends_on:
       app:
         condition: service_healthy

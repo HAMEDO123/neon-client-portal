@@ -81,6 +81,8 @@ enum AdminNotificationType {
   TASK_OVERDUE
   SUPPLY_REQUEST
   CHAT_MESSAGE
+  // The device has not seen somebody clock in (or out) after an hour of reminders.
+  ATTENDANCE
 }
 
 enum TaskPriority {
@@ -99,6 +101,9 @@ enum NotificationType {
   SYSTEM_NOTIFICATION
   // A formal warning from the manager. Preferences never silence it.
   WARNING
+  // "Clock in" / "Clock out" on the fingerprint device (lib/clock-reminders.ts).
+  // The studio's own rule about the working day, so preferences don't silence it.
+  ATTENDANCE_REMINDER
 }
 
 enum PayBasis {
@@ -562,6 +567,7 @@ model Employee {
   blockedEntries  ProjectTaskEntry[]         @relation("EntryBlockedBy")
   blockedJobs     AssignedTask[]             @relation("JobBlockedBy")
   siteVisits      SiteVisit[]
+  clockReminders  ClockReminder[]
 }
 
 // A formal warning from the manager, with the reason the employee is shown at
@@ -1986,4 +1992,23 @@ model SupplyRequestLine {
   createdAt DateTime @default(now())
 
   @@index([requestId, position])
+}
+
+/// One kind of clock reminder, for one person, on one day (lib/clock-reminders.ts):
+/// when it was last sent and how often, so "every two minutes" survives a
+/// scheduler that wakes late, and the notification it belongs to, so a repeat
+/// pushes again rather than filling the person's alerts with copies.
+model ClockReminder {
+  id             String   @id @default(cuid())
+  employeeId     String
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  day            DateTime @db.Date
+  /// in | out-soon | out | in-missed | out-missed
+  kind           String
+  count          Int      @default(0)
+  notificationId String?
+  firstAt        DateTime @default(now())
+  lastAt         DateTime @default(now())
+
+  @@unique([employeeId, day, kind])
 }

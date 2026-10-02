@@ -214,6 +214,7 @@ private struct NotificationRow: View {
         case "TASK_DEADLINE_REMINDER": return "alarm"
         case "TASK_TODAY_SCHEDULE", "TASK_TOMORROW_SCHEDULE": return "calendar"
         case "TASK_ASSIGNED": return "tray.and.arrow.down.fill"
+        case "ATTENDANCE_REMINDER": return "touchid"
         default: return item.type.hasPrefix("TASK") ? "checklist" : "bell.fill"
         }
     }
@@ -223,6 +224,7 @@ private struct NotificationRow: View {
         case "WARNING": return .orange
         case "CHAT_MESSAGE": return .purple
         case "TASK_DEADLINE_REMINDER": return .pink
+        case "ATTENDANCE_REMINDER": return .red
         default: return .cyan
         }
     }
