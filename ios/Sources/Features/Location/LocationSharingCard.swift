@@ -37,6 +37,7 @@ struct LocationSharingCard: View {
                     .font(.neonSubheadline)
                     .foregroundStyle(Color.neonTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                fineNote
                 NeonButton(L("Turn on location"), symbol: "location.fill", size: .medium) {
                     Haptic.tap()
                     sharing.askPermission()
@@ -54,6 +55,7 @@ struct LocationSharingCard: View {
                     .font(.neonSubheadline)
                     .foregroundStyle(Color.neonTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                fineNote
                 NeonButton(L("Open Settings"), symbol: "gearshape.fill", kind: .secondary, size: .medium) {
                     sharing.openSettings()
                 }
@@ -81,8 +83,9 @@ struct LocationSharingCard: View {
     @ViewBuilder
     private var notes: some View {
         let whileOpenOnly = sharing.authorization == .authorizedWhenInUse
-        if whileOpenOnly || !sharing.precise {
+        if whileOpenOnly || !sharing.precise || fineShows {
             VStack(alignment: .leading, spacing: NeonSpace.sm) {
+                fineNote
                 if whileOpenOnly {
                     StatusNote(
                         symbol: "iphone",
@@ -99,8 +102,55 @@ struct LocationSharingCard: View {
                         detail: L("The map shows only roughly where you are.")
                     )
                 }
-                NeonButton(whileOpenOnly ? L("Allow Always") : L("Open Settings"), symbol: "location.fill", kind: .secondary, size: .medium) {
-                    if whileOpenOnly { sharing.askPermission() } else { sharing.openSettings() }
+                if whileOpenOnly || !sharing.precise {
+                    NeonButton(whileOpenOnly ? L("Allow Always") : L("Open Settings"), symbol: "location.fill", kind: .secondary, size: .medium) {
+                        if whileOpenOnly { sharing.askPermission() } else { sharing.openSettings() }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: 1 JOD a day without location
+
+    private var fine: LocationFine? {
+        guard let fine = sharing.plan?.fine, fine.on else { return nil }
+        return fine
+    }
+
+    private var fineShows: Bool { fine != nil }
+
+    /// The rule, and where today stands against it: told before it starts,
+    /// then today's answer, then what this month has cost.
+    @ViewBuilder
+    private var fineNote: some View {
+        if let fine, let plan = sharing.plan {
+            let charged = plan.finedThisMonth ?? []
+            VStack(alignment: .leading, spacing: NeonSpace.sm) {
+                if let startsOn = fine.startsOn, startsOn > NeonFormat.dayKey(Date()) {
+                    StatusNote(
+                        symbol: "banknote.fill",
+                        tone: .warning,
+                        title: L("From %@, a working day without location costs %@", formattedDayKey(startsOn), fine.amountText),
+                        detail: L("Only days the fingerprint device sees you arrive. You are warned during the day first.")
+                    )
+                } else if plan.sharedToday == true {
+                    StatusNote(symbol: "checkmark.seal.fill", tone: .success, title: L("Today's location reached NEON"))
+                } else if fine.startsOn != nil, plan.sharing {
+                    StatusNote(
+                        symbol: "exclamationmark.triangle.fill",
+                        tone: .danger,
+                        title: L("No location has reached NEON today"),
+                        detail: L("A working day without it costs %@. Keep NEON's location on.", fine.amountText)
+                    )
+                }
+                if !charged.isEmpty {
+                    StatusNote(
+                        symbol: "banknote",
+                        tone: .danger,
+                        title: L("This month: %@ for %d days without location", NeonFormat.money(fine.amount * Double(charged.count), decimals: 0), charged.count),
+                        detail: charged.map(formattedDayKey).joined(separator: L(", "))
+                    )
                 }
             }
         }

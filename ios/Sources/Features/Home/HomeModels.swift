@@ -406,6 +406,7 @@ func homeAlertSymbol(_ type: String) -> String {
     case "SUPPLY_REQUEST": return "shippingbox.fill"
     case "CHAT_MESSAGE": return "bubble.left.fill"
     case "ATTENDANCE": return "touchid"
+    case "LOCATION": return "location.fill"
     default: return "bell.fill"
     }
 }

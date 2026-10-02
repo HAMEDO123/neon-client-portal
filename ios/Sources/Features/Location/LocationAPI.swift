@@ -31,6 +31,12 @@ struct LocationPlan: Decodable, Equatable {
     /// The studio requires location — Always, precise — to use the app at
     /// all (the manager's switch on the map; nil from a server before it).
     var required: Bool? = nil
+    /// 1 JOD a working day without location (lib/location-fine.ts).
+    var fine: LocationFine? = nil
+    /// A position from this phone reached the studio today.
+    var sharedToday: Bool? = nil
+    /// The days this month that cost 1 JOD ("YYYY-MM-DD"), cancelled ones left out.
+    var finedThisMonth: [String]? = nil
 
     var starts: Date? { parseISODate(startsAt) }
     var ends: Date? { parseISODate(endsAt) }
@@ -49,6 +55,7 @@ struct TeamLocations: Decodable, Equatable {
     let people: [TeamLocationPerson]
     /// Everybody on the team must allow their location to use the app.
     var required: Bool? = nil
+    var fine: LocationFine? = nil
 
     var starts: Date? { parseISODate(startsAt) }
     var ends: Date? { parseISODate(endsAt) }
@@ -56,6 +63,18 @@ struct TeamLocations: Decodable, Equatable {
 
     /// Everybody with a position to draw.
     var onMap: [TeamLocationPerson] { people.filter { $0.coordinate != nil } }
+}
+
+/// The studio's rule: a working day on which the fingerprint device saw
+/// somebody arrive and not one position reached the server costs `amount`
+/// JOD — from `startsOn`, the first working day after the team was told.
+struct LocationFine: Decodable, Equatable {
+    let on: Bool
+    let amount: Double
+    let startsOn: String?
+
+    /// "1 JOD", in the app's language.
+    var amountText: String { L("%@ JOD", NeonFormat.number(amount, decimals: amount.rounded() == amount ? 0 : 2)) }
 }
 
 struct OfficeSpot: Decodable, Equatable {
@@ -88,6 +107,10 @@ struct TeamLocationPerson: Decodable, Identifiable, Equatable {
     let metresFromOffice: Double?
     let arrivedAt: String?
     let departedAt: String?
+    /// A position from their phone reached the studio today.
+    var sharedToday: Bool? = nil
+    /// The days this month that cost them 1 JOD ("YYYY-MM-DD"), cancelled ones left out.
+    var finedThisMonth: [String]? = nil
 
     var coordinate: CLLocationCoordinate2D? {
         guard let latitude, let longitude else { return nil }
@@ -111,6 +134,10 @@ protocol TeamMapSource: AnyObject {
     func setOffice(_ coordinate: CLLocationCoordinate2D?) async throws -> OfficeSpot?
     /// Turns "location is required for the team" on or off; answers what it now is.
     func setRequired(_ required: Bool) async throws -> Bool
+    /// Turns "1 JOD a day without location" on or off (on tells the team first).
+    func setFine(_ on: Bool) async throws -> LocationFine?
+    /// Cancels the 1 JOD for one day; answers that person's charged days left this month.
+    func forgive(employeeId: String, day: String) async throws -> [String]
 }
 
 /// The studio's server.
@@ -141,5 +168,17 @@ final class NetworkTeamMapSource: TeamMapSource {
         let outcome = try await APIClient.shared.perform("team/locations/required", args: [required])
         struct Answer: Decodable { let required: Bool }
         return try outcome.result(Answer.self)?.required ?? required
+    }
+
+    func setFine(_ on: Bool) async throws -> LocationFine? {
+        let outcome = try await APIClient.shared.perform("team/locations/fine", args: [on])
+        struct Answer: Decodable { let fine: LocationFine? }
+        return try outcome.result(Answer.self)?.fine
+    }
+
+    func forgive(employeeId: String, day: String) async throws -> [String] {
+        let outcome = try await APIClient.shared.perform("team/locations/forgive", args: [employeeId, day])
+        struct Answer: Decodable { let finedThisMonth: [String]? }
+        return try outcome.result(Answer.self)?.finedThisMonth ?? []
     }
 }

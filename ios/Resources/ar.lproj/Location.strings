@@ -96,3 +96,25 @@
 "Location is required for the team" = "صار الموقع إجباري للفريق";
 "Location is no longer required" = "الموقع ما عاد إجباري";
 "Phones without it can't open the app until they allow it." = "اللي ما سمح بالموقع ما بيقدر يفتح التطبيق لحد ما يسمح.";
+
+/* 1 JOD a working day without location (lib/location-fine.ts) */
+"%@ JOD" = "%@ دينار";
+"From %@, a working day without location costs %@" = "من %@، يوم الدوام بدون موقع بينخصم عليه %@";
+"Only days the fingerprint device sees you arrive. You are warned during the day first." = "بس بالأيام اللي جهاز البصمة بيشوفك فيها داخل. وبيوصلك تنبيه خلال اليوم قبل.";
+"Today's location reached NEON" = "موقعك اليوم وصل لـ NEON";
+"No location has reached NEON today" = "لسا ما وصل موقعك اليوم لـ NEON";
+"A working day without it costs %@. Keep NEON's location on." = "يوم الدوام بدونه بينخصم عليه %@. خلّي موقع NEON شغّال.";
+"This month: %@ for %d days without location" = "هالشهر: %1$@ عن %2$d أيام بدون موقع";
+"A working day without location costs %@" = "يوم الدوام بدون موقع بينخصم عليه %@";
+"1 JOD a day without location" = "خصم دينار عن كل يوم بدون موقع";
+"1 JOD a day without location is on" = "صار في خصم دينار عن كل يوم بدون موقع";
+"1 JOD a day without location is off" = "انلغى خصم الدينار عن الأيام بدون موقع";
+"The team is told now; it counts from the next working day." = "الفريق انبلّغ هلأ، والخصم بيبلّش من يوم الدوام الجاي.";
+"%d days without location this month" = "%d أيام بدون موقع هالشهر";
+"Charged this month for days without location" = "انخصم عليه هالشهر عن أيام بدون موقع";
+"Cancel this day's charge" = "ألغِ خصم هاليوم";
+"Cancel the 1 JOD for %@?" = "تلغي خصم الدينار عن %@؟";
+"It comes off this month's deductions, and %@ is told." = "بينشال من خصومات هالشهر، و%@ بيوصله خبر.";
+"Cancel the charge" = "ألغِ الخصم";
+"The 1 JOD for %@ is cancelled" = "انلغى خصم الدينار عن %@";
+"%@ is told." = "%@ وصله خبر.";

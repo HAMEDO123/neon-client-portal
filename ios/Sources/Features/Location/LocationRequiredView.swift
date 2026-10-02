@@ -63,6 +63,12 @@ struct LocationRequiredView: View {
                 NeonDivider().padding(.leading, 52)
                 LocationRequiredRow(symbol: "eye.fill", hue: .purple, title: L("Only the manager sees it"),
                                     detail: L("On the team map. Only your latest position is kept, and it is wiped when the day ends."))
+                if let fine = sharing.plan?.fine, fine.on {
+                    NeonDivider().padding(.leading, 52)
+                    LocationRequiredRow(symbol: "banknote.fill", hue: .red,
+                                        title: L("A working day without location costs %@", fine.amountText),
+                                        detail: L("Only days the fingerprint device sees you arrive. You are warned during the day first."))
+                }
                 NeonDivider().padding(.leading, 52)
                 LocationRequiredRow(symbol: "bell.badge.fill", hue: .orange, title: L("Notifications and calls keep coming"),
                                     detail: L("Even before you allow it."))

@@ -18,7 +18,7 @@ import SwiftUI
 enum LocationScreens {
     static let ids: [String] = [
         "team-map", "team-map-person", "team-map-closed", "team-map-empty", "home-team-map",
-        "location-card-ask", "location-card-on", "location-card-while-open", "location-card-off", "location-card-closed",
+        "location-card-ask", "location-card-on", "location-card-fine", "location-card-while-open", "location-card-off", "location-card-closed",
         "team-map-live", "location-required-ask", "location-required-always", "location-required-settings", "location-required-precise",
     ]
 
@@ -30,8 +30,9 @@ enum LocationScreens {
         case "team-map-empty": return debugPushed(TeamMapView(source: TeamMapFixtureSource(nobodyYet: true)))
         case "team-map-live": return debugPushed(TeamMapView())
         case "home-team-map": return AnyView(HomeTeamMapFixtureHost())
-        case "location-card-ask": return card(.notDetermined, running: false, plan: plan(sharing: true))
-        case "location-card-on": return card(.authorizedAlways, running: true, plan: plan(sharing: true), sent: Date().addingTimeInterval(-70))
+        case "location-card-ask": return card(.notDetermined, running: false, plan: plan(sharing: true, fineStarts: 1))
+        case "location-card-on": return card(.authorizedAlways, running: true, plan: plan(sharing: true, fineStarts: -3), sent: Date().addingTimeInterval(-70))
+        case "location-card-fine": return card(.authorizedAlways, running: true, plan: plan(sharing: true, fineStarts: -5, sharedToday: false, charged: [-2, -1]))
         case "location-card-while-open": return card(.authorizedWhenInUse, running: true, plan: plan(sharing: true), sent: Date().addingTimeInterval(-20))
         case "location-card-off": return card(.denied, running: false, plan: plan(sharing: true))
         case "location-card-closed": return card(.authorizedAlways, running: false, plan: plan(sharing: false))
@@ -58,17 +59,22 @@ enum LocationScreens {
         )
     }
 
-    private static func plan(sharing: Bool) -> LocationPlan {
+    private static func plan(sharing: Bool, fineStarts: Int? = nil, sharedToday: Bool = true, charged: [Int] = []) -> LocationPlan {
         let today = Calendar.current.startOfDay(for: Date())
         let start = today.addingTimeInterval(11 * 3600)
         let end = today.addingTimeInterval(19 * 3600)
         let iso = ISO8601DateFormatter()
+        func key(_ days: Int) -> String { NeonFormat.dayKey(today.addingTimeInterval(Double(days) * 86400)) }
         return LocationPlan(
             sharing: sharing,
             reason: sharing ? nil : "after-hours",
             startsAt: iso.string(from: start),
             endsAt: iso.string(from: end),
-            nextStartsAt: iso.string(from: start.addingTimeInterval(sharing ? 86400 : 86400))
+            nextStartsAt: iso.string(from: start.addingTimeInterval(86400)),
+            required: true,
+            fine: fineStarts.map { LocationFine(on: true, amount: 1, startsOn: key($0)) },
+            sharedToday: sharedToday,
+            finedThisMonth: charged.map(key)
         )
     }
 }
@@ -114,6 +120,15 @@ final class TeamMapFixtureSource: TeamMapSource {
             person("p5", "Dana Qasem", "Project coordinator", "off", permission: "denied", arrived: 10.9),
             person("p6", "Kareem Faris", "Junior designer", "waiting", arrived: 11.3),
         ]
+        // Today's answer and this month's charges, for the fine's pieces.
+        people = people.map { p in
+            var p = p
+            p.sharedToday = p.coordinate != nil
+            if p.id == "p4" || p.id == "p2" {
+                p.finedThisMonth = [NeonFormat.dayKey(today.addingTimeInterval(-2 * 86400))]
+            }
+            return p
+        }
         if nobodyYet {
             people = people.map { p in
                 TeamLocationPerson(id: p.id, name: p.name, photoUrl: nil, role: p.role, state: p.state == "off" ? "off" : "waiting",
@@ -128,7 +143,8 @@ final class TeamMapFixtureSource: TeamMapSource {
             nextStartsAt: open ? iso.string(from: today.addingTimeInterval(35 * 3600)) : at(11 + 24),
             office: office,
             people: people,
-            required: true
+            required: true,
+            fine: LocationFine(on: true, amount: 1, startsOn: NeonFormat.dayKey(today.addingTimeInterval(-5 * 86400)))
         )
     }
 
@@ -139,6 +155,10 @@ final class TeamMapFixtureSource: TeamMapSource {
     }
 
     func setRequired(_ required: Bool) async throws -> Bool { required }
+
+    func setFine(_ on: Bool) async throws -> LocationFine? { LocationFine(on: on, amount: 1, startsOn: nil) }
+
+    func forgive(employeeId: String, day: String) async throws -> [String] { [] }
 }
 
 private struct HomeTeamMapFixtureHost: View {

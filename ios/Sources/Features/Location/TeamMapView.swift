@@ -59,6 +59,16 @@ final class TeamMapModel: ObservableObject {
         _ = try await source.setRequired(required)
         await load()
     }
+
+    func setFine(_ on: Bool) async throws {
+        _ = try await source.setFine(on)
+        await load()
+    }
+
+    func forgive(employeeId: String, day: String) async throws {
+        _ = try await source.forgive(employeeId: employeeId, day: day)
+        await load()
+    }
 }
 
 /// Place names for positions ("Abdoun, Amman"), from Apple, one at a time
@@ -245,6 +255,8 @@ struct TeamMapView: View {
                 TeamMapPersonDetail(
                     person: selected,
                     place: selected.coordinate.flatMap(places.name(for:)),
+                    fine: model.data?.fine,
+                    onForgive: { day in await forgive(selected, day: day) },
                     onClose: { selection = nil }
                 )
                 .padding(.horizontal, NeonSpace.gutter)
@@ -336,6 +348,14 @@ struct TeamMapView: View {
             )) {
                 Label(L("Location required for the team"), systemImage: "lock.fill")
             }
+            // 1 JOD a working day without location. Turning it on tells the
+            // team first; it counts from the next working day.
+            Toggle(isOn: Binding(
+                get: { model.data?.fine?.on ?? false },
+                set: { value in Task { await saveFine(value) } }
+            )) {
+                Label(L("1 JOD a day without location"), systemImage: "banknote.fill")
+            }
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.system(size: 17, weight: .semibold))
@@ -382,12 +402,33 @@ struct TeamMapView: View {
         )
     }
 
+    private func forgive(_ person: TeamLocationPerson, day: String) async {
+        do {
+            try await model.forgive(employeeId: person.id, day: day)
+            Haptic.success()
+            Toast.success(L("The 1 JOD for %@ is cancelled", formattedDayKey(day)), detail: L("%@ is told.", person.name))
+        } catch {
+            Toast.error(error)
+        }
+    }
+
     private func saveRequired(_ required: Bool) async {
         do {
             try await model.setRequired(required)
             Haptic.success()
             Toast.success(required ? L("Location is required for the team") : L("Location is no longer required"),
                           detail: required ? L("Phones without it can't open the app until they allow it.") : nil)
+        } catch {
+            Toast.error(error)
+        }
+    }
+
+    private func saveFine(_ on: Bool) async {
+        do {
+            try await model.setFine(on)
+            Haptic.success()
+            Toast.success(on ? L("1 JOD a day without location is on") : L("1 JOD a day without location is off"),
+                          detail: on ? L("The team is told now; it counts from the next working day.") : nil)
         } catch {
             Toast.error(error)
         }
@@ -458,6 +499,11 @@ struct TeamMapRow: View {
                     .foregroundStyle(Color.neonTextSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+                if let charged = person.finedThisMonth, !charged.isEmpty {
+                    Label(L("%d days without location this month", charged.count), systemImage: "banknote")
+                        .font(.neonCaption.weight(.semibold))
+                        .foregroundStyle(Color.neonDangerStrong)
+                }
             }
             Spacer(minLength: 8)
             if person.coordinate != nil {
@@ -522,7 +568,11 @@ func teamMapStatus(_ person: TeamLocationPerson, place: String?, now: Date = Dat
 struct TeamMapPersonDetail: View {
     let person: TeamLocationPerson
     let place: String?
+    var fine: LocationFine? = nil
+    var onForgive: (String) async -> Void = { _ in }
     let onClose: () -> Void
+
+    @State private var forgiving: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.md) {
@@ -549,6 +599,34 @@ struct TeamMapPersonDetail: View {
                     MetaLabel(L("Precise Location is off on this phone"), symbol: "exclamationmark.circle")
                 }
             }
+            if let charged = person.finedThisMonth, !charged.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L("Charged this month for days without location"))
+                        .font(.neonCaption.weight(.semibold))
+                        .foregroundStyle(Color.neonDangerStrong)
+                    FlowRow {
+                        ForEach(charged, id: \.self) { day in
+                            Button {
+                                forgiving = day
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Text(formattedDayKey(day))
+                                    Text(fine?.amountText ?? L("%@ JOD", "1"))
+                                        .foregroundStyle(Color.neonDangerStrong)
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(Color.neonTextTertiary)
+                                }
+                                .font(.neonCaption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(NeonHue.red.wash))
+                            }
+                            .buttonStyle(.pressable)
+                            .accessibilityHint(Text(L("Cancel this day's charge")))
+                        }
+                    }
+                }
+            }
             HStack(spacing: NeonSpace.md) {
                 NeonButton(L("Message"), symbol: "bubble.left.fill", kind: .secondary, size: .medium, fullWidth: true) {
                     PushCenter.shared.pendingPath = "/admin/chat/\(person.id)"
@@ -559,6 +637,18 @@ struct TeamMapPersonDetail: View {
                 .disabled(person.coordinate == nil)
             }
         }
+        .confirmDestructive(
+            item: forgivingBinding,
+            title: { L("Cancel the 1 JOD for %@?", formattedDayKey($0)) },
+            message: { _ in L("It comes off this month's deductions, and %@ is told.", person.name) },
+            actionTitle: L("Cancel the charge")
+        ) { day in
+            Task { await onForgive(day) }
+        }
+    }
+
+    private var forgivingBinding: Binding<String?> {
+        Binding(get: { forgiving }, set: { forgiving = $0 })
     }
 
     private func openDirections() {
