@@ -182,6 +182,55 @@ export async function sendVoip(
   }
 }
 
+/**
+ * A silent push: no banner and no sound. It wakes the app in the background
+ * for a few seconds so it can do something without being opened — asking the
+ * phone for a fresh position, for the manager's map (lib/staff-location.ts).
+ * `data` sits beside `aps` and is the app's to read.
+ *
+ * Apple's terms for these: the push type is `background`, the priority 5 —
+ * what Apple asks of a push with nothing to show — and the topic is the app's
+ * own bundle id, the same token and topic as an alert, never the VoIP ones.
+ * Apple also rations them per phone and may hold or drop one without saying
+ * so, so nothing may depend on a particular one arriving: the caller asks
+ * again later.
+ *
+ * It expires quickly. A phone that was off for an hour must not wake up to
+ * answer a question asked an hour ago, perhaps after the working day is over.
+ */
+export async function sendBackground(
+  target: ApnsTarget,
+  data: Record<string, unknown>,
+  expiresInSeconds = 600
+): Promise<ApnsResult> {
+  const settings = config();
+  if (!settings) {
+    return { ok: false, statusCode: null, error: "APNs is not configured", gone: false };
+  }
+
+  const host = target.sandbox ? SANDBOX_HOST : PRODUCTION_HOST;
+  try {
+    return await request(host, target, settings, JSON.stringify(backgroundBody(data)), {
+      "apns-topic": target.bundleId,
+      "apns-push-type": "background",
+      "apns-priority": "5",
+      "apns-expiration": String(Math.floor(Date.now() / 1000) + expiresInSeconds),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: null,
+      error: error instanceof Error ? error.message : String(error),
+      gone: false,
+    };
+  }
+}
+
+/** A silent push's body: `content-available` and nothing to show, with the app's own keys beside it. */
+export function backgroundBody(data: Record<string, unknown>): Record<string, unknown> {
+  return { aps: { "content-available": 1 }, ...data };
+}
+
 function request(
   host: string,
   target: ApnsTarget,

@@ -5,6 +5,7 @@ import { runRules } from "@/lib/notifications/automation-events";
 import { runMeetingReminders } from "@/lib/notifications/meeting-events";
 import { syncAttendance } from "@/lib/attendance-sync";
 import { runClockReminders } from "@/lib/notifications/clock-events";
+import { runLocationKeeper } from "@/lib/notifications/location-keeper";
 import { getTimezone, setSetting } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
 import { cronStampKey, cronStampValue } from "@/lib/status";
@@ -123,6 +124,16 @@ async function run(request: Request) {
   // scheduler; outside the windows it returns without touching the device.
   if (forced === "clock" || !forced) {
     ran.clock = await runClockReminders(new Date()).catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  // Where the team is (lib/staff-location.ts): wakes the phones that have gone
+  // quiet for ten minutes while the working window is open, and wipes every
+  // position whenever it is not. Called every minute by the meeting scheduler,
+  // so a position never outlives the day by more than a minute.
+  if (forced === "location" || !forced) {
+    ran.location = await runLocationKeeper(new Date()).catch((error) => ({
       error: error instanceof Error ? error.message : String(error),
     }));
   }
