@@ -95,7 +95,14 @@ describe("the wiring the update screen depends on", () => {
       ["GET", "get"],
       ["POST", "do"],
     ]) {
-      const route = readFileSync(join(root, "src", "app", "api", "mobile", folder, "[...name]", "route.ts"), "utf8");
+      // Line endings normalised: git checks this repository out with CRLF on
+      // Windows, where the office PC verifies every deploy, and a pattern written
+      // with a newline escape then matches nothing. These assertions are about the
+      // code, not about which machine read it.
+      const route = readFileSync(
+        join(root, "src", "app", "api", "mobile", folder, "[...name]", "route.ts"),
+        "utf8"
+      ).replace(/\r\n/g, "\n");
       assert.match(route, new RegExp(`export async function ${method}\\([^)]*\\) \\{\\n  return withLatestBuild\\(await `));
       const refused = route.indexOf('return json({ error: "Unauthorized." }, 401);');
       const noted = route.indexOf("noteAppBuild(request.headers);");
