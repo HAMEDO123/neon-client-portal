@@ -184,7 +184,8 @@ export const reads: ReadRegistry = {
   // the fingerprint device has seen this person clock out.
   // → { sharing, reason: "before-hours" | "after-hours" | "day-off" |
   //   "clocked-out" | null (null exactly when sharing), startsAt, endsAt
-  //   (today's window, null on a day off), nextStartsAt (the next start after now) }
+  //   (today's window, null on a day off), nextStartsAt (the next start after now),
+  //   required (whether the studio requires location to use the app at all) }
   "me/location": guarded(requireEmployee, async (_params, me) => locationPlanFor(me.id)),
 
   // That week's jobs, whoever they are for — the same week `assignedTasksForWeek`

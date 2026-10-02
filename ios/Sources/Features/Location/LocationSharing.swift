@@ -30,6 +30,10 @@ final class LocationSharing: NSObject, ObservableObject {
     @Published private(set) var lastSentAt: Date?
     /// The location service is on: inside the window, with permission.
     @Published private(set) var isRunning = false
+    /// The studio requires location to use the app (`me/location`'s
+    /// `required`) — remembered, so the cover is back at once on the next
+    /// launch, offline too.
+    @Published private(set) var required: Bool
 
     private let manager = CLLocationManager()
     private var enabled = false
@@ -51,10 +55,12 @@ final class LocationSharing: NSObject, ObservableObject {
     private static let stillHereEvery: TimeInterval = 120
     /// iOS asks "Change to Always Allow?" once; after that only Settings can.
     private static let askedAlwaysKey = "location_asked_always"
+    private static let requiredKey = "location_required"
 
     private override init() {
         authorization = manager.authorizationStatus
         precise = manager.accuracyAuthorization == .fullAccuracy
+        required = UserDefaults.standard.bool(forKey: Self.requiredKey)
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
@@ -67,15 +73,40 @@ final class LocationSharing: NSObject, ObservableObject {
     #if DEBUG
     /// A copy for Debug screenshots (LocationScreens): the state is drawn,
     /// and nothing here ever starts the location service or sends anything.
-    init(preview authorization: CLAuthorizationStatus, precise: Bool = true, plan: LocationPlan?, running: Bool, lastSentAt: Date? = nil) {
+    init(preview authorization: CLAuthorizationStatus, precise: Bool = true, plan: LocationPlan?, running: Bool, lastSentAt: Date? = nil, required: Bool = false) {
         self.authorization = authorization
         self.precise = precise
+        self.required = required
         super.init()
         self.plan = plan
         self.isRunning = running
         self.lastSentAt = lastSentAt
     }
     #endif
+
+    // MARK: - What the studio requires
+
+    /// The studio requires location and this phone has not allowed enough:
+    /// Always (so it carries on with the app closed) and precise (so the map
+    /// can tell the office from the street). The app covers its screens
+    /// until it has (LocationRequiredView).
+    var mustAllow: Bool {
+        required && (authorization != .authorizedAlways || !precise)
+    }
+
+    /// iOS will still show its "Change to Always Allow?" question here.
+    var canAskForAlways: Bool {
+        authorization == .authorizedWhenInUse && !UserDefaults.standard.bool(forKey: Self.askedAlwaysKey)
+    }
+
+    private func adopt(_ fresh: LocationPlan) {
+        plan = fresh
+        planReadAt = Date()
+        if let value = fresh.required, value != required {
+            required = value
+            UserDefaults.standard.set(value, forKey: Self.requiredKey)
+        }
+    }
 
     // MARK: - Turning it on and off
 
@@ -112,6 +143,9 @@ final class LocationSharing: NSObject, ObservableObject {
         lastSentAt = nil
         pending = nil
         reportedPermission = nil
+        // The next person to sign in on this phone may not be on the team.
+        required = false
+        UserDefaults.standard.removeObject(forKey: Self.requiredKey)
     }
 
     /// "Turn on": iOS's own question — While Using first, then Always, which
@@ -172,8 +206,7 @@ final class LocationSharing: NSObject, ObservableObject {
         reportPermissionIfChanged()
         if force || planIsOld {
             if let fresh = try? await APIClient.shared.readFresh("me/location", as: LocationPlan.self) {
-                plan = fresh
-                planReadAt = Date()
+                adopt(fresh)
             }
         }
         apply()
@@ -300,8 +333,7 @@ final class LocationSharing: NSObject, ObservableObject {
                 lastSent = location
                 lastSentAt = Date()
                 if let answer = try? ActionOutcome(data: data).result(LocationPlan.self) {
-                    plan = answer
-                    planReadAt = Date()
+                    adopt(answer)
                     apply()
                 }
             } catch {

@@ -19,7 +19,7 @@ enum LocationScreens {
     static let ids: [String] = [
         "team-map", "team-map-person", "team-map-closed", "team-map-empty", "home-team-map",
         "location-card-ask", "location-card-on", "location-card-while-open", "location-card-off", "location-card-closed",
-        "team-map-live",
+        "team-map-live", "location-required-ask", "location-required-always", "location-required-settings", "location-required-precise",
     ]
 
     @MainActor static func view(_ id: String) -> AnyView? {
@@ -35,8 +35,17 @@ enum LocationScreens {
         case "location-card-while-open": return card(.authorizedWhenInUse, running: true, plan: plan(sharing: true), sent: Date().addingTimeInterval(-20))
         case "location-card-off": return card(.denied, running: false, plan: plan(sharing: true))
         case "location-card-closed": return card(.authorizedAlways, running: false, plan: plan(sharing: false))
+        case "location-required-ask": return required(.notDetermined)
+        case "location-required-always": return required(.authorizedWhenInUse)
+        case "location-required-settings": return required(.denied)
+        case "location-required-precise": return required(.authorizedAlways, precise: false)
         default: return nil
         }
+    }
+
+    @MainActor private static func required(_ status: CLAuthorizationStatus, precise: Bool = true) -> AnyView {
+        let sharing = LocationSharing(preview: status, precise: precise, plan: plan(sharing: true), running: false, required: true)
+        return AnyView(LocationRequiredView(sharing: sharing))
     }
 
     @MainActor private static func card(_ status: CLAuthorizationStatus, running: Bool, plan: LocationPlan, sent: Date? = nil) -> AnyView {
@@ -118,7 +127,8 @@ final class TeamMapFixtureSource: TeamMapSource {
             endsAt: at(19),
             nextStartsAt: open ? iso.string(from: today.addingTimeInterval(35 * 3600)) : at(11 + 24),
             office: office,
-            people: people
+            people: people,
+            required: true
         )
     }
 
@@ -127,6 +137,8 @@ final class TeamMapFixtureSource: TeamMapSource {
     func setOffice(_ coordinate: CLLocationCoordinate2D?) async throws -> OfficeSpot? {
         coordinate.map { OfficeSpot(latitude: $0.latitude, longitude: $0.longitude) }
     }
+
+    func setRequired(_ required: Bool) async throws -> Bool { required }
 }
 
 private struct HomeTeamMapFixtureHost: View {

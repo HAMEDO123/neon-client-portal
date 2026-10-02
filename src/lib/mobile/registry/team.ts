@@ -28,7 +28,7 @@ import { getDayPlan } from "@/lib/day-plan-store";
 import { isAiConfigured } from "@/lib/ai/client";
 import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-queries";
 import { facesFor } from "@/lib/faces";
-import { refreshTeamLocations, setOfficeLocation, teamLocations } from "@/lib/mobile/location-service";
+import { refreshTeamLocations, setLocationRequired, setOfficeLocation, teamLocations } from "@/lib/mobile/location-service";
 import { bool, guarded, guardedAction, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 
 // The "team" area of the phone API: employees, payroll, and the map of where
@@ -153,7 +153,7 @@ export const reads: ReadRegistry = {
   // them clock out. A state says what the phone or the device reported, never
   // that anybody is absent. A read and nothing more: it changes no row, not
   // even a phone's "last asked".
-  // → { open, startsAt, endsAt, nextStartsAt, office: { latitude, longitude } | null,
+  // → { open, required, startsAt, endsAt, nextStartsAt, office: { latitude, longitude } | null,
   //     people: [{ id, name, photoUrl, role, state, latitude, longitude, accuracy,
   //     fixedAt, precise, permission, atOffice, metresFromOffice, arrivedAt, departedAt }] }
   "team/locations": guarded(requireAdmin, async () => teamLocations()),
@@ -260,6 +260,11 @@ export const actions: ActionRegistry = {
   // Where the office is, for "at the office" on the map: args [latitude,
   // longitude] sets it, [] or [null] clears it. → { office: { latitude, longitude } | null }
   "team/locations/office": guardedAction(requireAdmin, async ({ args }) => setOfficeLocation(args)),
+
+  // Whether everybody on the team must allow their location (Always, precise)
+  // to use the app at all: args [true | false] → { required }. On until the
+  // manager turns it off; what is shared, and when, is the same either way.
+  "team/locations/required": guardedAction(requireAdmin, async ({ args }) => setLocationRequired(args)),
 
   "team/setEmployeePay": async (input) => setEmployeePay(str(input.args[0], "id"), input.form),
   "team/setAttendance": async (input) => setAttendance(input.form),

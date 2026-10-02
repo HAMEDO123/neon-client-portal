@@ -5,6 +5,7 @@ struct NeonAdminApp: App {
     @UIApplicationDelegateAdaptor(NeonAppDelegate.self) private var appDelegate
     @StateObject private var api = APIClient.shared
     @StateObject private var appUpdate = AppUpdate.shared
+    @StateObject private var location = LocationSharing.shared
     // Observed so the whole tree rebuilds (via .id) when the language toggles.
     @AppStorage(AppLanguage.storageKey) private var languageRaw = AppLanguage.current.rawValue
 
@@ -47,6 +48,12 @@ struct NeonAdminApp: App {
                 // and still answers calls.
                 if appUpdate.needsUpdate {
                     UpdateRequiredView(current: Int(AppUpdate.build), latest: appUpdate.latest)
+                        .transition(.opacity)
+                        .zIndex(1)
+                } else if api.isLoggedIn, api.side == .employee, location.mustAllow {
+                    // The studio requires the team's location (working hours
+                    // only): the same kind of cover, with the same exceptions.
+                    LocationRequiredView(sharing: location)
                         .transition(.opacity)
                         .zIndex(1)
                 }

@@ -72,3 +72,27 @@
 "%d m" = "%d م";
 "%@ km" = "%@ كم";
 ", " = "، ";
+
+/* LocationRequiredView — the studio requires location to use the app */
+"Location is required" = "الموقع إجباري";
+"The studio asks everybody on the team to share their location during working hours. Allow it to keep using NEON." = "الاستوديو بيطلب من كل الفريق يشاركوا موقعهم خلال ساعات الدوام. اسمح بالموقع عشان تكمّل استخدام NEON.";
+"Never outside working hours, and never after you clock out." = "أبداً برّا ساعات الدوام، وأبداً بعد ما تبصم خروج.";
+"Only the manager sees it" = "المدير بس بيشوفه";
+"On the team map. Only your latest position is kept, and it is wiped when the day ends." = "على خريطة الفريق. بينحفظ آخر موقع إلك بس، وبينمسح لما يخلص الدوام.";
+"Notifications and calls keep coming" = "الإشعارات والمكالمات بتضل توصلك";
+"Even before you allow it." = "حتى قبل ما تسمح.";
+"Allow location" = "اسمح بالموقع";
+"If Location Services is off for the whole phone: Settings → Privacy & Security → Location Services." = "إذا خدمات الموقع مطفية على الجوال كله: الإعدادات ← الخصوصية والأمن ← خدمات الموقع.";
+"In Settings → NEON → Location:" = "من الإعدادات ← NEON ← الموقع:";
+"iPhone will ask you:" = "الآيفون رح يسألك:";
+"Choose “Allow While Using App”." = "اختار «السماح أثناء استخدام التطبيق».";
+"Then choose “Change to Always Allow”." = "وبعدين اختار «التغيير إلى السماح دائمًا».";
+"Choose “Change to Always Allow”." = "اختار «التغيير إلى السماح دائمًا».";
+"Turn on Precise Location." = "شغّل «الموقع الدقيق».";
+"Choose “Always”." = "اختار «دائمًا».";
+"Come back to NEON." = "ارجع على NEON.";
+"Working hours only · %@ – %@" = "خلال الدوام بس · %@ – %@";
+"Location required for the team" = "الموقع إجباري للفريق";
+"Location is required for the team" = "صار الموقع إجباري للفريق";
+"Location is no longer required" = "الموقع ما عاد إجباري";
+"Phones without it can't open the app until they allow it." = "اللي ما سمح بالموقع ما بيقدر يفتح التطبيق لحد ما يسمح.";

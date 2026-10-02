@@ -449,3 +449,22 @@ export function officeFromArgs(args: unknown[]): Place | null {
   }
   return { latitude, longitude };
 }
+
+// --- Whether the team must share ----------------------------------------------------
+
+/**
+ * AppSetting holding whether everybody on the team must let NEON use their
+ * location — Always, and precise — to use the app at all. The phone covers
+ * its screens until they do (ios/Sources/Features/Location/LocationRequiredView.swift);
+ * what is shared, and when, does not change: working hours only.
+ */
+export const REQUIRED_KEY = "location_required";
+
+/**
+ * Whether the studio requires it. Unset means yes — the studio asked for it,
+ * and a switch nobody has touched does what was asked; only an explicit
+ * "false" (the manager's switch on the map) turns it off.
+ */
+export function readRequired(raw: string | null | undefined): boolean {
+  return (raw ?? "").trim().toLowerCase() !== "false";
+}

@@ -18,6 +18,7 @@ import {
   personRow,
   personState,
   readOffice,
+  readRequired,
   readPermission,
   REFRESH_MINUTES,
   sharePlan,
@@ -479,5 +480,16 @@ describe("the wiring the map depends on", () => {
     assert.ok((CRON_JOBS as readonly string[]).includes("location"));
     assert.match(read("src", "app", "api", "cron", "notifications", "route.ts"), /forced === "location" \|\| !forced/);
     assert.match(read("docker-compose.yml"), /for job in meetings clock location; do/);
+  });
+});
+
+describe("readRequired", () => {
+  it("is on until the manager turns it off", () => {
+    assert.equal(readRequired(null), true);
+    assert.equal(readRequired(undefined), true);
+    assert.equal(readRequired(""), true);
+    assert.equal(readRequired("true"), true);
+    assert.equal(readRequired("false"), false);
+    assert.equal(readRequired(" FALSE "), false);
   });
 });

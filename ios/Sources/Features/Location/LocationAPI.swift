@@ -28,6 +28,9 @@ struct LocationPlan: Decodable, Equatable {
     let startsAt: String?
     let endsAt: String?
     let nextStartsAt: String?
+    /// The studio requires location — Always, precise — to use the app at
+    /// all (the manager's switch on the map; nil from a server before it).
+    var required: Bool? = nil
 
     var starts: Date? { parseISODate(startsAt) }
     var ends: Date? { parseISODate(endsAt) }
@@ -44,6 +47,8 @@ struct TeamLocations: Decodable, Equatable {
     let nextStartsAt: String?
     let office: OfficeSpot?
     let people: [TeamLocationPerson]
+    /// Everybody on the team must allow their location to use the app.
+    var required: Bool? = nil
 
     var starts: Date? { parseISODate(startsAt) }
     var ends: Date? { parseISODate(endsAt) }
@@ -104,6 +109,8 @@ protocol TeamMapSource: AnyObject {
     /// changes nothing on screen.
     func askForFreshPositions() async
     func setOffice(_ coordinate: CLLocationCoordinate2D?) async throws -> OfficeSpot?
+    /// Turns "location is required for the team" on or off; answers what it now is.
+    func setRequired(_ required: Bool) async throws -> Bool
 }
 
 /// The studio's server.
@@ -128,5 +135,11 @@ final class NetworkTeamMapSource: TeamMapSource {
         let outcome = try await APIClient.shared.perform("team/locations/office", args: args)
         struct Answer: Decodable { let office: OfficeSpot? }
         return try outcome.result(Answer.self)?.office
+    }
+
+    func setRequired(_ required: Bool) async throws -> Bool {
+        let outcome = try await APIClient.shared.perform("team/locations/required", args: [required])
+        struct Answer: Decodable { let required: Bool }
+        return try outcome.result(Answer.self)?.required ?? required
     }
 }

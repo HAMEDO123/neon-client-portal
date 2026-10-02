@@ -54,6 +54,11 @@ final class TeamMapModel: ObservableObject {
         _ = try await source.setOffice(coordinate)
         await load()
     }
+
+    func setRequired(_ required: Bool) async throws {
+        _ = try await source.setRequired(required)
+        await load()
+    }
 }
 
 /// Place names for positions ("Abdoun, Amman"), from Apple, one at a time
@@ -323,6 +328,14 @@ struct TeamMapView: View {
                     Label(L("Remove the office location"), systemImage: "trash")
                 }
             }
+            Divider()
+            // Whether the team can use the app without allowing location.
+            Toggle(isOn: Binding(
+                get: { model.data?.required ?? true },
+                set: { value in Task { await saveRequired(value) } }
+            )) {
+                Label(L("Location required for the team"), systemImage: "lock.fill")
+            }
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.system(size: 17, weight: .semibold))
@@ -367,6 +380,17 @@ struct TeamMapView: View {
                 .shadow(color: Color.neonShadowTint.opacity(0.16), radius: 18, y: -4)
                 .ignoresSafeArea(edges: .bottom)
         )
+    }
+
+    private func saveRequired(_ required: Bool) async {
+        do {
+            try await model.setRequired(required)
+            Haptic.success()
+            Toast.success(required ? L("Location is required for the team") : L("Location is no longer required"),
+                          detail: required ? L("Phones without it can't open the app until they allow it.") : nil)
+        } catch {
+            Toast.error(error)
+        }
     }
 
     private func saveOffice(_ coordinate: CLLocationCoordinate2D?) async {

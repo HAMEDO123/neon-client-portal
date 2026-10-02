@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { bool } from "@/lib/mobile/rpc";
 import { getSetting, getTimezone, getWorkHours, setSetting } from "@/lib/settings";
 import { dayKeyIn, dayKeyToDate } from "@/lib/time";
 import { deviceOutcome, isApnsConfigured, sendBackground, type ApnsResult } from "@/lib/notifications/apns";
@@ -13,7 +14,9 @@ import {
   parseReport,
   personRow,
   readOffice,
+  readRequired,
   REFRESH_MINUTES,
+  REQUIRED_KEY,
   sharePlan,
   whoToPing,
   type LocationWindow,
@@ -87,9 +90,24 @@ async function planNow(employeeId: string, now: Date) {
 
 // --- The phone's side ------------------------------------------------------------
 
+/** A plan as the phone receives it: with whether the studio requires location at all. */
+export type PhonePlan = SharePlan & { required: boolean };
+
+/** Whether everybody on the team must allow their location to use the app (AppSetting `location_required`). */
+export async function locationRequired(): Promise<boolean> {
+  return readRequired(await getSetting(REQUIRED_KEY));
+}
+
 /** `me/location`: whether this phone should be sharing now, and when that changes. */
-export async function locationPlanFor(employeeId: string, now: Date = new Date()): Promise<SharePlan> {
-  return (await planNow(employeeId, now)).plan;
+export async function locationPlanFor(employeeId: string, now: Date = new Date()): Promise<PhonePlan> {
+  return { ...(await planNow(employeeId, now)).plan, required: await locationRequired() };
+}
+
+/** `team/locations/required`: args [true | false] → { required }. */
+export async function setLocationRequired(args: unknown[]) {
+  const required = bool(args[0]);
+  await setSetting(REQUIRED_KEY, required ? "true" : "false");
+  return { required };
 }
 
 /**
@@ -97,8 +115,9 @@ export async function locationPlanFor(employeeId: string, now: Date = new Date()
  * fix was taken inside the window, and answers with the plan either way — the
  * answer is what stops a phone that is still sending after hours.
  */
-export async function reportLocation(employeeId: string, args: unknown[], now: Date = new Date()): Promise<SharePlan> {
-  const { today, plan } = await planNow(employeeId, now);
+export async function reportLocation(employeeId: string, args: unknown[], now: Date = new Date()): Promise<PhonePlan> {
+  const { today, plan: shared } = await planNow(employeeId, now);
+  const plan = { ...shared, required: await locationRequired() };
   // Not sharing: nothing in the request is even read, because there is
   // nothing it could be kept as.
   if (!plan.sharing) return plan;
@@ -172,6 +191,7 @@ export async function teamLocations(now: Date = new Date()) {
 
   return {
     open: isOpen(today.window, now),
+    required: await locationRequired(),
     startsAt: today.window?.start ?? null,
     endsAt: today.window?.end ?? null,
     nextStartsAt: today.nextStartsAt,
