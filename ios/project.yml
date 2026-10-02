@@ -85,9 +85,17 @@ targets:
         NSPhotoLibraryAddUsageDescription: "NEON saves the photos and videos you choose to save — from a chat or a camera snapshot — to your library."
         # A call keeps its sound when somebody switches to another app, as a
         # phone call does (audio), and rings a closed or locked phone through
-        # a VoIP push and CallKit (voip); nothing else runs in the background.
-        # PushKit and CallKit are system frameworks, linked by their imports.
-        UIBackgroundModes: [audio, voip]
+        # a VoIP push and CallKit (voip). The team's phones share where they
+        # are during working hours, and only then (location — iOS shows its
+        # blue pill while it runs in the background), woken at the start of
+        # the day by a silent push (remote-notification). Nothing else runs
+        # in the background. PushKit and CallKit are system frameworks,
+        # linked by their imports.
+        UIBackgroundModes: [audio, voip, location, remote-notification]
+        # The team map (Features/Location): asked of somebody on the team
+        # only, from the card on their Today page that says what is shared.
+        NSLocationWhenInUseUsageDescription: "During working hours, NEON shares where you are with the studio's manager on the team map. Nothing is shared outside working hours, or after you clock out."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Allow Always so NEON keeps sharing your location during working hours while the app is closed. Nothing is shared outside working hours, or after you clock out."
         NSMicrophoneUsageDescription: "NEON uses the microphone for calls with the studio."
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:

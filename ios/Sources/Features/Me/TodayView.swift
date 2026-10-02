@@ -39,6 +39,8 @@ struct TodayView: View {
                     if let day {
                         TodayHero(dayKey: day.dayKey, employeeName: employeeName, tasks: day.tasks)
                         NowNextCard(state: day.nowNext, hours: day.hours)
+                        // What this phone shares with the team map, and when.
+                        LocationSharingCard()
 
                         if day.tasks.isEmpty {
                             EmptyState(

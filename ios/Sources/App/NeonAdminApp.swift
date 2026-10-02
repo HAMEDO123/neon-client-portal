@@ -4,6 +4,7 @@ import SwiftUI
 struct NeonAdminApp: App {
     @UIApplicationDelegateAdaptor(NeonAppDelegate.self) private var appDelegate
     @StateObject private var api = APIClient.shared
+    @StateObject private var appUpdate = AppUpdate.shared
     // Observed so the whole tree rebuilds (via .id) when the language toggles.
     @AppStorage(AppLanguage.storageKey) private var languageRaw = AppLanguage.current.rawValue
 
@@ -40,6 +41,15 @@ struct NeonAdminApp: App {
                 #else
                 root
                 #endif
+                // An outdated build: its screens are covered until it is
+                // updated from TestFlight. Pushes, CallKit and the call
+                // overlay below are untouched, so it still gets notifications
+                // and still answers calls.
+                if appUpdate.needsUpdate {
+                    UpdateRequiredView(current: Int(AppUpdate.build), latest: appUpdate.latest)
+                        .transition(.opacity)
+                        .zIndex(1)
+                }
             }
             // A ringing or running call sits above every screen.
             .overlay { if api.isLoggedIn { CallOverlay() } }
@@ -106,6 +116,8 @@ struct EmployeeHome: View {
         }
         .environmentObject(store)
         .task { await store.poll() }
+        // Shares this phone's position during working hours (and only then).
+        .task { LocationSharing.shared.activate() }
         // A tapped notification: its tab, and the chat list opens the
         // conversation itself.
         .onReceive(PushCenter.shared.$pendingPath) { webPath in
@@ -114,7 +126,10 @@ struct EmployeeHome: View {
             if tab != .chat { PushCenter.shared.pendingPath = nil }
         }
         .onChange(of: scenePhase) { phase in
-            if phase == .active { Task { await store.refresh() } }
+            if phase == .active {
+                Task { await store.refresh() }
+                LocationSharing.shared.activate()
+            }
         }
     }
 }

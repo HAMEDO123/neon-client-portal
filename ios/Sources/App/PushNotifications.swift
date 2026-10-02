@@ -112,8 +112,28 @@ final class NeonAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
         MainActor.assumeIsolated {
             CallKitCenter.shared.setUp()
             VoipPush.shared.start()
+            // Somebody on the team: share the phone's position during working
+            // hours — also when iOS launched the app in the background for a
+            // move or for the server's silent push.
+            LocationSharing.shared.activate()
         }
         return true
+    }
+
+    /// A silent push. The only kind the server sends is "location": the day
+    /// has opened, or the manager's map found this phone's position old.
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        guard let neon = userInfo["neon"] as? [String: Any], neon["kind"] as? String == "location" else {
+            completionHandler(.noData)
+            return
+        }
+        Task { @MainActor in
+            completionHandler(await LocationSharing.shared.wake() ? .newData : .noData)
+        }
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

@@ -33,13 +33,15 @@ enum DebugScreens {
         "tab-home": .home, "tab-projects": .projects, "tab-tasks": .tasks, "tab-chat": .chat, "tab-more": .more,
     ]
 
-    static let appIds = ["login", "kit", "office-shopping"] + (2...DesignKitGallery.slices).map { "kit-\($0)" }
+    static let appIds = ["login", "kit", "office-shopping", "update-required"] + (2...DesignKitGallery.slices).map { "kit-\($0)" }
 
     @MainActor static func view(_ id: String) -> AnyView? {
         switch id {
         case "login": return AnyView(LoginView())
         case "office-shopping": return debugPushed(OfficeShoppingView())
         case "kit": return AnyView(DesignKitGallery())
+        // What an outdated TestFlight build shows (a Debug build itself is never covered).
+        case "update-required": return AnyView(UpdateRequiredView(current: 202610021122, latest: 202610031015))
         case let kit where kit.hasPrefix("kit-"):
             if let slice = Int(kit.dropFirst(4)), (2...DesignKitGallery.slices).contains(slice) {
                 return AnyView(DesignKitGallery(slice: slice))
@@ -57,7 +59,7 @@ enum DebugScreens {
             HomeScreens.view, HomeInsightsScreens.view, ProjectsScreens.view, ProjectFilesScreens.view,
             TasksScreens.view, TeamScreens.view, OpsScreens.view, WhatsAppScreens.view, ChatScreens.view,
             ChatRoomScreens.view, MeScreens.view, CallsScreens.view, CameraScreens.view, StatusScreens.view,
-            CamerasScreens.view,
+            CamerasScreens.view, LocationScreens.view,
         ]
     }
 
@@ -65,7 +67,7 @@ enum DebugScreens {
         tabs.keys.sorted() + appIds + HomeScreens.ids + HomeInsightsScreens.ids + ProjectsScreens.ids
             + ProjectFilesScreens.ids + TasksScreens.ids + TeamScreens.ids + OpsScreens.ids + WhatsAppScreens.ids
             + ChatScreens.ids + ChatRoomScreens.ids + MeScreens.ids + CallsScreens.ids + CameraScreens.ids
-            + StatusScreens.ids + CamerasScreens.ids
+            + StatusScreens.ids + CamerasScreens.ids + LocationScreens.ids
     }
 }
 

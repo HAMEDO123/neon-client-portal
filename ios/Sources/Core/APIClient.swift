@@ -222,6 +222,10 @@ final class APIClient: ObservableObject {
         guard let token else { throw APIError.unauthorized }
         var request = request
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Which build this is, so the server can tell an outdated phone to
+        // update (AppUpdate).
+        request.setValue(AppUpdate.build, forHTTPHeaderField: "X-Neon-Build")
+        request.setValue(AppUpdate.channel, forHTTPHeaderField: "X-Neon-Channel")
         // Always the server's answer now, never a copy URLCache kept.
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
@@ -240,6 +244,7 @@ final class APIClient: ObservableObject {
             throw APIError.network
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.network }
+        AppUpdate.shared.note(http.value(forHTTPHeaderField: "X-Neon-Latest-Build"))
 
         switch http.statusCode {
         case 200..<300:

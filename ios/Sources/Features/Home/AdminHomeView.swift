@@ -16,6 +16,7 @@ enum HomeRoute: Hashable {
     case projectList(HomeProjectFilter)
     case chat(ChatRoute)
     case cameras
+    case teamMap
 }
 
 /// Another tab, opened the way a tapped notification opens one: the shell
@@ -46,6 +47,7 @@ struct AdminHomeView: View {
     @State private var overviewCachedAt: Date?
     @State private var overviewError: String?
     @StateObject private var cameraFeed = HomeCamerasModel()
+    @StateObject private var teamMap = TeamMapModel()
     @State private var pulse: HomePulse?
     @State private var pulseError: String?
     @State private var today: HomeToday?
@@ -71,6 +73,13 @@ struct AdminHomeView: View {
                     }
 
                     hero
+
+                    // Where the team is, while the working day is on.
+                    if teamMap.data?.open == true, teamMap.data?.people.isEmpty == false {
+                        HomeTeamMapCard(model: teamMap, onOpen: { path.append(.teamMap) })
+                            .id("team-map")
+                            .transition(.neonRise)
+                    }
 
                     // The studio's cameras, live, when there are any.
                     if !cameraFeed.cameras.isEmpty {
@@ -349,6 +358,7 @@ struct AdminHomeView: View {
             HomeProjectListView(filter: filter, projects: overview?.projects ?? []) { path.append(.project($0)) }
         case .chat(let route): ChatRoomView(route: route)
         case .cameras: CamerasRootView()
+        case .teamMap: TeamMapView()
         }
     }
 
@@ -361,7 +371,8 @@ struct AdminHomeView: View {
         async let dayTask: Void = loadDay()
         async let nowTask: Void = loadNow()
         async let camerasTask: Void = cameraFeed.load()
-        _ = await (overviewTask, pulseTask, todayTask, dayTask, nowTask, camerasTask)
+        async let teamMapTask: Void = teamMap.load()
+        _ = await (overviewTask, pulseTask, todayTask, dayTask, nowTask, camerasTask, teamMapTask)
     }
 
     private func loadOverview() async {

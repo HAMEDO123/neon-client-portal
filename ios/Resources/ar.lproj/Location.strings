@@ -1,0 +1,74 @@
+/* Features/Location — the team map (the manager's) and sharing a phone's
+   position during working hours (the team's). Facts, never verdicts: "no
+   position yet" is what a phone has (not) sent, not that anybody is away. */
+
+/* The team's side */
+"Your location during work hours" = "موقعك خلال الدوام";
+"Working hours %@ – %@" = "ساعات الدوام %@ – %@";
+"The manager sees where you are on the team map while the working day is on. Nothing is shared outside working hours, or after you clock out." = "المدير بيشوف وين إنت على خريطة الفريق طول ما الدوام شغّال. ما بينشارك إشي برّا ساعات الدوام، ولا بعد ما تبصم خروج.";
+"Turn on location" = "شغّل الموقع";
+"Location is off" = "الموقع مطفي";
+"The team map shows the manager that it is off" = "خريطة الفريق بتورجي المدير إنه مطفي";
+"Turn it on in Settings → NEON → Location. It is only shared during working hours." = "شغّله من الإعدادات ← NEON ← الموقع. بينشارك بس خلال ساعات الدوام.";
+"Sharing your location" = "موقعك عم ينشارك";
+"Location sharing" = "مشاركة الموقع";
+"Only while NEON is open" = "بس والتطبيق مفتوح";
+"Choose Always so it carries on with the app closed — still during working hours only." = "اختار «دائماً» عشان يضل شغّال والتطبيق مسكّر — وبرضو بس خلال ساعات الدوام.";
+"Precise Location is off" = "الموقع الدقيق مطفي";
+"The map shows only roughly where you are." = "الخريطة بتورجي مكانك بشكل تقريبي بس.";
+"Allow Always" = "اسمح دائماً";
+"Until %@ · on the team map" = "لحد %@ · على خريطة الفريق";
+"On the team map" = "على خريطة الفريق";
+"sent %@" = "انبعت %@";
+"Shared during working hours only" = "بينشارك بس خلال ساعات الدوام";
+"Starts at %@ — nothing is shared before then" = "بيبلّش الساعة %@ — ما بينشارك إشي قبلها";
+"Stopped — you clocked out" = "وقف — إنت بصمت خروج";
+"Not shared on a day off" = "ما بينشارك بيوم العطلة";
+"Not shared outside working hours · starts %@" = "ما بينشارك برّا ساعات الدوام · بيبلّش %@";
+"Not shared outside working hours" = "ما بينشارك برّا ساعات الدوام";
+
+/* The manager's map */
+"Team map" = "خريطة الفريق";
+"Where the team is" = "وين الفريق";
+"Open map" = "افتح الخريطة";
+"%d on the map" = "%d على الخريطة";
+"%d at the office" = "%d بالمكتب";
+"%d location off" = "%d مطفي";
+"%d no position yet" = "%d بلا موقع";
+"Working hours only" = "خلال ساعات الدوام بس";
+"No positions yet" = "ما في مواقع لسا";
+"A phone shares its position once NEON has location turned on during working hours. The phones have been asked." = "الجوال بيشارك موقعه أول ما يكون الموقع شغّال بـ NEON خلال ساعات الدوام. انطلب من الجوالات تبعت مواقعها.";
+"The team map isn't available" = "خريطة الفريق مش متاحة";
+"Positions show from %@ to %@ on working days. Nothing is shared outside them." = "المواقع بتظهر من %@ لـ %@ بأيام الدوام. ما بينشارك إشي برّاها.";
+"Positions show again %@. Nothing is shared outside working hours." = "المواقع بترجع تظهر %@. ما بينشارك إشي برّا ساعات الدوام.";
+"Positions show during working hours only." = "المواقع بتظهر خلال ساعات الدوام بس.";
+"At the office" = "بالمكتب";
+"%@ from the office" = "%@ عن المكتب";
+"On the map" = "على الخريطة";
+"Last position %@" = "آخر موقع %@";
+"Location turned off · last position %@" = "طفّى الموقع · آخر موقع %@";
+"Location is off on their phone" = "الموقع مطفي على جواله";
+"No position yet · clocked in %@" = "ما في موقع لسا · بصم دخول %@";
+"No position yet today" = "ما في موقع لسا اليوم";
+"Clocked out at %@ · not shared after that" = "بصم خروج الساعة %@ · ما بينشارك بعدها";
+"Clocked out · not shared after that" = "بصم خروج · ما بينشارك بعدها";
+"Day off" = "عطلة";
+"Accurate to about %@" = "دقيق لحدود %@";
+"Precise Location is off on this phone" = "الموقع الدقيق مطفي على هالجوال";
+"Directions" = "الاتجاهات";
+"Map options" = "خيارات الخريطة";
+"Show everybody" = "اعرض الكل";
+"Set the office location" = "حدّد موقع المكتب";
+"Move the office location" = "غيّر موقع المكتب";
+"Remove the office location" = "احذف موقع المكتب";
+"Remove the office location?" = "تحذف موقع المكتب؟";
+"The map stops showing who is at the office. Positions are not affected." = "الخريطة رح توقف تورجي مين بالمكتب. المواقع نفسها ما بتتأثر.";
+"Move the map until the pin is on the office" = "حرّك الخريطة لحد ما يصير الدبوس على المكتب";
+"Somebody within about 150 m of it shows as at the office." = "اللي بيكون ضمن ١٥٠ متر تقريباً منه بيظهر إنه بالمكتب.";
+"Set office here" = "حدّد المكتب هون";
+"Office location saved" = "انحفظ موقع المكتب";
+"Office location removed" = "انحذف موقع المكتب";
+"Office" = "المكتب";
+"%d m" = "%d م";
+"%@ km" = "%@ كم";
+", " = "، ";
