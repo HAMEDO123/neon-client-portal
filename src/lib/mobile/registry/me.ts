@@ -22,7 +22,9 @@ import {
   deleteAssignedTask,
   setAssignedTaskState,
 } from "@/lib/actions/assigned-task-actions";
-import { guarded, guardedAction, param, optParam, str, oneOf, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { guarded, guardedAction, param, optParam, str, oneOf, bool, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { locationPlanFor, reportLocation, setLocationPermission } from "@/lib/mobile/location-service";
+import { PERMISSIONS } from "@/lib/staff-location";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { shoppingDedupeKey, shoppingLabel, shoppingMessage } from "@/lib/office-shopping";
 import { recordShopFetch, saveShopSession, shopSession, type ShopCookie } from "@/lib/office-shop-account";
@@ -177,6 +179,14 @@ export const reads: ReadRegistry = {
     }),
   })),
 
+  // Whether this phone should share its position now, for the manager's map
+  // (lib/staff-location.ts): only inside today's working window, and not once
+  // the fingerprint device has seen this person clock out.
+  // → { sharing, reason: "before-hours" | "after-hours" | "day-off" |
+  //   "clocked-out" | null (null exactly when sharing), startsAt, endsAt
+  //   (today's window, null on a day off), nextStartsAt (the next start after now) }
+  "me/location": guarded(requireEmployee, async (_params, me) => locationPlanFor(me.id)),
+
   // That week's jobs, whoever they are for — the same week `assignedTasksForWeek`
   // hands the web's Assign view, ?week=YYYY-MM-DD (a Sunday; any day in the
   // week works, lib/week.ts resolves it).
@@ -248,6 +258,21 @@ export const actions: ActionRegistry = {
   "me/assign/delete": async (input) => deleteAssignedTask(str(input.args[0], "id")),
   "me/assign/state": async (input) =>
     setAssignedTaskState(str(input.args[0], "id"), oneOf(input.args[1], ["TODO", "IN_PROGRESS", "DONE"], "state")),
+
+  // A position from this phone, for the manager's map: args [latitude,
+  // longitude, accuracy (metres), fixedAt (ISO), precise]. Kept only while
+  // the plan says sharing and only if it was taken inside the window — the
+  // latest one, never a trail. Answers with the same plan as `me/location`,
+  // so the phone stops the moment `sharing` is false.
+  "me/location/report": guardedAction(requireEmployee, async ({ args }, me) => reportLocation(me.id, args)),
+
+  // The phone's location permission as iOS reports it: args [permission,
+  // precise], permission always | when-in-use | denied | restricted |
+  // not-determined. At any hour: it is a switch on the phone, not a position.
+  // → { ok: true }
+  "me/location/permission": guardedAction(requireEmployee, async ({ args }, me) =>
+    setLocationPermission(me.id, oneOf(args[0], PERMISSIONS, "permission"), bool(args[1]))
+  ),
 
   // Somebody put something in the office's shared shop cart (the app's
   // "Office shopping" web view). The cart is the shop's; this only tells the

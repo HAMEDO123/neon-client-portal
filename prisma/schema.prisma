@@ -568,6 +568,8 @@ model Employee {
   blockedJobs     AssignedTask[]             @relation("JobBlockedBy")
   siteVisits      SiteVisit[]
   clockReminders  ClockReminder[]
+  // Where their phone last said it was, during working hours only.
+  staffLocation   StaffLocation?
 }
 
 // A formal warning from the manager, with the reason the employee is shown at
@@ -2011,4 +2013,24 @@ model ClockReminder {
   lastAt         DateTime @default(now())
 
   @@unique([employeeId, day, kind])
+}
+
+/// Where one person's phone last said it was, for the manager's map
+/// (lib/staff-location.ts). One row per person and never a second: only the
+/// latest position is kept, so there is no trail to read back. A position is
+/// stored only inside the working day, and the coordinates are wiped when the
+/// day closes or the device sees the person clock out — `permission`,
+/// `precise` and `pingedAt` stay, because they describe the phone, not where
+/// anybody went.
+model StaffLocation {
+  employeeId String    @id
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  latitude   Float?
+  longitude  Float?
+  accuracy   Float?    // metres, as the phone reported it
+  fixedAt    DateTime? // when the phone took the fix
+  permission String    @default("unknown") // always | when-in-use | denied | restricted | not-determined | unknown
+  precise    Boolean   @default(true)
+  pingedAt   DateTime? // when the server last asked this phone for a fresh position
+  updatedAt  DateTime  @updatedAt
 }

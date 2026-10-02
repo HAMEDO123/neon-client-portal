@@ -1,6 +1,7 @@
 import { mobileViewer } from "@/lib/mobile-auth";
 import { answerError, json } from "@/lib/mobile/rpc";
 import { ACTIONS } from "@/lib/mobile/registry";
+import { noteAppBuild, withLatestBuild } from "@/lib/ios-build";
 
 // Every change the phone app makes beyond the original handful of routes:
 // POST /api/mobile/do/<area>/<name> — see lib/mobile/rpc.ts.
@@ -11,6 +12,10 @@ import { ACTIONS } from "@/lib/mobile/registry";
 //
 // The action the entry calls carries the website's own guard, so this route
 // only refuses a request with no valid session at all.
+//
+// Every answer, refusals included, says which build of the iPhone app is the
+// newest one installed (X-Neon-Latest-Build, lib/ios-build.ts), so an older
+// app can ask to be updated.
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +46,12 @@ async function readInput(request: Request): Promise<{ args: unknown[]; form: For
 }
 
 export async function POST(request: Request, context: { params: Promise<{ name: string[] }> }) {
+  return withLatestBuild(await act(request, context));
+}
+
+async function act(request: Request, context: { params: Promise<{ name: string[] }> }) {
   if (!(await mobileViewer(request))) return json({ error: "Unauthorized." }, 401);
+  noteAppBuild(request.headers);
 
   const { name } = await context.params;
   const entry = ACTIONS[name.join("/")];

@@ -28,13 +28,15 @@ import { getDayPlan } from "@/lib/day-plan-store";
 import { isAiConfigured } from "@/lib/ai/client";
 import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-queries";
 import { facesFor } from "@/lib/faces";
-import { bool, guarded, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { refreshTeamLocations, setOfficeLocation, teamLocations } from "@/lib/mobile/location-service";
+import { bool, guarded, guardedAction, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 
-// The "team" area of the phone API: employees and payroll. See
-// lib/mobile/rpc.ts: keys are "team/<name>"; every read is guarded(requireAdmin, …),
-// matching the website's admin-only employees and payroll pages; every action
-// calls the website's own server action, so its guard, rules and notifications
-// are the website's own.
+// The "team" area of the phone API: employees, payroll, and the map of where
+// the team is. See lib/mobile/rpc.ts: keys are "team/<name>"; every read is
+// guarded(requireAdmin, …), matching the website's admin-only employees and
+// payroll pages; every action calls the website's own server action, so its
+// guard, rules and notifications are the website's own — except the map's,
+// which have no website counterpart and are guardedAction(requireAdmin, …).
 
 export const reads: ReadRegistry = {
   // Mirrors src/app/admin/(dashboard)/employees/page.tsx.
@@ -144,6 +146,18 @@ export const reads: ReadRegistry = {
     };
   }),
 
+  // Where the team is, for the manager's map (lib/staff-location.ts): the
+  // people the team count above counts — active, accessRole EMPLOYEE — each
+  // with where their phone last said it was: only inside today's working
+  // window, only the latest, and nothing once the fingerprint device has seen
+  // them clock out. A state says what the phone or the device reported, never
+  // that anybody is absent. A read and nothing more: it changes no row, not
+  // even a phone's "last asked".
+  // → { open, startsAt, endsAt, nextStartsAt, office: { latitude, longitude } | null,
+  //     people: [{ id, name, photoUrl, role, state, latitude, longitude, accuracy,
+  //     fixedAt, precise, permission, atOffice, metresFromOffice, arrivedAt, departedAt }] }
+  "team/locations": guarded(requireAdmin, async () => teamLocations()),
+
   // Mirrors src/app/admin/(dashboard)/payroll/page.tsx.
   "team/payroll": guarded(requireAdmin, async (params) => {
     const timezone = await getTimezone();
@@ -237,6 +251,15 @@ export const actions: ActionRegistry = {
       (input.args[2] as { from: string; to: string; keep: boolean }[]) ?? []
     ),
   "team/applyDayPlan": async (input) => applyDayPlan(str(input.args[0], "employeeId"), str(input.args[1], "dayKey")),
+
+  // The map's Refresh: a silent push to the phones that have gone quiet —
+  // still shared, switch not off, no position for two minutes and not asked
+  // in the last two. Outside the working window it asks nobody. → { asked }
+  "team/locations/refresh": guardedAction(requireAdmin, async () => refreshTeamLocations()),
+
+  // Where the office is, for "at the office" on the map: args [latitude,
+  // longitude] sets it, [] or [null] clears it. → { office: { latitude, longitude } | null }
+  "team/locations/office": guardedAction(requireAdmin, async ({ args }) => setOfficeLocation(args)),
 
   "team/setEmployeePay": async (input) => setEmployeePay(str(input.args[0], "id"), input.form),
   "team/setAttendance": async (input) => setAttendance(input.form),
