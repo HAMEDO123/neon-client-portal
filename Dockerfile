@@ -34,7 +34,12 @@ COPY prisma ./prisma
 RUN npm ci --include=dev
 
 COPY . .
-RUN npm run build
+# A deploy id for this build, so a page left open across an update reloads
+# itself instead of failing its server actions (see next.config.ts). Taken from
+# the clock at build time rather than passed in: a build argument is a habit,
+# and a forgotten habit leaves this silently switched off. The layer is cached
+# with the sources, so an unchanged build keeps its id — which is correct.
+RUN NEON_DEPLOY_ID="$(date -u +%Y%m%d%H%M%S)" npm run build
 
 ENV NODE_ENV=production \
     PORT=3000
