@@ -7,6 +7,7 @@ import { compressInBrowser } from "@/lib/client-image-compress";
 import { TextInput, Checkbox } from "@/components/admin/fields";
 import { buttonClasses } from "@/components/ui/buttons";
 import { beginBusy, endBusy } from "@/lib/busy";
+import { tooBig } from "@/lib/upload-limits";
 
 // Uploads run one file per request instead of one big multipart batch — a request
 // with many high-res photos can blow past the server action body-size limit even
@@ -29,6 +30,16 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
     const isBeforeAfter = formData.get("isBeforeAfter") === "on";
     const beforeImage = formData.get("beforeImage");
     const compress = formData.get("compress") === "on";
+
+    // One photo per request, so each is weighed on its own — see
+    // lib/upload-limits.ts for the two ceilings this is keeping clear of.
+    const refusal = [...files, ...(beforeImage instanceof File ? [beforeImage] : [])]
+      .map((file) => tooBig([file]))
+      .find(Boolean);
+    if (refusal) {
+      setError(refusal);
+      return;
+    }
 
     setProgress({ done: 0, total: isBeforeAfter ? 1 : files.length });
     // Held against the live refresh for the whole run, not per file: it posts

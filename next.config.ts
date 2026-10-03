@@ -20,9 +20,12 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      // Gallery images now upload one file per request (see ImageUploadForm), so this only
-      // needs to cover the single largest upload: a 50MB document/video (see storage.ts RULES).
-      bodySizeLimit: "60mb",
+      // Room for the largest single file (lib/upload-limits.ts MAX_UPLOAD_BYTES,
+      // 80 MB) plus what multipart wraps around it. **Cloudflare stops at 100 MB
+      // whatever this says** — measured, and the free plan's own limit — so
+      // raising this past about 90 MB only moves the failure from a 502 to a
+      // 413. The browser checks the size before sending so neither is reached.
+      bodySizeLimit: "90mb",
     },
   },
   images: {

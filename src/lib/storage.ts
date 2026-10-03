@@ -3,6 +3,7 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } fro
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
+import { MAX_UPLOAD_BYTES, sizeLabel } from "@/lib/upload-limits";
 
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
 
@@ -59,6 +60,10 @@ const DOCUMENT_EXTENSIONS = [
   "svg",
 ];
 
+// One number, from lib/upload-limits.ts, which says where it comes from: the
+// smaller of Cloudflare's 100 MB and this build's body limit, less what
+// multipart wraps around the file. A rule with its own figure would be a second
+// place for the limit to drift from the one the browser checks against.
 const RULES: Record<UploadKind, { types: string[]; extensions?: string[]; maxBytes: number; label: string }> = {
   image: {
     // HEIC/HEIF is what an iPhone takes by default, and this studio is a
@@ -76,8 +81,8 @@ const RULES: Record<UploadKind, { types: string[]; extensions?: string[]; maxByt
     ],
     // This is checked before compression runs, so it has to cover the raw
     // original — a high-res camera photo or 4K render export easily clears 12MB.
-    maxBytes: 40 * 1024 * 1024,
-    label: "JPEG, PNG, WebP, GIF, AVIF, or an iPhone photo (max 40MB)",
+    maxBytes: MAX_UPLOAD_BYTES,
+    label: `JPEG, PNG, WebP, GIF, AVIF, or an iPhone photo (max ${sizeLabel(MAX_UPLOAD_BYTES)})`,
   },
   audio: {
     // Voice notes recorded in the browser. Chrome/Android produce webm/ogg,
@@ -120,8 +125,8 @@ const RULES: Record<UploadKind, { types: string[]; extensions?: string[]; maxByt
     // empty string and the list above cannot match it. The extension is what
     // is left to go on; see `allowedDocument`.
     extensions: DOCUMENT_EXTENSIONS,
-    maxBytes: 50 * 1024 * 1024,
-    label: "PDF, DOCX, XLSX, ZIP, MP4, DWG, or image (max 50MB)",
+    maxBytes: MAX_UPLOAD_BYTES,
+    label: `PDF, DOCX, XLSX, ZIP, MP4, DWG, or image (max ${sizeLabel(MAX_UPLOAD_BYTES)})`,
   },
 };
 

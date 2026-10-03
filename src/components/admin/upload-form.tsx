@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { whileBusy } from "@/lib/busy";
+import { tooBig } from "@/lib/upload-limits";
 import { cn } from "@/lib/utils";
 
 // A form that carries a file, and says what went wrong.
@@ -44,6 +45,18 @@ export function UploadForm({
       action={(formData) =>
         startTransition(async () => {
           setError(null);
+
+          // Weighed here, before a byte is sent. Past the limit the upload does
+          // not fail with a message — it dies between Cloudflare and the app
+          // and comes back as a reply the browser cannot read, which is the
+          // least useful thing a person can be told. See lib/upload-limits.ts.
+          const files = [...formData.values()].filter((value): value is File => value instanceof File);
+          const refusal = tooBig(files.filter((file) => file.size > 0));
+          if (refusal) {
+            setError(refusal);
+            return;
+          }
+
           try {
             // Held against the live refresh, which would otherwise cancel this
             // mid-flight — see lib/busy.ts.

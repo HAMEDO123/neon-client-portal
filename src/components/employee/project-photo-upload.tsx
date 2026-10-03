@@ -7,6 +7,7 @@ import { addProjectImage } from "@/lib/actions/employee-project-actions";
 import { compressInBrowser } from "@/lib/client-image-compress";
 import { cn } from "@/lib/utils";
 import { beginBusy, endBusy } from "@/lib/busy";
+import { tooBig } from "@/lib/upload-limits";
 
 // Photos from a phone, onto a project.
 //
@@ -28,8 +29,19 @@ export function ProjectPhotoUpload({ projectId, spaceId }: { projectId: string; 
 
   function pick(chosen: FileList | null) {
     if (!chosen || chosen.length === 0) return;
+
+    // Said at the moment they are picked rather than after the button: a photo
+    // too big to send is worth knowing about before the caption is typed.
+    // These go one per request, so each is weighed on its own.
+    const picked = Array.from(chosen);
+    const refusal = picked.map((file) => tooBig([file])).find(Boolean) ?? null;
+    if (refusal) {
+      setError(refusal);
+      return;
+    }
+
     setError(null);
-    setFiles(Array.from(chosen));
+    setFiles(picked);
   }
 
   async function send(event: React.FormEvent<HTMLFormElement>) {
