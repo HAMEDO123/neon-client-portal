@@ -39,7 +39,21 @@ COPY . .
 # the clock at build time rather than passed in: a build argument is a habit,
 # and a forgotten habit leaves this silently switched off. The layer is cached
 # with the sources, so an unchanged build keeps its id — which is correct.
-RUN NEON_DEPLOY_ID="$(date -u +%Y%m%d%H%M%S)" npm run build
+#
+# And the key Next encrypts a server function's closure variables with. Every
+# upload form on the project tabs is `action.bind(null, project.id)`, and that
+# bound id is encrypted and sent to the browser. **Next makes a new key on
+# every build unless it is given one**, so a page rendered before a deploy can
+# never have its bound argument decrypted afterwards — "Failed to find Server
+# Action", answered 404, which the browser reports as "An unexpected response
+# was received from the server" with nothing in the log. Next's self-hosting
+# guide prescribes exactly this variable.
+#
+# It is a build argument because the key is embedded in the build output; it
+# comes from .env.docker through docker-compose.yml. Empty is the old
+# behaviour — a fresh key each build — rather than a failure.
+ARG NEON_ACTIONS_KEY=""
+RUN NEON_DEPLOY_ID="$(date -u +%Y%m%d%H%M%S)"     NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$NEON_ACTIONS_KEY"     npm run build
 
 ENV NODE_ENV=production \
     PORT=3000

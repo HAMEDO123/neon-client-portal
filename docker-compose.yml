@@ -38,7 +38,14 @@ services:
       retries: 12
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        # Stable across builds, from .env.docker, so a page rendered by an
+        # earlier build can still have its server actions decrypted — see the
+        # Dockerfile. Absent, Next makes a new key each build and every page
+        # anybody has open breaks the moment this is rebuilt.
+        NEON_ACTIONS_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
     container_name: neon-app
     restart: unless-stopped
     env_file: .env.docker
