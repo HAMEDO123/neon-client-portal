@@ -8,6 +8,7 @@ import { compressInBrowser } from "@/lib/client-image-compress";
 import { cn } from "@/lib/utils";
 import { beginBusy, endBusy } from "@/lib/busy";
 import { tooBig, uploadFailure } from "@/lib/upload-limits";
+import { lastReply, reportUploadFailure, watchingReply } from "@/lib/action-reply";
 
 // Photos from a phone, onto a project.
 //
@@ -59,14 +60,16 @@ export function ProjectPhotoUpload({ projectId, spaceId }: { projectId: string; 
     // one between two of them — see lib/busy.ts.
     beginBusy();
     try {
-      for (const [index, file] of files.entries()) {
-        const one = new FormData();
-        one.append("image", await compressInBrowser(file));
-        if (caption) one.append("caption", caption);
+      await watchingReply(async () => {
+        for (const [index, file] of files.entries()) {
+          const one = new FormData();
+          one.append("image", await compressInBrowser(file));
+          if (caption) one.append("caption", caption);
 
-        await addProjectImage(projectId, spaceId, one);
-        setProgress({ done: index + 1, total: files.length });
-      }
+          await addProjectImage(projectId, spaceId, one);
+          setProgress({ done: index + 1, total: files.length });
+        }
+      });
 
       setFiles([]);
       formRef.current?.reset();
@@ -75,7 +78,15 @@ export function ProjectPhotoUpload({ projectId, spaceId }: { projectId: string; 
       router.refresh();
     } catch (cause) {
       // Says how far it got: the ones already sent are on the project.
-      setError(uploadFailure(files, cause instanceof Error ? cause.message : ""));
+      const message = cause instanceof Error ? cause.message : "";
+      const reply = lastReply();
+      setError(uploadFailure(files, message, reply));
+      reportUploadFailure({
+        where: "employee-gallery",
+        files: files.map((file) => ({ name: file.name, size: file.size, type: file.type })),
+        message,
+        reply,
+      });
     } finally {
       endBusy();
       setProgress(null);

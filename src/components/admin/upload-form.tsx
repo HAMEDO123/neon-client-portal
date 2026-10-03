@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { whileBusy } from "@/lib/busy";
 import { tooBig, uploadFailure } from "@/lib/upload-limits";
+import { lastReply, reportUploadFailure, watchingReply } from "@/lib/action-reply";
 import { cn } from "@/lib/utils";
 
 // A form that carries a file, and says what went wrong.
@@ -38,11 +39,24 @@ export function UploadForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const form = useRef<HTMLFormElement>(null);
+  // The save button reads useFormStatus, which only follows form *actions* —
+  // so it no longer greys itself out, and a second press during a long
+  // upload would send the file twice. This is that guard.
+  const inFlight = useRef(false);
 
   return (
     <form
       ref={form}
-      action={(formData) =>
+      // onSubmit, not `action`. React 19 resets a form's fields when a form
+      // action finishes — failed or not — so after an upload went wrong the
+      // file picker was empty again ("Please select a file") and the next try
+      // had to start over. The browser still checks `required` before this runs.
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (inFlight.current) return;
+        const formData = new FormData(event.currentTarget);
+
+        inFlight.current = true;
         startTransition(async () => {
           setError(null);
 
@@ -54,27 +68,37 @@ export function UploadForm({
           const refusal = tooBig(files.filter((file) => file.size > 0));
           if (refusal) {
             setError(refusal);
+            inFlight.current = false;
             return;
           }
 
           try {
             // Held against the live refresh, which would otherwise cancel this
-            // mid-flight — see lib/busy.ts.
-            await whileBusy(() => action(formData));
+            // mid-flight — see lib/busy.ts — and watched, so a failure can say
+            // what actually came back — see lib/action-reply.ts.
+            await whileBusy(() => watchingReply(() => action(formData)));
             if (resetOnSuccess) form.current?.reset();
           } catch (cause) {
             if (isNextSignal(cause)) throw cause;
-            // Neither of the two ways this fails carries a message worth
-            // reading — Cloudflare's own 413 never reaches our code, and Next
-            // strips a thrown message in production — so what the browser
-            // knows about the file is said instead. See lib/upload-limits.ts.
-            setError(uploadFailure(files, cause instanceof Error ? cause.message : ""));
+            const message = cause instanceof Error ? cause.message : "";
+            const reply = lastReply();
+            setError(uploadFailure(files, message, reply));
+            reportUploadFailure({
+              where: "upload-form",
+              files: files.map((file) => ({ name: file.name, size: file.size, type: file.type })),
+              message,
+              reply,
+            });
+          } finally {
+            inFlight.current = false;
           }
-        })
-      }
+        });
+      }}
       className={cn(className, pending && "opacity-70")}
     >
       {children}
+
+      {pending && <p className="sm:col-span-full text-xs font-medium text-ink/50">Uploading…</p>}
 
       {error && (
         <p className="sm:col-span-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">

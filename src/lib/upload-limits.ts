@@ -21,6 +21,8 @@
 // Pure, and checked in the browser before anything is sent, so an oversized
 // file is a sentence somebody can act on instead of a dead request.
 
+import { describeReply, type ActionReply } from "./action-reply";
+
 /** Cloudflare's own ceiling on the free plan. Not ours to raise. */
 export const CLOUDFLARE_LIMIT_BYTES = 100 * 1024 * 1024;
 
@@ -103,13 +105,19 @@ export function isOpaqueFailure(message: string): boolean {
 
 /**
  * What to show when an upload fails: the message if it says something, and
- * otherwise what we sent and what to do about it.
+ * otherwise what we sent, what came back, and what to do about it.
  *
+ * `reply` is what the browser itself saw (lib/action-reply.ts). It is what
+ * separates the cases the message cannot: our own reply means NEON got the file
+ * and refused it with the reason hidden; anybody else's means it never arrived.
  * The size is named even though the form checked it already — a page left open
- * since before that check existed does not have it, and it is exactly that page
- * this sentence has to reach.
+ * since before that check existed does not have it.
  */
-export function uploadFailure(files: { name: string; size: number }[], message: string): string {
+export function uploadFailure(
+  files: { name: string; size: number }[],
+  message: string,
+  reply: ActionReply | null = null
+): string {
   if (message && !isOpaqueFailure(message)) return message;
 
   const sent = files.filter((file) => file.size > 0);
@@ -122,9 +130,19 @@ export function uploadFailure(files: { name: string; size: number }[], message: 
         ? `${sent[0].name} (${sizeLabel(sent[0].size)})`
         : `Those ${sent.length} files (${sizeLabel(total)} together)`;
 
-  if (total > MAX_UPLOAD_BYTES) {
-    return `${what} never reached NEON — it is over the ${sizeLabel(MAX_UPLOAD_BYTES)} limit, and is refused before it arrives. Send a smaller file.`;
+  const seen = describeReply(reply);
+  const evidence = seen ? ` What your browser got back: ${seen}` : "";
+
+  // Ours: the file arrived, and Next kept the reason off the page.
+  if (reply && reply.status > 0 && (reply.contentType ?? "").startsWith("text/x-component")) {
+    return `${what} reached NEON and was refused, but the reason was hidden from this page. It is in the server's log.${evidence}`;
   }
+
+  if (total > MAX_UPLOAD_BYTES) {
+    return `${what} never reached NEON — it is over the ${sizeLabel(MAX_UPLOAD_BYTES)} limit, and is refused before it arrives. Send a smaller file.${evidence}`;
+  }
+
+  if (seen) return `${what} never reached NEON.${evidence}`;
 
   return `${what} never reached NEON, and the server was not told why. Reload the page and try once more; if it fails again the file may be too large for the connection — ${sizeLabel(MAX_UPLOAD_BYTES)} is the most that can be sent.`;
 }

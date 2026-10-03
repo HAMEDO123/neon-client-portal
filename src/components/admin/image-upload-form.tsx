@@ -8,6 +8,7 @@ import { TextInput, Checkbox } from "@/components/admin/fields";
 import { buttonClasses } from "@/components/ui/buttons";
 import { beginBusy, endBusy } from "@/lib/busy";
 import { tooBig, uploadFailure } from "@/lib/upload-limits";
+import { lastReply, reportUploadFailure, watchingReply } from "@/lib/action-reply";
 
 // Uploads run one file per request instead of one big multipart batch — a request
 // with many high-res photos can blow past the server action body-size limit even
@@ -47,33 +48,43 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
     // next one just as readily — see lib/busy.ts.
     beginBusy();
     try {
-      if (isBeforeAfter) {
-        const single = new FormData();
-        single.append("image", compress ? await compressInBrowser(files[0]) : files[0]);
-        if (caption) single.append("caption", caption);
-        single.append("isBeforeAfter", "on");
-        if (compress) single.append("compress", "on");
-        if (beforeImage instanceof File && beforeImage.size > 0) {
-          single.append("beforeImage", compress ? await compressInBrowser(beforeImage) : beforeImage);
-        }
-        await addImage(projectId, spaceId, single);
-        setProgress({ done: 1, total: 1 });
-      } else {
-        for (let i = 0; i < files.length; i++) {
+      await watchingReply(async () => {
+        if (isBeforeAfter) {
           const single = new FormData();
-          single.append("image", compress ? await compressInBrowser(files[i]) : files[i]);
+          single.append("image", compress ? await compressInBrowser(files[0]) : files[0]);
           if (caption) single.append("caption", caption);
+          single.append("isBeforeAfter", "on");
           if (compress) single.append("compress", "on");
+          if (beforeImage instanceof File && beforeImage.size > 0) {
+            single.append("beforeImage", compress ? await compressInBrowser(beforeImage) : beforeImage);
+          }
           await addImage(projectId, spaceId, single);
-          setProgress({ done: i + 1, total: files.length });
+          setProgress({ done: 1, total: 1 });
+        } else {
+          for (let i = 0; i < files.length; i++) {
+            const single = new FormData();
+            single.append("image", compress ? await compressInBrowser(files[i]) : files[i]);
+            if (caption) single.append("caption", caption);
+            if (compress) single.append("compress", "on");
+            await addImage(projectId, spaceId, single);
+            setProgress({ done: i + 1, total: files.length });
+          }
         }
-      }
+      });
       formRef.current?.reset();
       router.refresh();
     } catch (err) {
       // A photo that never reached NEON leaves no message of its own —
       // see lib/upload-limits.ts.
-      setError(uploadFailure(files, err instanceof Error ? err.message : ""));
+      const message = err instanceof Error ? err.message : "";
+      const reply = lastReply();
+      setError(uploadFailure(files, message, reply));
+      reportUploadFailure({
+        where: "admin-gallery",
+        files: files.map((file) => ({ name: file.name, size: file.size, type: file.type })),
+        message,
+        reply,
+      });
     } finally {
       endBusy();
       setProgress(null);
