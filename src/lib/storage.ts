@@ -10,11 +10,23 @@ type UploadKind = "image" | "document" | "audio";
 
 const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: string }> = {
   image: {
-    types: ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"],
+    // HEIC/HEIF is what an iPhone takes by default, and this studio is a
+    // phone-first one. A browser cannot draw it, so it is never stored as it
+    // arrives — `saveFile` always re-encodes it to JPEG (see ALWAYS_CONVERT).
+    // sharp in this image reads HEIF, which is what makes that possible.
+    types: [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "image/avif",
+      "image/heic",
+      "image/heif",
+    ],
     // This is checked before compression runs, so it has to cover the raw
     // original — a high-res camera photo or 4K render export easily clears 12MB.
     maxBytes: 40 * 1024 * 1024,
-    label: "JPEG, PNG, WebP, GIF, or AVIF (max 40MB)",
+    label: "JPEG, PNG, WebP, GIF, AVIF, or an iPhone photo (max 40MB)",
   },
   audio: {
     // Voice notes recorded in the browser. Chrome/Android produce webm/ogg,
@@ -56,6 +68,9 @@ const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: stri
 // Renders and photos over this size are recompressed before storage — keeps the
 // gallery fast to load without asking admins to pre-shrink every export manually.
 const COMPRESS_THRESHOLD_BYTES = 1 * 1024 * 1024;
+
+/** Formats no browser draws, so they are re-encoded however small they are. */
+const ALWAYS_CONVERT = ["image/heic", "image/heif"];
 const MAX_DIMENSION = 2400;
 
 export async function compressImage(buffer: Buffer): Promise<{ buffer: Buffer; ext: string }> {
@@ -197,7 +212,16 @@ export async function saveFile(
   // Re-encoded when it is big, and also when it is sideways: a small photo with
   // a "turn me" tag looks right in a browser but not in everything that reads
   // the file afterwards, the gallery PDF for one.
-  if (kind === "image" && compress && (buffer.length > COMPRESS_THRESHOLD_BYTES || (await needsTurning(buffer)))) {
+  //
+  // **And always for a format a browser cannot draw.** An iPhone photo is HEIC,
+  // and a small upright one meets neither condition above — so without this it
+  // would be stored exactly as it arrived, with a `.heic` name and no content
+  // type we know, and every screen that showed it would show a broken picture
+  // instead. The upload would have reported success, which is the worst way for
+  // this to go wrong.
+  const mustConvert = ALWAYS_CONVERT.includes(baseType);
+
+  if (kind === "image" && (mustConvert || (compress && (buffer.length > COMPRESS_THRESHOLD_BYTES || (await needsTurning(buffer)))))) {
     const compressed = await compressImage(buffer);
     buffer = compressed.buffer;
     ext = compressed.ext;

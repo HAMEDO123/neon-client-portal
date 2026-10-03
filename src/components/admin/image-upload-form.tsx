@@ -69,7 +69,11 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
     >
       <div>
         <label className="mb-1 block text-xs font-medium text-ink/50">Images (select multiple to batch-upload)</label>
-        <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/avif" required multiple className="text-xs" />
+        {/* `image/*`, like every other picker here. The list this used to carry
+            left an iPhone photo greyed out in the chooser, or refused by the
+            server when the system offered it anyway — and HEIC is what an
+            iPhone takes by default. `saveFile` re-encodes whatever arrives. */}
+        <input type="file" name="image" accept="image/*" required multiple className="text-xs" />
         <p className="mt-1 text-[11px] text-ink/35">Uploaded one at a time — no batch size limit.</p>
       </div>
       <TextInput label="Caption (optional)" name="caption" defaultValue="" required={false} className="w-48" />
@@ -83,7 +87,7 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
       <Checkbox label="Before / After pair" name="isBeforeAfter" className="w-56" />
       <div>
         <label className="mb-1 block text-xs font-medium text-ink/50">“Before” image (if checked, uses only the first image above)</label>
-        <input type="file" name="beforeImage" accept="image/jpeg,image/png,image/webp,image/avif" className="text-xs" />
+        <input type="file" name="beforeImage" accept="image/*" className="text-xs" />
       </div>
       <button type="submit" disabled={!!progress} className={buttonClasses("primary", "sm")}>
         {progress ? `Uploading ${progress.done}/${progress.total}…` : "Add Image(s)"}
