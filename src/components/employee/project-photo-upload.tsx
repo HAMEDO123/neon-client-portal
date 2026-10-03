@@ -6,6 +6,7 @@ import { Camera, ImageUp, Loader2 } from "lucide-react";
 import { addProjectImage } from "@/lib/actions/employee-project-actions";
 import { compressInBrowser } from "@/lib/client-image-compress";
 import { cn } from "@/lib/utils";
+import { beginBusy, endBusy } from "@/lib/busy";
 
 // Photos from a phone, onto a project.
 //
@@ -42,6 +43,9 @@ export function ProjectPhotoUpload({ projectId, spaceId }: { projectId: string; 
     setError(null);
     setProgress({ done: 0, total: files.length });
 
+    // One photo per request, and the live refresh must not cancel the next
+    // one between two of them — see lib/busy.ts.
+    beginBusy();
     try {
       for (const [index, file] of files.entries()) {
         const one = new FormData();
@@ -61,6 +65,7 @@ export function ProjectPhotoUpload({ projectId, spaceId }: { projectId: string; 
       // Says how far it got: the ones already sent are on the project.
       setError(cause instanceof Error ? cause.message : "That did not upload.");
     } finally {
+      endBusy();
       setProgress(null);
     }
   }

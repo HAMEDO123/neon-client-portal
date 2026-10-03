@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { whileBusy } from "@/lib/busy";
 import { cn } from "@/lib/utils";
 
 // A form that carries a file, and says what went wrong.
@@ -44,7 +45,9 @@ export function UploadForm({
         startTransition(async () => {
           setError(null);
           try {
-            await action(formData);
+            // Held against the live refresh, which would otherwise cancel this
+            // mid-flight — see lib/busy.ts.
+            await whileBusy(() => action(formData));
             if (resetOnSuccess) form.current?.reset();
           } catch (cause) {
             if (isNextSignal(cause)) throw cause;

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { fillsWindow } from "@/lib/full-window";
+import { isBusy, onIdle } from "@/lib/busy";
 import { UpdateRequired } from "@/components/update-required";
 import { publishPresence } from "@/lib/use-presence";
 
@@ -73,6 +74,16 @@ export function LiveSync({ version }: { version?: string }) {
         stale.current = true;
         return;
       }
+
+      // Never on top of something in flight. `router.refresh()` cancels a
+      // server action that is still running, which is how uploading a drawing
+      // or a photo came back "An unexpected response was received from the
+      // server" — see lib/busy.ts. Held back, and run the moment it is free.
+      if (isBusy()) {
+        stale.current = true;
+        return;
+      }
+
       stale.current = false;
       startTransition(() => router.refresh());
     };
@@ -90,7 +101,13 @@ export function LiveSync({ version }: { version?: string }) {
     };
     document.addEventListener("visibilitychange", onVisible);
 
+    // ...and the same for a refresh held back while an upload was running.
+    const stopWaiting = onIdle(() => {
+      if (stale.current) refresh();
+    });
+
     return () => {
+      stopWaiting();
       source.close();
       document.removeEventListener("visibilitychange", onVisible);
     };

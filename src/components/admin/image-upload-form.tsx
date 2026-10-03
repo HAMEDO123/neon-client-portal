@@ -6,6 +6,7 @@ import { addImage } from "@/lib/actions/gallery-actions";
 import { compressInBrowser } from "@/lib/client-image-compress";
 import { TextInput, Checkbox } from "@/components/admin/fields";
 import { buttonClasses } from "@/components/ui/buttons";
+import { beginBusy, endBusy } from "@/lib/busy";
 
 // Uploads run one file per request instead of one big multipart batch — a request
 // with many high-res photos can blow past the server action body-size limit even
@@ -30,6 +31,10 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
     const compress = formData.get("compress") === "on";
 
     setProgress({ done: 0, total: isBeforeAfter ? 1 : files.length });
+    // Held against the live refresh for the whole run, not per file: it posts
+    // one photo per request, and a refresh between two of them cancels the
+    // next one just as readily — see lib/busy.ts.
+    beginBusy();
     try {
       if (isBeforeAfter) {
         const single = new FormData();
@@ -57,6 +62,7 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
+      endBusy();
       setProgress(null);
     }
   }
