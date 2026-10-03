@@ -6,6 +6,7 @@ import { addDrawingRevision, deleteDrawing, deleteRevision } from "@/lib/actions
 import { Badge } from "@/components/ui/badge";
 import { DeleteButton, SaveButton } from "@/components/admin/form-buttons";
 import { TextInput } from "@/components/admin/fields";
+import { UploadForm } from "@/components/admin/upload-form";
 import { formatDate, formatFileSize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -82,7 +83,7 @@ export function DrawingRow({ projectId, drawing }: { projectId: string; drawing:
             </div>
           )}
 
-          <form
+          <UploadForm
             action={addDrawingRevision.bind(null, projectId, drawing.id)}
             className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed border-ink/12 p-3"
           >
@@ -93,7 +94,7 @@ export function DrawingRow({ projectId, drawing }: { projectId: string; drawing:
               <input type="file" name="file" required className="text-xs" />
             </div>
             <SaveButton label="Upload Revision" />
-          </form>
+          </UploadForm>
         </div>
       )}
     </div>

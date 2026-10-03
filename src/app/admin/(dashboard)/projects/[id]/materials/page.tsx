@@ -8,6 +8,7 @@ import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { MATERIAL_CATEGORIES, toOptions } from "@/lib/constants";
+import { UploadForm } from "@/components/admin/upload-form";
 
 export default async function MaterialsAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,9 +17,10 @@ export default async function MaterialsAdminPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-6">
-      <form
+      <UploadForm
         action={createMaterial.bind(null, project.id)}
         className="glass grid grid-cols-1 gap-3 rounded-2xl p-6 sm:grid-cols-4"
+        resetOnSuccess={true}
       >
         <Select label="Category" name="category" defaultValue="Marble" options={toOptions(MATERIAL_CATEGORIES)} />
         <TextInput label="Name" name="name" placeholder="Calacatta Gold Marble" defaultValue="" className="sm:col-span-2" />
@@ -37,7 +39,7 @@ export default async function MaterialsAdminPage({ params }: { params: Promise<{
         <div>
           <SaveButton label="Add Material" />
         </div>
-      </form>
+      </UploadForm>
 
       {project.materials.length === 0 ? (
         <EmptyState icon={Palette} title="No materials yet" description="Build the material and finish board above." />

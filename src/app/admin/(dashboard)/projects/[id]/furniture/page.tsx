@@ -6,6 +6,7 @@ import { createFurnitureItem, deleteFurnitureItem } from "@/lib/actions/furnitur
 import { TextInput } from "@/components/admin/fields";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { EmptyState } from "@/components/ui/empty-state";
+import { UploadForm } from "@/components/admin/upload-form";
 
 export default async function FurnitureAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,9 +15,10 @@ export default async function FurnitureAdminPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-6">
-      <form
+      <UploadForm
         action={createFurnitureItem.bind(null, project.id)}
         className="glass grid grid-cols-1 gap-3 rounded-2xl p-6 sm:grid-cols-4"
+        resetOnSuccess={true}
       >
         <TextInput label="Name" name="name" placeholder="Sofa" defaultValue="" className="sm:col-span-2" />
         <TextInput label="Space" name="space" placeholder="Living Room" defaultValue="" required={false} />
@@ -34,7 +36,7 @@ export default async function FurnitureAdminPage({ params }: { params: Promise<{
         <div>
           <SaveButton label="Add Item" />
         </div>
-      </form>
+      </UploadForm>
 
       {project.furniture.length === 0 ? (
         <EmptyState icon={Sofa} title="No furniture yet" description="Build the furniture and product schedule above." />

@@ -7,6 +7,7 @@ import { SaveButton } from "@/components/admin/form-buttons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DRAWING_CATEGORIES, toOptions } from "@/lib/constants";
 import { DrawingRow } from "@/components/admin/drawing-row";
+import { UploadForm } from "@/components/admin/upload-form";
 
 export default async function DrawingsAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,9 +16,10 @@ export default async function DrawingsAdminPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex flex-col gap-6">
-      <form
+      <UploadForm
         action={createDrawing.bind(null, project.id)}
         className="glass grid grid-cols-1 gap-3 rounded-2xl p-6 sm:grid-cols-3"
+        resetOnSuccess={true}
       >
         <Select label="Category" name="category" defaultValue="Architectural" options={toOptions(DRAWING_CATEGORIES)} />
         <TextInput label="Sub-category" name="subCategory" placeholder="Floor Plans" defaultValue="" required={false} />
@@ -31,7 +33,7 @@ export default async function DrawingsAdminPage({ params }: { params: Promise<{ 
         <div className="sm:col-span-3">
           <SaveButton label="Add Drawing" />
         </div>
-      </form>
+      </UploadForm>
 
       {project.drawings.length === 0 ? (
         <EmptyState icon={FileText} title="No drawings yet" description="Upload the first technical drawing above." />

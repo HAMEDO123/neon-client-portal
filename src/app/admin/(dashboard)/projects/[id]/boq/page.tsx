@@ -6,6 +6,7 @@ import { TextInput, TextArea, Select } from "@/components/admin/fields";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BOQ_CATEGORIES, toOptions } from "@/lib/constants";
+import { UploadForm } from "@/components/admin/upload-form";
 
 export default async function BoqAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,9 +15,10 @@ export default async function BoqAdminPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="flex flex-col gap-6">
-      <form
+      <UploadForm
         action={createBoqItem.bind(null, project.id)}
         className="glass grid grid-cols-1 gap-3 rounded-2xl p-6 sm:grid-cols-4"
+        resetOnSuccess={true}
       >
         <Select label="Category" name="category" defaultValue="Flooring" options={toOptions(BOQ_CATEGORIES)} />
         <TextInput label="Item Name" name="name" placeholder="Porcelain Flooring" defaultValue="" className="sm:col-span-2" />
@@ -33,7 +35,7 @@ export default async function BoqAdminPage({ params }: { params: Promise<{ id: s
         <div>
           <SaveButton label="Add Item" />
         </div>
-      </form>
+      </UploadForm>
 
       {project.boqItems.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No BOQ items yet" description="Add quantities and specifications above." />

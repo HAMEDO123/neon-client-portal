@@ -6,6 +6,7 @@ import { TextInput, TextArea, Select, Checkbox } from "@/components/admin/fields
 import { SaveButton } from "@/components/admin/form-buttons";
 import { PROJECT_STAGES, PIPELINE_STATUSES } from "@/lib/constants";
 import { sellers } from "@/lib/sales-queries";
+import { UploadForm } from "@/components/admin/upload-form";
 
 // A project's details, from the team's side.
 //
@@ -37,9 +38,10 @@ export default async function EmployeeProjectOverviewPage({ params }: { params: 
     <div className="flex flex-col gap-8">
       <section>
         <h2 className="text-lg font-semibold text-ink">Project Details</h2>
-        <form
+        <UploadForm
           action={updateProjectOverview.bind(null, project.id)}
           className="glass mt-4 flex flex-col gap-4 rounded-2xl p-6"
+          resetOnSuccess={false}
         >
           {/* Side by side where there is room; stacked on a phone, where the
               file picker will not shrink below its own text. */}
@@ -121,7 +123,7 @@ export default async function EmployeeProjectOverviewPage({ params }: { params: 
           <div>
             <SaveButton label="Save Details" />
           </div>
-        </form>
+        </UploadForm>
       </section>
 
       <section>

@@ -8,7 +8,58 @@ const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
 
 type UploadKind = "image" | "document" | "audio";
 
-const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: string }> = {
+/**
+ * What a drawing or document may be when the browser will not say.
+ *
+ * Only reached for a file whose type is empty or the generic one — never a way
+ * round a type the browser *did* name, so a .exe called .pdf is still refused
+ * on its type as it was before.
+ */
+const DOCUMENT_EXTENSIONS = [
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "csv",
+  "txt",
+  "zip",
+  "rar",
+  "7z",
+  "mp4",
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "heic",
+  "heif",
+  // The CAD and model files the studio actually sends, which are the ones
+  // Windows has no type for.
+  "dwg",
+  "dxf",
+  "dwf",
+  "rvt",
+  "rfa",
+  "skp",
+  "3ds",
+  "max",
+  "obj",
+  "fbx",
+  "stl",
+  "step",
+  "stp",
+  "iges",
+  "igs",
+  "ai",
+  "psd",
+  "indd",
+  "eps",
+  "svg",
+];
+
+const RULES: Record<UploadKind, { types: string[]; extensions?: string[]; maxBytes: number; label: string }> = {
   image: {
     // HEIC/HEIF is what an iPhone takes by default, and this studio is a
     // phone-first one. A browser cannot draw it, so it is never stored as it
@@ -58,8 +109,17 @@ const RULES: Record<UploadKind, { types: string[]; maxBytes: number; label: stri
       "image/jpeg",
       "image/png",
       "image/webp",
+      // An iPhone photo attached as a document, converted below like any other.
+      "image/heic",
+      "image/heif",
       "application/octet-stream", // DWG and other CAD files report this generic type in most browsers
     ],
+    // ...and often no type at all. A browser names a file from what the
+    // operating system has registered for its extension, and Windows has
+    // nothing for .dwg, .dxf, .rvt or .skp — so `file.type` arrives as the
+    // empty string and the list above cannot match it. The extension is what
+    // is left to go on; see `allowedDocument`.
+    extensions: DOCUMENT_EXTENSIONS,
     maxBytes: 50 * 1024 * 1024,
     label: "PDF, DOCX, XLSX, ZIP, MP4, DWG, or image (max 50MB)",
   },
@@ -116,6 +176,24 @@ export async function squareImage(buffer: Buffer): Promise<{ buffer: Buffer; ext
     .toBuffer();
 
   return { buffer: output, ext: "jpg" };
+}
+
+/**
+ * Whether this file may be stored under this rule.
+ *
+ * The type first, as it always was. Only when the browser gives none — or the
+ * generic one it uses for "I have no idea" — does the extension decide, and
+ * only for a rule that lists extensions at all. A .dwg from Windows arrives
+ * with `file.type === ""`, which is the whole reason this exists: the upload
+ * was refused as an unsupported type when nothing had said what the type was.
+ */
+function allowed(rule: { types: string[]; extensions?: string[] }, baseType: string, file: File): boolean {
+  if (rule.types.includes(baseType)) return true;
+
+  const unnamed = baseType.length === 0 || baseType === "application/octet-stream";
+  if (!unnamed || !rule.extensions) return false;
+
+  return rule.extensions.includes(extFromFile(file));
 }
 
 function extFromFile(file: File) {
@@ -199,7 +277,7 @@ export async function saveFile(
   // "audio/webm;codecs=opus" is audio/webm: Chrome names its voice notes that
   // way, and matching the whole string rejected every one of them.
   const baseType = file.type.split(";")[0].trim().toLowerCase();
-  if (!rule.types.includes(baseType)) {
+  if (!allowed(rule, baseType, file)) {
     throw new Error(`Unsupported file type. Use: ${rule.label}.`);
   }
   if (file.size > rule.maxBytes) {
@@ -221,10 +299,25 @@ export async function saveFile(
   // this to go wrong.
   const mustConvert = ALWAYS_CONVERT.includes(baseType);
 
-  if (kind === "image" && (mustConvert || (compress && (buffer.length > COMPRESS_THRESHOLD_BYTES || (await needsTurning(buffer)))))) {
-    const compressed = await compressImage(buffer);
-    buffer = compressed.buffer;
-    ext = compressed.ext;
+  // `mustConvert` is not gated on the kind: a HEIC attached to a drawing is as
+  // undrawable as one added to the gallery, and the client it is shown to is on
+  // whatever computer they have.
+  if (mustConvert || (kind === "image" && compress && (buffer.length > COMPRESS_THRESHOLD_BYTES || (await needsTurning(buffer))))) {
+    try {
+      const compressed = await compressImage(buffer);
+      buffer = compressed.buffer;
+      ext = compressed.ext;
+    } catch (cause) {
+      // sharp says "Input buffer contains unsupported image format", which is
+      // true and no use to somebody holding a phone. A file that cannot be read
+      // as a picture is a file to replace, and that is what the sentence says.
+      if (mustConvert) {
+        throw new Error("That photo could not be read. Try taking it again, or send it as a JPEG.");
+      }
+      // Only an optimisation failed, and the original is perfectly good: a
+      // photo must not be lost because it could not be made smaller.
+      console.error("compressImage failed; storing the original", cause);
+    }
   }
 
   const relativePath = `${folder}/${crypto.randomUUID()}.${ext}`;

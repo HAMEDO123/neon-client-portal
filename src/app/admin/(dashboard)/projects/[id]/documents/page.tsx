@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { DOCUMENT_CATEGORIES, toOptions } from "@/lib/constants";
 import { formatFileSize } from "@/lib/format";
+import { UploadForm } from "@/components/admin/upload-form";
 
 export default async function DocumentsAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,9 +17,10 @@ export default async function DocumentsAdminPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-6">
-      <form
+      <UploadForm
         action={createDocument.bind(null, project.id)}
         className="glass grid grid-cols-1 gap-3 rounded-2xl p-6 sm:grid-cols-4"
+        resetOnSuccess={true}
       >
         <Select label="Category" name="category" defaultValue="Specifications" options={toOptions(DOCUMENT_CATEGORIES)} />
         <TextInput label="Title" name="title" placeholder="Design Contract" defaultValue="" className="sm:col-span-2" />
@@ -30,7 +32,7 @@ export default async function DocumentsAdminPage({ params }: { params: Promise<{
         <div>
           <SaveButton label="Add Document" />
         </div>
-      </form>
+      </UploadForm>
 
       {project.documents.length === 0 ? (
         <EmptyState icon={FolderOpen} title="No documents yet" description="Upload contracts, reports, or specifications above." />
