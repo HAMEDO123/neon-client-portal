@@ -7,7 +7,7 @@ import { addProjectImage } from "@/lib/actions/employee-project-actions";
 import { compressInBrowser } from "@/lib/client-image-compress";
 import { cn } from "@/lib/utils";
 import { beginBusy, endBusy } from "@/lib/busy";
-import { tooBig } from "@/lib/upload-limits";
+import { tooBig, uploadFailure } from "@/lib/upload-limits";
 
 // Photos from a phone, onto a project.
 //
@@ -75,7 +75,7 @@ export function ProjectPhotoUpload({ projectId, spaceId }: { projectId: string; 
       router.refresh();
     } catch (cause) {
       // Says how far it got: the ones already sent are on the project.
-      setError(cause instanceof Error ? cause.message : "That did not upload.");
+      setError(uploadFailure(files, cause instanceof Error ? cause.message : ""));
     } finally {
       endBusy();
       setProgress(null);

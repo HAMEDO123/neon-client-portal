@@ -5,8 +5,10 @@ import {
   BODY_LIMIT_BYTES,
   CLOUDFLARE_LIMIT_BYTES,
   MAX_UPLOAD_BYTES,
+  isOpaqueFailure,
   sizeLabel,
   tooBig,
+  uploadFailure,
 } from "../src/lib/upload-limits";
 
 // A file past either ceiling does not fail with a message — it dies between
@@ -73,5 +75,68 @@ describe("how a size is written", () => {
   it("never says 0 KB for a file that exists", () => {
     // "that file is 0 KB" about something plainly there reads as a bug.
     assert.equal(sizeLabel(12), "1 KB");
+  });
+});
+
+describe("the failures that say nothing", () => {
+  // Measured against the live site on 2026-10-03: a 105 MB upload came back
+  // `413 Payload Too Large` as an HTML page from Cloudflare, which React
+  // reports with this sentence and which leaves no trace in the server's log.
+  const CLOUDFLARE = "An unexpected response was received from the server.";
+
+  // What Next hands the browser instead of a thrown message in production.
+  const REDACTED =
+    "An error occurred in the Server Components render. The specific message is " +
+    "omitted in production builds to avoid leaking sensitive details.";
+
+  it("knows which messages tell the reader nothing", () => {
+    assert.equal(isOpaqueFailure(CLOUDFLARE), true);
+    assert.equal(isOpaqueFailure(REDACTED), true);
+    assert.equal(isOpaqueFailure("Failed to fetch"), true);
+  });
+
+  // An unknown action is answered `text/plain` with this, which React shows
+  // verbatim. It means a page from another build, not a file that was refused,
+  // and the two must not be given the same sentence.
+  it("leaves a message that does say something alone", () => {
+    assert.equal(isOpaqueFailure("Server action not found."), false);
+    assert.equal(
+      uploadFailure([{ name: "a.pdf", size: 10 }], "Server action not found."),
+      "Server action not found."
+    );
+    assert.equal(uploadFailure([], "Select a file to upload."), "Select a file to upload.");
+  });
+
+  it("names the file and its size when the failure does not", () => {
+    const message = uploadFailure([{ name: "plan.dwg", size: 120 * 1024 * 1024 }], CLOUDFLARE);
+    assert.match(message, /plan\.dwg/);
+    assert.match(message, /120 MB/);
+    // Over the limit is a cause we know, so it is stated rather than guessed at.
+    assert.match(message, /over the 80 MB limit/);
+  });
+
+  it("asks for a reload when the size was not the problem", () => {
+    const message = uploadFailure([{ name: "plan.dwg", size: 2 * 1024 * 1024 }], REDACTED);
+    assert.match(message, /plan\.dwg/);
+    assert.match(message, /Reload the page/);
+    assert.doesNotMatch(message, /over the/);
+  });
+
+  it("counts several files together", () => {
+    const message = uploadFailure(
+      [
+        { name: "a.jpg", size: 50 * 1024 * 1024 },
+        { name: "b.jpg", size: 50 * 1024 * 1024 },
+      ],
+      CLOUDFLARE
+    );
+    assert.match(message, /Those 2 files \(100 MB together\)/);
+  });
+
+  // A file picker that was never filled in posts a zero-byte entry; naming it
+  // would read as though the upload had carried something.
+  it("ignores empty entries", () => {
+    const message = uploadFailure([{ name: "", size: 0 }], CLOUDFLARE);
+    assert.match(message, /^That upload never reached NEON/);
   });
 });

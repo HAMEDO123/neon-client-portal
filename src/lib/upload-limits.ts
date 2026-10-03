@@ -59,3 +59,72 @@ export function tooBig(files: File[], max = MAX_UPLOAD_BYTES): string | null {
 
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// When the failure itself says nothing
+//
+// Two different things reach the browser as a sentence nobody can act on, and
+// they are worth telling apart from a real refusal:
+//
+//   **Cloudflare's 413.** Measured on 2026-10-03 against the live site: 75 MB
+//   uploaded fine, 95 MB reached the app and was refused by our own rule, and
+//   105 MB came back `413 Payload Too Large` as an **HTML page** from
+//   Cloudflare. React sees a reply that is not `text/x-component` and says
+//   *"An unexpected response was received from the server."* Nothing of ours
+//   ran, so the server log is empty — which is the whole difficulty: the one
+//   failure with no evidence anywhere is the one with a cause we cannot fix.
+//
+//   **Next redacting a server action's error in production.** A thrown message
+//   never reaches the browser: the reply carries a digest and nothing else, and
+//   React builds an error whose text is a paragraph about omitted details. So
+//   "File is too large" and "That file type is not supported" both arrive as
+//   the same unreadable thing.
+//
+// In either case the browser still knows what it tried to send, and that is
+// the fact worth putting on screen. An unknown action is deliberately NOT in
+// this list — Next answers that one `text/plain` with "Server action not
+// found.", which React shows verbatim and which means something quite
+// different.
+
+const OPAQUE = [
+  "unexpected response was received from the server",
+  "error occurred in the server components render",
+  "an error occurred in the server components",
+  "failed to fetch",
+  "load failed",
+  "networkerror",
+];
+
+/** Whether this message is one of the ones that tells the reader nothing. */
+export function isOpaqueFailure(message: string): boolean {
+  const text = message.toLowerCase();
+  return OPAQUE.some((phrase) => text.includes(phrase));
+}
+
+/**
+ * What to show when an upload fails: the message if it says something, and
+ * otherwise what we sent and what to do about it.
+ *
+ * The size is named even though the form checked it already — a page left open
+ * since before that check existed does not have it, and it is exactly that page
+ * this sentence has to reach.
+ */
+export function uploadFailure(files: { name: string; size: number }[], message: string): string {
+  if (message && !isOpaqueFailure(message)) return message;
+
+  const sent = files.filter((file) => file.size > 0);
+  const total = sent.reduce((sum, file) => sum + file.size, 0);
+
+  const what =
+    sent.length === 0
+      ? "That upload"
+      : sent.length === 1
+        ? `${sent[0].name} (${sizeLabel(sent[0].size)})`
+        : `Those ${sent.length} files (${sizeLabel(total)} together)`;
+
+  if (total > MAX_UPLOAD_BYTES) {
+    return `${what} never reached NEON — it is over the ${sizeLabel(MAX_UPLOAD_BYTES)} limit, and is refused before it arrives. Send a smaller file.`;
+  }
+
+  return `${what} never reached NEON, and the server was not told why. Reload the page and try once more; if it fails again the file may be too large for the connection — ${sizeLabel(MAX_UPLOAD_BYTES)} is the most that can be sent.`;
+}

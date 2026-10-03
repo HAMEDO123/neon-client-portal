@@ -7,7 +7,7 @@ import { compressInBrowser } from "@/lib/client-image-compress";
 import { TextInput, Checkbox } from "@/components/admin/fields";
 import { buttonClasses } from "@/components/ui/buttons";
 import { beginBusy, endBusy } from "@/lib/busy";
-import { tooBig } from "@/lib/upload-limits";
+import { tooBig, uploadFailure } from "@/lib/upload-limits";
 
 // Uploads run one file per request instead of one big multipart batch — a request
 // with many high-res photos can blow past the server action body-size limit even
@@ -71,7 +71,9 @@ export function ImageUploadForm({ projectId, spaceId }: { projectId: string; spa
       formRef.current?.reset();
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
+      // A photo that never reached NEON leaves no message of its own —
+      // see lib/upload-limits.ts.
+      setError(uploadFailure(files, err instanceof Error ? err.message : ""));
     } finally {
       endBusy();
       setProgress(null);

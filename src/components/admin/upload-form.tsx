@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { whileBusy } from "@/lib/busy";
-import { tooBig } from "@/lib/upload-limits";
+import { tooBig, uploadFailure } from "@/lib/upload-limits";
 import { cn } from "@/lib/utils";
 
 // A form that carries a file, and says what went wrong.
@@ -64,7 +64,11 @@ export function UploadForm({
             if (resetOnSuccess) form.current?.reset();
           } catch (cause) {
             if (isNextSignal(cause)) throw cause;
-            setError(cause instanceof Error ? cause.message : "That upload did not go through.");
+            // Neither of the two ways this fails carries a message worth
+            // reading — Cloudflare's own 413 never reaches our code, and Next
+            // strips a thrown message in production — so what the browser
+            // knows about the file is said instead. See lib/upload-limits.ts.
+            setError(uploadFailure(files, cause instanceof Error ? cause.message : ""));
           }
         })
       }
