@@ -10,6 +10,7 @@ import {
   Fingerprint,
   Info,
   MapPin,
+  MapPinned,
   MessageSquare,
   RefreshCw,
   TriangleAlert,
@@ -39,6 +40,7 @@ const ICONS: Record<NotificationType, typeof BellRing> = {
   WARNING: TriangleAlert,
   ATTENDANCE_REMINDER: Fingerprint,
   LOCATION_REMINDER: MapPin,
+  SITE_VISIT: MapPinned,
 };
 
 function ago(date: Date) {

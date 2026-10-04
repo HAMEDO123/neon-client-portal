@@ -3,6 +3,7 @@ import { saveFile } from "@/lib/storage";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
+import { VISIT_TASK_REFUSAL, isVisitTask } from "@/lib/site-visit-task-store";
 import { verifySubmission } from "@/lib/ai/verify-submission";
 import type { TaskState } from "@/generated/prisma/enums";
 
@@ -49,6 +50,14 @@ export async function submitProof(
   // already approved, must not be submitted again.
   const move = canMove(subject.state, "SUBMITTED", "employee", true);
   if (!move.ok) return { ok: false, error: move.reason };
+
+  // A site visit is written up in the diary, where the client is asked and the
+  // manager approves. A photo sent against its job would be a second record of
+  // the same visit — so it is turned away here, the one place the website and
+  // the phone both pass through.
+  if (subject.kind === "assigned" && (await isVisitTask(subject.id))) {
+    return { ok: false, error: VISIT_TASK_REFUSAL };
+  }
 
   if (!(photo instanceof File) || photo.size === 0) {
     return { ok: false, error: "Attach a photo or a file of the finished work." };

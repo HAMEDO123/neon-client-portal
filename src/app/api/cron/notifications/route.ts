@@ -3,6 +3,7 @@ import { runDeadlineReminders, runScheduleNotifier, runStageReminders } from "@/
 import { runFollowUps } from "@/lib/notifications/follow-up-events";
 import { runRules } from "@/lib/notifications/automation-events";
 import { runMeetingReminders } from "@/lib/notifications/meeting-events";
+import { runSiteVisitReminders } from "@/lib/notifications/site-visit-events";
 import { syncAttendance } from "@/lib/attendance-sync";
 import { runClockReminders } from "@/lib/notifications/clock-events";
 import { runLocationKeeper } from "@/lib/notifications/location-keeper";
@@ -108,6 +109,16 @@ async function run(request: Request) {
   // key, so overlapping runs tell somebody once.
   if (forced === "meetings" || !forced) {
     ran.meetings = await runMeetingReminders(new Date(), timezone);
+  }
+
+  // The reminder the day before a site visit, and the job each visit has among
+  // the tasks. Considered on every run: a reminder is keyed to the visit's own
+  // time, so overlapping runs say it once. It reports rather than throws, so a
+  // failure here cannot take the rest of the pass down with it.
+  if (forced === "visits" || !forced) {
+    ran.visits = await runSiteVisitReminders(new Date(), timezone).catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    }));
   }
 
   // What the fingerprint device saw. Considered on every run, like the

@@ -5,7 +5,9 @@ import { prisma } from "@/lib/db";
 import { requireAdmin, requireSiteVisitor } from "@/lib/admin-guard";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { dispatchNotification } from "@/lib/notifications/engine";
-import { needsReport } from "@/lib/site-visits";
+import { needsReport, readVisitWhen } from "@/lib/site-visits";
+import { syncVisitTaskQuietly } from "@/lib/site-visit-task-store";
+import { getTimezone } from "@/lib/settings";
 import { sendWhatsApp } from "@/lib/whatsapp";
 import type { SiteVisitState } from "@/generated/prisma/enums";
 
@@ -26,6 +28,10 @@ import type { SiteVisitState } from "@/generated/prisma/enums";
 function refresh() {
   revalidatePath("/employee/tasks");
   revalidatePath("/admin/site-visits");
+  // A visit with a day is also a job on that day (lib/site-visit-task-store.ts),
+  // so the person's own day and the manager's week board have changed too.
+  revalidatePath("/employee");
+  revalidatePath("/admin/tasks");
 }
 
 /**
@@ -78,25 +84,24 @@ async function askForReview(visit: {
     : { sentAt: null, note: `Could not ask ${name ?? "the client"} on ${phone}: ${result.error}` };
 }
 
-function readForm(formData: FormData) {
+async function readForm(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim().slice(0, 200);
   if (!title) throw new Error("Say what the visit is for.");
 
-  const when = String(formData.get("scheduledAt") ?? "").trim();
-  // datetime-local gives "YYYY-MM-DDTHH:mm", which Date reads in the browser's
-  // own zone — here, on the server, that is the container's. The studio runs
-  // in one country and the server is set to it, so this stays the plain
-  // reading rather than pretending to a precision it does not have.
+  // The website's date box sends a wall clock with no zone, and that is a time
+  // in the studio — not on the server, which runs in UTC. This comment used to
+  // say the server was set to the studio's zone; it never was, so every visit
+  // written on the website was stored three hours late and moved three hours
+  // further on each edit. `readVisitWhen` reads it in the studio's zone, and
+  // takes the phone app's instants as they are.
   //
   // Empty is allowed and means nobody has picked a day yet: the manager can
   // write a visit down and leave the when to whoever is going. A date that
   // was typed and cannot be read is still refused — that is a mistake, not a
   // decision to leave it open.
-  let scheduledAt: Date | null = null;
-  if (when) {
-    scheduledAt = new Date(when);
-    if (Number.isNaN(scheduledAt.getTime())) throw new Error("That day and time could not be read.");
-  }
+  const when = readVisitWhen(String(formData.get("scheduledAt") ?? ""), await getTimezone());
+  if (!when.ok) throw new Error("That day and time could not be read.");
+  const scheduledAt = when.at;
 
   const projectId = String(formData.get("projectId") ?? "").trim() || null;
 
@@ -116,11 +121,12 @@ export async function scheduleSiteVisit(formData: FormData) {
   const actor = await requireSiteVisitor();
   if (actor.type !== "EMPLOYEE") throw new Error("Visits are scheduled by whoever is going.");
 
-  const input = readForm(formData);
+  const input = await readForm(formData);
   const visit = await prisma.siteVisit.create({
     data: { ...input, employeeId: actor.id },
     select: { id: true, title: true, scheduledAt: true },
   });
+  await syncVisitTaskQuietly(visit.id);
 
   await notifyAdmin({
     type: "TASK_STATUS_CHANGED",
@@ -146,7 +152,9 @@ export async function updateSiteVisit(id: string, formData: FormData) {
     throw new Error("That visit has already been answered for.");
   }
 
-  await prisma.siteVisit.update({ where: { id }, data: readForm(formData) });
+  await prisma.siteVisit.update({ where: { id }, data: await readForm(formData) });
+  // A new day moves its job to that day, and a cleared one takes it off the week.
+  await syncVisitTaskQuietly(id);
   refresh();
 }
 
@@ -202,6 +210,9 @@ export async function reportSiteVisit(id: string, state: SiteVisitState, formDat
       ...(review ? { reviewSentAt: review.sentAt, reviewNote: review.note } : {}),
     },
   });
+  // Written up: its job is with the manager now. Not made, or called off: it is
+  // no longer work to do, and the diary keeps the record.
+  await syncVisitTaskQuietly(id);
 
   await notifyAdmin({
     type: "TASK_STATUS_CHANGED",
@@ -246,15 +257,17 @@ export async function assignSiteVisit(formData: FormData) {
     : null;
   if (!owner) throw new Error("Choose somebody who keeps the site-visit diary.");
 
-  const input = readForm(formData);
+  const input = await readForm(formData);
   const visit = await prisma.siteVisit.create({
     data: { ...input, employeeId: owner.id },
     select: { id: true, title: true, scheduledAt: true },
   });
+  await syncVisitTaskQuietly(visit.id);
 
   await dispatchNotification({
     employeeId: owner.id,
-    type: "TASK_ASSIGNED",
+    // Its own type, so it has its own sound — see lib/notifications/types.ts.
+    type: "SITE_VISIT",
     title: "A site visit for you",
     message: visit.scheduledAt
       ? `${visit.title} — ${visit.scheduledAt.toLocaleString("en-GB")}`
@@ -284,6 +297,7 @@ export async function approveSiteVisit(id: string) {
     where: { id },
     data: { state: "VISITED", approvedAt: new Date() },
   });
+  await syncVisitTaskQuietly(id);
 
   refresh();
 }
@@ -307,6 +321,7 @@ export async function reopenSiteVisit(id: string) {
     where: { id },
     data: { state: "PLANNED", reportedAt: null },
   });
+  await syncVisitTaskQuietly(id);
 
   refresh();
 }

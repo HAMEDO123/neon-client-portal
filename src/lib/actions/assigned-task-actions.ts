@@ -8,6 +8,7 @@ import { daysBetween } from "@/lib/week";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
+import { refuseVisitTask } from "@/lib/site-visit-task-store";
 import type { TaskPriority } from "@/generated/prisma/enums";
 
 // Handing out work that is not part of any project.
@@ -124,6 +125,8 @@ export async function createAssignedTask(formData: FormData) {
 
 export async function updateAssignedTask(id: string, formData: FormData) {
   await requireTaskAssigner();
+  // A site visit's job follows the visit — see lib/site-visit-task-store.ts.
+  await refuseVisitTask(id);
   const input = readForm(formData);
 
   const before = await prisma.assignedTask.findUnique({
@@ -170,6 +173,7 @@ export async function updateAssignedTask(id: string, formData: FormData) {
 
 export async function deleteAssignedTask(id: string) {
   await requireTaskAssigner();
+  await refuseVisitTask(id);
   await prisma.assignedTask.delete({ where: { id } }).catch(() => {});
   refresh();
 }
@@ -183,6 +187,7 @@ export async function deleteAssignedTask(id: string) {
  */
 export async function moveAssignedTask(id: string, input: { days: number; employeeId?: string }) {
   await requireTaskAssigner();
+  await refuseVisitTask(id);
 
   const task = await prisma.assignedTask.findUnique({
     where: { id },
@@ -232,6 +237,8 @@ export async function moveAssignedTask(id: string, input: { days: number; employ
 /** The manager ticking one off from the week view. */
 export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGRESS" | "DONE") {
   await requireTaskAssigner();
+  // Approving a visit is done on the visit, where the client's answer is.
+  await refuseVisitTask(id);
 
   const before = await prisma.assignedTask.findUnique({ where: { id }, select: { state: true } });
 

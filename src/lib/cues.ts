@@ -19,9 +19,10 @@ import {
 // moves when something is read, and reading is not news. A conversation this
 // person muted (ChatPref.muted) makes no sound for them.
 
-export type Cues = { messages: number; updates: number };
+/** `visits` is 0 for the manager: a site visit's own sound is for whoever is going. */
+export type Cues = { messages: number; updates: number; visits: number };
 
-type Row = { messages: Date | null; updates: Date | null };
+type Row = { messages: Date | null; updates: Date | null; visits?: Date | null };
 
 async function readCues(viewer: ChatViewer) {
   if (viewer.type === "ADMIN") {
@@ -62,14 +63,22 @@ async function readCues(viewer: ChatViewer) {
           )
       ) AS messages,
       (
-        -- A chat message is already the other sound.
+        -- A chat message is already the other sound, and a site visit has its own.
         SELECT MAX("createdAt") FROM "Notification"
-        WHERE "employeeId" = ${viewer.id} AND "type" <> 'CHAT_MESSAGE'
-      ) AS updates
+        WHERE "employeeId" = ${viewer.id} AND "type" NOT IN ('CHAT_MESSAGE', 'SITE_VISIT')
+      ) AS updates,
+      (
+        SELECT MAX("createdAt") FROM "Notification"
+        WHERE "employeeId" = ${viewer.id} AND "type" = 'SITE_VISIT'
+      ) AS visits
   `;
 }
 
 export async function latestCues(viewer: ChatViewer): Promise<Cues> {
   const row = (await readCues(viewer))[0];
-  return { messages: row?.messages?.getTime() ?? 0, updates: row?.updates?.getTime() ?? 0 };
+  return {
+    messages: row?.messages?.getTime() ?? 0,
+    updates: row?.updates?.getTime() ?? 0,
+    visits: row?.visits?.getTime() ?? 0,
+  };
 }

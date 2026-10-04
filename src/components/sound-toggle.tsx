@@ -1,11 +1,11 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Bell, MessageCircle, Volume2, VolumeX } from "lucide-react";
+import { Bell, MapPinned, MessageCircle, Volume2, VolumeX } from "lucide-react";
 import { previewCue, setSoundsOn, soundsOn, subscribeSounds } from "@/lib/sound-cues";
 import { cn } from "@/lib/utils";
 
-// The two sounds, and a switch for them. Kept per device, like a phone's own
+// The three sounds, and a switch for them. Kept per device, like a phone's own
 // volume: the office computer can be quiet while the phone is not.
 
 export function SoundToggle() {
@@ -53,6 +53,7 @@ export function SoundToggle() {
       <div className="mt-3 flex flex-wrap gap-2">
         <PreviewButton label="Message sound" icon={MessageCircle} disabled={!on} onClick={() => previewCue("message")} />
         <PreviewButton label="Update sound" icon={Bell} disabled={!on} onClick={() => previewCue("update")} />
+        <PreviewButton label="Site visit sound" icon={MapPinned} disabled={!on} onClick={() => previewCue("visit")} />
       </div>
     </section>
   );

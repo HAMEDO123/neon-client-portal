@@ -460,7 +460,7 @@ export function diskRow(id: string, title: string, facts: DiskFacts, where: stri
 export const CRON_STAMP_KEY = "cron_last_run";
 
 /** Every job the endpoint can be told to run on its own (`?job=`). */
-export const CRON_JOBS = ["tomorrow", "today", "deadlines", "followups", "rules", "meetings", "attendance", "stages", "clock", "location"] as const;
+export const CRON_JOBS = ["tomorrow", "today", "deadlines", "followups", "rules", "meetings", "attendance", "stages", "clock", "location", "visits"] as const;
 
 /** The setting a run is stamped under: the full pass, or one forced job. Unknown jobs are not stamped. */
 export function cronStampKey(job: string | null): string | null {

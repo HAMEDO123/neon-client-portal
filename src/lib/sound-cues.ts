@@ -10,7 +10,7 @@
 // plays the instant it is asked. Browsers only let a page make sound once
 // somebody has touched it, so the first tap anywhere switches sound on.
 
-export type Cue = "message" | "update";
+export type Cue = "message" | "update" | "visit";
 
 export type Note = {
   frequency: number;
@@ -36,6 +36,14 @@ export const CUES: Record<Cue, Note[]> = {
   update: [
     { frequency: 659.25, start: 0, duration: 0.45, wave: "triangle", level: 0.3 },
     { frequency: 987.77, start: 0.15, duration: 0.6, wave: "triangle", level: 0.26 },
+  ],
+  // A site visit: a low bell struck twice, then a higher one left to ring —
+  // slower and rounder than either of the others, so it is known for what it
+  // is from across the room. The studio asked for exactly that.
+  visit: [
+    { frequency: 523.25, start: 0, duration: 0.5, wave: "sine", level: 0.5, shimmer: 0.5 },
+    { frequency: 523.25, start: 0.28, duration: 0.5, wave: "sine", level: 0.5, shimmer: 0.5 },
+    { frequency: 783.99, start: 0.56, duration: 1.1, wave: "sine", level: 0.55, shimmer: 0.6 },
   ],
 };
 
@@ -75,7 +83,7 @@ export function isNews(heardUpTo: number, at: number) {
 }
 
 const OFF_KEY = "neon:sounds";
-const heard: Record<Cue, number> = { message: 0, update: 0 };
+const heard: Record<Cue, number> = { message: 0, update: 0, visit: 0 };
 let context: AudioContext | null = null;
 
 /** On unless this device was told otherwise. A device setting, like a phone's own volume. */

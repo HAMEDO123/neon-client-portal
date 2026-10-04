@@ -116,7 +116,9 @@ export async function sendApns(target: ApnsTarget, payload: PushPayload): Promis
   const body = JSON.stringify({
     aps: {
       alert: { title: payload.title, body: payload.body },
-      sound: "default",
+      // A kind with a sound of its own names the file; an iPhone that does not
+      // have it plays its ordinary sound, so this is safe before the app does.
+      sound: payload.sound ?? "default",
       "thread-id": payload.tag,
     },
     // Everything the app needs to act on a tap, alongside the visible alert.

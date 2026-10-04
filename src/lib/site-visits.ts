@@ -1,4 +1,5 @@
 import type { SiteVisitState } from "@/generated/prisma/enums";
+import { dayKeyIn, formatDayIn, formatTimeIn, instantAt, shiftDayKey } from "./time";
 
 // What a site visit is, and where it stands.
 //
@@ -143,4 +144,139 @@ export function sortForManager<T extends VisitLike>(visits: T[], now: number = D
     if (rank(a) === 4) return second - first;
     return first - second;
   });
+}
+
+// ---------------------------------------------------------------------------
+// When it is
+
+/**
+ * Reads the "when" a form sent.
+ *
+ * Two shapes arrive and they mean different things. The phone app sends an
+ * instant (`2026-10-05T11:29:00Z`); the website's date box sends a wall clock
+ * with no zone (`2026-10-05T14:29`), and that is a statement about the studio,
+ * not about the server. The server runs in UTC, so reading it with `new Date`
+ * put every visit written on the website three hours late — and moved it three
+ * hours further on every edit. Nothing looked wrong on the screen that wrote
+ * it, because the same mistake was undone on the way back out.
+ *
+ * `ok: false` is a date somebody typed that cannot be read. Empty is allowed
+ * and means nobody has picked a day yet.
+ */
+export function readVisitWhen(raw: string, timeZone: string): { ok: boolean; at: Date | null } {
+  const text = raw.trim();
+  if (!text) return { ok: true, at: null };
+
+  if (/(Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+    const at = new Date(text);
+    return Number.isNaN(at.getTime()) ? { ok: false, at: null } : { ok: true, at };
+  }
+
+  const wall = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(text);
+  if (!wall) return { ok: false, at: null };
+  const at = instantAt(wall[1], wall[2], timeZone);
+  return at ? { ok: true, at } : { ok: false, at: null };
+}
+
+// ---------------------------------------------------------------------------
+// The visit among the tasks
+//
+// A visit with a day is also a job on that day — an ordinary AssignedTask, so
+// the person's task list, the week board and the phone app show it without any
+// of them learning a new kind of work (the same choice a chat task card makes).
+// The visit drives the job and never the other way round: it is answered for in
+// the diary, where the account is written and the client is asked.
+
+export type VisitTaskState = "TODO" | "SUBMITTED" | "DONE";
+export type VisitTaskPlan = { dayKey: string; state: VisitTaskState };
+
+/**
+ * The job a visit should have, or null when it should have none.
+ *
+ * No day, no job: there is nowhere on a week to put it. A visit that did not
+ * happen or was called off has none either — it stopped being work to do, and
+ * the diary keeps the record of it.
+ */
+export function visitTaskPlan(visit: VisitLike, timeZone: string): VisitTaskPlan | null {
+  const when = at(visit.scheduledAt);
+  if (when == null) return null;
+
+  const state: VisitTaskState | null =
+    visit.state === "PLANNED"
+      ? "TODO"
+      : visit.state === "REPORTED"
+        ? "SUBMITTED"
+        : visit.state === "VISITED"
+          ? "DONE"
+          : null;
+  if (!state) return null;
+
+  // The studio's calendar day, not the server's: a visit at half past midnight
+  // in Amman is still yesterday evening in UTC.
+  return { dayKey: dayKeyIn(timeZone, new Date(when)), state };
+}
+
+export function visitTaskTitle(title: string): string {
+  return `Site visit: ${title}`.slice(0, 200);
+}
+
+/** What the job says under its title: when, where, who for, and what for. */
+export function visitTaskNote(
+  visit: { scheduledAt: Date | string | null; location: string | null; clientName: string | null; purpose: string | null },
+  timeZone: string
+): string | null {
+  const when = at(visit.scheduledAt);
+  const lines = [
+    when != null ? `At ${formatTimeIn(timeZone, new Date(when))}` : null,
+    visit.location?.trim() ? `Where: ${visit.location.trim()}` : null,
+    visit.clientName?.trim() ? `Client: ${visit.clientName.trim()}` : null,
+    visit.purpose?.trim() || null,
+  ].filter(Boolean);
+  return lines.length ? lines.join("\n") : null;
+}
+
+/** Said on the job itself, because the job is not where a visit is finished. */
+export const VISIT_TASK_DELIVERABLE = "Write the visit up under Site visits when you are back. That is what finishes it.";
+
+// ---------------------------------------------------------------------------
+// The reminder the day before
+
+export const REMIND_BEFORE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether the reminder for this visit is owed now: planned, and inside the day
+ * before it.
+ *
+ * Still ahead only — a reminder for something already under way is not one —
+ * and a visit written down less than a day ahead is reminded on the next pass,
+ * since "tomorrow at nine" said this evening is still worth hearing. Asking
+ * once is the notification's own unique key (`visitReminderKey`), not a check
+ * here, so a pass that runs twice or wakes late says it once.
+ */
+export function reminderDue(visit: VisitLike, now: number = Date.now()): boolean {
+  const when = at(visit.scheduledAt);
+  if (visit.state !== "PLANNED" || when == null) return false;
+  return now >= when - REMIND_BEFORE_MS && now < when;
+}
+
+/** Carries the moment it is for, so a visit that moves earns a new reminder. */
+export function visitReminderKey(visitId: string, scheduledAt: Date): string {
+  return `SITE_VISIT_REMINDER:${visitId}:${scheduledAt.toISOString()}`;
+}
+
+export function visitReminderCopy(
+  visit: { title: string; location: string | null; scheduledAt: Date },
+  timeZone: string,
+  now: Date = new Date()
+): { title: string; message: string } {
+  const today = dayKeyIn(timeZone, now);
+  const day = dayKeyIn(timeZone, visit.scheduledAt);
+  const title =
+    day === today ? "Site visit today" : day === shiftDayKey(today, 1) ? "Site visit tomorrow" : "Site visit coming up";
+
+  const place = visit.location?.trim() ? ` · ${visit.location.trim()}` : "";
+  return {
+    title,
+    message: `${visit.title} — ${formatDayIn(timeZone, visit.scheduledAt)} · ${formatTimeIn(timeZone, visit.scheduledAt)}${place}`,
+  };
 }

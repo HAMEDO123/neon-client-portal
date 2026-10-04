@@ -20,6 +20,12 @@ export type AssignedTaskView = {
   endKey: string;
   state: "TODO" | "IN_PROGRESS" | "SUBMITTED" | "DONE" | "TOMORROW";
   priority: "LOW" | "MEDIUM" | "HIGH";
+  /**
+   * Set when this job stands for a site visit (lib/site-visit-task-store.ts).
+   * Such a job is finished by writing the visit up in the diary, never here,
+   * so a screen showing one offers the way there instead of the camera.
+   */
+  siteVisitId: string | null;
 };
 
 function toView(row: {
@@ -33,6 +39,7 @@ function toView(row: {
   endDay: Date;
   state: AssignedTaskView["state"];
   priority: AssignedTaskView["priority"];
+  siteVisitId: string | null;
 }): AssignedTaskView {
   return {
     id: row.id,
@@ -45,6 +52,7 @@ function toView(row: {
     endKey: dateToDayKey(row.endDay)!,
     state: row.state,
     priority: row.priority,
+    siteVisitId: row.siteVisitId,
   };
 }
 
@@ -64,6 +72,7 @@ const view = {
   endDay: true,
   state: true,
   priority: true,
+  siteVisitId: true,
 } as const;
 
 /**

@@ -111,6 +111,10 @@ enum NotificationType {
   // notice, the day's two warnings, the deduction and its cancelling. Money is
   // never something to opt out of hearing about, so preferences don't silence it.
   LOCATION_REMINDER
+  // A site visit: one handed to somebody, and the reminder the day before it
+  // (lib/notifications/site-visit-events.ts). Its own type because it has its
+  // own sound, and an appointment with a client is not something to opt out of.
+  SITE_VISIT
 }
 
 enum PayBasis {
@@ -1702,6 +1706,13 @@ model AssignedTask {
   chatTaskId String?
   chatTask   ChatTask? @relation(fields: [chatTaskId], references: [id], onDelete: Cascade)
 
+  // The site visit this job stands for, on the day of the visit — so a visit
+  // is in the tasks, the week board and the app without any of them learning a
+  // new kind of work. The visit drives it (lib/site-visit-task-store.ts): it is
+  // answered for in the diary, never here. Unique: one visit, one job.
+  siteVisitId String?    @unique
+  siteVisit   SiteVisit? @relation(fields: [siteVisitId], references: [id], onDelete: Cascade)
+
   @@index([employeeId, startDay])
   @@index([startDay, endDay])
   @@index([chatTaskId])
@@ -1973,6 +1984,9 @@ model SiteVisit {
   /// not go. Written either way — a review nobody asked for must not look the
   /// same as one nobody answered.
   reviewNote   String?
+
+  /// The job it shows up as among the person's tasks, while it has a day.
+  task AssignedTask?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt

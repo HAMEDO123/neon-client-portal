@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileText,
   Flag,
+  MapPinned,
   MessageSquare,
   PackageCheck,
 } from "lucide-react";
@@ -75,10 +76,17 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
 
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
-            <ClipboardList size={10} strokeWidth={2.5} />
-            From the manager
-          </span>
+          {task.siteVisitId ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-cyan/20 bg-cyan/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-strong">
+              <MapPinned size={10} strokeWidth={2.5} />
+              Site visit
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
+              <ClipboardList size={10} strokeWidth={2.5} />
+              From the manager
+            </span>
+          )}
           {chatHref && (
             <Link
               href={chatHref}
@@ -151,13 +159,32 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
         </div>
       </section>
 
-      <CompletionForm entryId={task.id} state={task.state} kind="assigned" />
+      {/* A site visit is finished in the diary — where the account is written,
+          the client is asked and the manager approves — so the camera is not
+          offered here: a photo sent against the job would be a second record of
+          the same visit, and the server turns it away. */}
+      {task.siteVisitId ? (
+        <Link
+          href="/employee/tasks?view=visits"
+          className="glass flex items-center justify-between gap-3 rounded-2xl p-4 transition-colors hover:bg-white/80"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-ink">Write the visit up</span>
+            <span className="mt-0.5 block text-xs text-ink/55">
+              Under Site visits — say what came of it, or that it did not happen.
+            </span>
+          </span>
+          <MapPinned size={18} strokeWidth={2} className="shrink-0 text-cyan-strong" />
+        </Link>
+      ) : (
+        <CompletionForm entryId={task.id} state={task.state} kind="assigned" />
+      )}
 
       {task.note && (
         <section className="glass rounded-2xl p-4">
           <h2 className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink/40">
             <FileText size={13} strokeWidth={2} />
-            Notes from the manager
+            {task.siteVisitId ? "About the visit" : "Notes from the manager"}
           </h2>
           <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm text-ink/70">
             {task.note}

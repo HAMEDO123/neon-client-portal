@@ -110,3 +110,139 @@ describe("where a site visit stands", () => {
     assert.deepEqual(visits.map((v) => v.id), ["x", "y"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// When it is, the job it has among the tasks, and the reminder the day before.
+
+import {
+  readVisitWhen,
+  reminderDue,
+  visitReminderCopy,
+  visitReminderKey,
+  visitTaskNote,
+  visitTaskPlan,
+  visitTaskTitle,
+} from "../src/lib/site-visits";
+import { soundFor } from "../src/lib/notifications/types";
+
+const AMMAN = "Asia/Amman";
+
+describe("reading when a visit is", () => {
+  // The website's date box sends a wall clock; the server runs in UTC. Read
+  // with `new Date`, 14:30 in the studio was stored as 14:30 UTC — 17:30 —
+  // and moved three hours further on every edit.
+  it("reads the website's wall clock as a time in the studio", () => {
+    const read = readVisitWhen("2026-10-05T14:30", AMMAN);
+    assert.equal(read.ok, true);
+    assert.equal(read.at?.toISOString(), "2026-10-05T11:30:00.000Z");
+  });
+
+  it("takes the phone app's instant exactly as it is", () => {
+    assert.equal(readVisitWhen("2026-10-05T11:29:00Z", AMMAN).at?.toISOString(), "2026-10-05T11:29:00.000Z");
+    assert.equal(readVisitWhen("2026-10-05T14:29:00+03:00", AMMAN).at?.toISOString(), "2026-10-05T11:29:00.000Z");
+  });
+
+  it("lets an empty box mean nobody has picked a day", () => {
+    assert.deepEqual(readVisitWhen("  ", AMMAN), { ok: true, at: null });
+  });
+
+  it("refuses a date that was typed and cannot be read", () => {
+    assert.equal(readVisitWhen("next tuesday", AMMAN).ok, false);
+    assert.equal(readVisitWhen("2026-13-45T99:99", AMMAN).ok, false);
+  });
+});
+
+describe("the job a visit has among the tasks", () => {
+  const at = new Date("2026-10-05T11:29:00Z"); // 14:29 in Amman
+
+  it("puts a planned visit on its day as work to do", () => {
+    assert.deepEqual(visitTaskPlan({ state: "PLANNED", scheduledAt: at }, AMMAN), { dayKey: "2026-10-05", state: "TODO" });
+  });
+
+  it("follows the visit: written up is with the manager, approved is done", () => {
+    assert.equal(visitTaskPlan({ state: "REPORTED", scheduledAt: at }, AMMAN)?.state, "SUBMITTED");
+    assert.equal(visitTaskPlan({ state: "VISITED", scheduledAt: at }, AMMAN)?.state, "DONE");
+  });
+
+  // No day means nowhere on the week to put it; not made or called off means
+  // it stopped being work to do. The diary keeps the record of both.
+  it("has no job without a day, or once it is not going to happen", () => {
+    assert.equal(visitTaskPlan({ state: "PLANNED", scheduledAt: null }, AMMAN), null);
+    assert.equal(visitTaskPlan({ state: "MISSED", scheduledAt: at }, AMMAN), null);
+    assert.equal(visitTaskPlan({ state: "CANCELLED", scheduledAt: at }, AMMAN), null);
+  });
+
+  // Half past midnight in Amman is still the evening before in UTC. Taking the
+  // day from the server's clock would put the job on the wrong day.
+  it("takes the day from the studio's calendar, not the server's", () => {
+    const lateNight = new Date("2026-10-05T21:30:00Z"); // 00:30 on the 6th in Amman
+    assert.equal(visitTaskPlan({ state: "PLANNED", scheduledAt: lateNight }, AMMAN)?.dayKey, "2026-10-06");
+  });
+
+  it("says what it is, when, where and who for", () => {
+    assert.equal(visitTaskTitle("Villa in Dabouq"), "Site visit: Villa in Dabouq");
+    const note = visitTaskNote({ scheduledAt: at, location: "Dabouq", clientName: "Abed", purpose: "Measure up" }, AMMAN);
+    assert.match(note ?? "", /At 2:29\sPM/);
+    assert.match(note ?? "", /Where: Dabouq/);
+    assert.match(note ?? "", /Client: Abed/);
+    assert.match(note ?? "", /Measure up/);
+  });
+});
+
+describe("the reminder the day before", () => {
+  const visitAt = new Date("2026-10-05T11:29:00Z");
+  const hours = (h: number) => visitAt.getTime() + h * 3_600_000;
+
+  it("is owed from a day before until the visit starts", () => {
+    assert.equal(reminderDue({ state: "PLANNED", scheduledAt: visitAt }, hours(-25)), false);
+    assert.equal(reminderDue({ state: "PLANNED", scheduledAt: visitAt }, hours(-24)), true);
+    assert.equal(reminderDue({ state: "PLANNED", scheduledAt: visitAt }, hours(-3)), true);
+    assert.equal(reminderDue({ state: "PLANNED", scheduledAt: visitAt }, hours(0)), false);
+    assert.equal(reminderDue({ state: "PLANNED", scheduledAt: visitAt }, hours(2)), false);
+  });
+
+  it("is only ever for a planned visit with a day", () => {
+    for (const state of ["REPORTED", "VISITED", "MISSED", "CANCELLED"] as const) {
+      assert.equal(reminderDue({ state, scheduledAt: visitAt }, hours(-3)), false, state);
+    }
+    assert.equal(reminderDue({ state: "PLANNED", scheduledAt: null }, hours(-3)), false);
+  });
+
+  // The key is what makes it said once — and a visit that moves is a different
+  // appointment, so it earns a reminder of its own.
+  it("is keyed to the visit's own time", () => {
+    const moved = new Date("2026-10-07T08:00:00Z");
+    assert.equal(visitReminderKey("v1", visitAt), "SITE_VISIT_REMINDER:v1:2026-10-05T11:29:00.000Z");
+    assert.notEqual(visitReminderKey("v1", visitAt), visitReminderKey("v1", moved));
+  });
+
+  it("says tomorrow when it is tomorrow, and today when it is today", () => {
+    const visit = { title: "Villa in Dabouq", location: "Dabouq", scheduledAt: visitAt };
+    const dayBefore = visitReminderCopy(visit, AMMAN, new Date(hours(-24)));
+    assert.equal(dayBefore.title, "Site visit tomorrow");
+    assert.match(dayBefore.message, /Villa in Dabouq/);
+    assert.match(dayBefore.message, /2:29\sPM/);
+    assert.match(dayBefore.message, /Dabouq$/);
+
+    assert.equal(visitReminderCopy(visit, AMMAN, new Date(hours(-2))).title, "Site visit today");
+  });
+
+  it("has a sound of its own, and nothing else does", () => {
+    assert.equal(soundFor("SITE_VISIT"), "neon-visit.caf");
+    assert.equal(soundFor("TASK_ASSIGNED"), null);
+    assert.equal(soundFor("CHAT_MESSAGE"), null);
+  });
+});
+
+// The name the server sends is a file in the phone app's bundle. Renaming one
+// without the other is silent: an iPhone that cannot find the file plays its
+// ordinary sound, and nothing anywhere says the special one has gone.
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { SITE_VISIT_SOUND } from "../src/lib/notifications/types";
+
+describe("the site visit sound on the phone", () => {
+  it("is a file the app ships", () => {
+    assert.equal(existsSync(join(process.cwd(), "ios", "Resources", "Sounds", SITE_VISIT_SOUND)), true);
+  });
+});

@@ -399,6 +399,19 @@ body:has(.admin-shell) {
   display: none;
 }
 
+/* The same, but only where a finger does the scrolling. With a mouse a hidden
+   scrollbar leaves nothing to drag, so whatever is past the edge of a rail is
+   out of reach — the project tabs lost their last tab that way on a desk. */
+@media (hover: none), (pointer: coarse) {
+  .scrollbar-touch-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-touch-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Task cards in chat, and the form that hands one out.
 
    Only opacity and transform move, so every one of these stays on the

@@ -45,7 +45,27 @@ const PREFERENCE_BY_TYPE: Record<NotificationType, keyof PreferenceFlags | null>
   // The 1 JOD a working day without location — the notice, the warnings, the
   // deduction and its cancelling. Money is never something to opt out of hearing about.
   LOCATION_REMINDER: null,
+  // A site visit handed to somebody, and the reminder the day before it. An
+  // appointment with a client is not something to switch off hearing about.
+  SITE_VISIT: null,
 };
+
+// --- Which sound it makes ---------------------------------------------------
+// One kind of notification has a sound of its own: a site visit, because the
+// studio asked to be able to tell it from everything else without looking.
+//
+// The name is a file in the phone app's bundle (ios/Resources/Sounds). An
+// iPhone that does not have the file yet — a build from before it was added —
+// plays its ordinary sound instead, which is Apple's own fallback, so sending
+// the name early costs nothing. The website has its own version of the same
+// sound (lib/sound-cues.ts), which only plays while it is open.
+
+export const SITE_VISIT_SOUND = "neon-visit.caf";
+
+/** The sound file for this kind of notification, or null for the ordinary one. */
+export function soundFor(type: NotificationType): string | null {
+  return type === "SITE_VISIT" ? SITE_VISIT_SOUND : null;
+}
 
 export function isTypeEnabled(type: NotificationType, preferences: PreferenceFlags): boolean {
   const flag = PREFERENCE_BY_TYPE[type];
@@ -193,6 +213,8 @@ export type PushPayload = {
   notificationId: string;
   /** A picture for the notification — the sender, for a chat message. */
   icon?: string;
+  /** A sound of its own, where this kind has one — see `soundFor`. */
+  sound?: string;
 };
 
 export function pushPayload(input: {
@@ -212,6 +234,7 @@ export function pushPayload(input: {
     tag: `${input.type}:${input.notificationId}`,
     notificationId: input.notificationId,
     ...(input.icon ? { icon: input.icon } : {}),
+    ...(soundFor(input.type) ? { sound: soundFor(input.type)! } : {}),
   };
 }
 
