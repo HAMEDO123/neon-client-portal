@@ -69,6 +69,12 @@ struct ChatRoomView: View {
     /// only then: the server's copy replacing it later is a swap, not an arrival.
     @State private var sentCount = 0
     @FocusState private var composerFocused: Bool
+    #if DEBUG
+    /// `-neonFakeKeyboard`: a keyboard-sized space rises under the composer a
+    /// moment after the room opens, so the newest-stays-in-view behaviour can
+    /// be screenshotted on a simulator with a hardware keyboard.
+    @State private var fakeKeyboard: CGFloat = 0
+    #endif
     @Environment(\.dismiss) private var dismissRoom
     // A group the manager made: its info sheet, and the name and picture it
     // was just given there (the route keeps what the list said).
@@ -133,6 +139,14 @@ struct ChatRoomView: View {
                 onVoice: sendVoice
             )
         }
+        #if DEBUG
+        .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: fakeKeyboard) }
+        .task {
+            guard ProcessInfo.processInfo.arguments.contains("-neonFakeKeyboard") else { return }
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            withAnimation(.easeOut(duration: 0.25)) { fakeKeyboard = 336 }
+        }
+        #endif
         .animation(NeonMotion.resolved(NeonMotion.smooth), value: store.reactions.pinned.isEmpty)
         .animation(NeonMotion.resolved(NeonMotion.smooth), value: store.cachedAt == nil)
         .background { ChatRoomWallpaper().ignoresSafeArea() }
@@ -426,8 +440,12 @@ struct ChatRoomView: View {
                 )
                 .onPreferenceChange(ChatViewportKey.self) { scroll.setViewport($0) }
                 .onPreferenceChange(ChatScrollBottomKey.self) { scroll.setContentBottom($0) }
+                .modifier(ChatScrollWatch(tracker: scroll) {
+                    guard !searching, store.messages != nil else { return }
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                })
                 .scrollDismissesKeyboard(.interactively)
-                .modifier(ChatOpensAtNewest())
+                .modifier(ChatOpensAtNewest(holdsNewest: scroll.holdsNewest && !searching))
                 // Messages melt away under the header and above the composer
                 // instead of being sliced through a line of text.
                 .mask {
@@ -508,14 +526,24 @@ struct ChatRoomView: View {
             .onChange(of: scroll.nearBottom) { near in
                 if near { unseen = 0 }
             }
+            // The keyboard rose (or fell), or the box grew a line: if the
+            // newest was in view it stays in view, moving with the keyboard.
+            .onChange(of: scroll.keepNewest) { _ in
+                guard !searching, store.messages != nil else { return }
+                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                // Once more after the keyboard has settled: a lazy list can
+                // land a little short of rows it has not drawn yet.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
             .onChange(of: composerFocused) { focused in
                 guard focused, scroll.nearBottom else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     withNeonAnimation(NeonMotion.smooth) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
             }
             .onChange(of: scrollTarget) { target in
                 guard let target else { return }
+                scroll.release()
                 let rowId = rows(displayed(store.messages ?? [])).first { $0.messageIds.contains(target) }?.id ?? target
                 withNeonAnimation(NeonMotion.smooth) { proxy.scrollTo(rowId, anchor: .center) }
                 scrollTarget = nil
@@ -797,18 +825,84 @@ struct ChatRoomView: View {
 @MainActor
 final class ChatScrollTracker: ObservableObject {
     @Published private(set) var nearBottom = true
+    /// Moves each time the visible part of the conversation changed height
+    /// while the newest message was in view — the keyboard rising or
+    /// falling, the box growing a line as somebody types — so the room can
+    /// keep the newest in view. A scroll view keeps its top where it was when
+    /// it shrinks, which is what hid the last messages behind the keyboard.
+    @Published private(set) var keepNewest = 0
     private var viewport: CGFloat = 0
     private var contentBottom: CGFloat = 0
+    /// Fed by the scroll view's own geometry (iOS 18 and later), which then
+    /// replaces the measuring below. On iOS 26 the measuring stopped
+    /// reporting at all — a height of zero for ever — so the room never knew
+    /// where the reader was, and never kept the newest above the keyboard.
+    private var fromGeometry = false
 
     /// How far above the bottom still counts as reading the newest.
     private let slack: CGFloat = 140
 
+    /// Whether the room is holding the newest in view: true at the bottom,
+    /// false once the reader has scrolled away from it (or the room jumped
+    /// to an older message on purpose). On iOS 18 and later it switches the
+    /// scroll view's own bottom anchor on and off (`ChatOpensAtNewest`), so
+    /// the system keeps the newest in view through every change of size — the
+    /// keyboard rising, the box growing a line, a photo arriving at its full
+    /// height, a lazy list correcting rows it had only guessed — frame by
+    /// frame, and lets a reader who scrolled up stay where they are.
+    @Published private(set) var holdsNewest = true
+    /// The reader's finger is on the conversation, or it is still gliding.
+    private var userScrolling = false
+
+    /// From `onScrollGeometryChange` (iOS 18 and later): how far the newest
+    /// is below the visible part, and how tall that part is. Answers whether
+    /// to put the newest back in view: the system's anchor holds it through a
+    /// change of size, but a lazy list still corrects a row it had only
+    /// guessed a moment later, which moves the newest out of sight again.
+    func setGeometry(belowBottom: CGFloat, container: CGFloat) -> Bool {
+        fromGeometry = true
+        viewport = container
+        let atBottom = belowBottom <= 4
+        if userScrolling {
+            if atBottom != holdsNewest { holdsNewest = atBottom }
+        } else if atBottom, !holdsNewest {
+            holdsNewest = true
+        }
+        let holding = holdsNewest && !userScrolling
+        // While holding, whatever moved the newest is about to be undone:
+        // the reader is at the newest, and the jump button must not flash.
+        let near = holding || belowBottom < slack
+        if near != nearBottom { nearBottom = near }
+        return holding && !atBottom
+    }
+
+    /// From `onScrollPhaseChange`.
+    func setUserScrolling(_ scrolling: Bool) {
+        userScrolling = scrolling
+    }
+
+    /// The room is taking the reader somewhere older on purpose — a pinned
+    /// message, a search result: stop holding the newest.
+    func release() {
+        if holdsNewest { holdsNewest = false }
+    }
+
     func setViewport(_ height: CGFloat) {
+        guard !fromGeometry else { return }
+        let before = viewport
         viewport = height
+        if before > 0, abs(height - before) > 1, nearBottom {
+            // The newest was in view and stays in view (the room scrolls to
+            // it), so this is no moment to call the reader away from it — the
+            // jump button would flash for nothing.
+            keepNewest += 1
+            return
+        }
         update()
     }
 
     func setContentBottom(_ maxY: CGFloat) {
+        guard !fromGeometry else { return }
         contentBottom = maxY
         update()
     }
@@ -826,14 +920,61 @@ private struct ChatScrollBottomKey: PreferenceKey {
 }
 
 /// Opens at the newest message where the system can say so itself (iOS 17
-/// and later) — only for where it starts: when something arrives later, the
-/// room decides (a reader scrolled up stays where they are).
+/// and later). On iOS 18 the newest is also held through every change of
+/// size while the reader is at the bottom (`holdsNewest`), and not once they
+/// have scrolled up — then what arrives leaves them where they are.
 private struct ChatOpensAtNewest: ViewModifier {
+    var holdsNewest = true
+
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
-            content.defaultScrollAnchor(.bottom, for: .initialOffset)
+            content
+                .defaultScrollAnchor(.bottom, for: .initialOffset)
+                .defaultScrollAnchor(holdsNewest ? .bottom : nil, for: .sizeChanges)
         } else if #available(iOS 17.0, *) {
             content.defaultScrollAnchor(.bottom)
+        } else {
+            content
+        }
+    }
+}
+
+/// Where the conversation's scroll stands, from the scroll view itself
+/// (iOS 18 and later).
+private struct ChatScrollMetrics: Equatable {
+    let belowBottom: CGFloat
+    let container: CGFloat
+}
+
+private struct ChatScrollWatch: ViewModifier {
+    let tracker: ChatScrollTracker
+    /// Puts the newest back in view, at once.
+    let pin: () -> Void
+    @State private var pinQueued = false
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                .onScrollGeometryChange(for: ChatScrollMetrics.self) { geometry in
+                    ChatScrollMetrics(
+                        belowBottom: max(0, geometry.contentSize.height - geometry.visibleRect.maxY),
+                        container: geometry.containerSize.height
+                    )
+                } action: { _, metrics in
+                    if tracker.setGeometry(belowBottom: metrics.belowBottom, container: metrics.container) {
+                        // On the next turn of the run loop, once: several
+                        // corrections in one layout pass are one move back.
+                        guard !pinQueued else { return }
+                        pinQueued = true
+                        DispatchQueue.main.async {
+                            pinQueued = false
+                            pin()
+                        }
+                    }
+                }
+                .onScrollPhaseChange { _, phase in
+                    tracker.setUserScrolling(phase == .tracking || phase == .interacting || phase == .decelerating)
+                }
         } else {
             content
         }

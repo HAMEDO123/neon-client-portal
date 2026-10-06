@@ -17,6 +17,9 @@ struct WhatsAppThreadView: View {
     @State private var draft = ""
     @State private var sending = false
     @State private var sendError: String?
+    /// The visible height of the conversation, to keep the newest in view
+    /// when the keyboard rises or the box grows a line.
+    @State private var viewport: CGFloat = 0
 
     private struct PendingMessage: Identifiable {
         let id = UUID()
@@ -69,6 +72,15 @@ struct WhatsAppThreadView: View {
                     .padding(.vertical, 12)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                // A scroll view keeps its top where it was when it shrinks, so
+                // the keyboard rising hid the newest messages: it follows them.
+                .modifier(WhatsAppViewportWatch { height in
+                    let changed = viewport > 0 && abs(height - viewport) > 1
+                    viewport = height
+                    guard changed else { return }
+                    withAnimation(.easeOut(duration: 0.25)) { reader.scrollTo("bottom", anchor: .bottom) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { reader.scrollTo("bottom", anchor: .bottom) }
+                })
                 .onChange(of: (messages?.count ?? 0) + pending.count) { _ in
                     withAnimation(.easeOut(duration: 0.2)) { reader.scrollTo("bottom", anchor: .bottom) }
                 }
@@ -393,6 +405,39 @@ private struct WhatsAppPendingBubble: View {
             .padding(.vertical, 8)
             .background(Color.neonSuccessStrong.opacity(0.55), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .frame(maxWidth: 300, alignment: .trailing)
+        }
+    }
+}
+
+private struct WhatsAppViewportKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// The visible height of the thread's scroll view as it changes: from the
+/// scroll view itself on iOS 18 and later, measured on older systems.
+private struct WhatsAppViewportWatch: ViewModifier {
+    let changed: (CGFloat) -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                // The system keeps the newest in view through a change of
+                // size (the keyboard, a photo arriving at its full height),
+                // frame by frame; the scroll below catches what a lazy list
+                // corrects a moment later.
+                .defaultScrollAnchor(.bottom, for: .sizeChanges)
+                .onScrollGeometryChange(for: CGFloat.self) { $0.containerSize.height } action: { _, height in
+                    changed(height)
+                }
+        } else {
+            content
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: WhatsAppViewportKey.self, value: geo.size.height)
+                    }
+                )
+                .onPreferenceChange(WhatsAppViewportKey.self) { changed($0) }
         }
     }
 }
