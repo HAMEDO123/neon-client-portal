@@ -159,6 +159,13 @@ final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     func toggle(url: URL) {
+        toggle(url: url) { await ChatVoiceNotes.shared.data(for: url) }
+    }
+
+    /// The same, for a note whose bytes need fetching another way — a
+    /// WhatsApp voice note, behind the app's own bearer token. `url` is only
+    /// the note's identity here.
+    func toggle(url: URL, fetch: @escaping () async -> Data?) {
         if playingURL == url || loadingURL == url {
             stop()
             return
@@ -166,7 +173,7 @@ final class ChatVoicePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
         stop()
         loadingURL = url
         Task {
-            let data = await ChatVoiceNotes.shared.data(for: url)
+            let data = await fetch()
             // Tapped something else, or stopped, while it was on its way.
             guard loadingURL == url else { return }
             loadingURL = nil

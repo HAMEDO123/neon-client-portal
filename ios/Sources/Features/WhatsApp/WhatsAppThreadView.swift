@@ -272,6 +272,9 @@ private struct WhatsAppBubble: View {
                         WhatsAppMediaImage(messageId: id)
                             .frame(width: 200, height: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    } else if message.type == "ptt" || message.type == "audio" {
+                        // Played here: the server hands it over as AAC an iPhone plays.
+                        WhatsAppVoiceNoteView(messageId: id, mine: message.fromMe)
                     } else {
                         WhatsAppAttachmentRow(message: message, mine: message.fromMe)
                     }

@@ -96,3 +96,12 @@
 /* Round 2: critic fixes */
 "Group member" = "عضو في المجموعة";
 "Groups are read-only here — reply from the phone." = "المجموعات للقراءة فقط هنا — الرد من الهاتف.";
+
+/* The company WhatsApp inside the chat list (WhatsAppInChat.swift) */
+"WhatsApp: %@" = "واتساب: %@";
+"Older WhatsApp chats, and search" = "محادثات واتساب أقدم، والبحث";
+"Couldn't load · tap to retry" = "ما تحمّلت · اكبس لتعيد المحاولة";
+"Contact cards" = "بطاقات اتصال";
+"Group update" = "تحديث بالمجموعة";
+"Waiting for this message" = "بانتظار هالرسالة";
+"Greeting" = "ترحيب";

@@ -116,6 +116,13 @@ struct NotificationsView: View {
         case .chat(let slug):
             await openConversation(slug: slug)
         case .none:
+            // A client wrote to the company WhatsApp: the chat list opens
+            // that conversation (ChatListView reads the pending link).
+            if let url = item.url, WhatsAppLink.isWhatsApp(url) {
+                PushCenter.shared.pendingPath = url
+                openChat()
+                return
+            }
             // No id this screen can open on its own — a job handed out by
             // hand notifies with just "/employee/chat" when it has no
             // conversation to point at, and a plain CHAT_MESSAGE the same;
@@ -216,6 +223,8 @@ private struct NotificationRow: View {
         case "TASK_ASSIGNED": return "tray.and.arrow.down.fill"
         case "ATTENDANCE_REMINDER": return "touchid"
         case "LOCATION_REMINDER": return "location.fill"
+        case "WHATSAPP_MESSAGE": return "phone.bubble.left.fill"
+        case "SITE_VISIT": return "mappin.and.ellipse"
         default: return item.type.hasPrefix("TASK") ? "checklist" : "bell.fill"
         }
     }
@@ -227,6 +236,8 @@ private struct NotificationRow: View {
         case "TASK_DEADLINE_REMINDER": return .pink
         case "ATTENDANCE_REMINDER": return .red
         case "LOCATION_REMINDER": return .green
+        case "WHATSAPP_MESSAGE": return .green
+        case "SITE_VISIT": return .orange
         default: return .cyan
         }
     }

@@ -162,7 +162,8 @@ final class NeonAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
 /// Where a notification's web path lands in the app's tabs.
 enum PushRoute {
     static func adminTab(_ path: String) -> AdminTab {
-        if path.hasPrefix("/admin/chat") { return .chat }
+        // The company WhatsApp lives in the chat list now; its link opens there.
+        if path.hasPrefix("/admin/chat") || path.hasPrefix("/admin/whatsapp") { return .chat }
         if path.hasPrefix("/admin/tasks") { return .tasks }
         if path.hasPrefix("/admin/projects") { return .projects }
         if path == "/admin" || path == "/admin/" { return .home }
@@ -170,7 +171,7 @@ enum PushRoute {
     }
 
     static func employeeTab(_ path: String) -> EmployeeTab {
-        if path.hasPrefix("/employee/chat") { return .chat }
+        if path.hasPrefix("/employee/chat") || path.hasPrefix("/employee/whatsapp") { return .chat }
         if path.hasPrefix("/employee/tasks") || path.hasPrefix("/employee/assigned") { return .tasks }
         if path.hasPrefix("/employee/projects") { return .projects }
         if path == "/employee" || path.hasPrefix("/employee?") { return .today }

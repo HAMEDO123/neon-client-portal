@@ -21,7 +21,11 @@ struct ChatListView: View {
     @State private var tasksError: String?
     @State private var stories: ChatStoriesResponse?
     @State private var storiesLoading = true
-    @State private var path: [ChatRoute] = []
+    @State private var path = NavigationPath()
+    /// The company WhatsApp's recent conversations, folded into the list;
+    /// nil when there is no linked number or this person may not read it.
+    @State private var whatsApp: WhatsAppSummary?
+    @State private var showWhatsAppInbox = false
     @State private var searching: Bool
     @State private var query = ""
     @State private var showNewChat = false
@@ -105,11 +109,13 @@ struct ChatListView: View {
                 .refreshable {
                     Haptic.tap()
                     async let stories: Void = loadStories()
+                    async let clients: Void = loadWhatsApp()
                     switch filter {
                     case .tasks: await loadTasks()
                     default: await load()
                     }
                     await stories
+                    await clients
                 }
                 #if DEBUG
                 .debugScroll(proxy)
@@ -122,7 +128,12 @@ struct ChatListView: View {
             .navigationDestination(for: ChatRoute.self) { route in
                 ChatRoomView(route: route)
             }
+            // A client on the company WhatsApp, answered as the studio.
+            .navigationDestination(for: WhatsAppChatRoute.self) { route in
+                WhatsAppThreadView(chat: route.chat, timeZone: whatsAppStudioTimeZone)
+            }
             .navigationDestination(isPresented: $showMeetings) { MeetingsView() }
+            .navigationDestination(isPresented: $showWhatsAppInbox) { WhatsAppRootView() }
         }
         .task(id: path.isEmpty) {
             // Re-read whenever the list is what is on screen, so the counts a
@@ -132,6 +143,7 @@ struct ChatListView: View {
             var round = 0
             while !Task.isCancelled {
                 await load()
+                await loadWhatsApp()
                 if let conversations, cachedAt == nil { await ticks.refresh(conversations, api: api) }
                 // Stories change far less often than messages: every fourth round.
                 if round > 0, round.isMultiple(of: 4) { await loadStories() }
@@ -160,18 +172,22 @@ struct ChatListView: View {
                 Task { await loadStories() }
                 return
             }
+            if name.hasPrefix("whatsapp/") {
+                Task { await loadWhatsApp() }
+                return
+            }
             guard name.hasPrefix("chat/groups/") else { return }
             Task { await load() }
         }
         .sheet(isPresented: $showNewChat) {
             ChatNewConversationSheet(isManager: isManager, onlineIds: onlineIds) { route in
-                path = [route]
+                path = NavigationPath([route])
                 Task { await load() }
             }
         }
         .sheet(isPresented: $showNewGroup) {
             ChatNewGroupSheet(onlineIds: onlineIds) { route in
-                path = [route]
+                path = NavigationPath([route])
                 Task { await load() }
             }
         }
@@ -331,7 +347,7 @@ struct ChatListView: View {
     private func openChat(withAuthor authorKey: String) {
         player = nil
         guard let conversation = conversations?.first(where: { $0.slug == slug(forAuthor: authorKey) }) else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { path = [ChatRoute(conversation)] }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { path = NavigationPath([ChatRoute(conversation)]) }
     }
 
     // MARK: - Rows
@@ -353,52 +369,59 @@ struct ChatListView: View {
         return filtered.filter { matchesSearch(query, $0.title, ChatListPreview($0).full, $0.subtitle) }
     }
 
+    /// The company WhatsApp's rows this view shows: every one in All, the
+    /// unread ones in Unread, none in Groups and Favorites (a WhatsApp chat is
+    /// neither the studio's group nor something pinned or starred here), and
+    /// the search's matches.
+    private var shownWhatsApp: [WhatsAppSummaryRow] {
+        let rows = whatsApp?.rows ?? []
+        let filtered: [WhatsAppSummaryRow]
+        switch filter {
+        case .all, .tasks: filtered = rows
+        case .unread: filtered = rows.filter(\.hasUnread)
+        case .groups, .favorites: filtered = []
+        }
+        guard !query.isEmpty else { return filtered }
+        return filtered.filter { matchesSearch(query, $0.title, $0.preview) }
+    }
+
     @ViewBuilder
     private var conversationRows: some View {
         if let conversations {
             let shown = shownConversations
-            if shown.isEmpty {
+            let clients = shownWhatsApp
+            if shown.isEmpty && clients.isEmpty {
                 emptyState(hasAny: !conversations.isEmpty)
                     .neonListRow()
                     .chatListStill()
             } else {
-                ForEach(Array(shown.enumerated()), id: \.element.id) { index, conversation in
-                    Button {
-                        Haptic.tap()
-                        path.append(ChatRoute(conversation))
-                    } label: {
-                        ChatConversationCard(conversation: conversation, delivery: ticks.delivery[conversation.slug])
-                    }
-                    .buttonStyle(.pressableCard)
-                    .staggered(index)
-                    .neonListRow(top: 4, bottom: 4)
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                ForEach(Array(mergeChatList(shown, clients).enumerated()), id: \.element.id) { index, entry in
+                    switch entry {
+                    case .chat(let conversation):
+                        conversationRow(conversation, index: index)
+                    case .whatsapp(let row):
                         Button {
                             Haptic.tap()
-                            Task { await setPrefs(conversation, pinned: !conversation.pinned) }
+                            path.append(row.route)
                         } label: {
-                            Label(conversation.pinned ? L("Unpin") : L("Pin"), systemImage: conversation.pinned ? "pin.slash.fill" : "pin.fill")
+                            ChatWhatsAppCard(row: row)
                         }
-                        .tint(.neonIndigo)
+                        .buttonStyle(.pressableCard)
+                        .staggered(index)
+                        .neonListRow(top: 4, bottom: 4)
                     }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button {
-                            Haptic.tap()
-                            Task { await setPrefs(conversation, favorite: !conversation.favorite) }
-                        } label: {
-                            Label(conversation.favorite ? L("Unfavorite") : L("Favorite"), systemImage: conversation.favorite ? "star.slash.fill" : "star.fill")
-                        }
-                        .tint(.neonAmber)
-                        Button {
-                            Haptic.tap()
-                            Task { await setPrefs(conversation, muted: !conversation.muted) }
-                        } label: {
-                            Label(conversation.muted ? L("Unmute") : L("Mute"), systemImage: conversation.muted ? "bell.fill" : "bell.slash.fill")
-                        }
-                        .tint(.neonPurple)
-                    }
-                    .contextMenu { prefsMenu(conversation) }
                 }
+            }
+            // The list carries the recent ones; the inbox has every chat and search.
+            if whatsApp != nil, filter == .all, query.isEmpty {
+                Button {
+                    Haptic.tap()
+                    showWhatsAppInbox = true
+                } label: {
+                    ChatWhatsAppMoreRow()
+                }
+                .buttonStyle(.pressable)
+                .neonListRow(top: 2, bottom: 2)
             }
         } else if let errorMessage {
             ErrorState(message: errorMessage) { await load() }
@@ -407,6 +430,45 @@ struct ChatListView: View {
             SkeletonRows(count: 6)
                 .neonListRow()
         }
+    }
+
+    @ViewBuilder
+    private func conversationRow(_ conversation: ConversationSummary, index: Int) -> some View {
+        Button {
+            Haptic.tap()
+            path.append(ChatRoute(conversation))
+        } label: {
+            ChatConversationCard(conversation: conversation, delivery: ticks.delivery[conversation.slug])
+        }
+        .buttonStyle(.pressableCard)
+        .staggered(index)
+        .neonListRow(top: 4, bottom: 4)
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                Haptic.tap()
+                Task { await setPrefs(conversation, pinned: !conversation.pinned) }
+            } label: {
+                Label(conversation.pinned ? L("Unpin") : L("Pin"), systemImage: conversation.pinned ? "pin.slash.fill" : "pin.fill")
+            }
+            .tint(.neonIndigo)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                Haptic.tap()
+                Task { await setPrefs(conversation, favorite: !conversation.favorite) }
+            } label: {
+                Label(conversation.favorite ? L("Unfavorite") : L("Favorite"), systemImage: conversation.favorite ? "star.slash.fill" : "star.fill")
+            }
+            .tint(.neonAmber)
+            Button {
+                Haptic.tap()
+                Task { await setPrefs(conversation, muted: !conversation.muted) }
+            } label: {
+                Label(conversation.muted ? L("Unmute") : L("Mute"), systemImage: conversation.muted ? "bell.fill" : "bell.slash.fill")
+            }
+            .tint(.neonPurple)
+        }
+        .contextMenu { prefsMenu(conversation) }
     }
 
     @ViewBuilder
@@ -503,13 +565,24 @@ struct ChatListView: View {
     /// A tapped notification pointing at a conversation ("/admin/chat/<slug>",
     /// "/employee/chat/<slug>?task=…"): open it once the list knows it.
     private func openFromNotification(_ webPath: String?) async {
+        // A client wrote to the company WhatsApp: open that conversation.
+        if let webPath, WhatsAppLink.isWhatsApp(webPath) {
+            PushCenter.shared.pendingPath = nil
+            guard let chatId = WhatsAppLink.chatId(in: webPath) else {
+                showWhatsAppInbox = true
+                return
+            }
+            let row = whatsApp?.rows.first { $0.id == chatId }
+            path = NavigationPath([row?.route ?? WhatsAppChatRoute(id: chatId)])
+            return
+        }
         guard let webPath, let range = webPath.range(of: "/chat/") else { return }
         let slug = String(webPath[range.upperBound...].prefix { $0 != "?" && $0 != "/" })
         guard !slug.isEmpty else { return }
         if conversations == nil { await load() }
         guard let summary = conversations?.first(where: { $0.slug == slug }) else { return }
         PushCenter.shared.pendingPath = nil
-        path = [ChatRoute(summary)]
+        path = NavigationPath([ChatRoute(summary)])
     }
 
     private func load() async {
@@ -536,6 +609,15 @@ struct ChatListView: View {
             tasksError = nil
         } catch {
             if tasks == nil { tasksError = error.localizedDescription }
+        }
+    }
+
+    /// The clients' rows. Extra like the stories: no answer leaves the list
+    /// as it was, and the team's conversations are unaffected.
+    private func loadWhatsApp() async {
+        let summary = await api.fetchWhatsAppSummary()
+        if summary != whatsApp {
+            withNeonAnimation(NeonMotion.smooth) { whatsApp = summary }
         }
     }
 
