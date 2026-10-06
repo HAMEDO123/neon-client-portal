@@ -29,3 +29,6 @@ public/uploads
 # The camera relay's file holds camera passwords; the site's image has no use
 # for it (deploy/go2rtc/README.md).
 deploy/go2rtc/go2rtc.yaml
+
+# Written by the build itself; a copy from this folder would be a stale id.
+.deploy-id
