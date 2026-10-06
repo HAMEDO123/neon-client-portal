@@ -65,3 +65,7 @@ ios/NeonShare.entitlements
 # The camera relay's own file: hand-written cameras with their passwords, and the
 # names go2rtc keeps connected. Never committed (deploy/go2rtc/README.md).
 /deploy/go2rtc/go2rtc.yaml
+
+# The deploy stamp the Dockerfile writes inside the image (next.config.ts).
+# A copy here would be a stale id handed to every local build.
+/.deploy-id

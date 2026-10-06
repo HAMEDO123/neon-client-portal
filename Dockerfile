@@ -53,7 +53,15 @@ COPY . .
 # comes from .env.docker through docker-compose.yml. Empty is the old
 # behaviour — a fresh key each build — rather than a failure.
 ARG NEON_ACTIONS_KEY=""
-RUN NEON_DEPLOY_ID="$(date -u +%Y%m%d%H%M%S)"     NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$NEON_ACTIONS_KEY"     npm run build
+# The deploy id is **written to .deploy-id as well as handed to the build**.
+# `next start` reads next.config.ts again, in a container where the variable
+# no longer exists; without the file the running server has no deploy id while
+# every page's JavaScript has one, and Next reloads the whole document on every
+# navigation to settle the disagreement. That is what it did for three days.
+RUN date -u +%Y%m%d%H%M%S > .deploy-id \
+    && NEON_DEPLOY_ID="$(cat .deploy-id)" \
+       NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$NEON_ACTIONS_KEY" \
+       npm run build
 
 ENV NODE_ENV=production \
     PORT=3000
