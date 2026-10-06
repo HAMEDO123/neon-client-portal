@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus } from "lucide-react";
 import { TaskDialog } from "@/components/admin/week-board";
+import { TaskBriefing } from "@/components/tasks/task-briefing";
 import { deleteAssignedTask, setAssignedTaskState } from "@/lib/actions/assigned-task-actions";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { StateBadge } from "@/components/ui/state-badge";
@@ -59,6 +60,11 @@ export function AssignWork({
         <Plus size={18} strokeWidth={2.5} />
         Assign a task
       </button>
+
+      {/* The same box the manager has: several people's work said in one go,
+          checked as a list, then handed out. It has no wide table in it, so it
+          belongs on a phone as much as on a desk. */}
+      <TaskBriefing team={team} todayKey={todayKey} />
 
       <div className="flex items-center gap-2">
         <h2 className="mr-auto text-sm font-semibold text-ink">{weekLabel}</h2>

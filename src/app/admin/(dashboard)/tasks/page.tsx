@@ -9,6 +9,7 @@ import { assignedTasksForWeek } from "@/lib/assigned-tasks";
 import { weekDayKeys, weekStartKey } from "@/lib/week";
 import { TaskBoard } from "@/components/admin/task-board";
 import { WeekView } from "@/components/admin/week-view";
+import { TaskBriefing } from "@/components/tasks/task-briefing";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -90,6 +91,10 @@ export default async function TasksPage({
         <Stat icon={Loader} tone="cyan" label="In progress" value={working} />
         <Stat icon={Clock} tone="amber" label="Due tomorrow" value={dueTomorrow} />
       </div>
+
+      {/* Above the two boards on purpose: this is how a day is handed out, and
+          the boards are where it is then read. */}
+      {board.team.length > 0 && <TaskBriefing team={board.team} todayKey={today} />}
 
       {board.rows.length === 0 ? (
         <EmptyState

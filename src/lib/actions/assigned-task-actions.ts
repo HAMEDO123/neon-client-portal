@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireTaskAssigner } from "@/lib/admin-guard";
-import { dayKeyToDate } from "@/lib/time";
+import { dayKeyToDate, todayKey } from "@/lib/time";
+import { getTimezone } from "@/lib/settings";
+import { draftTasksFromWords, type DictationResult } from "@/lib/ai/task-dictation";
+import { MAX_DRAFTS, briefingCopy, readDraft, type TaskDraft } from "@/lib/task-dictation";
 import { daysBetween } from "@/lib/week";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { recordStateChange } from "@/lib/task-state-log";
@@ -260,4 +263,91 @@ export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGR
   }
 
   refresh();
+}
+
+// ---------------------------------------------------------------------------
+// Handing work out by saying it — see lib/task-dictation.ts.
+//
+// Two steps on purpose. The first reads the words and creates nothing; the
+// second creates what the manager has read and corrected. Both answer with a
+// sentence rather than throwing one: a thrown message never reaches the browser
+// in production (Next replaces it with a digest), and "the assistant could not
+// read that" is exactly the kind of thing the person asking needs to see.
+
+/** Reads what was said into drafts. Creates nothing and tells nobody. */
+export async function draftAssignedTasks(words: string): Promise<DictationResult> {
+  await requireTaskAssigner();
+  return draftTasksFromWords(typeof words === "string" ? words : "");
+}
+
+export type AssignDraftsResult =
+  | { ok: true; created: number; people: number; skipped: number }
+  | { ok: false; error: string };
+
+/**
+ * Creates the jobs the manager approved, and tells each person once.
+ *
+ * What arrives is the list from the browser, so it is read again from nothing:
+ * every person is checked against the team as it is now, every day and title
+ * re-read. A draft the model produced is not trusted here any more than one
+ * typed by hand would be.
+ */
+export async function assignDraftedTasks(drafts: unknown): Promise<AssignDraftsResult> {
+  await requireTaskAssigner();
+
+  const sent = Array.isArray(drafts) ? drafts.slice(0, MAX_DRAFTS) : [];
+  if (sent.length === 0) return { ok: false, error: "There is nothing to assign." };
+
+  const team = await prisma.employee.findMany({
+    // Staff only, for the same reason as everywhere else in this file.
+    where: { active: true, accessRole: "EMPLOYEE" },
+    select: { id: true },
+  });
+  const today = todayKey(await getTimezone());
+  const context = { personIds: new Set(team.map((person) => person.id)), todayKey: today };
+
+  const ready = sent.map((draft) => readDraft(draft, context)).filter((draft): draft is TaskDraft => draft !== null);
+  if (ready.length === 0) return { ok: false, error: "None of those could be given to anybody on the team." };
+
+  // One at a time: a burst of writes is what the local database falls over on,
+  // and the order they were said in is the order they should appear in.
+  const made = new Map<string, { ids: string[]; drafts: TaskDraft[] }>();
+  for (const draft of ready) {
+    const task = await prisma.assignedTask.create({
+      data: {
+        employeeId: draft.employeeId,
+        title: draft.title,
+        note: draft.note,
+        acceptance: draft.acceptance,
+        startDay: dayKeyToDate(draft.startKey),
+        endDay: dayKeyToDate(draft.endKey),
+        priority: draft.priority,
+      },
+      select: { id: true },
+    });
+
+    const theirs = made.get(draft.employeeId) ?? { ids: [], drafts: [] };
+    theirs.ids.push(task.id);
+    theirs.drafts.push(draft);
+    made.set(draft.employeeId, theirs);
+  }
+
+  // Once per person, however many jobs the briefing gave them.
+  for (const [employeeId, theirs] of made) {
+    const copy = briefingCopy(theirs.drafts, today);
+    await dispatchNotification({
+      employeeId,
+      type: "TASK_ASSIGNED",
+      title: copy.title,
+      message: copy.message,
+      url: theirs.ids.length === 1 ? jobUrl(theirs.ids[0]) : "/employee/tasks",
+      dedupeKey: `ASSIGNED_BRIEFING:${theirs.ids[0]}`,
+      metadata: { tasks: theirs.ids.length },
+    }).catch(() => {
+      // The work is recorded; a failed push must not undo that.
+    });
+  }
+
+  refresh();
+  return { ok: true, created: ready.length, people: made.size, skipped: sent.length - ready.length };
 }
