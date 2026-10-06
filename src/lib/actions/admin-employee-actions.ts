@@ -109,6 +109,11 @@ export async function createEmployeeAccount(formData: FormData) {
   await prisma.employee.create({
     data: {
       ...fields,
+      // The company WhatsApp is the whole team's, by the studio's decision —
+      // and the form that creates somebody has no tick for it, which read here
+      // as "cleared" and would have left every new person without it. It is
+      // taken away, where it should be, on their own page afterwards.
+      canReadWhatsApp: true,
       passwordHash: password ? await hashPassword(password) : null,
       color: EMPLOYEE_COLORS[count % EMPLOYEE_COLORS.length],
       order: count,

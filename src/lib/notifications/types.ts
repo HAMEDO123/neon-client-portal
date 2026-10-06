@@ -48,6 +48,10 @@ const PREFERENCE_BY_TYPE: Record<NotificationType, keyof PreferenceFlags | null>
   // A site visit handed to somebody, and the reminder the day before it. An
   // appointment with a client is not something to switch off hearing about.
   SITE_VISIT: null,
+  // Somebody wrote to the studio's WhatsApp. The studio asked for this to reach
+  // the whole team, so it follows who may open the inbox (canReadWhatsApp, on
+  // the person's page) rather than a switch each person can turn off.
+  WHATSAPP_MESSAGE: null,
 };
 
 // --- Which sound it makes ---------------------------------------------------

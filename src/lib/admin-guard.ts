@@ -67,9 +67,14 @@ export async function requireStaff(): Promise<Staff> {
  *
  * A third guard rather than a widening of `requireStaff`, because the company's
  * WhatsApp is not the project board: it carries client prices, complaints and
- * supplier terms, and everyone on the team can already reach the board. Being
- * on the team therefore says nothing about whether you should have it — this is
- * granted one person at a time, in the admin, and defaults to nobody.
+ * supplier terms. It began as something granted one person at a time and
+ * defaulting to nobody.
+ *
+ * **The studio then decided the whole team should have it** (2026-10-06): the
+ * column is on by default and was switched on for everybody. It is still this
+ * guard and still a column, not `requireStaff`, so that it can be taken from
+ * one person on their page without touching what else they can do — and so the
+ * decision can be reversed by changing a default rather than a guard.
  *
  * **Reading and replying are one permission**, decided by the studio: whoever
  * may read the studio's conversations may answer in them, from the same screen,

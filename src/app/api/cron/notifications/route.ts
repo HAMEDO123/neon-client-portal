@@ -4,6 +4,7 @@ import { runFollowUps } from "@/lib/notifications/follow-up-events";
 import { runRules } from "@/lib/notifications/automation-events";
 import { runMeetingReminders } from "@/lib/notifications/meeting-events";
 import { runSiteVisitReminders } from "@/lib/notifications/site-visit-events";
+import { runWhatsAppWatch } from "@/lib/notifications/whatsapp-events";
 import { syncAttendance } from "@/lib/attendance-sync";
 import { runClockReminders } from "@/lib/notifications/clock-events";
 import { runLocationKeeper } from "@/lib/notifications/location-keeper";
@@ -117,6 +118,18 @@ async function run(request: Request) {
   // failure here cannot take the rest of the pass down with it.
   if (forced === "visits" || !forced) {
     ran.visits = await runSiteVisitReminders(new Date(), timezone).catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  // Somebody writing to the studio's WhatsApp (lib/whatsapp-watch.ts): the
+  // chat list is asked for, and whatever has arrived since the last look is
+  // told to everybody who can open the inbox. Called every minute by the
+  // meeting scheduler — a client's message announced ten minutes late is a
+  // client kept waiting. It reports rather than throws: the worker being down
+  // must not take the rest of the pass with it.
+  if (forced === "whatsapp" || !forced) {
+    ran.whatsapp = await runWhatsAppWatch(new Date()).catch((error) => ({
       error: error instanceof Error ? error.message : String(error),
     }));
   }

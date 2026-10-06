@@ -154,7 +154,9 @@ services:
       # is worth little on a ten-minute pass (lib/clock-reminders.ts). So does
       # the team map's keeper, so a position never outlives the working day by
       # more than a minute (lib/staff-location.ts).
-      - 'while true; do for job in meetings clock location; do status=$$(curl -sS -o /tmp/ran.json -w "%{http_code}" --max-time 50 -H "Authorization: Bearer $$CRON_SECRET" "http://app:3000/api/cron/notifications?job=$$job" || echo 000); echo "$$(date -u +%FT%TZ) $$job HTTP $$status $$(head -c 200 /tmp/ran.json)"; done; sleep 60; done'
+      # And the look at the studio's WhatsApp (lib/whatsapp-watch.ts): a client
+      # writing in is told to the team within the minute, not within ten.
+      - 'while true; do for job in meetings clock location whatsapp; do status=$$(curl -sS -o /tmp/ran.json -w "%{http_code}" --max-time 50 -H "Authorization: Bearer $$CRON_SECRET" "http://app:3000/api/cron/notifications?job=$$job" || echo 000); echo "$$(date -u +%FT%TZ) $$job HTTP $$status $$(head -c 200 /tmp/ran.json)"; done; sleep 60; done'
     depends_on:
       app:
         condition: service_healthy

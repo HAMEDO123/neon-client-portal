@@ -16,6 +16,7 @@ import {
   type ReadRegistry,
 } from "@/lib/mobile/rpc";
 import { limitFrom, readInbox, readLineSettings, readThread, replyInChat } from "@/lib/mobile/whatsapp-inbox";
+import { inboxSummary } from "@/lib/notifications/whatsapp-events";
 
 // The "whatsapp" area of the phone API. See lib/mobile/rpc.ts: keys are
 // "whatsapp/<name>"; every read is guarded(<the website page's guard>, …); an
@@ -42,6 +43,14 @@ export const reads: ReadRegistry = {
   "whatsapp/messages": guarded(requireWhatsAppAccess, async (params) =>
     readThread(param(params, "chatId"), limitFrom(optParam(params, "limit"), 50))
   ),
+
+  // What the pinned WhatsApp row at the top of the chat list says: how many
+  // chats have something unread, and the newest message — { checkedAt,
+  // unreadChats, latest: { title, preview, at, fromMe } | null }, or null when
+  // there is no linked number (draw no row). Read from what the minute's look
+  // stored (lib/notifications/whatsapp-events.ts), so it answers at once and
+  // never waits on the worker — unlike "whatsapp/inbox", which asks it.
+  "whatsapp/summary": guarded(requireWhatsAppAccess, async () => inboxSummary()),
 
   // The manager's line settings: transport, whether it answers, the linked number.
   "whatsapp/line": guarded(requireAdmin, async () => readLineSettings()),

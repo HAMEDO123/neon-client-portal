@@ -2,6 +2,9 @@ import { conversationsFor, requireChatViewer } from "@/lib/chat";
 import { taskListFor } from "@/lib/chat-task-store";
 import { isOverdue, progressOf } from "@/lib/chat-tasks";
 import { getTimezone } from "@/lib/settings";
+import { getSessionEmployee } from "@/lib/employee-session";
+import { inboxSummary } from "@/lib/notifications/whatsapp-events";
+import { inboxUrl } from "@/lib/whatsapp-watch";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { ConversationList } from "@/components/chat/conversation-list";
 import { TaskList } from "@/components/chat/task-list";
@@ -27,6 +30,13 @@ export default async function EmployeeChatsPage({
   const timezone = await getTimezone();
   const { view } = await searchParams;
 
+  // The company's WhatsApp, pinned first — for whoever may open it. Somebody
+  // the manager has switched it off for is not shown a row that would turn
+  // them away.
+  const me = await getSessionEmployee();
+  const summary = me?.canReadWhatsApp ? await inboxSummary() : null;
+  const whatsapp = summary ? { href: inboxUrl("employee"), summary } : null;
+
   const now = new Date().getTime();
   const open = tasks.filter((task) => !progressOf(task.assignments).complete);
   const late = open.filter((task) => isOverdue(task.dueAt, task.assignments, now));
@@ -43,7 +53,12 @@ export default async function EmployeeChatsPage({
         chats={
           <>
             <div className="glass overflow-hidden rounded-2xl">
-              <ConversationList items={conversations} basePath="/employee/chat" timeZone={timezone} />
+              <ConversationList
+                items={conversations}
+                basePath="/employee/chat"
+                timeZone={timezone}
+                whatsapp={whatsapp}
+              />
             </div>
             <p className="mt-4 px-4 text-center text-xs text-ink/40">
               A private chat is seen only by the two people in it. The manager cannot read your chats with colleagues.

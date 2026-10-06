@@ -115,6 +115,10 @@ enum NotificationType {
   // (lib/notifications/site-visit-events.ts). Its own type because it has its
   // own sound, and an appointment with a client is not something to opt out of.
   SITE_VISIT
+  // Somebody wrote to the studio's WhatsApp number (lib/whatsapp-watch.ts). It
+  // goes to everybody who can open the inbox, because the studio asked for a
+  // client's message to be something the whole team hears about.
+  WHATSAPP_MESSAGE
 }
 
 enum PayBasis {
@@ -493,14 +497,19 @@ model Employee {
   // and leaves room for another role later.
   accessRole   String    @default("EMPLOYEE")
   // Whether this person may read the company WhatsApp number's conversations
-  // in the portal, and answer in them as the studio. Off for everyone by
-  // default and granted one person at a time: the studio's WhatsApp carries
-  // client prices, complaints and supplier terms, so this is nearer to payroll
-  // than to the project board, and it is not something a job title should
-  // imply. Named for reading because it started there; reading and replying
-  // are one permission by the studio's decision, and renaming a column is a
-  // migration for a word.
-  canReadWhatsApp Boolean @default(false)
+  // in the portal, and answer in them as the studio.
+  //
+  // **On for everybody, by the studio's decision on 2026-10-06.** It began the
+  // other way round — off by default and granted one person at a time, because
+  // the number carries client prices, complaints and supplier terms. The studio
+  // then decided the whole team should see what clients write and be able to
+  // answer, so the default is on and everyone on the team was switched on with
+  // it. It stays a switch rather than becoming a fact about being on the team:
+  // the manager can still take it from one person on their page.
+  //
+  // Named for reading because it started there; reading and replying are one
+  // permission, and renaming a column is a migration for a word.
+  canReadWhatsApp Boolean @default(true)
   // Whether this person may hand work out to the rest of the team: the week
   // board, and ticking a project's steps. Off for everyone by default and
   // granted one person at a time, like the WhatsApp tick above it. It does not

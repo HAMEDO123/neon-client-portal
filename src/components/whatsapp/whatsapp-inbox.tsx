@@ -15,6 +15,7 @@ import {
   Video,
 } from "lucide-react";
 import type { WhatsAppChat, WhatsAppChatMessage } from "@/lib/whatsapp/worker";
+import { describeWhatsAppType } from "@/lib/whatsapp-watch";
 import { cn } from "@/lib/utils";
 
 // The company number's WhatsApp, inside the portal.
@@ -54,15 +55,18 @@ export function WhatsAppInbox({
   initialChats,
   initialError = null,
   timeZone,
+  initialOpenId = null,
 }: {
   initialChats: WhatsAppChat[];
   initialError?: string | null;
   timeZone: string;
+  /** The chat a notification pointed at (`?chat=`), opened straight away. */
+  initialOpenId?: string | null;
 }) {
   const [chats, setChats] = useState(initialChats);
   const [error, setError] = useState(initialError);
   const [query, setQuery] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialOpenId);
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -484,7 +488,7 @@ function Bubble({
           </p>
         )}
 
-        {!message.body && !message.hasMedia && <p className="italic opacity-60">{describeType(message.type)}</p>}
+        {!message.body && !message.hasMedia && <p className="italic opacity-60">{describeWhatsAppType(message.type)}</p>}
 
         <p className={cn("mt-0.5 text-[10px]", message.fromMe ? "text-white/70" : "text-ink/40")}>
           {whenShort(message.timestamp, timeZone)}
@@ -525,7 +529,7 @@ function Attachment({ message }: { message: WhatsAppChatMessage }) {
       )}
     >
       {iconFor(message.type)}
-      {describeType(message.type)}
+      {describeWhatsAppType(message.type)}
     </a>
   );
 }
@@ -539,30 +543,10 @@ function iconFor(type: string) {
   return <FileText size={size} strokeWidth={1.75} />;
 }
 
-/** What a message without words actually is, in the reader's terms. */
-function describeType(type: string): string {
-  const names: Record<string, string> = {
-    image: "Photo",
-    video: "Video",
-    audio: "Audio",
-    ptt: "Voice note",
-    document: "Document",
-    sticker: "Sticker",
-    location: "Location",
-    vcard: "Contact card",
-    multi_vcard: "Contact cards",
-    revoked: "Message deleted",
-    e2e_notification: "Encryption notice",
-    notification_template: "Notice",
-    call_log: "Call",
-  };
-  return names[type] ?? "Attachment";
-}
-
 function preview(last: WhatsAppChat["lastMessage"]): string {
   if (!last) return "No messages yet";
   const body = last.body.trim();
-  const text = body || describeType(last.type);
+  const text = body || describeWhatsAppType(last.type);
   return last.fromMe ? `You: ${text}` : text;
 }
 

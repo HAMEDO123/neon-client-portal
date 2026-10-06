@@ -484,7 +484,10 @@ describe("the wiring the map depends on", () => {
   it("runs the keeper every minute, beside the clock reminders", () => {
     assert.ok((CRON_JOBS as readonly string[]).includes("location"));
     assert.match(read("src", "app", "api", "cron", "notifications", "route.ts"), /forced === "location" \|\| !forced/);
-    assert.match(read("docker-compose.yml"), /for job in meetings clock location; do/);
+    // The keeper is on the minute's list, beside the clock reminders. Other
+    // jobs may ride the same minute after it (the WhatsApp look does), so this
+    // holds the keeper's place rather than the whole list.
+    assert.match(read("docker-compose.yml"), /for job in meetings clock location( \w+)*; do/);
   });
 });
 

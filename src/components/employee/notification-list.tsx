@@ -11,6 +11,7 @@ import {
   Info,
   MapPin,
   MapPinned,
+  MessageCircle,
   MessageSquare,
   RefreshCw,
   TriangleAlert,
@@ -41,6 +42,7 @@ const ICONS: Record<NotificationType, typeof BellRing> = {
   ATTENDANCE_REMINDER: Fingerprint,
   LOCATION_REMINDER: MapPin,
   SITE_VISIT: MapPinned,
+  WHATSAPP_MESSAGE: MessageCircle,
 };
 
 function ago(date: Date) {

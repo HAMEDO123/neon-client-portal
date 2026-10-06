@@ -129,15 +129,16 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           required={false}
         />
 
-        {/* Off for everyone until you tick it. The studio's WhatsApp carries
-            client prices, complaints and supplier terms, so being on the team
-            does not imply it — and this grants answering as well as reading. */}
+        {/* On for everybody, by the studio's decision: the whole team sees what
+            clients write to the company number, is told when they do, and can
+            answer. This is where it is taken away from one person — it covers
+            answering as well as reading, and the notifications with them. */}
         <Checkbox
           className="sm:col-span-2"
           label="Can use the company WhatsApp"
           name="canReadWhatsApp"
           defaultChecked={employee.canReadWhatsApp}
-          description="Adds a WhatsApp tab to their portal: they can read the studio's conversations and reply in them, as the studio's number."
+          description="On for the whole team. They see the studio's WhatsApp at the top of their chats, are told when a client writes, and can reply as the studio's number. Untick to take all of that away from this person."
         />
 
         {/* Handing work out, not running the studio: a button and the same

@@ -2,6 +2,8 @@ import { conversationsFor, requireChatViewer } from "@/lib/chat";
 import { taskListFor } from "@/lib/chat-task-store";
 import { isOverdue, progressOf } from "@/lib/chat-tasks";
 import { getTimezone } from "@/lib/settings";
+import { inboxSummary } from "@/lib/notifications/whatsapp-events";
+import { inboxUrl } from "@/lib/whatsapp-watch";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { ConversationList } from "@/components/chat/conversation-list";
 import { TaskList } from "@/components/chat/task-list";
@@ -26,6 +28,10 @@ export default async function AdminChatsPage({
   const tasks = await taskListFor(viewer);
   const timezone = await getTimezone();
   const { view } = await searchParams;
+
+  // The company's WhatsApp, pinned first. The manager may always open it.
+  const summary = await inboxSummary();
+  const whatsapp = summary ? { href: inboxUrl("admin"), summary } : null;
 
   const now = new Date().getTime();
   const open = tasks.filter((task) => !progressOf(task.assignments).complete);
@@ -52,6 +58,7 @@ export default async function AdminChatsPage({
               items={conversations}
               basePath="/admin/chat"
               timeZone={timezone}
+              whatsapp={whatsapp}
             />
           </div>
         }

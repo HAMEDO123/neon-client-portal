@@ -20,7 +20,11 @@ import { WhatsAppInbox } from "@/components/whatsapp/whatsapp-inbox";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminWhatsAppPage() {
+export default async function AdminWhatsAppPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ chat?: string | string[] }>;
+}) {
   try {
     await requireWhatsAppAccess();
   } catch {
@@ -28,6 +32,8 @@ export default async function AdminWhatsAppPage() {
   }
 
   const timezone = await getTimezone();
+  // A notification about one chat opens on that chat.
+  const { chat } = await searchParams;
   const result = await whatsAppChats();
 
   return (
@@ -35,6 +41,7 @@ export default async function AdminWhatsAppPage() {
       initialChats={result.ok ? result.data.chats : []}
       initialError={result.ok ? null : result.error}
       timeZone={timezone}
+      initialOpenId={typeof chat === "string" && chat ? chat : null}
     />
   );
 }
