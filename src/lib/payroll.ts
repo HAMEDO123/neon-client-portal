@@ -123,6 +123,29 @@ export function periodOf(dayKey: string) {
   return dayKey.slice(0, 7);
 }
 
+/**
+ * The pay month a receipt counts in: **the month it was sent**, whatever date
+ * is printed on it.
+ *
+ * It used to follow the printed date, and that made sending a receipt look
+ * broken. Both screens list "this month's" receipts and promise each is "added
+ * to this month's pay" — so a receipt from the 30th sent on the 6th was read,
+ * stored, filed under last month, and never appeared in the list it had just
+ * been sent from. The owner's words were "I can't upload proof photos for the
+ * receipts"; the table held three, one of them twice, because the natural
+ * answer to a receipt that vanishes is to send it again. A misread year filed
+ * one under 2024, where nobody would ever have opened it.
+ *
+ * It also decides money, which is why it is a function with a test rather than
+ * an expression in an action: a receipt filed under a month whose pay is
+ * already settled is a receipt nobody is paid for. The printed date is still
+ * kept on the row (`receiptDate`) and shown to the manager, who can see a
+ * months-old receipt for what it is and correct it.
+ */
+export function receiptPeriod(sentDayKey: string) {
+  return periodOf(sentDayKey);
+}
+
 /** The previous month relative to a YYYY-MM period. */
 export function previousPeriod(period: string) {
   const [year, month] = period.split("-").map(Number);

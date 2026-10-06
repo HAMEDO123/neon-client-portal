@@ -9,7 +9,7 @@ import { answering, Refusal, type Answer } from "@/lib/refusal";
 import { saveFile } from "@/lib/storage";
 import { readReceipt } from "@/lib/ai/receipts";
 import { dispatchNotification } from "@/lib/notifications/engine";
-import { countedReceiptAmount, periodOf } from "@/lib/payroll";
+import { countedReceiptAmount, receiptPeriod } from "@/lib/payroll";
 import { MANUAL } from "@/lib/attendance";
 import { syncAttendance, type SyncReport } from "@/lib/attendance-sync";
 import {
@@ -194,9 +194,10 @@ async function storeReceipt(employeeId: string, formData: FormData) {
     data: {
       employeeId,
       imageUrl: saved.url,
-      // Provisionally this month; the reading may move it to the month the
-      // receipt itself is dated.
-      periodMonth: periodOf(todayKey(timezone)),
+      // The month it is sent in, and it stays there whatever date the reading
+      // finds printed on it — see `receiptPeriod` for what following the
+      // printed date did.
+      periodMonth: receiptPeriod(todayKey(timezone)),
     },
   });
 
@@ -217,7 +218,6 @@ async function storeReceipt(employeeId: string, formData: FormData) {
         currency: reading.currency,
         summary: reading.summary,
         aiNotes: reading.notes,
-        periodMonth: reading.date ? periodOf(reading.date) : receipt.periodMonth,
       },
     });
   } else {

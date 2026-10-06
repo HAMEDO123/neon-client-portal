@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
   computePayroll,
@@ -7,6 +9,7 @@ import {
   periodLabel,
   periodOf,
   previousPeriod,
+  receiptPeriod,
   RECEIPT_CAP,
   round,
 } from "@/lib/payroll";
@@ -25,6 +28,22 @@ describe("hourly rate", () => {
   it("treats a missing or zero salary as no rate", () => {
     assert.equal(hourlyRate(0, "MONTHLY"), 0);
     assert.equal(hourlyRate(Number.NaN, "MONTHLY"), 0);
+  });
+});
+
+describe("the month a receipt counts in", () => {
+  // Both screens list this month's receipts and say each is "added to this
+  // month's pay". Filed under the date printed on it instead, a receipt from
+  // the 30th sent on the 6th vanished from the list it had just been sent from.
+  it("is the month it was sent", () => {
+    assert.equal(receiptPeriod("2026-10-06"), "2026-10");
+    assert.equal(receiptPeriod("2026-01-01"), "2026-01");
+  });
+
+  it("is not moved by the date the reading finds on the receipt", () => {
+    const action = readFileSync(join(process.cwd(), "src", "lib", "actions", "operations-actions.ts"), "utf8");
+    assert.match(action, /periodMonth: receiptPeriod\(todayKey\(timezone\)\)/);
+    assert.equal(/periodMonth:[^\n]*reading\.date/.test(action), false, "a receipt is being filed by its printed date again");
   });
 });
 
