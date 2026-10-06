@@ -14,10 +14,14 @@ struct AssignRootView: View {
     @State private var errorMessage: String?
     @State private var editing: MyAssignedJob?
     @State private var creating = false
+    @State private var briefing = false
 
     var body: some View {
         NeonScroll(spacing: NeonSpace.stack) {
             if let cachedAt { OfflineBanner(savedAt: cachedAt) }
+
+            // Several jobs at once, by saying them.
+            TaskBriefingCard { briefing = true }
 
             if let week {
                 weekHeader(week)
@@ -79,6 +83,9 @@ struct AssignRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
             guard isFaceChange(note.object as? String) else { return }
             Task { await load() }
+        }
+        .sheet(isPresented: $briefing, onDismiss: { Task { await load() } }) {
+            TaskBriefingView()
         }
         .sheet(isPresented: $creating) {
             AssignJobFormSheet(team: team, job: nil) {

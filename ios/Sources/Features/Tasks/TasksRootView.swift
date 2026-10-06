@@ -51,6 +51,7 @@ struct TasksRootView: View {
     @State private var segment: Segment
     @State private var jobSheet: WeekBoardView.JobSheetTarget?
     @State private var openingTeamChat = false
+    @State private var briefing = false
 
     init(initialSegment: Segment = .board) {
         _segment = State(initialValue: initialSegment)
@@ -90,6 +91,12 @@ struct TasksRootView: View {
                 header
                     .padding(.bottom, NeonSpace.xs)
 
+                // Handing work out by saying it, on the board and the week.
+                if segment == .board || segment == .week {
+                    TaskBriefingCard { briefing = true }
+                        .transition(.opacity)
+                }
+
                 Group {
                     switch segment {
                     case .board: TaskBoardView(store: boardStore)
@@ -126,6 +133,9 @@ struct TasksRootView: View {
         }
         .sheet(item: $jobSheet) { target in
             JobEditorSheet(target: target, team: weekStore.value?.team ?? [])
+        }
+        .sheet(isPresented: $briefing) {
+            TaskBriefingView()
         }
     }
 

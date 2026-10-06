@@ -96,7 +96,11 @@ targets:
         # only, from the card on their Today page that says what is shared.
         NSLocationWhenInUseUsageDescription: "During working hours, NEON shares where you are with the studio's manager on the team map. Nothing is shared outside working hours, or after you clock out."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Allow Always so NEON keeps sharing your location during working hours while the app is closed. Nothing is shared outside working hours, or after you clock out."
-        NSMicrophoneUsageDescription: "NEON uses the microphone for calls with the studio."
+        NSMicrophoneUsageDescription: "NEON uses the microphone for calls with the studio, voice messages, and saying tasks."
+        # Saying the tasks (Features/Tasks/TaskDictation.swift): Apple's own
+        # speech recognition turns what the manager says into text in a box,
+        # which is only ever read and corrected before anything is sent.
+        NSSpeechRecognitionUsageDescription: "NEON turns what you say into text, so you can hand out tasks by speaking. You check the list before anything is sent."
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

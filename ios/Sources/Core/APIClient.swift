@@ -463,9 +463,10 @@ final class APIClient: ObservableObject {
     }
 
     @discardableResult
-    func sendJSON(_ method: String, _ path: String, _ json: [String: Any]) async throws -> Data {
+    func sendJSON(_ method: String, _ path: String, _ json: [String: Any], timeout: TimeInterval? = nil) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
+        if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: json)
         return try await send(request)

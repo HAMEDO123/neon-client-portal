@@ -4,6 +4,7 @@
 "NSCameraUsageDescription" = "يستخدم NEON الكاميرا لتصوير الشغل المنجز، ولمكالمات الفيديو مع الاستوديو.";
 "NSPhotoLibraryUsageDescription" = "يعرض NEON آخر صورك وفيديوهاتك تحت كاميرا المحادثة، عشان تبعث أي وحدة بكبسة.";
 "NSPhotoLibraryAddUsageDescription" = "يحفظ NEON الصور والفيديوهات اللي بتختار تحفظها — من محادثة أو لقطة كاميرا — في مكتبة صورك.";
-"NSMicrophoneUsageDescription" = "يستخدم NEON المايكروفون للمكالمات مع الاستوديو.";
+"NSMicrophoneUsageDescription" = "يستخدم NEON المايكروفون للمكالمات مع الاستوديو، والرسائل الصوتية، وقول المهام.";
+"NSSpeechRecognitionUsageDescription" = "بيحوّل NEON كلامك لنص، عشان توزّع المهام بصوتك. بتراجع القائمة قبل ما ينبعت أي إشي.";
 "NSLocationWhenInUseUsageDescription" = "خلال ساعات الدوام، بيشارك NEON موقعك مع مدير الاستوديو على خريطة الفريق. ما بينشارك إشي برّا ساعات الدوام، ولا بعد ما تبصم خروج.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "اختار «دائماً» عشان يضل NEON يشارك موقعك خلال ساعات الدوام والتطبيق مسكّر. ما بينشارك إشي برّا ساعات الدوام، ولا بعد ما تبصم خروج.";

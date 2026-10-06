@@ -37,8 +37,10 @@ import {
 } from "@/lib/actions/task-actions";
 import { clearTaskEntryDetails, updateTaskEntryDetails } from "@/lib/actions/task-detail-actions";
 import {
+  assignDraftedTasks,
   createAssignedTask,
   deleteAssignedTask,
+  draftAssignedTasks,
   moveAssignedTask,
   setAssignedTaskState,
   updateAssignedTask,
@@ -187,6 +189,19 @@ export const actions: ActionRegistry = {
   "tasks/deleteJob": guardedAction(requireTaskAssigner, async (input) => {
     await deleteAssignedTask(str(input.args[0], "id"));
   }),
+
+  // --- Handing work out by saying it (lib/task-dictation.ts) -------------------
+  //
+  // The website's two steps, called as they are — requireTaskAssigner is inside
+  // each. The first reads the words and creates nothing: args [words] →
+  // { ok: true, todayKey, tomorrowKey, drafts: [{ employeeId, title, note,
+  // acceptance, startKey, endKey, priority }], unplaced: [{ said, why }] } or
+  // { ok: false, error }. The second creates the drafts the manager checked and
+  // tells each person once: args [drafts] → { ok: true, created, people,
+  // skipped } or { ok: false, error }. Nothing is sent from the words alone.
+  "tasks/briefing/draft": async (input) => draftAssignedTasks(typeof input.args[0] === "string" ? input.args[0] : ""),
+
+  "tasks/briefing/assign": async (input) => assignDraftedTasks(input.args[0]),
 
   "tasks/moveJob": guardedAction(requireTaskAssigner, async (input) => {
     const id = str(input.args[0], "id");

@@ -290,3 +290,57 @@
 "e.g. 3" = "مثلًا ٣";
 "vs the week before" = "مقارنة بالأسبوع الذي قبله";
 "steps and jobs" = "خطوات ومهام";
+
+/* Saying the tasks (TaskBriefingView, TaskDictation) — the website's "Hand out work by saying it" */
+"Say the tasks" = "احكي المهام";
+"Say who does what and when. NEON lays it out as tasks to check, then sends each person theirs." = "احكي مين بيعمل شو وإيمتى. NEON بيرتّبها مهام تراجعها، وبعدين بيبعت لكل واحد مهامه.";
+"Opens the microphone to say the tasks" = "بيفتح المايك عشان تحكي المهام";
+"For example: Wael today, one, call the supplier, two, send the villa drawings. Sally tomorrow, finish the living room renders, urgent." = "مثلاً: وائل اليوم، واحد، يتصل بالمورد، اثنين، يبعت مخططات الفيلا. سالي بكرة، تخلص ريندرات الصالة، ضروري.";
+"Listening… tap to stop" = "عم بسمعك… اكبس عشان توقف";
+"Tap the microphone and talk" = "اكبس على المايك واحكي";
+"Or type it. Nothing is sent before you check the list." = "أو اكتبها. ما بينبعت إشي قبل ما تراجع القائمة.";
+"The language it listens for" = "اللغة اللي بيسمعها";
+"Make the tasks" = "رتّب المهام";
+"Read it again" = "اقرأها من جديد";
+"Reading what you said… this takes a few seconds." = "عم بقرأ اللي حكيته… بياخد كم ثانية.";
+"Start listening" = "ابدأ الاستماع";
+"Stop listening" = "وقّف الاستماع";
+"Check the list" = "راجع القائمة";
+"%d tasks for %d people · change anything before sending" = "%1$d مهام لـ %2$d أشخاص · عدّل اللي بدك قبل الإرسال";
+"Not turned into tasks" = "ما صارت مهام";
+"Said, but not given to anybody" = "انحكت، بس ما انعطت لحدا";
+"Somebody on the team" = "حدا من الفريق";
+"1 task" = "مهمة وحدة";
+"Remove: %@" = "احذف: %@";
+"Give to…" = "اعطيها لـ…";
+"Normal" = "عادي";
+"Urgent" = "ضروري";
+"When there's time" = "على مهله";
+"%@ → %@ · %d days" = "%1$@ ← %2$@ · %3$d أيام";
+"Send %d tasks to %d people" = "ابعت %1$d مهام لـ %2$d أشخاص";
+"Each person is told once, with their own list." = "كل واحد بيوصله إشعار واحد فيه مهامه.";
+"%d tasks sent to %d people" = "انبعتت %1$d مهام لـ %2$d أشخاص";
+"%d could not be given to anybody and were left out." = "%d ما انعطت لحدا وانشالت.";
+"Nothing in that was a task. Say who does what." = "ما في مهمة باللي انحكى. احكي مين بيعمل شو.";
+"You can't dictate during a call." = "ما بتقدر تحكي المهام وإنت بمكالمة.";
+"Allow Speech Recognition for NEON in Settings to dictate." = "اسمح بـ«التعرّف على الكلام» لـ NEON من الإعدادات عشان تحكي المهام.";
+"Allow the microphone for NEON in Settings to dictate." = "اسمح بالمايك لـ NEON من الإعدادات عشان تحكي المهام.";
+"Speech recognition isn't available right now. Type the tasks instead." = "التعرّف على الكلام مش متاح هلأ. اكتب المهام بدالها.";
+"The microphone could not start. Try again." = "المايك ما اشتغل. جرّب كمان مرة.";
+"Nothing was heard. Check the microphone, or type the tasks." = "ما انسمع إشي. شيّك المايك، أو اكتب المهام.";
+
+/* The server's own sentences (lib/ai/task-dictation.ts, assigned-task-actions.ts), shown as they come */
+"Say or type who does what first." = "احكي أو اكتب مين بيعمل شو أول.";
+"That is too much for one go. Send it in two parts." = "هاد كثير لمرة وحدة. ابعته على دفعتين.";
+"The assistant needs ANTHROPIC_API_KEY set on the server." = "المساعد بحاجة لـ ANTHROPIC_API_KEY على السيرفر.";
+"The assistant is unavailable." = "المساعد مش متاح.";
+"There is nobody on the team to give work to yet." = "ما في حدا بالفريق لسا تعطيه شغل.";
+"The assistant would not read that. Try saying it another way." = "المساعد ما قرأها. جرّب تحكيها بطريقة ثانية.";
+"That was too long to finish reading. Send it in two parts." = "كانت طويلة كثير ليخلص قراءتها. ابعتها على دفعتين.";
+"The assistant gave no answer. Try again." = "المساعد ما رد. جرّب كمان مرة.";
+"The assistant's answer could not be read. Try again." = "ما قدرت أقرأ جواب المساعد. جرّب كمان مرة.";
+"There is nothing to assign." = "ما في إشي توزّعه.";
+"None of those could be given to anybody on the team." = "ولا وحدة منهم انعطت لحدا من الفريق.";
+"This could not be given to anybody on the team." = "هاي ما انعطت لحدا من الفريق.";
+"This could not be turned into a task." = "هاي ما صارت مهمة.";
+"Nothing was sent." = "ما انبعت إشي.";

@@ -22,11 +22,39 @@ enum TasksScreens {
         "tasks-process-standard",
         "tasks-process-owner", "tasks-process-owner-new",
         "tasks-process-period", "tasks-process-period-new",
+        "tasks-briefing", "tasks-briefing-list",
     ]
+
+    private static let briefingTeam = [
+        AssignTeamMember(id: "w", name: "Wael", color: nil, role: "Designer", photoUrl: nil),
+        AssignTeamMember(id: "s", name: "Sally", color: nil, role: "3D visualiser", photoUrl: nil),
+        AssignTeamMember(id: "a", name: "Amro", color: nil, role: "Site engineer", photoUrl: nil),
+    ]
+
+    private static let briefingWords = "وائل اليوم واحد يتصل بالمورد اثنين يبعت مخططات الفيلا سالي بكرة تخلص ريندرات الصالة ضروري وتبعتلي صور وعمرو من الأحد للثلاثاء زيارة موقع عبدون ونزار يجهز العرض"
+
+    private static var briefingAnswer: BriefingAnswer {
+        let today = NeonFormat.dayKey(Date())
+        let tomorrow = BriefingDays.shift(today, by: 1)
+        return BriefingAnswer(
+            ok: true, error: nil, todayKey: today, tomorrowKey: tomorrow,
+            drafts: [
+                BriefingDraft(employeeId: "w", title: "يتصل بالمورد", note: nil, acceptance: nil, startKey: today, endKey: today, priority: "MEDIUM"),
+                BriefingDraft(employeeId: "w", title: "يبعت مخططات الفيلا", note: nil, acceptance: nil, startKey: today, endKey: today, priority: "MEDIUM"),
+                BriefingDraft(employeeId: "s", title: "تخلص ريندرات الصالة", note: nil, acceptance: "تبعت صور الريندرات", startKey: tomorrow, endKey: tomorrow, priority: "HIGH"),
+                BriefingDraft(employeeId: "a", title: "زيارة موقع عبدون", note: nil, acceptance: nil, startKey: BriefingDays.shift(today, by: 2), endKey: BriefingDays.shift(today, by: 4), priority: "MEDIUM"),
+            ],
+            unplaced: [BriefingUnplaced(said: "ونزار يجهز العرض", why: "There is nobody called Nizar on the team.")]
+        )
+    }
 
     @MainActor static func view(_ id: String) -> AnyView? {
         let api = APIClient.shared
         switch id {
+        // Saying the tasks: the empty box, and the list an answer leaves —
+        // made up here, so nothing is asked of the assistant or sent anywhere.
+        case "tasks-briefing": return AnyView(TaskBriefingView(preview: "", answer: nil, team: briefingTeam))
+        case "tasks-briefing-list": return AnyView(TaskBriefingView(preview: briefingWords, answer: briefingAnswer, team: briefingTeam))
         case "tasks-board": return AnyView(TasksRootView(initialSegment: .board))
         case "tasks-week": return AnyView(TasksRootView(initialSegment: .week))
         case "tasks-chat": return AnyView(TasksRootView(initialSegment: .chat))
