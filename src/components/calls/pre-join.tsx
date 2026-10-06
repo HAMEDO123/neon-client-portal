@@ -10,6 +10,7 @@ import {
   type MediaProblem,
 } from "@/components/calls/call-session";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // The moment before a call: see yourself, hear that the microphone works,
 // pick which microphone and camera, and choose to go in muted or with the
@@ -212,7 +213,7 @@ export function PreJoin({
       await onConfirm({ mic, camera, audioMuted: !micOn || !mic }, problem);
     } catch (cause) {
       held.current.handedOver = false;
-      setError(cause instanceof Error ? cause.message : "Could not connect the call. Try again.");
+      setError(shownError(cause, "Could not connect the call. Try again."));
       setJoining(false);
     }
   }

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Loader2, Scissors } from "lucide-react";
 import { applyPerformanceDeductions } from "@/lib/actions/analytics-actions";
+import { shownError } from "@/lib/refusal";
 
 // Money leaves someone's pay when this is pressed, so it asks once first.
 export function ApplyDeductions({ period, count }: { period: string; count: number }) {
@@ -17,7 +18,7 @@ export function ApplyDeductions({ period, count }: { period: string; count: numb
         await applyPerformanceDeductions(period);
         setConfirming(false);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That did not go through.");
+        setError(shownError(cause, "That did not go through."));
       }
     });
   }

@@ -134,10 +134,18 @@ export async function requireTaskAssigner(): Promise<Staff> {
  * their own visits, and the manager reads all of them and answers for none.
  */
 export async function requireSiteVisitor(): Promise<Staff> {
-  if (await hasAdminSession()) return { type: "ADMIN" };
-
+  // The visitor first, and that order is the point. One browser can hold both
+  // sessions — the owner's PC does — and every other guard here may ask for the
+  // manager first because the manager can do everything the other person can.
+  // Here it is the other way round: the manager answers for nobody's visit. So
+  // "the manager's session wins" turned somebody finishing their own visit in
+  // the employee portal into the manager trying to, and refused them with a
+  // sentence about whoever went — which production then hid behind
+  // "Minified React error #441".
   const employee = await getSessionEmployee();
   if (employee?.canLogSiteVisits) return { type: "EMPLOYEE", id: employee.id, name: employee.name };
+
+  if (await hasAdminSession()) return { type: "ADMIN" };
 
   throw new Error("Unauthorized");
 }

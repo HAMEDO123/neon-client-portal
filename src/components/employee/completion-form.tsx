@@ -7,6 +7,7 @@ import { submitAssignedTaskCompletion } from "@/lib/actions/my-assigned-actions"
 import { cn } from "@/lib/utils";
 import { shrinkPhoto } from "@/lib/client-image";
 import { isPictureFile, PROOF_ACCEPT } from "@/lib/attachments";
+import { shownError } from "@/lib/refusal";
 
 // Finishing a task means showing it.
 //
@@ -90,7 +91,7 @@ export function CompletionForm({
         else await submitTaskCompletion(entryId, formData);
         clear();
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not send it. Try again.");
+        setError(shownError(cause, "Could not send it. Try again."));
       }
     });
   }

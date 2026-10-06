@@ -5,6 +5,7 @@ import { CalendarClock, EyeOff, Link2, OctagonAlert, PackageCheck, StickyNote, X
 import { updateTaskEntryDetails } from "@/lib/actions/task-detail-actions";
 import { PRIORITY_LABEL } from "@/lib/task-board";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // Scheduling for one board cell: who does it, on which day, by when, how
 // urgent, and anything they need to know. Saving hands the change to the
@@ -98,7 +99,7 @@ export function TaskScheduleEditor({
         } catch (cause) {
           // A refused loop is the expected failure here, and it has to say so
           // rather than closing as though it saved.
-          setError(cause instanceof Error ? cause.message : "That did not save.");
+          setError(shownError(cause, "That did not save."));
         } finally {
           setPending(false);
         }

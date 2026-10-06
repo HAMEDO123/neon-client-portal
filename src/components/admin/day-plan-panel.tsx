@@ -7,6 +7,7 @@ import type { PlannedBlock } from "@/lib/day-plan";
 import type { StoredDayPlan } from "@/lib/day-plan-store";
 import { buttonClasses } from "@/components/ui/buttons";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // A proposed day for one person: generated, kept, edited, and only then put on
 // the board. Leaving the page and coming back finds it exactly as it was,
@@ -72,7 +73,7 @@ export function DayPlanPanel({
         setBlocks(result.plan.blocks);
         setDirty(false);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That did not work.");
+        setError(shownError(cause, "That did not work."));
       }
     });
   }
@@ -94,7 +95,7 @@ export function DayPlanPanel({
         setDirty(false);
         setSaid("Saved.");
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That did not save.");
+        setError(shownError(cause, "That did not save."));
       }
     });
   }
@@ -115,7 +116,7 @@ export function DayPlanPanel({
         if (result.jobs > 0) done.push(`${result.jobs} ${result.jobs === 1 ? "job" : "jobs"} on the week board`);
         setSaid(`${done.join(" and ") || "Nothing moved"} for ${dayName}. ${name} has been told.`);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That did not work.");
+        setError(shownError(cause, "That did not work."));
       }
     });
   }

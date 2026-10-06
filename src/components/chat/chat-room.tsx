@@ -58,6 +58,7 @@ import type { ChatViewer } from "@/lib/chat-conversations";
 import type { ChatTaskView } from "@/lib/chat-task-store";
 import type { ChatMeetingView } from "@/lib/chat-meeting-store";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // A conversation — the team's, or a private one between two people — laid out
 // the way a messaging app is: a scrolling column of bubbles, your own on the
@@ -1448,7 +1449,7 @@ function Composer({
   }, []);
 
   function fail(cause: unknown) {
-    setError(cause instanceof Error ? cause.message : "Could not send that.");
+    setError(shownError(cause, "Could not send that."));
   }
 
   function send(body: string) {

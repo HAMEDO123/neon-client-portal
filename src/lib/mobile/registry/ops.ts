@@ -27,7 +27,7 @@ import {
   setAutomationSwitch,
   updateAutomationRule,
 } from "@/lib/actions/automation-actions";
-import { bool, guarded, oneOf, optParam, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { bool, guarded, heard, oneOf, optParam, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 import type { SupplyRequestStatus } from "@/generated/prisma/enums";
 
 // The "ops" area of the phone API: attendance, requests (manager side), site
@@ -131,14 +131,16 @@ export const actions: ActionRegistry = {
   },
 
   // --- Site visits ---------------------------------------------------------
-  "ops/scheduleSiteVisit": async (input) => scheduleSiteVisit(input.form),
-  "ops/updateSiteVisit": async (input) => updateSiteVisit(str(input.args[0], "id"), input.form),
+  // These four answer with a refusal rather than throwing it; `heard` hands
+  // the app the same `{ error }` it always got.
+  "ops/scheduleSiteVisit": async (input) => heard(await scheduleSiteVisit(input.form)),
+  "ops/updateSiteVisit": async (input) => heard(await updateSiteVisit(str(input.args[0], "id"), input.form)),
   "ops/reportSiteVisit": async (input) => {
     const id = str(input.args[0], "id");
     const state = oneOf(input.args[1], VISIT_STATES, "state");
-    return reportSiteVisit(id, state, input.form);
+    return heard(await reportSiteVisit(id, state, input.form));
   },
-  "ops/deleteSiteVisit": async (input) => deleteSiteVisit(str(input.args[0], "id")),
+  "ops/deleteSiteVisit": async (input) => heard(await deleteSiteVisit(str(input.args[0], "id"))),
 
   // --- Settings --------------------------------------------------------------
   "ops/saveWorkHours": async (input) => saveWorkHours(input.form),

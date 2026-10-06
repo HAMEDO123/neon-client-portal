@@ -4,6 +4,7 @@ import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
 import { MAX_UPLOAD_BYTES, sizeLabel } from "@/lib/upload-limits";
+import { Refusal } from "@/lib/refusal";
 
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
 
@@ -282,11 +283,14 @@ export async function saveFile(
   // "audio/webm;codecs=opus" is audio/webm: Chrome names its voice notes that
   // way, and matching the whole string rejected every one of them.
   const baseType = file.type.split(";")[0].trim().toLowerCase();
+  // Refusals, not plain errors: these are sentences for whoever chose the
+  // file, and an action that answers (lib/refusal.ts) can hand them on. Thrown
+  // as plain errors they never reached a production page at all.
   if (!allowed(rule, baseType, file)) {
-    throw new Error(`Unsupported file type. Use: ${rule.label}.`);
+    throw new Refusal(`Unsupported file type. Use: ${rule.label}.`);
   }
   if (file.size > rule.maxBytes) {
-    throw new Error(`File is too large. Max size: ${rule.label.match(/max ([^)]+)/)?.[1] ?? "limit"}.`);
+    throw new Refusal(`File is too large. Max size: ${rule.label.match(/max ([^)]+)/)?.[1] ?? "limit"}.`);
   }
 
   let buffer: Buffer = Buffer.from(await file.arrayBuffer());
@@ -317,7 +321,7 @@ export async function saveFile(
       // true and no use to somebody holding a phone. A file that cannot be read
       // as a picture is a file to replace, and that is what the sentence says.
       if (mustConvert) {
-        throw new Error("That photo could not be read. Try taking it again, or send it as a JPEG.");
+        throw new Refusal("That photo could not be read. Try taking it again, or send it as a JPEG.");
       }
       // Only an optimisation failed, and the original is perfectly good: a
       // photo must not be lost because it could not be made smaller.

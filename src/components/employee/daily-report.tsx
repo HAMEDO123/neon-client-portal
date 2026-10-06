@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { NotebookPen } from "lucide-react";
 import { saveDailyReport } from "@/lib/actions/operations-actions";
+import { shownError } from "@/lib/refusal";
 
 // The day in the employee's own words.
 //
@@ -31,7 +32,7 @@ export function DailyReport({ today, savedAt }: { today: string; savedAt: Date |
             await saveDailyReport(formData);
             setSaved(true);
           } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "That did not send.");
+            setError(shownError(cause, "That did not send."));
           }
         })
       }

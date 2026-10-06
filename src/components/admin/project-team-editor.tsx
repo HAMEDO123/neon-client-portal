@@ -7,6 +7,7 @@ import { assignProjectTeam } from "@/lib/actions/task-detail-actions";
 import { dotTone } from "@/lib/task-board";
 import type { TaskBoardCell, TaskBoardMember, TaskBoardSection } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // Who is doing what on this project.
 //
@@ -44,7 +45,7 @@ export function ProjectTeamEditor({
             await assignProjectTeam(project.id, formData);
             onClose();
           } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "That did not save.");
+            setError(shownError(cause, "That did not save."));
           }
         });
       }}

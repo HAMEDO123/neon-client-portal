@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { Check, Undo2 } from "lucide-react";
 import { approveSiteVisit, reopenSiteVisit } from "@/lib/actions/site-visit-actions";
+import { refusalOf } from "@/lib/ask";
+import type { Answer } from "@/lib/refusal";
 
 // The manager's two words on a finished visit.
 //
@@ -18,14 +20,10 @@ export function VisitDecision({ id }: { id: string }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function run(action: () => Promise<void>) {
+  function run(action: () => Promise<Answer>) {
     setError(null);
     start(async () => {
-      try {
-        await action();
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That did not save.");
-      }
+      setError(await refusalOf(action, "That did not save. Try again."));
     });
   }
 

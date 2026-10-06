@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { Camera, Loader2, Trash2 } from "lucide-react";
 import { PersonAvatar } from "@/components/chat/person-avatar";
 import { compressInBrowser } from "@/lib/client-image-compress";
+import { shownError } from "@/lib/refusal";
 
 // Setting somebody's face. One component for both sides: the manager uses it on
 // an employee's page, the person uses it on their own profile, and the only
@@ -60,7 +61,7 @@ export function PhotoPicker({
       try {
         await action(formData);
       } catch (submitError) {
-        setError(submitError instanceof Error ? submitError.message : "That photo could not be saved.");
+        setError(shownError(submitError, "That photo could not be saved."));
       }
     });
   }
@@ -75,7 +76,7 @@ export function PhotoPicker({
         formData.set("photo", await shrink(file));
         await action(formData);
       } catch (submitError) {
-        setError(submitError instanceof Error ? submitError.message : "That photo could not be saved.");
+        setError(shownError(submitError, "That photo could not be saved."));
       } finally {
         // So picking the same file twice in a row still fires a change.
         if (input.current) input.current.value = "";

@@ -22,6 +22,7 @@
 // file is a sentence somebody can act on instead of a dead request.
 
 import { describeReply, type ActionReply } from "./action-reply";
+import { isOpaqueFailure } from "./refusal";
 
 /** Cloudflare's own ceiling on the free plan. Not ours to raise. */
 export const CLOUDFLARE_LIMIT_BYTES = 100 * 1024 * 1024;
@@ -88,20 +89,11 @@ export function tooBig(files: File[], max = MAX_UPLOAD_BYTES): string | null {
 // found.", which React shows verbatim and which means something quite
 // different.
 
-const OPAQUE = [
-  "unexpected response was received from the server",
-  "error occurred in the server components render",
-  "an error occurred in the server components",
-  "failed to fetch",
-  "load failed",
-  "networkerror",
-];
-
-/** Whether this message is one of the ones that tells the reader nothing. */
-export function isOpaqueFailure(message: string): boolean {
-  const text = message.toLowerCase();
-  return OPAQUE.some((phrase) => text.includes(phrase));
-}
+// The list itself lives in lib/refusal.ts, beside the other half of the same
+// problem (a sentence an action wanted to say, and could not). It gained
+// "Minified React error" there: that, not the long sentence about production
+// builds, is what a redacted refusal actually reads as on a production page.
+export { isOpaqueFailure };
 
 /**
  * What to show when an upload fails: the message if it says something, and

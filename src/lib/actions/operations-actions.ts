@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { headlineOf, readSupplyLines, summaryOf, totalOf } from "@/lib/supply-requests";
 import { requireAdmin } from "@/lib/admin-guard";
 import { requireEmployee } from "@/lib/employee-session";
+import { answering, Refusal, type Answer } from "@/lib/refusal";
 import { saveFile } from "@/lib/storage";
 import { readReceipt } from "@/lib/ai/receipts";
 import { dispatchNotification } from "@/lib/notifications/engine";
@@ -167,18 +168,31 @@ export async function decideSupplyRequest(id: string, status: SupplyRequestStatu
 
 // --- Expense receipts (salary++) -------------------------------------------
 
-export async function submitReceipt(formData: FormData) {
+/**
+ * Stores a receipt's photo and reads it.
+ *
+ * It answers with a refusal rather than throwing one (lib/refusal.ts): "that
+ * is not a photo" and "that photo could not be read" are the two things worth
+ * telling somebody holding a receipt, and thrown they reached a production
+ * page as "Minified React error #441". The phone API turns the answer back
+ * into the `{ error }` it always sent.
+ */
+export async function submitReceipt(formData: FormData): Promise<Answer> {
   const employee = await requireEmployee();
 
-  const photo = formData.get("photo");
-  if (!(photo instanceof File) || photo.size === 0) throw new Error("Attach a photo of the receipt.");
+  return answering(() => storeReceipt(employee.id, formData));
+}
 
-  const saved = await saveFile(photo, `receipts/${employee.id}`, "image");
+async function storeReceipt(employeeId: string, formData: FormData) {
+  const photo = formData.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) throw new Refusal("Attach a photo of the receipt.");
+
+  const saved = await saveFile(photo, `receipts/${employeeId}`, "image");
   const timezone = await getTimezone();
 
   const receipt = await prisma.expenseReceipt.create({
     data: {
-      employeeId: employee.id,
+      employeeId,
       imageUrl: saved.url,
       // Provisionally this month; the reading may move it to the month the
       // receipt itself is dated.

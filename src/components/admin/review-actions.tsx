@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Check, Loader2, Undo2 } from "lucide-react";
 import { approveSubmission, rejectSubmission } from "@/lib/actions/submission-actions";
+import { shownError } from "@/lib/refusal";
 
 // Accept or send back, and say why.
 //
@@ -30,7 +31,7 @@ export function ReviewActions({ submissionId }: { submissionId: string }) {
         else await rejectSubmission(submissionId, formData);
         setNote("");
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That did not go through.");
+        setError(shownError(cause, "That did not go through."));
       }
     });
   }

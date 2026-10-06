@@ -5,6 +5,7 @@ import { Check, Clock, Package, Plus, ShoppingCart, X } from "lucide-react";
 import { cancelSupplyRequest, createSupplyRequest } from "@/lib/actions/operations-actions";
 import type { SupplyRequestStatus } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 const STATUS = {
   PENDING: { label: "Waiting for approval", tone: "bg-amber-500/10 text-amber-700 border-amber-500/20", icon: Clock },
@@ -34,7 +35,7 @@ export function SupplyRequestForm() {
             (document.getElementById("supply-form") as HTMLFormElement | null)?.reset();
             setLines([0]);
           } catch (submitError) {
-            setError(submitError instanceof Error ? submitError.message : "Could not send that.");
+            setError(shownError(submitError, "Could not send that."));
           }
         })
       }

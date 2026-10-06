@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { CircleAlert, CirclePause, Clock, Play } from "lucide-react";
 import { answerFollowUp } from "@/lib/actions/follow-up-actions";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // The day asked something; this is where it is answered.
 //
@@ -100,7 +101,7 @@ export function FollowUpReply({
         setAsking(null);
         setNote("");
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "That did not send.");
+        setError(shownError(cause, "That did not send."));
       }
     });
   }

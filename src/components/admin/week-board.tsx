@@ -22,6 +22,7 @@ import { daysBetween, dayLabel, moveSpanTo, placeInWeek, stackRows, weekLabel } 
 import { STATE_LABEL, dotTone } from "@/lib/task-board";
 import { StateBadge } from "@/components/ui/state-badge";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // The week of work the manager hands out by hand.
 //
@@ -476,7 +477,7 @@ export function TaskDialog({
               else await createAssignedTask(formData);
               onClose();
             } catch (cause) {
-              setError(cause instanceof Error ? cause.message : "That did not save.");
+              setError(shownError(cause, "That did not save."));
             }
           });
         }}

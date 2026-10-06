@@ -22,7 +22,7 @@ import {
   deleteAssignedTask,
   setAssignedTaskState,
 } from "@/lib/actions/assigned-task-actions";
-import { guarded, guardedAction, param, optParam, str, oneOf, bool, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { guarded, guardedAction, heard, param, optParam, str, oneOf, bool, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 import { locationPlanFor, reportLocation, setLocationPermission } from "@/lib/mobile/location-service";
 import { PERMISSIONS } from "@/lib/staff-location";
 import { notifyAdmin } from "@/lib/admin-notifications";
@@ -225,7 +225,9 @@ export const actions: ActionRegistry = {
   // Supplies, receipts, the daily report.
   "me/requests/supply/create": async (input) => createSupplyRequest(input.form),
   "me/requests/supply/cancel": async (input) => cancelSupplyRequest(str(input.args[0], "id")),
-  "me/requests/receipt/submit": async (input) => submitReceipt(input.form),
+  // Answers with its refusal (lib/refusal.ts); `heard` sends the app the same
+  // `{ error }` a thrown sentence always became.
+  "me/requests/receipt/submit": async (input) => heard(await submitReceipt(input.form)),
   "me/requests/receipt/delete": async (input) => deleteReceipt(str(input.args[0], "id")),
   "me/requests/report/save": async (input) => saveDailyReport(input.form),
 

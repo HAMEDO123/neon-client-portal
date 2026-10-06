@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BellOff, BellRing, Loader } from "lucide-react";
 import { ADMIN_PUSH, currentSubscription, enablePush, pushSupported } from "@/lib/push-client";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // The manager's own phone, turned on from the admin.
 //
@@ -82,7 +83,7 @@ export function AdminPushToggle({
     } catch (error) {
       const denied = error instanceof Error && /blocked|turned off/i.test(error.message);
       setStatus(denied ? "blocked" : "off");
-      setMessage(error instanceof Error ? error.message : "Could not enable push on this device.");
+      setMessage(shownError(error, "Could not enable push on this device."));
     }
   }
 

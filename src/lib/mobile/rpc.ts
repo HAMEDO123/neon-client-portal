@@ -142,6 +142,18 @@ export function json(value: unknown, status = 200): Response {
   return new Response(body, { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
+/**
+ * For an action that answers with its refusal instead of throwing it
+ * (lib/refusal.ts). The website needs the answer — a thrown sentence never
+ * reaches a production page — and the app needs what it has always had: an
+ * `{ error }` with a 400. So the answer is turned back into the throw here, and
+ * a success hands back nothing, exactly as the action did when it returned
+ * nothing.
+ */
+export function heard(answer: { ok: true } | { ok: false; error: string }): void {
+  if (!answer.ok) throw new RpcError(answer.error);
+}
+
 type Digested = { digest?: unknown };
 
 /**

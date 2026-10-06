@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { MapPinned, Plus, X } from "lucide-react";
 import { assignSiteVisit } from "@/lib/actions/site-visit-actions";
+import { refusalOf } from "@/lib/ask";
 
 // The manager writing a visit down for somebody else.
 //
@@ -44,15 +45,17 @@ export function NewSiteVisit({ keepers, projects }: { keepers: Keeper[]; project
 
   return (
     <form
-      action={(formData) => {
+      // onSubmit, not a form action: React empties a form's fields whenever a
+      // form action finishes, refused or not, so a visit turned away for one
+      // missing box came back with every other box blank.
+      onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
         setError(null);
         start(async () => {
-          try {
-            await assignSiteVisit(formData);
-            setOpen(false);
-          } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "That did not save.");
-          }
+          const refusal = await refusalOf(() => assignSiteVisit(formData), "That did not save. Try again.");
+          if (refusal) setError(refusal);
+          else setOpen(false);
         });
       }}
       className="rounded-2xl border border-warm-line bg-card p-4"

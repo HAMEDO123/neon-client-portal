@@ -1,32 +1,76 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { AlertTriangle, Camera, Loader, Receipt, Trash2 } from "lucide-react";
+import { AlertTriangle, Camera, ImageUp, Loader, Receipt, Trash2 } from "lucide-react";
 import { deleteReceipt, submitReceipt } from "@/lib/actions/operations-actions";
+import { lastReply, reportUploadFailure, watchingReply } from "@/lib/action-reply";
+import { whileBusy } from "@/lib/busy";
+import { compressInBrowser } from "@/lib/client-image-compress";
+import { tooBig, uploadFailure } from "@/lib/upload-limits";
 import type { ReceiptStatus } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
-// Photographing a receipt. The upload and the reading happen in one action,
-// so the employee waits once and sees the result rather than a row that fills
+// Sending in a receipt. The upload and the reading happen in one action, so
+// the employee waits once and sees the result rather than a row that fills
 // itself in later.
+//
+// **Two ways in, because a phone treats them differently.** With `capture` the
+// phone opens its camera and offers nothing else — so a receipt photographed
+// at the till an hour ago, or a screenshot of one that came by message, could
+// not be sent at all. This had only the camera, under a button that said
+// "Photograph a receipt", and the owner's words for it were "I can't upload
+// proof photos for the receipts". The task-proof form learned the same thing
+// first and has the same two buttons.
+//
+// **It goes up the way every other photo here does**, which this one did not:
+// shrunk in the browser first (a camera photo is most of the wait, and the
+// reading takes several seconds on top), held against the live refresh — a
+// `router.refresh()` landing mid-action cancels it, see lib/busy.ts — and, when
+// it fails, saying what the browser got back and writing that to the server's
+// log (`[upload-failed]`), so the next failure names itself.
+//
+// The action answers with its refusal rather than throwing it (lib/refusal.ts):
+// "that is not a photo" has to reach the person holding the receipt.
 
 export function ReceiptUploader() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
 
   function upload(file: File) {
-    const formData = new FormData();
-    formData.set("photo", file);
+    // Said before anything is sent: a file too large never reaches the server,
+    // and what comes back then is a page with no message in it.
+    const refusal = tooBig([file]);
+    if (refusal) {
+      setError(refusal);
+      return;
+    }
 
     startTransition(async () => {
       setError(null);
       try {
-        await submitReceipt(formData);
-      } catch (uploadError) {
-        setError(uploadError instanceof Error ? uploadError.message : "Could not upload that photo.");
+        const answer = await whileBusy(() =>
+          watchingReply(async () => {
+            const formData = new FormData();
+            formData.set("photo", await compressInBrowser(file));
+            return submitReceipt(formData);
+          })
+        );
+        if (!answer.ok) setError(answer.error);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "";
+        const reply = lastReply();
+        setError(uploadFailure([file], message, reply));
+        reportUploadFailure({
+          where: "employee-receipt",
+          files: [{ name: file.name, size: file.size, type: file.type }],
+          message,
+          reply,
+        });
       } finally {
-        if (inputRef.current) inputRef.current.value = "";
+        if (cameraRef.current) cameraRef.current.value = "";
+        if (libraryRef.current) libraryRef.current.value = "";
       }
     });
   }
@@ -34,7 +78,7 @@ export function ReceiptUploader() {
   return (
     <div className="glass rounded-2xl p-4">
       <input
-        ref={inputRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         // Opens the camera directly on a phone rather than the photo library.
@@ -45,25 +89,42 @@ export function ReceiptUploader() {
           if (file) upload(file);
         }}
       />
+      <input
+        ref={libraryRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) upload(file);
+        }}
+      />
 
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={pending}
-        className="flex h-14 w-full items-center justify-center gap-2.5 rounded-xl bg-ink text-sm font-medium text-bg disabled:opacity-60"
-      >
-        {pending ? (
-          <>
-            <Loader size={17} className="animate-spin" strokeWidth={2} />
-            Reading the receipt…
-          </>
-        ) : (
-          <>
+      {pending ? (
+        <p className="flex h-14 w-full items-center justify-center gap-2.5 rounded-xl bg-ink text-sm font-medium text-bg opacity-70">
+          <Loader size={17} className="animate-spin" strokeWidth={2} />
+          Reading the receipt…
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => cameraRef.current?.click()}
+            className="flex h-14 items-center justify-center gap-2 rounded-xl bg-ink text-sm font-medium text-bg"
+          >
             <Camera size={18} strokeWidth={2} />
-            Photograph a receipt
-          </>
-        )}
-      </button>
+            Take a photo
+          </button>
+          <button
+            type="button"
+            onClick={() => libraryRef.current?.click()}
+            className="flex h-14 items-center justify-center gap-2 rounded-xl border border-ink/15 bg-white/70 text-sm font-medium text-ink"
+          >
+            <ImageUp size={18} strokeWidth={2} />
+            Choose a photo
+          </button>
+        </div>
+      )}
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       <p className="mt-2 text-[11px] text-ink/40">

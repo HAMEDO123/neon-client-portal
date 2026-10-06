@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin, requireSiteVisitor } from "@/lib/admin-guard";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { dispatchNotification } from "@/lib/notifications/engine";
+import { answering, Refusal, type Answer } from "@/lib/refusal";
 import { needsReport, readVisitWhen } from "@/lib/site-visits";
 import { syncVisitTaskQuietly } from "@/lib/site-visit-task-store";
 import { getTimezone } from "@/lib/settings";
@@ -24,6 +25,15 @@ import type { SiteVisitState } from "@/generated/prisma/enums";
 // prevent.** "I went" on its own tells the manager less than the plan already
 // did, so a report is required with the answer, and not going needs a reason
 // for the same reason.
+//
+// **Every action here answers with its refusal instead of throwing it**
+// (lib/refusal.ts). They threw, and in production a thrown sentence never
+// reaches the page: somebody ending a visit was shown "Minified React error
+// #441" where "Write what came of the visit." was meant. So each export wraps
+// its work in `answering`, each sentence for a person is a `Refusal`, and
+// anything else that goes wrong is still a fault and still thrown. The phone
+// API turns the answer back into the `{ error }` it always sent (`heard`, in
+// lib/mobile/rpc.ts), so the app notices no change.
 
 function refresh() {
   revalidatePath("/employee/tasks");
@@ -86,7 +96,7 @@ async function askForReview(visit: {
 
 async function readForm(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim().slice(0, 200);
-  if (!title) throw new Error("Say what the visit is for.");
+  if (!title) throw new Refusal("Say what the visit is for.");
 
   // The website's date box sends a wall clock with no zone, and that is a time
   // in the studio — not on the server, which runs in UTC. This comment used to
@@ -100,7 +110,7 @@ async function readForm(formData: FormData) {
   // was typed and cannot be read is still refused — that is a mistake, not a
   // decision to leave it open.
   const when = readVisitWhen(String(formData.get("scheduledAt") ?? ""), await getTimezone());
-  if (!when.ok) throw new Error("That day and time could not be read.");
+  if (!when.ok) throw new Refusal("That day and time could not be read.");
   const scheduledAt = when.at;
 
   const projectId = String(formData.get("projectId") ?? "").trim() || null;
@@ -117,45 +127,49 @@ async function readForm(formData: FormData) {
 }
 
 /** Writes a visit down before it happens. */
-export async function scheduleSiteVisit(formData: FormData) {
-  const actor = await requireSiteVisitor();
-  if (actor.type !== "EMPLOYEE") throw new Error("Visits are scheduled by whoever is going.");
+export async function scheduleSiteVisit(formData: FormData): Promise<Answer> {
+  return answering(async () => {
+    const actor = await requireSiteVisitor();
+    if (actor.type !== "EMPLOYEE") throw new Refusal("Visits are scheduled by whoever is going.");
 
-  const input = await readForm(formData);
-  const visit = await prisma.siteVisit.create({
-    data: { ...input, employeeId: actor.id },
-    select: { id: true, title: true, scheduledAt: true },
+    const input = await readForm(formData);
+    const visit = await prisma.siteVisit.create({
+      data: { ...input, employeeId: actor.id },
+      select: { id: true, title: true, scheduledAt: true },
+    });
+    await syncVisitTaskQuietly(visit.id);
+
+    await notifyAdmin({
+      type: "TASK_STATUS_CHANGED",
+      title: `${actor.name} scheduled a site visit`,
+      message: visit.scheduledAt
+        ? `${visit.title} — ${visit.scheduledAt.toLocaleString("en-GB")}`
+        : `${visit.title} — no date set yet`,
+      url: "/admin/site-visits",
+      dedupeKey: `SITE_VISIT:${visit.id}`,
+      employeeId: actor.id,
+    }).catch(() => null);
+
+    refresh();
   });
-  await syncVisitTaskQuietly(visit.id);
-
-  await notifyAdmin({
-    type: "TASK_STATUS_CHANGED",
-    title: `${actor.name} scheduled a site visit`,
-    message: visit.scheduledAt
-      ? `${visit.title} — ${visit.scheduledAt.toLocaleString("en-GB")}`
-      : `${visit.title} — no date set yet`,
-    url: "/admin/site-visits",
-    dedupeKey: `SITE_VISIT:${visit.id}`,
-    employeeId: actor.id,
-  }).catch(() => null);
-
-  refresh();
 }
 
 /** Changes a visit that has not been answered for yet. */
-export async function updateSiteVisit(id: string, formData: FormData) {
-  const actor = await requireSiteVisitor();
-  if (actor.type !== "EMPLOYEE") throw new Error("A visit is changed by whoever is going.");
-  const visit = await mine(actor.id, id);
+export async function updateSiteVisit(id: string, formData: FormData): Promise<Answer> {
+  return answering(async () => {
+    const actor = await requireSiteVisitor();
+    if (actor.type !== "EMPLOYEE") throw new Refusal("A visit is changed by whoever is going.");
+    const visit = await mine(actor.id, id);
 
-  if (visit.state !== "PLANNED") {
-    throw new Error("That visit has already been answered for.");
-  }
+    if (visit.state !== "PLANNED") {
+      throw new Refusal("That visit has already been answered for.");
+    }
 
-  await prisma.siteVisit.update({ where: { id }, data: await readForm(formData) });
-  // A new day moves its job to that day, and a cleared one takes it off the week.
-  await syncVisitTaskQuietly(id);
-  refresh();
+    await prisma.siteVisit.update({ where: { id }, data: await readForm(formData) });
+    // A new day moves its job to that day, and a cleared one takes it off the week.
+    await syncVisitTaskQuietly(id);
+    refresh();
+  });
 }
 
 /**
@@ -165,72 +179,74 @@ export async function updateSiteVisit(id: string, formData: FormData) {
  * tick where an account should be, so it is refused — the one thing this
  * screen exists to collect is the only thing it insists on.
  */
-export async function reportSiteVisit(id: string, state: SiteVisitState, formData: FormData) {
-  const actor = await requireSiteVisitor();
-  if (actor.type !== "EMPLOYEE") throw new Error("A visit is answered for by whoever went.");
-  const visit = await mine(actor.id, id);
+export async function reportSiteVisit(id: string, state: SiteVisitState, formData: FormData): Promise<Answer> {
+  return answering(async () => {
+    const actor = await requireSiteVisitor();
+    if (actor.type !== "EMPLOYEE") throw new Refusal("A visit is answered for by whoever went.");
+    const visit = await mine(actor.id, id);
 
-  if (state === "PLANNED" || state === "VISITED") {
-    // VISITED is the manager's word, reached by approving — never written
-    // here, the same way DONE is never written by whoever did the work.
-    throw new Error("That is not something to answer a visit with.");
-  }
-  if (visit.state !== "PLANNED") throw new Error("That visit has already been answered for.");
+    if (state === "PLANNED" || state === "VISITED") {
+      // VISITED is the manager's word, reached by approving — never written
+      // here, the same way DONE is never written by whoever did the work.
+      throw new Refusal("That is not something to answer a visit with.");
+    }
+    if (visit.state !== "PLANNED") throw new Refusal("That visit has already been answered for.");
 
-  const report = String(formData.get("report") ?? "").trim().slice(0, 4000) || null;
-  if (needsReport(state) && !report) {
-    throw new Error(
-      state === "REPORTED" ? "Write what came of the visit." : "Say why the visit did not happen."
-    );
-  }
+    const report = String(formData.get("report") ?? "").trim().slice(0, 4000) || null;
+    if (needsReport(state) && !report) {
+      throw new Refusal(
+        state === "REPORTED" ? "Write what came of the visit." : "Say why the visit did not happen."
+      );
+    }
 
-  // Finished means finished *according to whoever went*. The client is asked
-  // now, so the manager has their answer to approve on.
-  let review: { sentAt: Date | null; note: string } | null = null;
-  if (state === "REPORTED") {
-    const full = await prisma.siteVisit.findUniqueOrThrow({
+    // Finished means finished *according to whoever went*. The client is asked
+    // now, so the manager has their answer to approve on.
+    let review: { sentAt: Date | null; note: string } | null = null;
+    if (state === "REPORTED") {
+      const full = await prisma.siteVisit.findUniqueOrThrow({
+        where: { id },
+        select: {
+          id: true,
+          title: true,
+          clientName: true,
+          clientPhone: true,
+          project: { select: { clientName: true, clientPhone: true } },
+        },
+      });
+      review = await askForReview(full);
+    }
+
+    await prisma.siteVisit.update({
       where: { id },
-      select: {
-        id: true,
-        title: true,
-        clientName: true,
-        clientPhone: true,
-        project: { select: { clientName: true, clientPhone: true } },
+      data: {
+        state,
+        report,
+        reportedAt: new Date(),
+        ...(review ? { reviewSentAt: review.sentAt, reviewNote: review.note } : {}),
       },
     });
-    review = await askForReview(full);
-  }
+    // Written up: its job is with the manager now. Not made, or called off: it is
+    // no longer work to do, and the diary keeps the record.
+    await syncVisitTaskQuietly(id);
 
-  await prisma.siteVisit.update({
-    where: { id },
-    data: {
-      state,
-      report,
-      reportedAt: new Date(),
-      ...(review ? { reviewSentAt: review.sentAt, reviewNote: review.note } : {}),
-    },
+    await notifyAdmin({
+      type: "TASK_STATUS_CHANGED",
+      title:
+        state === "REPORTED"
+          ? `${actor.name} finished the visit to ${visit.title} — waiting for you`
+          : state === "MISSED"
+            ? `${actor.name} did not make the visit to ${visit.title}`
+            : `${actor.name} called off the visit to ${visit.title}`,
+      message: [report ?? "No note.", review?.note].filter(Boolean).join(" · "),
+      url: "/admin/site-visits",
+      // Keyed on what it became, so the scheduling alert and this one are two
+      // tellings and re-saving the same answer is one.
+      dedupeKey: `SITE_VISIT_REPORT:${id}:${state}`,
+      employeeId: actor.id,
+    }).catch(() => null);
+
+    refresh();
   });
-  // Written up: its job is with the manager now. Not made, or called off: it is
-  // no longer work to do, and the diary keeps the record.
-  await syncVisitTaskQuietly(id);
-
-  await notifyAdmin({
-    type: "TASK_STATUS_CHANGED",
-    title:
-      state === "REPORTED"
-        ? `${actor.name} finished the visit to ${visit.title} — waiting for you`
-        : state === "MISSED"
-          ? `${actor.name} did not make the visit to ${visit.title}`
-          : `${actor.name} called off the visit to ${visit.title}`,
-    message: [report ?? "No note.", review?.note].filter(Boolean).join(" · "),
-    url: "/admin/site-visits",
-    // Keyed on what it became, so the scheduling alert and this one are two
-    // tellings and re-saving the same answer is one.
-    dedupeKey: `SITE_VISIT_REPORT:${id}:${state}`,
-    employeeId: actor.id,
-  }).catch(() => null);
-
-  refresh();
 }
 
 /**
@@ -245,38 +261,40 @@ export async function reportSiteVisit(id: string, state: SiteVisitState, formDat
  * a visit handed to somebody with no Site visits view is a visit nobody will
  * ever see.
  */
-export async function assignSiteVisit(formData: FormData) {
-  await requireAdmin();
+export async function assignSiteVisit(formData: FormData): Promise<Answer> {
+  return answering(async () => {
+    await requireAdmin();
 
-  const employeeId = String(formData.get("employeeId") ?? "").trim();
-  const owner = employeeId
-    ? await prisma.employee.findFirst({
-        where: { id: employeeId, active: true, canLogSiteVisits: true },
-        select: { id: true, name: true },
-      })
-    : null;
-  if (!owner) throw new Error("Choose somebody who keeps the site-visit diary.");
+    const employeeId = String(formData.get("employeeId") ?? "").trim();
+    const owner = employeeId
+      ? await prisma.employee.findFirst({
+          where: { id: employeeId, active: true, canLogSiteVisits: true },
+          select: { id: true, name: true },
+        })
+      : null;
+    if (!owner) throw new Refusal("Choose somebody who keeps the site-visit diary.");
 
-  const input = await readForm(formData);
-  const visit = await prisma.siteVisit.create({
-    data: { ...input, employeeId: owner.id },
-    select: { id: true, title: true, scheduledAt: true },
+    const input = await readForm(formData);
+    const visit = await prisma.siteVisit.create({
+      data: { ...input, employeeId: owner.id },
+      select: { id: true, title: true, scheduledAt: true },
+    });
+    await syncVisitTaskQuietly(visit.id);
+
+    await dispatchNotification({
+      employeeId: owner.id,
+      // Its own type, so it has its own sound — see lib/notifications/types.ts.
+      type: "SITE_VISIT",
+      title: "A site visit for you",
+      message: visit.scheduledAt
+        ? `${visit.title} — ${visit.scheduledAt.toLocaleString("en-GB")}`
+        : `${visit.title} — set a day for it when you know.`,
+      url: "/employee/tasks?view=visits",
+      dedupeKey: `SITE_VISIT_ASSIGNED:${visit.id}`,
+    }).catch(() => null);
+
+    refresh();
   });
-  await syncVisitTaskQuietly(visit.id);
-
-  await dispatchNotification({
-    employeeId: owner.id,
-    // Its own type, so it has its own sound — see lib/notifications/types.ts.
-    type: "SITE_VISIT",
-    title: "A site visit for you",
-    message: visit.scheduledAt
-      ? `${visit.title} — ${visit.scheduledAt.toLocaleString("en-GB")}`
-      : `${visit.title} — set a day for it when you know.`,
-    url: "/employee/tasks?view=visits",
-    dedupeKey: `SITE_VISIT_ASSIGNED:${visit.id}`,
-  }).catch(() => null);
-
-  refresh();
 }
 
 /**
@@ -286,20 +304,22 @@ export async function assignSiteVisit(formData: FormData) {
  * theirs, and the whole reason the REPORTED state exists. Nobody approves
  * their own visit, in the same way nobody approves their own finished work.
  */
-export async function approveSiteVisit(id: string) {
-  await requireAdmin();
+export async function approveSiteVisit(id: string): Promise<Answer> {
+  return answering(async () => {
+    await requireAdmin();
 
-  const visit = await prisma.siteVisit.findUnique({ where: { id }, select: { state: true } });
-  if (!visit) throw new Error("That visit no longer exists.");
-  if (visit.state !== "REPORTED") throw new Error("Only a visit waiting for you can be approved.");
+    const visit = await prisma.siteVisit.findUnique({ where: { id }, select: { state: true } });
+    if (!visit) throw new Refusal("That visit no longer exists.");
+    if (visit.state !== "REPORTED") throw new Refusal("Only a visit waiting for you can be approved.");
 
-  await prisma.siteVisit.update({
-    where: { id },
-    data: { state: "VISITED", approvedAt: new Date() },
+    await prisma.siteVisit.update({
+      where: { id },
+      data: { state: "VISITED", approvedAt: new Date() },
+    });
+    await syncVisitTaskQuietly(id);
+
+    refresh();
   });
-  await syncVisitTaskQuietly(id);
-
-  refresh();
 }
 
 /**
@@ -310,34 +330,38 @@ export async function approveSiteVisit(id: string) {
  * what really happened. The account they wrote is kept: sending work back has
  * never meant deleting what somebody said about it.
  */
-export async function reopenSiteVisit(id: string) {
-  await requireAdmin();
+export async function reopenSiteVisit(id: string): Promise<Answer> {
+  return answering(async () => {
+    await requireAdmin();
 
-  const visit = await prisma.siteVisit.findUnique({ where: { id }, select: { state: true } });
-  if (!visit) throw new Error("That visit no longer exists.");
-  if (visit.state !== "REPORTED") throw new Error("Only a visit waiting for you can be sent back.");
+    const visit = await prisma.siteVisit.findUnique({ where: { id }, select: { state: true } });
+    if (!visit) throw new Refusal("That visit no longer exists.");
+    if (visit.state !== "REPORTED") throw new Refusal("Only a visit waiting for you can be sent back.");
 
-  await prisma.siteVisit.update({
-    where: { id },
-    data: { state: "PLANNED", reportedAt: null },
+    await prisma.siteVisit.update({
+      where: { id },
+      data: { state: "PLANNED", reportedAt: null },
+    });
+    await syncVisitTaskQuietly(id);
+
+    refresh();
   });
-  await syncVisitTaskQuietly(id);
-
-  refresh();
 }
 
 /** Removes a visit written down by mistake. Only before it is answered for. */
-export async function deleteSiteVisit(id: string) {
-  const actor = await requireSiteVisitor();
-  if (actor.type !== "EMPLOYEE") throw new Error("A visit is removed by whoever wrote it down.");
-  const visit = await mine(actor.id, id);
+export async function deleteSiteVisit(id: string): Promise<Answer> {
+  return answering(async () => {
+    const actor = await requireSiteVisitor();
+    if (actor.type !== "EMPLOYEE") throw new Refusal("A visit is removed by whoever wrote it down.");
+    const visit = await mine(actor.id, id);
 
-  if (visit.state !== "PLANNED") {
-    throw new Error("A visit that has been answered for is part of the record.");
-  }
+    if (visit.state !== "PLANNED") {
+      throw new Refusal("A visit that has been answered for is part of the record.");
+    }
 
-  await prisma.siteVisit.delete({ where: { id } });
-  refresh();
+    await prisma.siteVisit.delete({ where: { id } });
+    refresh();
+  });
 }
 
 /**
@@ -354,6 +378,6 @@ async function mine(employeeId: string, id: string) {
     where: { id, employeeId },
     select: { id: true, state: true, title: true },
   });
-  if (!visit) throw new Error("That visit no longer exists.");
+  if (!visit) throw new Refusal("That visit no longer exists.");
   return visit;
 }

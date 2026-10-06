@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { BellOff, BellRing, Loader, Plus, Share, X } from "lucide-react";
 import { currentSubscription, enablePush, isIOS, isStandalone, pushSupported } from "@/lib/push-client";
+import { shownError } from "@/lib/refusal";
 
 // Notifications that nobody switched on are notifications that do not arrive.
 //
@@ -71,7 +72,7 @@ export function PushPrompt({ publicKey }: { publicKey: string }) {
       setDone(true);
       setTimeout(() => setMode(null), 1600);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not turn notifications on.");
+      setError(shownError(cause, "Could not turn notifications on."));
     } finally {
       setBusy(false);
     }

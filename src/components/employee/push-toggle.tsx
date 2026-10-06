@@ -5,6 +5,7 @@ import { BellOff, BellRing, Loader } from "lucide-react";
 import { removePushSubscription } from "@/lib/actions/employee-actions";
 import { currentSubscription, enablePush, pushSupported } from "@/lib/push-client";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // The switch itself. The work of turning push on lives in push-client, shared
 // with the prompt on the dashboard so the two cannot drift apart.
@@ -54,7 +55,7 @@ export function PushToggle({ publicKey, configured }: { publicKey: string; confi
     } catch (error) {
       const denied = error instanceof Error && /blocked|turned off/i.test(error.message);
       setStatus(denied ? "blocked" : "off");
-      setMessage(error instanceof Error ? error.message : "Could not enable push on this device.");
+      setMessage(shownError(error, "Could not enable push on this device."));
     }
   }
 

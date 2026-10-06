@@ -21,6 +21,7 @@ import { CallSession, openMedia, type MediaProblem } from "@/components/calls/ca
 import { IncomingCall } from "@/components/calls/incoming-call";
 import { PreJoin, savedDevices, type PreJoinRequest } from "@/components/calls/pre-join";
 import { CallScreen } from "@/components/calls/call-screen";
+import { shownError } from "@/lib/refusal";
 
 // Calls, everywhere in a portal. Mounted once in each portal's shell, so a
 // call rings on any page, and a call in progress stays up — full screen or in
@@ -233,7 +234,7 @@ export function CallProvider({ side, children }: { side: ChatSide; children: Rea
     } catch (cause) {
       media.mic?.stop();
       media.camera?.stop();
-      setNotice(cause instanceof Error ? cause.message : "Could not answer the call.");
+      setNotice(shownError(cause, "Could not answer the call."));
     } finally {
       setAnswering(false);
     }

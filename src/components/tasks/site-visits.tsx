@@ -8,6 +8,7 @@ import {
   scheduleSiteVisit,
   updateSiteVisit,
 } from "@/lib/actions/site-visit-actions";
+import { refusalOf } from "@/lib/ask";
 import type { SiteVisitView } from "@/lib/site-visit-queries";
 import { STATE_LABEL, STATE_TONE, awaitingReport, needsDate } from "@/lib/site-visits";
 import type { SiteVisitState } from "@/generated/prisma/enums";
@@ -34,6 +35,8 @@ export function SiteVisits({
   const [form, setForm] = useState<{ visit: SiteVisitView | null } | null>(null);
   const [answering, setAnswering] = useState<{ visit: SiteVisitView; state: SiteVisitState } | null>(null);
   const [pending, start] = useTransition();
+  // A visit that would not be removed says why, here: its sheet has closed.
+  const [problem, setProblem] = useState<string | null>(null);
 
   const owed = visits.filter((visit) => awaitingReport(visit));
   // Written down by the manager with the day left to whoever is going.
@@ -50,6 +53,8 @@ export function SiteVisits({
         <Plus size={18} strokeWidth={2.5} />
         Schedule a site visit
       </button>
+
+      {problem && <p className="text-xs font-medium text-pink-strong">{problem}</p>}
 
       {owed.length > 0 && (
         <section className="flex flex-col gap-2">
@@ -108,8 +113,9 @@ export function SiteVisits({
           onClose={() => setForm(null)}
           onDelete={(id) => {
             setForm(null);
+            setProblem(null);
             start(async () => {
-              await deleteSiteVisit(id);
+              setProblem(await refusalOf(() => deleteSiteVisit(id), "That visit could not be removed. Try again."));
             });
           }}
         />
@@ -257,16 +263,20 @@ function VisitDialog({
   return (
     <Sheet title={visit ? "Edit the visit" : "New site visit"} onClose={onClose}>
       <form
-        action={(formData) => {
+        // onSubmit, not a form action: React empties a form's fields whenever a
+        // form action finishes, refused or not — so a visit turned away for one
+        // box came back with all of them blank.
+        onSubmit={(event) => {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
           setError(null);
           start(async () => {
-            try {
-              if (visit) await updateSiteVisit(visit.id, formData);
-              else await scheduleSiteVisit(formData);
-              onClose();
-            } catch (cause) {
-              setError(cause instanceof Error ? cause.message : "That did not save.");
-            }
+            const refusal = await refusalOf(
+              () => (visit ? updateSiteVisit(visit.id, formData) : scheduleSiteVisit(formData)),
+              "That did not save. Try again."
+            );
+            if (refusal) setError(refusal);
+            else onClose();
           });
         }}
       >
@@ -402,15 +412,19 @@ function AnswerDialog({
       </p>
 
       <form
-        action={(formData) => {
+        // onSubmit, not a form action, and it matters most here: React empties
+        // a form whenever a form action finishes, so an account of a visit that
+        // was refused — or simply did not go through — was wiped from the box
+        // the moment it failed. What somebody wrote on a site must survive the
+        // attempt to send it.
+        onSubmit={(event) => {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
           setError(null);
           start(async () => {
-            try {
-              await reportSiteVisit(visit.id, state, formData);
-              onClose();
-            } catch (cause) {
-              setError(cause instanceof Error ? cause.message : "That did not save.");
-            }
+            const refusal = await refusalOf(() => reportSiteVisit(visit.id, state, formData), "That did not save. Try again.");
+            if (refusal) setError(refusal);
+            else onClose();
           });
         }}
       >

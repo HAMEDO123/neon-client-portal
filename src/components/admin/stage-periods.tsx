@@ -14,6 +14,7 @@ import {
 import { periodTimeline, totalDays } from "@/lib/stage-schedule";
 import { dotTone } from "@/lib/task-board";
 import { cn } from "@/lib/utils";
+import { shownError } from "@/lib/refusal";
 
 // The shape of the process: which steps make up which section, and how long a
 // run of steps is allowed to take.
@@ -152,7 +153,7 @@ function PeriodForm({ steps }: { steps: Step[] }) {
           try {
             await saveStagePeriod(formData);
           } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "That did not save.");
+            setError(shownError(cause, "That did not save."));
           }
         });
       }}
