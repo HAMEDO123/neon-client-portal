@@ -5,7 +5,9 @@ import Link from "next/link";
 import { ListChecks, MessageSquarePlus, Search, Users, X } from "lucide-react";
 import type { ConversationSummary } from "@/lib/chat";
 import { listTime, previewLine } from "@/lib/chat-conversations";
+import { mergeChatList, rowPreview, type InboxRow } from "@/lib/whatsapp-watch";
 import { useMinuteNow } from "@/lib/use-minute-now";
+import { WhatsAppRow } from "@/components/chat/whatsapp-row";
 import { cn } from "@/lib/utils";
 
 // Every conversation the manager has, as a column beside the open one: a
@@ -14,8 +16,13 @@ import { cn } from "@/lib/utils";
 //
 // The filters read what is already known about each conversation (unread
 // counts, whether it is the group), so nothing here needs a query of its own.
+//
+// The company number's clients are rows here too, folded in by the time of
+// their last message exactly as the chat list page folds them
+// (`mergeChatList`) — the column beside a conversation and the list it came
+// from must not be able to disagree about what is in the chat section.
 
-type Filter = "all" | "unread" | "groups";
+type Filter = "all" | "unread" | "groups" | "whatsapp";
 
 export function ConversationPanel({
   items,
@@ -24,6 +31,7 @@ export function ConversationPanel({
   activeSlug,
   initialNow,
   tasksHref,
+  whatsapp = null,
 }: {
   items: ConversationSummary[];
   /** Where the conversations live: "/admin/chat". */
@@ -33,24 +41,37 @@ export function ConversationPanel({
   initialNow: number;
   /** Where the tasks handed out in chats are listed. */
   tasksHref?: string;
+  /** The company number's conversations, and which one is open. Null draws none. */
+  whatsapp?: { basePath: string; rows: InboxRow[]; activeId?: string } | null;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const now = useMinuteNow() ?? initialNow;
 
-  const unreadCount = items.filter((item) => item.unread > 0).length;
+  const rows = whatsapp?.rows;
+  const unreadCount =
+    items.filter((item) => item.unread > 0).length + (rows ?? []).filter((row) => row.unread !== 0).length;
   const groupCount = items.filter((item) => item.isGroup).length;
 
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return items.filter((item) => {
+    const chats = items.filter((item) => {
+      if (filter === "whatsapp") return false;
       if (filter === "unread" && item.unread === 0) return false;
       if (filter === "groups" && !item.isGroup) return false;
       if (!needle) return true;
       const preview = previewLine(item.last, item.isGroup) ?? "";
       return `${item.title} ${item.subtitle ?? ""} ${preview}`.toLowerCase().includes(needle);
     });
-  }, [items, filter, search]);
+    const clients = (rows ?? []).filter((row) => {
+      // "Groups" is the team's groups: a client's group is a WhatsApp chat.
+      if (filter === "groups") return false;
+      if (filter === "unread" && row.unread === 0) return false;
+      if (!needle) return true;
+      return `${row.title} ${rowPreview(row)}`.toLowerCase().includes(needle);
+    });
+    return mergeChatList(chats, clients);
+  }, [items, rows, filter, search]);
 
   // Somebody nobody has written to yet is where a new conversation starts.
   const unstarted = items.filter((item) => !item.last && !item.isGroup);
@@ -59,6 +80,8 @@ export function ConversationPanel({
     { key: "all", label: "All" },
     { key: "unread", label: "Unread", count: unreadCount },
     { key: "groups", label: "Groups", count: groupCount },
+    // Only where there is a number to read: a filter that can never match is noise.
+    ...(rows ? [{ key: "whatsapp" as const, label: "WhatsApp" }] : []),
   ];
 
   return (
@@ -106,7 +129,7 @@ export function ConversationPanel({
           )}
         </div>
 
-        <div className="mt-3 flex gap-1.5" role="group" aria-label="Filter conversations">
+        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Filter conversations">
           {filters.map((item) => (
             <button
               key={item.key}
@@ -136,7 +159,23 @@ export function ConversationPanel({
           </p>
         ) : (
           <ul className="flex flex-col">
-            {shown.map((item) => {
+            {shown.map((entry) => {
+              if (entry.kind === "whatsapp") {
+                return (
+                  <li key={`wa:${entry.row.id}`}>
+                    <WhatsAppRow
+                      row={entry.row}
+                      href={`${whatsapp!.basePath}/${encodeURIComponent(entry.row.id)}`}
+                      now={new Date(now)}
+                      timeZone={timeZone}
+                      active={entry.row.id === whatsapp!.activeId}
+                      look="panel"
+                    />
+                  </li>
+                );
+              }
+
+              const item = entry.item;
               const preview = previewLine(item.last, item.isGroup);
               const active = item.slug === activeSlug;
               return (

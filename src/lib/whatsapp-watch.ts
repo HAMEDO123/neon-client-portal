@@ -1,11 +1,13 @@
 // Noticing that somebody wrote to the studio's WhatsApp.
 //
 // The studio asked for two things: that a message arriving on the company
-// number is something the whole team hears about, and that WhatsApp sits at the
-// top of everybody's chats. Both need the same fact — what has arrived since we
-// last looked — and nothing tells us: the worker is asked for the chat list and
-// answers with how things stand now. So this compares what stands now with what
-// had already been announced, and says what is new. Pure, and tested, because
+// number is something the whole team hears about, and that the clients' chats
+// sit in the same list as the team's own — a row each, in order of who wrote
+// last. Both need the same fact — how the number's chats stand — and nothing
+// tells us: the worker is asked for the chat list and answers with how things
+// stand now. So this compares what stands now with what had already been
+// announced, says what is new, and keeps the rows the list draws (`inboxRows`,
+// `mergeChatList`) so drawing it never waits on the worker. Pure, and tested, because
 // the two ways it can go wrong are both loud: announcing history to the whole
 // team the first time it runs, or announcing the same message every minute.
 //
@@ -53,12 +55,36 @@ export type Arrival = {
   isGroup: boolean;
 };
 
-/** What the pinned row in the chat list says, without asking the worker again. */
+/**
+ * One client's conversation, as a row in the chat list.
+ *
+ * Enough to draw the row and open the conversation, and nothing else — no
+ * message is kept here beyond the line a list shows.
+ */
+export type InboxRow = {
+  /** WhatsApp's own id for the chat: what the conversation is opened by. */
+  id: string;
+  title: string;
+  preview: string;
+  /** When its last message was sent. */
+  at: number;
+  /** The handset's own unread count; -1 is "marked unread" there. */
+  unread: number;
+  fromMe: boolean;
+  isGroup: boolean;
+};
+
+/** How many conversations the chat list carries: the most recently active. */
+export const ROWS_KEPT = 40;
+
+/** What the chat list knows about the company number, without asking the worker again. */
 export type InboxSummary = {
   checkedAt: number;
   /** Chats with something unread on the handset. */
   unreadChats: number;
   latest: { title: string; preview: string; at: number; fromMe: boolean } | null;
+  /** The conversations themselves, newest first — a row each in the chat list. */
+  rows: InboxRow[];
 };
 
 /** An arrival older than this is recorded and not announced: it is not news any more. */
@@ -89,6 +115,11 @@ const TYPE_WORDS: Record<string, string> = {
   revoked: "Message deleted",
   e2e_notification: "Encryption notice",
   notification_template: "Notice",
+  notification: "Notice",
+  protocol: "Notice",
+  gp2: "Group update",
+  ciphertext: "Waiting for this message",
+  automated_greeting_message: "Greeting",
   call_log: "Call",
 };
 
@@ -131,6 +162,37 @@ export function readWatchState(raw: string | null | undefined): WatchState | nul
 /** Status broadcasts and channels are not conversations with the studio. */
 function isConversation(chat: WatchedChat): boolean {
   return !chat.id.endsWith("@broadcast") && !chat.id.endsWith("@newsletter");
+}
+
+/**
+ * The conversations a chat list shows, newest first.
+ *
+ * Not the archived ones — somebody put those away on the handset — and not a
+ * chat with nothing in it, which has no line to show and no time to sort by.
+ * A chat whose last line is one of WhatsApp's own notices still has its row:
+ * it is a conversation, and the notice is simply what its last line says.
+ */
+export function inboxRows(chats: WatchedChat[], limit: number = ROWS_KEPT): InboxRow[] {
+  const rows: InboxRow[] = [];
+
+  for (const chat of chats) {
+    if (!isConversation(chat) || chat.archived) continue;
+    const last = chat.lastMessage;
+    const at = last?.timestamp ?? chat.timestamp;
+    if (!last || !at) continue;
+
+    rows.push({
+      id: chat.id,
+      title: chatTitle(chat),
+      preview: whatsAppPreview(last),
+      at,
+      unread: Math.trunc(chat.unreadCount) || 0,
+      fromMe: last.fromMe,
+      isGroup: chat.isGroup,
+    });
+  }
+
+  return rows.sort((a, b) => b.at - a.at).slice(0, Math.max(0, limit));
 }
 
 /**
@@ -199,9 +261,25 @@ export function look(
           fromMe: newest.lastMessage.fromMe,
         }
       : null,
+    rows: inboxRows(conversations),
   };
 
   return { arrivals, next, summary };
+}
+
+function readRow(value: unknown): InboxRow | null {
+  const row = value as Partial<InboxRow> | null;
+  if (!row || typeof row.id !== "string" || !row.id) return null;
+  if (typeof row.title !== "string" || typeof row.at !== "number" || !Number.isFinite(row.at)) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    preview: typeof row.preview === "string" ? row.preview : "",
+    at: row.at,
+    unread: typeof row.unread === "number" && Number.isFinite(row.unread) ? Math.trunc(row.unread) : 0,
+    fromMe: Boolean(row.fromMe),
+    isGroup: Boolean(row.isGroup),
+  };
 }
 
 /** Reads the stored summary back, or null when there is none worth showing. */
@@ -218,10 +296,73 @@ export function readInboxSummary(raw: string | null | undefined): InboxSummary |
         latest && typeof latest.title === "string" && typeof latest.preview === "string" && typeof latest.at === "number"
           ? { title: latest.title, preview: latest.preview, at: latest.at, fromMe: Boolean(latest.fromMe) }
           : null,
+      // A summary stored before rows were kept has none; one unreadable row
+      // costs that row and not the list.
+      rows: Array.isArray(value.rows) ? value.rows.map(readRow).filter((row): row is InboxRow => row !== null) : [],
     };
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// One list: the team's conversations and the clients'
+
+/** A conversation of the platform's own, as far as ordering it goes. */
+type Listed = { pinned: boolean; last: { createdAt: Date } | null };
+
+export type ListEntry<T> = { kind: "chat"; item: T } | { kind: "whatsapp"; row: InboxRow };
+
+/**
+ * The chat list with the company number's conversations in it.
+ *
+ * The studio asked for the clients to be in the same list as the team — a row
+ * each, not a door to a second inbox. So the order is the list's own
+ * (lib/chat-prefs.ts) with the clients folded into it by the time of their
+ * last message:
+ *
+ *   1. what this viewer pinned, as it already was — a WhatsApp chat cannot be
+ *      pinned here, so nothing of WhatsApp's pushes in above a pin;
+ *   2. everything with a last message, the team's and the clients' together,
+ *      newest first;
+ *   3. colleagues nobody has written to yet, last, as they always were.
+ *
+ * `items` arrive in the list's own order and keep it among themselves.
+ */
+export function mergeChatList<T extends Listed>(items: T[], rows: InboxRow[]): ListEntry<T>[] {
+  const pinned = items.filter((item) => item.pinned);
+  const started = items.filter((item) => !item.pinned && item.last);
+  const unstarted = items.filter((item) => !item.pinned && !item.last);
+
+  const timed: { entry: ListEntry<T>; at: number; order: number }[] = [
+    ...started.map((item, order) => ({ entry: { kind: "chat" as const, item }, at: item.last!.createdAt.getTime(), order })),
+    // After the team's on a tie: the same second is not worth reordering for.
+    ...rows.map((row, order) => ({ entry: { kind: "whatsapp" as const, row }, at: row.at, order: started.length + order })),
+  ];
+  timed.sort((a, b) => b.at - a.at || a.order - b.order);
+
+  return [
+    ...pinned.map((item) => ({ kind: "chat" as const, item })),
+    ...timed.map(({ entry }) => entry),
+    ...unstarted.map((item) => ({ kind: "chat" as const, item })),
+  ];
+}
+
+/** The line under a client's name in the list: "You: …" for what the studio sent. */
+export function rowPreview(row: Pick<InboxRow, "preview" | "fromMe">): string {
+  return row.fromMe ? `You: ${row.preview}` : row.preview;
+}
+
+/** A WhatsApp conversation as the thread screen needs it, from its id alone if need be. */
+export function chatFromRow(
+  chatId: string,
+  row: InboxRow | null | undefined
+): { id: string; name: string | null; number: string | null; isGroup: boolean } {
+  const isGroup = row?.isGroup ?? chatId.endsWith("@g.us");
+  // The part before the @ is a phone number only for an ordinary chat: a
+  // group's is its own id and a @lid chat's is not a number anybody dials.
+  const digits = chatId.endsWith("@c.us") ? chatId.slice(0, chatId.indexOf("@")) : null;
+  return { id: chatId, name: row?.title ?? null, number: digits && /^\d+$/.test(digits) ? digits : null, isGroup };
 }
 
 // ---------------------------------------------------------------------------
@@ -246,8 +387,40 @@ export function arrivalKey(arrival: Arrival, employeeId: string): string {
   return `WHATSAPP:${arrival.chatId}:${arrival.at}:${employeeId}`;
 }
 
-/** Where the announcement opens, on each side. */
+/**
+ * Where the announcement opens, on each side.
+ *
+ * Still the WhatsApp tab's address with `?chat=`, which the tab now passes
+ * straight on to the conversation in the chat section (`whatsAppChatUrl`). It
+ * is kept as the stored link because the phone app reads these paths, and a
+ * path it has never seen is one it cannot route.
+ */
 export function inboxUrl(side: "admin" | "employee", chatId?: string): string {
   const base = side === "admin" ? "/admin/whatsapp" : "/employee/whatsapp";
   return chatId ? `${base}?chat=${encodeURIComponent(chatId)}` : base;
+}
+
+/** Where the chat section keeps the company number's conversations, on each side. */
+export function whatsAppChatBase(side: "admin" | "employee"): string {
+  return side === "admin" ? "/admin/chat/wa" : "/employee/chat/wa";
+}
+
+/** One client's conversation, inside the chat section. */
+export function whatsAppChatUrl(side: "admin" | "employee", chatId: string): string {
+  return `${whatsAppChatBase(side)}/${encodeURIComponent(chatId)}`;
+}
+
+/**
+ * A chat id out of a URL segment.
+ *
+ * Decoded only when it still looks encoded, so it does not matter whether the
+ * framework already decoded it: an id never contains a `%` of its own.
+ */
+export function chatIdFromSegment(segment: string): string {
+  if (!segment.includes("%")) return segment;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }

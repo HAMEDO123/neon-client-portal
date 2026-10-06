@@ -20,6 +20,8 @@ import { dayKeyIn } from "@/lib/time";
 import { memberLine } from "@/lib/group-members";
 import { isGroupConversation } from "@/lib/chat-conversations";
 import { groupMemberNames } from "@/lib/chat-group-store";
+import { inboxSummary } from "@/lib/notifications/whatsapp-events";
+import { whatsAppChatBase } from "@/lib/whatsapp-watch";
 import { avatarUrl } from "@/lib/avatar";
 import { ChatRoom } from "@/components/chat/chat-room";
 import { AssistantPanel } from "@/components/chat/assistant-panel";
@@ -71,6 +73,9 @@ export default async function AdminConversationPage({
     select: { id: true, name: true },
   });
   const conversations = await conversationsFor(viewer);
+  // The company number's clients, rows in the same column (stored by the
+  // minute's look, so this never waits on the worker). Null without a number.
+  const clients = await inboxSummary();
   const panel = await projectPanelFor(channel.id);
   const timezone = await getTimezone();
 
@@ -127,6 +132,7 @@ export default async function AdminConversationPage({
           timeZone={timezone}
           initialNow={now.getTime()}
           tasksHref="/admin/chat?view=tasks"
+          whatsapp={clients ? { basePath: whatsAppChatBase("admin"), rows: clients.rows } : null}
         />
       </aside>
 

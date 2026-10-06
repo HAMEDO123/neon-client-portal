@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getTimezone } from "@/lib/settings";
 import { requireWhatsAppAccess } from "@/lib/admin-guard";
 import { whatsAppChats } from "@/lib/whatsapp/worker";
+import { whatsAppChatUrl } from "@/lib/whatsapp-watch";
 import { WhatsAppInbox } from "@/components/whatsapp/whatsapp-inbox";
 
 // The company number's WhatsApp, in the dashboard.
@@ -31,9 +32,13 @@ export default async function AdminWhatsAppPage({
     redirect("/admin");
   }
 
-  const timezone = await getTimezone();
-  // A notification about one chat opens on that chat.
+  // A notification about one chat opens that chat — in the chat section, where
+  // the clients' conversations live beside the team's. The notification keeps
+  // this address because the phone app reads these paths too.
   const { chat } = await searchParams;
+  if (typeof chat === "string" && chat) redirect(whatsAppChatUrl("admin", chat));
+
+  const timezone = await getTimezone();
   const result = await whatsAppChats();
 
   return (
@@ -41,7 +46,6 @@ export default async function AdminWhatsAppPage({
       initialChats={result.ok ? result.data.chats : []}
       initialError={result.ok ? null : result.error}
       timeZone={timezone}
-      initialOpenId={typeof chat === "string" && chat ? chat : null}
     />
   );
 }

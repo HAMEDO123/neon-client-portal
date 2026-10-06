@@ -98,21 +98,24 @@ export async function runWhatsAppWatch(now: Date = new Date()): Promise<WhatsApp
 }
 
 /**
- * What the pinned WhatsApp row in the chat list says: read from what the last
- * look stored, never by asking the worker — the chat list must not wait on a
- * browser in another container to draw itself.
+ * The company number's conversations as the chat list draws them — a row per
+ * client — read from what the last look stored, never by asking the worker:
+ * the chat list must not wait on a browser in another container to draw itself.
+ * So a row is at most a minute behind, and a look that could not read the
+ * number leaves the rows it had rather than an empty list.
  *
- * Null when there is no linked number, so the row is not drawn for a studio
- * that has no WhatsApp to open.
+ * Null when there is no linked number, so nothing of WhatsApp's is drawn for a
+ * studio that has none.
  */
 export async function inboxSummary(): Promise<InboxSummary | null> {
   if (activeTransport() !== "worker") return null;
   return (
     readInboxSummary(await getSetting(INBOX_SUMMARY_KEY)) ?? {
-      // Linked, and not looked at yet: the row is still worth drawing.
+      // Linked, and not looked at yet: there are no rows to show so far.
       checkedAt: 0,
       unreadChats: 0,
       latest: null,
+      rows: [],
     }
   );
 }

@@ -19,6 +19,15 @@ describe("pages that own the window", () => {
     }
   });
 
+  // A client's WhatsApp conversation opens inside the chat section, a segment
+  // deeper. Left out of this, it would be refreshed underneath every couple of
+  // seconds while somebody was typing an answer to a client.
+  it("knows a client's WhatsApp conversation in the chat section", () => {
+    assert.equal(fillsWindow("/admin/chat/wa/962790000001%40c.us"), true);
+    assert.equal(fillsWindow("/employee/chat/wa/962790000001@c.us"), true);
+    assert.equal(fillsWindow("/employee/chat/wa/1203630%40g.us/"), true);
+  });
+
   it("knows the WhatsApp tab, on either side", () => {
     assert.equal(fillsWindow("/admin/whatsapp"), true);
     assert.equal(fillsWindow("/admin/whatsapp/"), true);

@@ -207,9 +207,13 @@ export function adminChatUrl(conversation: Conversation) {
   return "/admin/chat";
 }
 
-/** An open conversation, which keeps its own live connection, rather than the list of them. */
+/**
+ * An open conversation, which keeps its own live connection, rather than the
+ * list of them. A client's WhatsApp conversation is one too — it lives a
+ * segment deeper, at `/chat/wa/<id>`, and polls for itself.
+ */
 export function isConversationPath(pathname: string) {
-  return /\/chat\/[^/]+\/?$/.test(pathname);
+  return /\/chat\/(?:wa\/)?[^/]+\/?$/.test(pathname);
 }
 
 /**

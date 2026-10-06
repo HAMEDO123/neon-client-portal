@@ -4,12 +4,19 @@ import {
   STALE_AFTER_MS,
   arrivalCopy,
   arrivalKey,
+  chatFromRow,
+  chatIdFromSegment,
   chatTitle,
+  inboxRows,
   inboxUrl,
   look,
+  mergeChatList,
   readInboxSummary,
   readWatchState,
+  rowPreview,
+  whatsAppChatUrl,
   whatsAppPreview,
+  type InboxRow,
   type WatchedChat,
 } from "../src/lib/whatsapp-watch";
 
@@ -164,6 +171,152 @@ describe("the row in the chat list", () => {
   });
 });
 
+// The studio asked for the clients to be in the same chat list as the team, a
+// row each. These are the rows, and the order the two kinds of row are put in.
+describe("a row for each client", () => {
+  it("is every open conversation, newest first", () => {
+    const rows = inboxRows([
+      chat({ id: "old@c.us", name: "Old", last: { timestamp: minutesAgo(90) } }),
+      chat({ id: "new@c.us", name: "New", unreadCount: 3, last: { body: "صورة", timestamp: minutesAgo(2) } }),
+    ]);
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      ["new@c.us", "old@c.us"]
+    );
+    assert.deepEqual(rows[0], {
+      id: "new@c.us",
+      title: "New",
+      preview: "صورة",
+      at: minutesAgo(2),
+      unread: 3,
+      fromMe: false,
+      isGroup: false,
+    });
+  });
+
+  // Put away on the handset is put away here; a status broadcast was never a
+  // conversation; and a chat with nothing in it has no line to show.
+  it("leaves out what is archived, what is not a conversation, and what is empty", () => {
+    const rows = inboxRows([
+      chat({ id: "a@c.us", archived: true }),
+      chat({ id: "status@broadcast" }),
+      chat({ id: "news@newsletter" }),
+      chat({ id: "empty@c.us", last: null }),
+      chat({ id: "kept@c.us" }),
+    ]);
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      ["kept@c.us"]
+    );
+  });
+
+  it("carries the most recent and no more", () => {
+    const many = Array.from({ length: 12 }, (_, index) =>
+      chat({ id: `${index}@c.us`, last: { timestamp: minutesAgo(index + 1) } })
+    );
+    const rows = inboxRows(many, 5);
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      ["0@c.us", "1@c.us", "2@c.us", "3@c.us", "4@c.us"]
+    );
+  });
+
+  it("says what was sent when there are no words, and whose line it is", () => {
+    const [voice] = inboxRows([chat({ last: { body: "", type: "ptt" } })]);
+    assert.equal(voice.preview, "Voice note");
+    assert.equal(rowPreview({ preview: "تم", fromMe: true }), "You: تم");
+    assert.equal(rowPreview({ preview: "مرحبا", fromMe: false }), "مرحبا");
+  });
+
+  it("travels with the summary, and a damaged row costs that row only", () => {
+    const { summary } = look([chat(), chat({ id: "b@c.us" })], watching, NOW);
+    assert.equal(summary.rows.length, 2);
+
+    const stored = JSON.parse(JSON.stringify(summary));
+    stored.rows[0] = { title: "no id" };
+    assert.equal(readInboxSummary(JSON.stringify(stored))?.rows.length, 1);
+    // A summary from before rows were kept simply has none.
+    delete stored.rows;
+    assert.deepEqual(readInboxSummary(JSON.stringify(stored))?.rows, []);
+  });
+});
+
+describe("one list, the team and the clients together", () => {
+  const at = (minutes: number) => new Date(minutesAgo(minutes));
+  const team = (slug: string, last: Date | null, pinned = false) => ({ slug, pinned, last: last ? { createdAt: last } : null });
+  const client = (id: string, minutes: number): InboxRow => ({
+    id,
+    title: id,
+    preview: "",
+    at: minutesAgo(minutes),
+    unread: 0,
+    fromMe: false,
+    isGroup: false,
+  });
+  const names = (entries: ReturnType<typeof mergeChatList<ReturnType<typeof team>>>) =>
+    entries.map((entry) => (entry.kind === "chat" ? entry.item.slug : `wa:${entry.row.id}`));
+
+  it("is in order of who wrote last, whichever kind of chat it is", () => {
+    const merged = mergeChatList(
+      [team("team", at(5)), team("wael", at(40))],
+      [client("abu", 1), client("supplier", 20), client("old", 300)]
+    );
+    assert.deepEqual(names(merged), ["wa:abu", "team", "wa:supplier", "wael", "wa:old"]);
+  });
+
+  // A WhatsApp chat cannot be pinned here, so nothing of it may land above
+  // what somebody chose to keep at the top.
+  it("keeps what the viewer pinned above everything, as it was", () => {
+    const merged = mergeChatList([team("pinned", at(500), true), team("team", at(5))], [client("abu", 1)]);
+    assert.deepEqual(names(merged), ["pinned", "wa:abu", "team"]);
+  });
+
+  // A colleague nobody has written to yet has no time to be sorted by. They
+  // stay where they always were — after everything that has been said — and
+  // a client's old chat does not fall below them.
+  it("leaves colleagues nobody has written to yet at the end", () => {
+    const merged = mergeChatList([team("new-colleague", null), team("team", at(5))], [client("abu", 900)]);
+    assert.deepEqual(names(merged), ["team", "wa:abu", "new-colleague"]);
+  });
+
+  it("is the list it was given when there is no WhatsApp", () => {
+    const items = [team("a", at(1), true), team("b", at(2)), team("c", null)];
+    assert.deepEqual(names(mergeChatList(items, [])), ["a", "b", "c"]);
+  });
+});
+
+describe("opening a client's conversation", () => {
+  it("lives in the chat section, on the right side", () => {
+    assert.equal(whatsAppChatUrl("employee", "962790000001@c.us"), "/employee/chat/wa/962790000001%40c.us");
+    assert.equal(whatsAppChatUrl("admin", "1203630@g.us"), "/admin/chat/wa/1203630%40g.us");
+  });
+
+  // Whether the framework hands the segment over decoded or not must not
+  // decide whether the chat is found.
+  it("reads the id back out of the address either way", () => {
+    assert.equal(chatIdFromSegment("962790000001%40c.us"), "962790000001@c.us");
+    assert.equal(chatIdFromSegment("962790000001@c.us"), "962790000001@c.us");
+    assert.equal(chatIdFromSegment("%E0%A4%A"), "%E0%A4%A");
+  });
+
+  it("can be opened by its id alone, when the list no longer carries it", () => {
+    assert.deepEqual(chatFromRow("962790000001@c.us", null), {
+      id: "962790000001@c.us",
+      name: null,
+      number: "962790000001",
+      isGroup: false,
+    });
+    assert.equal(chatFromRow("1203630@g.us", null).isGroup, true);
+    // A @lid chat's first part is not a number anybody dials.
+    assert.equal(chatFromRow("27483530960@lid", null).number, null);
+  });
+
+  it("takes its name from the row when there is one", () => {
+    const row: InboxRow = { id: "a@c.us", title: "Abu Mohammad", preview: "", at: NOW, unread: 0, fromMe: false, isGroup: false };
+    assert.equal(chatFromRow("a@c.us", row).name, "Abu Mohammad");
+  });
+});
+
 describe("what is kept between looks", () => {
   it("reads back what it wrote", () => {
     const { next } = look([chat()], watching, NOW);
@@ -204,6 +357,8 @@ describe("saying it", () => {
 
   // The manager is turned away by the employee portal, and the reverse: a
   // notification that opens onto a refusal reads as a broken platform.
+  // The stored link stays the WhatsApp tab's: the phone app reads these paths,
+  // and the tab passes `?chat=` on to the conversation in the chat section.
   it("opens on the right side, on the chat it is about", () => {
     assert.equal(inboxUrl("employee", "a@c.us"), "/employee/whatsapp?chat=a%40c.us");
     assert.equal(inboxUrl("admin", "a@c.us"), "/admin/whatsapp?chat=a%40c.us");
@@ -223,6 +378,14 @@ describe("the look is actually run", () => {
 
   it("every minute, by the scheduler that runs the minute's jobs", () => {
     assert.match(read("docker-compose.yml"), /for job in meetings clock location[^;]*\bwhatsapp\b[^;]*; do/);
+  });
+
+  // A link in a notification that the tab swallowed would open the whole inbox
+  // instead of the one chat it was about.
+  it("and a link to one chat is passed on to that conversation", () => {
+    for (const side of ["admin/(dashboard)", "employee/(portal)"]) {
+      assert.match(read("src", "app", ...side.split("/"), "whatsapp", "page.tsx"), /redirect\(whatsAppChatUrl\(/, side);
+    }
   });
 
   it("as a job the endpoint knows by name", () => {

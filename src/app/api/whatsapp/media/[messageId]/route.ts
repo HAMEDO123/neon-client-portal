@@ -1,19 +1,24 @@
 import { requireWhatsAppAccess } from "@/lib/admin-guard";
-import { whatsAppMessageMedia } from "@/lib/whatsapp/worker";
+import { attachmentResponse, readAttachment } from "@/lib/whatsapp-attachments";
 
 // One message's attachment, as bytes.
 //
 // Served rather than handed over as base64 so a photo can be the src of an
-// <img> and a document can be the href of a link — the browser then streams
-// and caches it like any other file, instead of the page carrying a megabyte
-// of text per picture.
+// <img>, a voice note the src of an <audio>, and a document the href of a link
+// — the page never carries a megabyte of text per picture.
 //
-// Never cached beyond this request: these are somebody's private messages, and
-// the guard has to run every time one is asked for.
+// What is handed over is decided in lib/whatsapp-attachments.ts, shared with
+// the phone app's route: a voice note comes out as AAC, which an iPhone plays,
+// and a `Range` request is answered with the part asked for, without which
+// Safari will not play audio or video at all.
+//
+// Never cached by the browser: these are somebody's private messages, and the
+// guard has to run every time one is asked for. It runs first, here, before
+// anything is looked up.
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, context: { params: Promise<{ messageId: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ messageId: string }> }) {
   try {
     await requireWhatsAppAccess();
   } catch {
@@ -21,18 +26,8 @@ export async function GET(_request: Request, context: { params: Promise<{ messag
   }
 
   const { messageId } = await context.params;
-  const result = await whatsAppMessageMedia(messageId);
+  const result = await readAttachment(messageId);
   if (!result.ok) return new Response(result.error, { status: result.status ?? 502 });
 
-  const bytes = Buffer.from(result.data.base64, "base64");
-  return new Response(new Uint8Array(bytes), {
-    headers: {
-      "content-type": result.data.mimeType,
-      "content-length": String(bytes.byteLength),
-      "cache-control": "private, no-store",
-      ...(result.data.filename
-        ? { "content-disposition": `inline; filename="${result.data.filename.replace(/"/g, "")}"` }
-        : {}),
-    },
-  });
+  return attachmentResponse(request, result.data);
 }

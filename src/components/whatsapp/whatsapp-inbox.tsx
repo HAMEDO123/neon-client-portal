@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
+  ChevronLeft,
   FileText,
   Image as ImageIcon,
   Loader2,
@@ -55,18 +57,15 @@ export function WhatsAppInbox({
   initialChats,
   initialError = null,
   timeZone,
-  initialOpenId = null,
 }: {
   initialChats: WhatsAppChat[];
   initialError?: string | null;
   timeZone: string;
-  /** The chat a notification pointed at (`?chat=`), opened straight away. */
-  initialOpenId?: string | null;
 }) {
   const [chats, setChats] = useState(initialChats);
   const [error, setError] = useState(initialError);
   const [query, setQuery] = useState("");
-  const [openId, setOpenId] = useState<string | null>(initialOpenId);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -188,7 +187,7 @@ export function WhatsAppInbox({
       </div>
 
       {open ? (
-        <Thread key={open.id} chat={open} timeZone={timeZone} onBack={() => setOpenId(null)} />
+        <WhatsAppThread key={open.id} chat={open} timeZone={timeZone} onBack={() => setOpenId(null)} />
       ) : (
         <div className="hidden min-w-0 flex-1 items-center justify-center p-8 text-center lg:flex">
           <p className="max-w-xs text-sm text-ink/40">
@@ -201,16 +200,39 @@ export function WhatsAppInbox({
   );
 }
 
-function Thread({
+/** What a conversation needs to be opened: who it is with, and where it lives. */
+export type ThreadChat = Pick<WhatsAppChat, "id" | "name" | "number" | "isGroup">;
+
+/**
+ * One conversation: its messages, and the box to answer in.
+ *
+ * Exported because it is drawn in two places — beside the list in the WhatsApp
+ * tab, and as a conversation of its own in the chat section, where each client
+ * is a row among the team's chats. One component, so the two cannot come to
+ * read or answer differently.
+ *
+ * The way back is the caller's: the tab closes the pane (`onBack`), the chat
+ * section goes back to its list (`backHref`). The header and the message box
+ * carry `chat-header` and `chat-composer` so that inside `.chat-screen`
+ * (globals.css) they keep clear of the status bar and the home indicator the
+ * way a team conversation does; elsewhere the classes do nothing.
+ */
+export function WhatsAppThread({
   chat,
   timeZone,
   onBack,
+  backHref,
 }: {
-  chat: WhatsAppChat;
+  chat: ThreadChat;
   timeZone: string;
-  onBack: () => void;
+  onBack?: () => void;
+  /** Where the arrow leads, when the thread is a page rather than a pane. */
+  backHref?: string;
 }) {
   const [messages, setMessages] = useState<WhatsAppChatMessage[] | null>(null);
+  // A chat opened by its id alone — older than the rows the list keeps — is
+  // named by the account itself, in the same answer as its messages.
+  const [knownName, setKnownName] = useState<string | null>(chat.name);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending[]>([]);
   const bottom = useRef<HTMLDivElement>(null);
@@ -228,6 +250,7 @@ function Thread({
       }
       const arrived: WhatsAppChatMessage[] = body.messages ?? [];
       setMessages(arrived);
+      if (typeof body.chat?.name === "string" && body.chat.name) setKnownName(body.chat.name);
       // Anything queued that the account is now handing back has left, and its
       // own bubble replaces ours.
       setPending((waiting) => stillWaiting(waiting, arrived));
@@ -271,22 +294,37 @@ function Thread({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-ink/10 bg-paper px-3 py-2.5">
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-lg px-2 py-1 text-xs font-medium text-ink/55 hover:bg-white/60 lg:hidden"
-        >
-          Back
-        </button>
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink/[0.06] text-ink/45">
-          {chat.isGroup ? <Users size={15} strokeWidth={1.75} /> : <MessageSquare size={15} strokeWidth={1.75} />}
+      <div className="chat-header flex shrink-0 items-center gap-2 border-b border-ink/10 bg-paper px-3 py-2.5">
+        {backHref ? (
+          <Link
+            href={backHref}
+            aria-label="Back to the chats"
+            className="-ml-1 flex h-9 w-8 shrink-0 items-center justify-center text-ink/55 lg:hidden"
+          >
+            <ChevronLeft size={26} strokeWidth={2.25} />
+          </Link>
+        ) : (
+          onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-lg px-2 py-1 text-xs font-medium text-ink/55 hover:bg-white/60 lg:hidden"
+            >
+              Back
+            </button>
+          )
+        )}
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600/12 text-emerald-800">
+          {chat.isGroup ? <Users size={16} strokeWidth={1.75} /> : <MessageSquare size={16} strokeWidth={1.75} />}
         </span>
         <div className="min-w-0">
           <p dir="auto" className="truncate text-sm font-semibold text-ink/85">
-            {chat.name || chat.number || "Unknown"}
+            {knownName || (chat.number ? `+${chat.number}` : "Unknown")}
           </p>
-          <p className="text-[11px] text-ink/40">{chat.isGroup ? "Group" : chat.number ?? ""}</p>
+          {/* Says which kind of chat this is: here, an answer goes out as the studio. */}
+          <p className="truncate text-[11px] text-ink/40">
+            WhatsApp · {chat.isGroup ? "group" : chat.number ? `+${chat.number}` : "the studio’s number"}
+          </p>
         </div>
       </div>
 
@@ -340,7 +378,7 @@ function Thread({
  * library will not post into one — saying so after somebody has typed their
  * message is saying it too late.
  */
-function Composer({ chat, onQueued }: { chat: WhatsAppChat; onQueued: (text: string) => void }) {
+function Composer({ chat, onQueued }: { chat: ThreadChat; onQueued: (text: string) => void }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -375,7 +413,7 @@ function Composer({ chat, onQueued }: { chat: WhatsAppChat; onQueued: (text: str
 
   if (chat.isGroup) {
     return (
-      <p className="shrink-0 border-t border-ink/10 bg-paper px-3 py-3 text-center text-[11px] text-ink/45">
+      <p className="chat-composer shrink-0 border-t border-ink/10 bg-paper px-3 py-3 text-center text-[11px] text-ink/45">
         Reading only in a group. WhatsApp is hard on a linked session that posts into groups, so the studio&rsquo;s
         number answers people rather than groups.
       </p>
@@ -383,7 +421,7 @@ function Composer({ chat, onQueued }: { chat: WhatsAppChat; onQueued: (text: str
   }
 
   return (
-    <div className="shrink-0 border-t border-ink/10 bg-paper px-3 py-2.5">
+    <div className="chat-composer shrink-0 border-t border-ink/10 bg-paper px-3 py-2.5">
       {error && <p className="mb-1.5 text-xs font-medium text-pink-strong">{error}</p>}
       <div className="flex items-end gap-2">
         <textarea
@@ -501,20 +539,64 @@ function Bubble({
 /**
  * A message's attachment, fetched only when it is actually on screen.
  *
- * A photo is shown; anything else is a link, because a spreadsheet drawn as an
- * image is a broken icon and a voice note is not something a thumbnail can
- * say. The download goes through the portal, so the file is never carried in
- * the page.
+ * A photo is shown, a voice note and a video play where they are, and anything
+ * else is a link — a spreadsheet drawn as an image is a broken icon. The file
+ * goes through the portal, so it is never carried in the page.
+ *
+ * **Nothing is fetched until it is asked for** (`preload="none"`): a
+ * conversation with forty voice notes in it would otherwise have the worker
+ * decrypt all forty to draw forty play buttons.
+ *
+ * A photo that will not load says so, in the bubble, instead of leaving the
+ * browser's broken-picture mark: that mark is what every attachment showed
+ * while the worker could not read them, and it reads as "still loading".
  */
 function Attachment({ message }: { message: WhatsAppChatMessage }) {
   const href = `/api/whatsapp/media/${encodeURIComponent(message.id ?? "")}`;
+  const [failed, setFailed] = useState(false);
 
   if (message.type === "image" || message.type === "sticker") {
+    if (failed) {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className={cn(
+            "mb-1.5 flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium",
+            message.fromMe ? "bg-white/15" : "bg-ink/[0.05]"
+          )}
+        >
+          <ImageIcon size={14} strokeWidth={1.75} />
+          This photo could not be loaded. Open it to try again.
+        </a>
+      );
+    }
     return (
       <a href={href} target="_blank" rel="noreferrer" className="mb-1.5 block overflow-hidden rounded-lg">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={href} alt="" loading="lazy" className="max-h-64 w-full object-cover" />
+        <img
+          src={href}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className={cn("w-full", message.type === "sticker" ? "max-h-40 object-contain" : "max-h-64 object-cover")}
+        />
       </a>
+    );
+  }
+
+  if (message.type === "ptt" || message.type === "audio") {
+    return (
+      // The route hands a voice note over as AAC, which every phone plays;
+      // WhatsApp's own Ogg Opus is not something an iPhone will.
+      <audio src={href} controls preload="none" className="mb-1.5 h-10 w-64 max-w-full" />
+    );
+  }
+
+  if (message.type === "video") {
+    return (
+      <video src={href} controls playsInline preload="none" className="mb-1.5 max-h-72 w-full rounded-lg bg-black/80" />
     );
   }
 

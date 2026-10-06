@@ -3,7 +3,7 @@ import { taskListFor } from "@/lib/chat-task-store";
 import { isOverdue, progressOf } from "@/lib/chat-tasks";
 import { getTimezone } from "@/lib/settings";
 import { inboxSummary } from "@/lib/notifications/whatsapp-events";
-import { inboxUrl } from "@/lib/whatsapp-watch";
+import { inboxUrl, whatsAppChatBase } from "@/lib/whatsapp-watch";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { ConversationList } from "@/components/chat/conversation-list";
 import { TaskList } from "@/components/chat/task-list";
@@ -29,9 +29,12 @@ export default async function AdminChatsPage({
   const timezone = await getTimezone();
   const { view } = await searchParams;
 
-  // The company's WhatsApp, pinned first. The manager may always open it.
+  // The company number's clients, a row each among the team's chats. The
+  // manager may always open them.
   const summary = await inboxSummary();
-  const whatsapp = summary ? { href: inboxUrl("admin"), summary } : null;
+  const whatsapp = summary
+    ? { basePath: whatsAppChatBase("admin"), rows: summary.rows, allHref: inboxUrl("admin") }
+    : null;
 
   const now = new Date().getTime();
   const open = tasks.filter((task) => !progressOf(task.assignments).complete);
@@ -41,8 +44,9 @@ export default async function AdminChatsPage({
     <div>
       <h1 className="font-display text-2xl font-semibold text-bark">Chat</h1>
       <p className="mt-1 text-sm text-bark/50">
-        The team&apos;s group, and a private conversation with each person. A private chat is only between you and
-        them. Hand out a task from any of them with + or by typing /task.
+        The team&apos;s group, a private conversation with each person, and the clients writing to the company&apos;s
+        WhatsApp — the rows with the green mark, answered as the studio. Hand out a task from a team chat with + or by
+        typing /task.
       </p>
 
       <ChatSidebar

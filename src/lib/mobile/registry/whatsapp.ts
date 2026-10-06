@@ -44,12 +44,15 @@ export const reads: ReadRegistry = {
     readThread(param(params, "chatId"), limitFrom(optParam(params, "limit"), 50))
   ),
 
-  // What the pinned WhatsApp row at the top of the chat list says: how many
-  // chats have something unread, and the newest message — { checkedAt,
-  // unreadChats, latest: { title, preview, at, fromMe } | null }, or null when
-  // there is no linked number (draw no row). Read from what the minute's look
-  // stored (lib/notifications/whatsapp-events.ts), so it answers at once and
-  // never waits on the worker — unlike "whatsapp/inbox", which asks it.
+  // The company number's conversations as the chat list draws them — a row
+  // per client, among the team's own chats: { checkedAt, unreadChats, latest:
+  // { title, preview, at, fromMe } | null, rows: [{ id, title, preview, at,
+  // unread, fromMe, isGroup }] }, newest first, the forty most recently active
+  // and none archived. Null when there is no linked number (draw no rows).
+  // `at` is milliseconds; `unread` is the handset's own count (-1 is "marked
+  // unread" there). Read from what the minute's look stored
+  // (lib/notifications/whatsapp-events.ts), so it answers at once and never
+  // waits on the worker — unlike "whatsapp/inbox", which asks it.
   "whatsapp/summary": guarded(requireWhatsAppAccess, async () => inboxSummary()),
 
   // The manager's line settings: transport, whether it answers, the linked number.

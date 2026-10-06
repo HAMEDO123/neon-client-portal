@@ -4,14 +4,15 @@ import { isOverdue, progressOf } from "@/lib/chat-tasks";
 import { getTimezone } from "@/lib/settings";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { inboxSummary } from "@/lib/notifications/whatsapp-events";
-import { inboxUrl } from "@/lib/whatsapp-watch";
+import { inboxUrl, whatsAppChatBase } from "@/lib/whatsapp-watch";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { ConversationList } from "@/components/chat/conversation-list";
 import { TaskList } from "@/components/chat/task-list";
 
 // The employee's chats — the team's group, their private conversation with the
-// manager, and one with each colleague — and, on the other tab, the tasks the
-// manager has given them in any of those chats. `?view=tasks` opens on that tab.
+// manager, one with each colleague, and the clients writing to the company's
+// WhatsApp, a row each — and, on the other tab, the tasks the manager has
+// given them in any of the team's chats. `?view=tasks` opens on that tab.
 
 export default async function EmployeeChatsPage({
   searchParams,
@@ -30,12 +31,14 @@ export default async function EmployeeChatsPage({
   const timezone = await getTimezone();
   const { view } = await searchParams;
 
-  // The company's WhatsApp, pinned first — for whoever may open it. Somebody
-  // the manager has switched it off for is not shown a row that would turn
-  // them away.
+  // The company number's clients, a row each among the team's chats — for
+  // whoever may open them. Somebody the manager has switched it off for is not
+  // shown rows that would turn them away.
   const me = await getSessionEmployee();
   const summary = me?.canReadWhatsApp ? await inboxSummary() : null;
-  const whatsapp = summary ? { href: inboxUrl("employee"), summary } : null;
+  const whatsapp = summary
+    ? { basePath: whatsAppChatBase("employee"), rows: summary.rows, allHref: inboxUrl("employee") }
+    : null;
 
   const now = new Date().getTime();
   const open = tasks.filter((task) => !progressOf(task.assignments).complete);
@@ -62,6 +65,8 @@ export default async function EmployeeChatsPage({
             </div>
             <p className="mt-4 px-4 text-center text-xs text-ink/40">
               A private chat is seen only by the two people in it. The manager cannot read your chats with colleagues.
+              {whatsapp &&
+                " The rows with the green mark are clients on the company’s WhatsApp: everybody on the team sees those, and an answer goes out as the studio."}
             </p>
           </>
         }

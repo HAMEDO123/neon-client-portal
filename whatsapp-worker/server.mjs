@@ -349,21 +349,51 @@ function readMessages(client, chatId, limit) {
  * underneath does not. So this does what `Message.downloadMedia` does and
  * nothing it does not: find the message in the store, resolve the media if it
  * is not resolved yet, and decrypt it.
+ *
+ * **The message's own mimetype goes with it, and that is not optional.**
+ * WhatsApp Web (2.3000.1049…) started checking the file's type against the
+ * kind of message, and a call that names no mimetype is read as
+ * `application/octet-stream` — which a document may be and a photo may not. So
+ * every PDF opened and every photo, voice note, video and sticker was refused
+ * in a few milliseconds, before anything was fetched: `InvalidMediaFileType:
+ * Unexpected mimetype application/octet-stream for media type image`. The
+ * library's own `downloadMedia` (1.34.7) makes the same call without it and
+ * fails the same way, so this is not something upgrading it would have fixed.
+ *
+ * **A failure comes back as a sentence, not thrown.** An error raised inside
+ * the page is an instance of a minified class, and what reaches the log is its
+ * name — the whole of it read `t t: t`, seventeen times, with nothing to say
+ * which step or why. The name and message are read in the page, where they
+ * still exist, and handed back as `{ unavailable }`.
  */
 function readMedia(client, messageId) {
   return client.pupPage.evaluate(async (id) => {
+    /** What went wrong, in words that survive leaving the page. */
+    const why = (step, error) => {
+      const name = error?.name && error.name !== "Error" ? `${error.name}: ` : "";
+      return { unavailable: `${step} — ${name}${error?.message ?? String(error)}`.slice(0, 300) };
+    };
+
     const store = window.require("WAWebCollections");
     const msg = store.Msg.get(id) || (await store.Msg.getMessagesById([id]))?.messages?.[0];
 
-    // REUPLOADING means the media has expired and WhatsApp is fetching it
-    // again — there is nothing to hand over yet.
-    if (!msg || !msg.mediaData || msg.mediaData.mediaStage === "REUPLOADING") return null;
+    if (!msg || !msg.mediaData) return { unavailable: "no such attachment" };
+
+    // REUPLOADING means the media has expired and WhatsApp is asking the phone
+    // for it again — there is nothing to hand over yet.
+    if (msg.mediaData.mediaStage === "REUPLOADING") {
+      return { unavailable: "WhatsApp is fetching this attachment from the phone again" };
+    }
 
     if (msg.mediaData.mediaStage !== "RESOLVED") {
-      await msg.downloadMedia({ downloadEvenIfExpensive: true, rmrReason: 1 });
+      try {
+        await msg.downloadMedia({ downloadEvenIfExpensive: true, rmrReason: 1 });
+      } catch (error) {
+        return why("could not be fetched", error);
+      }
     }
     if (msg.mediaData.mediaStage.includes("ERROR") || msg.mediaData.mediaStage === "FETCHING") {
-      return null;
+      return { unavailable: `not downloaded (${msg.mediaData.mediaStage})` };
     }
 
     // The download manager expects a performance-logging object it can call
@@ -377,16 +407,28 @@ function readMedia(client, messageId) {
       },
     };
 
-    const decrypted = await window.require("WAWebDownloadManager").downloadManager.downloadAndMaybeDecrypt({
-      directPath: msg.directPath,
-      encFilehash: msg.encFilehash,
-      filehash: msg.filehash,
-      mediaKey: msg.mediaKey,
-      mediaKeyTimestamp: msg.mediaKeyTimestamp,
-      type: msg.type,
-      signal: new AbortController().signal,
-      downloadQpl: noQpl,
-    });
+    let decrypted;
+    try {
+      decrypted = await window.require("WAWebDownloadManager").downloadManager.downloadAndMaybeDecrypt({
+        directPath: msg.directPath,
+        encFilehash: msg.encFilehash,
+        filehash: msg.filehash,
+        mediaKey: msg.mediaKey,
+        mediaKeyTimestamp: msg.mediaKeyTimestamp,
+        type: msg.type,
+        // See above: without this, only documents download.
+        mimetype: msg.mimetype,
+        signal: new AbortController().signal,
+        downloadQpl: noQpl,
+      });
+    } catch (error) {
+      // WhatsApp keeps an attachment for a few weeks; after that it is gone
+      // from their servers and only the phone still has it.
+      if (error?.status === 404 || error?.status === 410) {
+        return { unavailable: "no longer on WhatsApp's servers — it is only on the phone now" };
+      }
+      return why("could not be decrypted", error);
+    }
 
     return {
       base64: await window.WWebJS.arrayBufferToBase64Async(decrypted),
@@ -522,7 +564,14 @@ const server = createServer(async (request, response) => {
       if (!client) return send(response, 409, { error: "line is not linked" });
 
       const media = await readMedia(client, decodeURIComponent(parts[3]));
-      if (!media?.base64) return send(response, 404, { error: "that attachment is not available" });
+      if (!media?.base64) {
+        // Said in the log as well as to the caller: an attachment that will not
+        // open is the kind of thing nobody reports until all of them have
+        // stopped, and the reason is the only useful part.
+        const reason = media?.unavailable ?? "nothing came back";
+        console.warn("[whatsapp] attachment not available:", reason);
+        return send(response, 404, { error: `That attachment is not available: ${reason}.` });
+      }
       return send(response, 200, media);
     }
 
