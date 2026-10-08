@@ -7,14 +7,15 @@ import {
   deleteDrawing,
 } from "@/lib/actions/drawing-actions";
 import { createDocument, deleteDocument } from "@/lib/actions/document-actions";
-import { createBoqItem, deleteBoqItem } from "@/lib/actions/boq-actions";
+import { addBoqFile, createBoqItem, deleteBoqFile, deleteBoqItem } from "@/lib/actions/boq-actions";
+import { BOQ_FILE_CATEGORY } from "@/lib/boq-files";
 import { createPricingItem, deletePricingItem } from "@/lib/actions/pricing-actions";
 import { createMaterial, deleteMaterial } from "@/lib/actions/material-actions";
 import { createFurnitureItem, deleteFurnitureItem } from "@/lib/actions/furniture-actions";
 import { createApproval, deleteApproval } from "@/lib/actions/approval-actions";
 import { resolveComment, deleteComment } from "@/lib/actions/comment-actions";
 import { replyAsStudio } from "@/lib/mobile/projectfiles-comments";
-import { guarded, guardedAction, oneOf, optStr, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { guarded, guardedAction, heard, oneOf, optStr, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 
 // The "projectfiles" area of the phone API: the project file tabs — drawings,
 // documents, BOQ, pricing, materials, furniture, approvals, comments — that
@@ -88,7 +89,23 @@ export const reads: ReadRegistry = {
       where: { projectId },
       orderBy: [{ category: "asc" }, { order: "asc" }],
     });
+    // The BOQ as a file, beside the items: documents filed under "BOQ"
+    // (lib/boq-files.ts). Added to what was here, so an app that does not know
+    // about it yet reads the same `items` it always did.
+    const files = await prisma.document.findMany({
+      where: { projectId, category: BOQ_FILE_CATEGORY },
+      orderBy: { order: "asc" },
+    });
     return {
+      files: files.map((d) => ({
+        id: d.id,
+        title: d.title,
+        fileUrl: d.fileUrl,
+        fileType: d.fileType,
+        fileSize: d.fileSize,
+        version: d.version,
+        createdAt: d.createdAt,
+      })),
       items: items.map((b) => ({
         id: b.id,
         category: b.category,
@@ -218,6 +235,11 @@ export const actions: ActionRegistry = {
   "projectfiles/deleteDocument": (input) => deleteDocument(str(input.args[0], "projectId"), str(input.args[1], "id")),
 
   "projectfiles/createBoqItem": (input) => createBoqItem(str(input.args[0], "projectId"), input.form),
+  // The BOQ as a file: args [projectId], form { file, title?, version? }. It is
+  // stored as a document under "BOQ" and comes back in `projectfiles/boq`'s
+  // `files`. Answers with its refusal; `heard` sends the app `{ error }`.
+  "projectfiles/addBoqFile": async (input) => heard(await addBoqFile(str(input.args[0], "projectId"), input.form)),
+  "projectfiles/deleteBoqFile": (input) => deleteBoqFile(str(input.args[0], "projectId"), str(input.args[1], "id")),
   "projectfiles/deleteBoqItem": (input) => deleteBoqItem(str(input.args[0], "projectId"), str(input.args[1], "id")),
 
   "projectfiles/createPricingItem": (input) => createPricingItem(str(input.args[0], "projectId"), input.form),

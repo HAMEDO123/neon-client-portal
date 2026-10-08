@@ -11,6 +11,7 @@ import { DrawingsSection } from "@/components/client/drawings-section";
 import { MaterialsSection } from "@/components/client/materials-section";
 import { FurnitureSection } from "@/components/client/furniture-section";
 import { BoqSection } from "@/components/client/boq-section";
+import { boqFilesOf, hasBoq } from "@/lib/boq-files";
 import { PricingSection } from "@/components/client/pricing-section";
 import { DocumentsSection } from "@/components/client/documents-section";
 import { ApprovalsSection } from "@/components/client/approvals-section";
@@ -66,7 +67,8 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
   if (project.drawings.length > 0) navItems.push({ key: "drawings", label: "Drawings" });
   if (project.materials.length > 0) navItems.push({ key: "materials", label: "Materials" });
   if (project.furniture.length > 0) navItems.push({ key: "furniture", label: "Furniture" });
-  if (project.boqItems.length > 0) navItems.push({ key: "boq", label: "BOQ" });
+  // Items, a file, or both: a BOQ added as a spreadsheet is still a BOQ.
+  if (hasBoq(project)) navItems.push({ key: "boq", label: "BOQ" });
   if (project.showPricing && project.pricingItems.length > 0) navItems.push({ key: "pricing", label: "Pricing" });
   if (project.documents.length > 0) navItems.push({ key: "documents", label: "Documents" });
   if (project.approvals.length > 0) navItems.push({ key: "approvals", label: "Approvals" });
@@ -79,7 +81,7 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
   const checklist = [
     { label: "Final Renders", done: project.spaces.some((s) => s.images.length > 0) },
     { label: "Technical Drawings", done: project.drawings.length > 0 },
-    { label: "Bill of Quantities", done: project.boqItems.length > 0 },
+    { label: "Bill of Quantities", done: hasBoq(project) },
     { label: "Material Schedule", done: project.materials.length > 0 },
     { label: "Furniture Schedule", done: project.furniture.length > 0 },
     { label: "Execution Proposal", done: project.showPricing && project.pricingItems.length > 0 },
@@ -145,8 +147,15 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
 
       {project.furniture.length > 0 && <FurnitureSection furniture={project.furniture} showPrice={project.showPricing} />}
 
-      {project.boqItems.length > 0 && (
-        <BoqSection items={project.boqItems} showQuantities={project.showBoqQuantities} showPrices={project.showBoqPrices} />
+      {hasBoq(project) && (
+        <BoqSection
+          items={project.boqItems}
+          files={boqFilesOf(project.documents)}
+          showQuantities={project.showBoqQuantities}
+          showPrices={project.showBoqPrices}
+          allowDownloads={project.allowDownloads}
+          token={project.token}
+        />
       )}
 
       {project.showPricing && project.pricingItems.length > 0 && (

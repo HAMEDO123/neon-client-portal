@@ -4,15 +4,19 @@ import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/admin-guard";
 import { deleteFile, saveFile } from "@/lib/storage";
 import { refreshProject } from "@/lib/project-paths";
+import { Refusal } from "@/lib/refusal";
 
 function refresh(projectId: string) {
   refreshProject(projectId, { tab: "documents" });
+  // A document filed under "BOQ" is a BOQ file, and the BOQ tab lists those
+  // (lib/boq-files.ts) — so adding or removing one here changes that screen too.
+  refreshProject(projectId, { tab: "boq" });
 }
 
 export async function createDocument(projectId: string, formData: FormData) {
   await requireStaff();
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) throw new Error("Select a file to upload.");
+  if (!(file instanceof File) || file.size === 0) throw new Refusal("Select a file to upload.");
 
   const saved = await saveFile(file, `projects/${projectId}/documents`, "document");
   const count = await prisma.document.count({ where: { projectId } });

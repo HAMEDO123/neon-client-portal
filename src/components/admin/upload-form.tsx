@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { whileBusy } from "@/lib/busy";
 import { tooBig, uploadFailure } from "@/lib/upload-limits";
 import { lastReply, reportUploadFailure, watchingReply } from "@/lib/action-reply";
+import type { Answer } from "@/lib/refusal";
 import { cn } from "@/lib/utils";
 
 // A form that carries a file, and says what went wrong.
@@ -31,7 +32,12 @@ export function UploadForm({
   /** Cleared on success. Off where the page redraws with the new row anyway. */
   resetOnSuccess = true,
 }: {
-  action: (formData: FormData) => Promise<void>;
+  /**
+   * The upload. An action that answers with its refusal (lib/refusal.ts) has it
+   * shown as written; one that returns nothing is taken to have worked, and
+   * what it throws is read the way a failed upload always was.
+   */
+  action: (formData: FormData) => Promise<void | Answer>;
   children: React.ReactNode;
   className?: string;
   resetOnSuccess?: boolean;
@@ -76,7 +82,13 @@ export function UploadForm({
             // Held against the live refresh, which would otherwise cancel this
             // mid-flight — see lib/busy.ts — and watched, so a failure can say
             // what actually came back — see lib/action-reply.ts.
-            await whileBusy(() => watchingReply(() => action(formData)));
+            const answer = await whileBusy(() => watchingReply(() => action(formData)));
+            // Refused, in the action's own words — and the form keeps what was
+            // typed, as it does for any other failure.
+            if (answer && !answer.ok) {
+              setError(answer.error);
+              return;
+            }
             if (resetOnSuccess) form.current?.reset();
           } catch (cause) {
             if (isNextSignal(cause)) throw cause;
