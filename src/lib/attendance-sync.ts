@@ -112,7 +112,10 @@ async function syncOnce(options: SyncOptions, now: Date): Promise<SyncReport> {
   // for four days. Rate-limited inside, so an unplugged device is not searched
   // for by every pass.
   const moved = await relocateDevice(at, now);
-  return moved ? (await readAndWrite(moved, options, now)).report : first.report;
+  // A fresh "now": the wait and the search took half a minute, and the device's
+  // clock is measured against it — read against the old one, a clock a second
+  // out reported as twenty-five.
+  return moved ? (await readAndWrite(moved, options, new Date())).report : first.report;
 }
 
 /**
