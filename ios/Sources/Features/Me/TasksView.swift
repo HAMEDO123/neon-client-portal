@@ -10,12 +10,16 @@ struct TasksView: View {
     @State private var jobs: [MyAssignedJob]?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
+    /// Which filter the list on screen was read for.
+    @State private var shownFilter: TaskFilter?
     @StateObject private var cards = ChatCardsLoader()
     @State private var proofFor: ProofTarget?
 
     var body: some View {
         NavigationStack {
-            NeonScroll(spacing: NeonSpace.stack) {
+            // Not lazy: a handful of long sections, and a lazy stack re-measuring
+            // one it had let go of moved the page under the reader's finger.
+            NeonScroll(spacing: NeonSpace.stack, lazy: false) {
                 ScreenHeader(L("Tasks")) {
                     AccountMenu()
                 }
@@ -86,9 +90,15 @@ struct TasksView: View {
             .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
             .neonAmbientBackground()
         }
+        // Runs again each time the tab comes back into view. It used to empty
+        // the list first, so every return to Tasks showed the skeleton and
+        // put the page back at its top; now only another filter starts the
+        // list over, and coming back reads it again in place.
         .task(id: filter) {
-            tasks = nil
-            jobs = nil
+            if shownFilter != filter {
+                tasks = nil
+                jobs = nil
+            }
             await load()
         }
         .task { await cards.load(api) }
@@ -111,6 +121,7 @@ struct TasksView: View {
             let (loadedTasks, loadedJobs) = try await (tasksLoad, jobsLoad)
             tasks = loadedTasks.value.tasks
             jobs = loadedJobs.value
+            shownFilter = filter
             cachedAt = loadedTasks.cachedAt
             errorMessage = nil
         } catch {

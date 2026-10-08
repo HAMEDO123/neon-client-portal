@@ -122,41 +122,39 @@ struct FilterChips<Option: Hashable>: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(options, id: \.self) { option in
-                        let selected = option == selection
-                        Button {
-                            guard !selected else { return }
-                            Haptic.selection()
-                            withNeonAnimation(NeonMotion.snappy) { selection = option }
-                            withAnimation(NeonMotion.smooth) { proxy.scrollTo(option, anchor: .center) }
-                        } label: {
-                            ChipLabel(title: title(option), symbol: symbol?(option), count: count?(option), isSelected: selected)
-                                .background {
-                                    if selected {
-                                        Capsule()
-                                            .fill(tint == .neonAccent ? AnyShapeStyle(LinearGradient.neonAccent) : AnyShapeStyle(tint))
-                                            .shadow(color: tint.opacity(0.26), radius: 4, x: 0, y: 2)
-                                            .matchedGeometryEffect(id: "selection", in: namespace)
-                                    } else {
-                                        Capsule()
-                                            .fill(Color.white.opacity(0.94))
-                                            .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
-                                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(options, id: \.self) { option in
+                    let selected = option == selection
+                    Button {
+                        guard !selected else { return }
+                        Haptic.selection()
+                        withNeonAnimation(NeonMotion.snappy) { selection = option }
+                    } label: {
+                        ChipLabel(title: title(option), symbol: symbol?(option), count: count?(option), isSelected: selected)
+                            .background {
+                                if selected {
+                                    Capsule()
+                                        .fill(tint == .neonAccent ? AnyShapeStyle(LinearGradient.neonAccent) : AnyShapeStyle(tint))
+                                        .shadow(color: tint.opacity(0.26), radius: 4, x: 0, y: 2)
+                                        .matchedGeometryEffect(id: "selection", in: namespace)
+                                } else {
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.94))
+                                        .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
                                 }
-                        }
-                        .buttonStyle(PressableStyle(scale: 0.95))
-                        .id(option)
-                        .accessibilityAddTraits(selected ? .isSelected : [])
+                            }
                     }
+                    .buttonStyle(PressableStyle(scale: 0.95))
+                    .id(option)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                .padding(.horizontal, inset)
-                .padding(.vertical, 4)
             }
-            .onAppear { proxy.scrollTo(selection, anchor: .center) }
+            .padding(.horizontal, inset)
+            .padding(.vertical, 4)
+            .sidewaysItems()
         }
+        .sidewaysFollow(selection)
     }
 }
 
@@ -264,22 +262,21 @@ struct PillFilterBar<Option: Hashable>: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 2) {
                 ForEach(options, id: \.self) { option in
-                    pill(option, proxy: nil).frame(maxWidth: .infinity)
+                    pill(option, spread: true).frame(maxWidth: .infinity)
                 }
             }
             .padding(5)
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 2) {
-                        ForEach(options, id: \.self) { option in
-                            pill(option, proxy: proxy)
-                        }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(options, id: \.self) { option in
+                        pill(option, spread: false)
                     }
-                    .padding(5)
                 }
-                // Starts on the chosen pill, whichever way the language reads.
-                .onAppear { proxy.scrollTo(selection, anchor: .center) }
+                .padding(5)
+                .sidewaysItems()
             }
+            // Starts on the chosen pill, whichever way the language reads.
+            .sidewaysFollow(selection)
         }
         .background(Capsule().fill(Color.white.opacity(0.94)))
         .overlay(Capsule().strokeBorder(Color.neonLine, lineWidth: 1))
@@ -287,15 +284,12 @@ struct PillFilterBar<Option: Hashable>: View {
         .neonShadow(.low)
     }
 
-    private func pill(_ option: Option, proxy: ScrollViewProxy?) -> some View {
+    private func pill(_ option: Option, spread: Bool) -> some View {
         let selected = option == selection
         return Button {
             guard !selected else { return }
             Haptic.selection()
             withNeonAnimation(NeonMotion.snappy) { selection = option }
-            if let proxy {
-                withAnimation(NeonMotion.smooth) { proxy.scrollTo(option, anchor: .center) }
-            }
         } label: {
             HStack(spacing: 6) {
                 Text(title(option))
@@ -308,7 +302,7 @@ struct PillFilterBar<Option: Hashable>: View {
             .foregroundStyle(selected ? Color.white : Color.neonInk.opacity(0.82))
             .padding(.horizontal, 16)
             .frame(minHeight: 40)
-            .frame(maxWidth: proxy == nil ? .infinity : nil)
+            .frame(maxWidth: spread ? .infinity : nil)
             .background {
                 if selected {
                     Capsule()
@@ -322,6 +316,52 @@ struct PillFilterBar<Option: Hashable>: View {
         .buttonStyle(PressableStyle(scale: 0.95))
         .id(option)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+// MARK: - A sideways strip's own scrolling
+
+/// Keeps a sideways strip on its chosen item, and moves nothing else.
+///
+/// `ScrollViewProxy.scrollTo` scrolls every scroll view around the item, so a
+/// strip of filters near the top of a page also scrolled the page — back to
+/// its top — each time the strip came into view: coming back to the tab,
+/// coming back from a task, scrolling up to it. The strip's own scroll
+/// position (iOS 17 and later) moves the strip alone; before that the strip
+/// simply stays where it is.
+private struct SidewaysFollow<ID: Hashable>: ViewModifier {
+    let selection: ID
+    @State private var position: ID?
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content
+                .scrollPosition(id: $position, anchor: .center)
+                .onAppear { position = selection }
+                .onChange(of: selection) { value in
+                    withAnimation(NeonMotion.smooth) { position = value }
+                }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// On a sideways `ScrollView`: keeps the item with this id in view.
+    /// Its row of items wears `sidewaysItems()`.
+    func sidewaysFollow<ID: Hashable>(_ selection: ID) -> some View {
+        modifier(SidewaysFollow(selection: selection))
+    }
+
+    /// On the row of items inside a sideways `ScrollView` that
+    /// `sidewaysFollow` finds its item in.
+    @ViewBuilder func sidewaysItems() -> some View {
+        if #available(iOS 17.0, *) {
+            scrollTargetLayout()
+        } else {
+            self
+        }
     }
 }
 

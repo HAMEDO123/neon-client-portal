@@ -166,17 +166,30 @@ final class CallCenter: ObservableObject {
         }
     }
 
-    /// Says why calls are not connecting — once per reason.
+    /// Keeps why calls are not connecting, and says it — once per reason.
     ///
     /// Every one of these used to be a bare `return`: the loop outside waited
     /// two seconds and tried again, for ever, so being signed out, a route
     /// that is not there and a connection still being made all looked the same
     /// from the screen — "Calls are still connecting". That is the one thing
     /// a person cannot act on, and it is exactly what they were shown.
-    private func reportStream(_ problem: String?) {
-        guard streamProblem != problem else { return }
+    ///
+    /// Only what the person can act on pops up on its own (`tell`): being
+    /// signed out. The server restarting for an update, or the phone between
+    /// networks, is over in seconds and the loop reconnects by itself — it
+    /// was shown as "Calls are unavailable (502)" and stayed on screen long
+    /// after calls worked again. That reason is kept, and given if a call is
+    /// tried while the stream is still down (`begin`). Connected again, a
+    /// notice that only said the stream was down goes.
+    private func reportStream(_ problem: String?, tell: Bool = false) {
+        let previous = streamProblem
+        guard previous != problem else { return }
         streamProblem = problem
-        if let problem { notice = problem }
+        if let problem {
+            if tell { notice = problem }
+        } else if let previous, notice == previous {
+            notice = nil
+        }
     }
 
     private func connectOnce() async {
@@ -185,7 +198,7 @@ final class CallCenter: ObservableObject {
         if APIClient.uiTestMode { return }
         #endif
         guard let token = APIClient.shared.token else {
-            reportStream(L("You are signed out. Sign in again to make calls."))
+            reportStream(L("You are signed out. Sign in again to make calls."), tell: true)
             return
         }
         var request = URLRequest(url: streamURL)
@@ -211,16 +224,19 @@ final class CallCenter: ObservableObject {
                 return
             }
             guard http.statusCode == 200 else {
-                // 401 is a token this server will not take any more; anything
-                // else is worth showing as itself, because a 404 here means
-                // this build is asking for a route the server does not have —
-                // an app that needs rebuilding, which no amount of waiting
-                // fixes.
-                reportStream(
-                    http.statusCode == 401
-                        ? L("You are signed out. Sign in again to make calls.")
-                        : L("Calls are unavailable (%ld). The app may need updating.", http.statusCode)
-                )
+                // 401 is a token this server will not take any more. A 404 or
+                // 410 means this build is asking for a route the server does
+                // not have — an app that needs updating, which no amount of
+                // waiting fixes. Anything else (a 502 while the server
+                // restarts, a timeout at the proxy) passes on its own.
+                switch http.statusCode {
+                case 401:
+                    reportStream(L("You are signed out. Sign in again to make calls."), tell: true)
+                case 404, 410:
+                    reportStream(L("Calls are unavailable (%ld). The app may need updating.", http.statusCode))
+                default:
+                    reportStream(L("Calls can't reach the server right now. Try again in a moment."))
+                }
                 return
             }
 

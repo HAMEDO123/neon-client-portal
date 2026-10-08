@@ -140,18 +140,28 @@ struct NeonDivider: View {
 struct NeonScroll<Content: View>: View {
     var spacing: CGFloat
     var padding: CGFloat
+    /// Lazy suits a page that is one long list of rows. A page of a few tall
+    /// sections is better drawn whole: a lazy stack lets a section go once it
+    /// is off screen and guesses its height when it comes back, and the page
+    /// jumps when the guess is corrected.
+    var lazy: Bool
     let content: Content
 
-    init(spacing: CGFloat = NeonSpace.lg, padding: CGFloat = NeonSpace.gutter, @ViewBuilder content: () -> Content) {
+    init(spacing: CGFloat = NeonSpace.lg, padding: CGFloat = NeonSpace.gutter, lazy: Bool = true, @ViewBuilder content: () -> Content) {
         self.spacing = spacing
         self.padding = padding
+        self.lazy = lazy
         self.content = content()
     }
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: spacing) {
-                content
+            Group {
+                if lazy {
+                    LazyVStack(alignment: .leading, spacing: spacing) { content }
+                } else {
+                    VStack(alignment: .leading, spacing: spacing) { content }
+                }
             }
             .padding(padding)
             .padding(.bottom, NeonSpace.xxl)

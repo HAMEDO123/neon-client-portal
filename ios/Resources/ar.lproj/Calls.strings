@@ -49,6 +49,7 @@
 "Calls are unavailable (%ld). The app may need updating." = "المكالمات غير متاحة (%ld). قد يحتاج التطبيق إلى تحديث.";
 "Calls cannot read what the server sent. The app may need updating." = "لا تستطيع المكالمات قراءة ما أرسله الخادم. قد يحتاج التطبيق إلى تحديث.";
 "Calls could not reach the server." = "تعذّر على المكالمات الوصول إلى الخادم.";
+"Calls can't reach the server right now. Try again in a moment." = "المكالمات لا تصل إلى الخادم الآن. حاول بعد لحظات.";
 "You are signed out. Sign in again to make calls." = "تم تسجيل خروجك. سجّل الدخول من جديد لإجراء المكالمات.";
 "Calls could not connect to the server. Check the connection and try again." = "تعذّر على المكالمات الاتصال بالخادم. تحقّق من الاتصال وحاول مجددًا.";
 

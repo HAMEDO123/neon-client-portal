@@ -1,7 +1,8 @@
 import SwiftUI
 
 // Fullscreen viewer: swipe between images, pinch to zoom, double-tap to
-// toggle zoom, drag to pan while zoomed, tap to hide the chrome. Shared with
+// toggle zoom, drag to pan while zoomed, tap to hide the chrome, pull the
+// photo down to close (as Photos and WhatsApp do). Shared with
 // Chat, which passes photos only; the gallery adds before/after pairs,
 // hotspots, a strip of thumbnails and actions on the photo shown.
 struct ImageViewerItem: Identifiable {
@@ -48,6 +49,10 @@ struct ImageViewerView: View {
     @State private var chromeHidden = false
     @State private var showBefore = false
     @State private var showHotspots = true
+    /// How far the photo has been pulled down to close.
+    @State private var pull: CGFloat = 0
+    /// The photo on screen is zoomed in: a drag pans it instead of closing.
+    @State private var zoomed = false
 
     init(payload: ImageViewerPayload) {
         self.payload = payload
@@ -67,19 +72,25 @@ struct ImageViewerView: View {
                         hotspots: i == index && showBefore ? [] : (showHotspots ? item.hotspots : []),
                         onTap: {
                             withNeonAnimation(NeonMotion.quick) { chromeHidden.toggle() }
-                        }
+                        },
+                        onZoom: { zoomed = $0 }
                     )
                     .tag(i)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea()
+            .offset(y: pull)
+            .scaleEffect(1 - min(pull, 400) / 1600)
 
-            if !chromeHidden {
+            // Hidden by a tap on the photo, but never while it is being
+            // pulled; a tap brings it back.
+            if !chromeHidden, pull == 0 {
                 chrome
                     .transition(.opacity)
             }
         }
+        .simultaneousGesture(pullToClose)
         .statusBarHidden(chromeHidden)
         // The app is light; on this black page the status bar's glyphs must
         // be white. Applies to the viewer's own presentation only.
@@ -89,6 +100,29 @@ struct ImageViewerView: View {
             Haptic.selection()
         }
         .animation(NeonMotion.resolved(NeonMotion.quick), value: index)
+    }
+
+    // MARK: - Pulling down to close
+
+    /// Down, and mostly down — sideways is the next photo. Past a short way,
+    /// or flicked, it closes; short of that it settles back.
+    private var pullToClose: some Gesture {
+        DragGesture(minimumDistance: 16)
+            .onChanged { value in
+                guard !zoomed else { return }
+                let down = value.translation.height
+                guard pull > 0 || (down > 0 && down > abs(value.translation.width) * 1.4) else { return }
+                pull = max(0, down)
+            }
+            .onEnded { value in
+                guard pull > 0 else { return }
+                if pull > 110 || value.predictedEndTranslation.height > 280 {
+                    Haptic.soft()
+                    dismiss()
+                } else {
+                    withNeonAnimation(NeonMotion.snappy) { pull = 0 }
+                }
+            }
     }
 
     // MARK: - Chrome
@@ -272,6 +306,8 @@ private struct ZoomableImageView: View {
     let url: URL?
     var hotspots: [ImageViewerHotspot] = []
     var onTap: () -> Void = {}
+    /// Whether it is zoomed in, as that changes.
+    var onZoom: (Bool) -> Void = { _ in }
 
     @State private var scale: CGFloat = 1
     @State private var lastScale: CGFloat = 1
@@ -306,6 +342,8 @@ private struct ZoomableImageView: View {
             .onTapGesture(count: 1) { onTap() }
         }
         .onChange(of: url) { _ in reset() }
+        .onChange(of: scale > 1) { onZoom($0) }
+        .onDisappear { if scale > 1 { onZoom(false) } }
     }
 
     private var magnification: some Gesture {

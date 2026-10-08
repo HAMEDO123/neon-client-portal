@@ -239,32 +239,31 @@ struct TasksPersonFilter: View {
 
     var body: some View {
         let hues = TasksTeamHues(people)
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: NeonSpace.sm) {
-                    Chip(L("Everyone"), symbol: "person.3.fill", isSelected: selection == nil) {
-                        withNeonAnimation(NeonMotion.snappy) { selection = nil }
-                    }
-                    .id("everyone")
-                    ForEach(people) { person in
-                        let selected = selection == person.id
-                        Button {
-                            Haptic.selection()
-                            withNeonAnimation(NeonMotion.snappy) { selection = selected ? nil : person.id }
-                            withAnimation(NeonMotion.smooth) { proxy.scrollTo(person.id, anchor: .center) }
-                        } label: {
-                            TasksPersonChip(name: person.name, hue: hues.hue(person), isSelected: selected, photo: facePhotoURL(person.photoUrl))
-                                .frame(minHeight: 36)
-                        }
-                        .buttonStyle(PressableStyle(scale: 0.95))
-                        .id(person.id)
-                        .accessibilityAddTraits(selected ? .isSelected : [])
-                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: NeonSpace.sm) {
+                Chip(L("Everyone"), symbol: "person.3.fill", isSelected: selection == nil) {
+                    withNeonAnimation(NeonMotion.snappy) { selection = nil }
                 }
-                .padding(.horizontal, NeonSpace.gutter)
-                .padding(.vertical, NeonSpace.xs)
+                .id("everyone")
+                ForEach(people) { person in
+                    let selected = selection == person.id
+                    Button {
+                        Haptic.selection()
+                        withNeonAnimation(NeonMotion.snappy) { selection = selected ? nil : person.id }
+                    } label: {
+                        TasksPersonChip(name: person.name, hue: hues.hue(person), isSelected: selected, photo: facePhotoURL(person.photoUrl))
+                            .frame(minHeight: 36)
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.95))
+                    .id(person.id)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
             }
+            .padding(.horizontal, NeonSpace.gutter)
+            .padding(.vertical, NeonSpace.xs)
+            .sidewaysItems()
         }
+        .sidewaysFollow(selection ?? "everyone")
     }
 }
 

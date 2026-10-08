@@ -691,35 +691,34 @@ struct StageTrack: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 0) {
-                    ForEach(Array(stages.enumerated()), id: \.offset) { index, stage in
-                        VStack(spacing: 8) {
-                            HStack(spacing: 0) {
-                                Rectangle()
-                                    .fill(index == 0 ? Color.clear : (index <= current ? tint : Color.neonLineStrong))
-                                    .frame(height: 2)
-                                dot(index)
-                                Rectangle()
-                                    .fill(index == stages.count - 1 ? Color.clear : (index < current ? tint : Color.neonLineStrong))
-                                    .frame(height: 2)
-                            }
-                            Text(stage)
-                                .font(.system(size: 11, weight: index == current ? .bold : .medium))
-                                .foregroundStyle(index == current ? Color.neonInk : Color.neonTextTertiary)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                                .frame(width: 76)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(Array(stages.enumerated()), id: \.offset) { index, stage in
+                    VStack(spacing: 8) {
+                        HStack(spacing: 0) {
+                            Rectangle()
+                                .fill(index == 0 ? Color.clear : (index <= current ? tint : Color.neonLineStrong))
+                                .frame(height: 2)
+                            dot(index)
+                            Rectangle()
+                                .fill(index == stages.count - 1 ? Color.clear : (index < current ? tint : Color.neonLineStrong))
+                                .frame(height: 2)
                         }
-                        .frame(width: 84)
-                        .id(index)
+                        Text(stage)
+                            .font(.system(size: 11, weight: index == current ? .bold : .medium))
+                            .foregroundStyle(index == current ? Color.neonInk : Color.neonTextTertiary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .frame(width: 76)
                     }
+                    .frame(width: 84)
+                    .id(index)
                 }
-                .padding(.horizontal, 4)
             }
-            .onAppear { proxy.scrollTo(max(0, min(current, stages.count - 1)), anchor: .center) }
+            .padding(.horizontal, 4)
+            .sidewaysItems()
         }
+        .sidewaysFollow(max(0, min(current, stages.count - 1)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(stages.indices.contains(current) ? stages[current] : "")
     }
