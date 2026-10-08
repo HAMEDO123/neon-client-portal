@@ -1,5 +1,6 @@
 import { attendanceFromPunches, cutoffFor } from "@/lib/attendance";
-import { deviceAddress, readClock, readPunches } from "@/lib/attendance-device";
+import { readClock, readPunches, type DeviceAddress, type DeviceClock } from "@/lib/attendance-device";
+import { currentDeviceAddress, relocateDevice, rememberDevice } from "@/lib/attendance-locate";
 import { applyAttendance, type SyncOutcome } from "@/lib/attendance-store";
 import { getSetting, getTimezone, getWorkHours, setSetting } from "@/lib/settings";
 import { dayKeyIn } from "@/lib/time";
@@ -90,11 +91,43 @@ export async function syncAttendanceIfStale(maxAgeSeconds: number, now = new Dat
 }
 
 async function syncOnce(options: SyncOptions, now: Date): Promise<SyncReport> {
-  const at = deviceAddress();
+  // Where the device is now, not where it was configured: the router hands it
+  // its address, and has changed it before (lib/attendance-find.ts).
+  const at = await currentDeviceAddress();
   // No address means the studio has no device, or this is somebody's laptop.
   // Silence is the right answer, the same as an absent ANTHROPIC_API_KEY.
   if (!at) return { ran: false, reason: "no-device-configured" };
 
+  const first = await readAndWrite(at, options, now);
+  if (first.report.ran) {
+    // The first time it is read, note which machine it is — a later search
+    // needs a serial to hold a candidate to.
+    await rememberDevice(at, now);
+    return first.report;
+  }
+  if (!first.silent) return first.report;
+
+  // It did not answer where it was. Before saying so, look for it: on
+  // 2026-10-04 the router moved it one address along and nothing was recorded
+  // for four days. Rate-limited inside, so an unplugged device is not searched
+  // for by every pass.
+  const moved = await relocateDevice(at, now);
+  // A fresh "now": the wait and the search took half a minute, and the device's
+  // clock is measured against it — read against the old one, a clock a second
+  // out reported as twenty-five.
+  return moved ? (await readAndWrite(moved, options, new Date())).report : first.report;
+}
+
+/**
+ * One reading of the device at one address. `silent` says the machine itself
+ * did not answer — as opposed to answering and something after that failing —
+ * which is the only case worth searching the network over.
+ */
+async function readAndWrite(
+  at: DeviceAddress,
+  options: SyncOptions,
+  now: Date
+): Promise<{ report: SyncReport; silent: boolean }> {
   try {
     // The studio's timezone before anything else. The device knows only wall
     // clock, and which instant that was is unanswerable without it — not even
@@ -103,15 +136,23 @@ async function syncOnce(options: SyncOptions, now: Date): Promise<SyncReport> {
 
     // The clock next, on its own connection: if it is wrong there is no point
     // reading the log at all, and the answer is the thing worth saying.
-    const clock = await readClock(at, timeZone, now);
+    let clock: DeviceClock;
+    try {
+      clock = await readClock(at, timeZone, now);
+    } catch (error) {
+      return { silent: true, report: { ran: false, reason: "unreachable", error: sayDeviceError(error) } };
+    }
     if (Math.abs(clock.driftSeconds) > MAX_DRIFT_SECONDS) {
       return {
-        ran: false,
-        reason: "clock-wrong",
-        driftSeconds: clock.driftSeconds,
-        // What the machine displays, not an instant: a clock nobody can read
-        // has no instant, and asking an invalid Date for one throws.
-        deviceTime: clock.wallClock,
+        silent: false,
+        report: {
+          ran: false,
+          reason: "clock-wrong",
+          driftSeconds: clock.driftSeconds,
+          // What the machine displays, not an instant: a clock nobody can read
+          // has no instant, and asking an invalid Date for one throws.
+          deviceTime: clock.wallClock,
+        },
       };
     }
 
@@ -126,19 +167,40 @@ async function syncOnce(options: SyncOptions, now: Date): Promise<SyncReport> {
     await setSetting(LAST_SYNC_KEY, new Date().toISOString()).catch(() => undefined);
 
     return {
-      ran: true,
-      punches: punches.length,
-      days: days.length,
-      driftSeconds: clock.driftSeconds,
-      outcome,
+      silent: false,
+      report: {
+        ran: true,
+        punches: punches.length,
+        days: days.length,
+        driftSeconds: clock.driftSeconds,
+        outcome,
+      },
     };
   } catch (error) {
     return {
-      ran: false,
-      reason: "unreachable",
-      error: error instanceof Error ? error.message : String(error),
+      silent: false,
+      report: { ran: false, reason: "unreachable", error: sayDeviceError(error) },
     };
   }
+}
+
+/**
+ * What went wrong, in words.
+ *
+ * The device library rejects with a plain object — `{ err, ip, command }` —
+ * not an Error, so `String(error)` put **"[object Object]"** on the manager's
+ * screen and in the scheduler's log for as long as the device was unreachable.
+ */
+function sayDeviceError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const inner = (error as { err?: unknown; message?: unknown; code?: unknown }) ?? {};
+    const cause = inner.err instanceof Error ? inner.err.message : inner.err;
+    const said = [inner.message, cause, inner.code].find((part) => typeof part === "string" && part.trim());
+    if (typeof said === "string") return said;
+    return "the device did not answer";
+  }
+  return String(error);
 }
 
 /** The same pass, said in one line for a scheduler's log. */

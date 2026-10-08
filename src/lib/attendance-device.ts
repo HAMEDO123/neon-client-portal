@@ -183,6 +183,30 @@ export async function readClock(at: DeviceAddress, timeZone: string, now = new D
 }
 
 /**
+ * The machine's serial number: the one thing about it that does not change
+ * when its address does. What lets a search of the network adopt *this* device
+ * and no other (lib/attendance-find.ts).
+ *
+ * A short wait on purpose — it is asked of every machine that answers on the
+ * port during a search, and most of the time is spent on the ones that are not
+ * a fingerprint device at all.
+ */
+export async function readSerial(at: DeviceAddress): Promise<string | null> {
+  const device = new ZKLib(at.ip, at.port, 4_000, REPLY_PORT);
+  await device.createSocket();
+  try {
+    const answer = await device.getSerialNumber();
+    return typeof answer === "string" ? answer : null;
+  } finally {
+    try {
+      await device.disconnect();
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
+/**
  * Runs a write with the machine disabled, and always re-enables it.
  *
  * The ZK protocol wants writes done while the device is not serving. Leaving it

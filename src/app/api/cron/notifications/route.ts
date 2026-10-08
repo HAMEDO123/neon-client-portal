@@ -6,6 +6,7 @@ import { runMeetingReminders } from "@/lib/notifications/meeting-events";
 import { runSiteVisitReminders } from "@/lib/notifications/site-visit-events";
 import { runWhatsAppWatch } from "@/lib/notifications/whatsapp-events";
 import { syncAttendance } from "@/lib/attendance-sync";
+import { tellIfDeviceSilent } from "@/lib/notifications/attendance-events";
 import { runClockReminders } from "@/lib/notifications/clock-events";
 import { runLocationKeeper } from "@/lib/notifications/location-keeper";
 import { getTimezone, setSetting } from "@/lib/settings";
@@ -140,7 +141,11 @@ async function run(request: Request) {
   // rather than doubling anything. It reports rather than throws — a device
   // that is unplugged must not take the rest of this pass down with it.
   if (forced === "attendance" || !forced) {
-    ran.attendance = await syncAttendance();
+    const report = await syncAttendance();
+    ran.attendance = report;
+    // A device that has gone quiet in working hours is said to the manager,
+    // once a day. Nothing said it for four days in October 2026.
+    await tellIfDeviceSilent(report);
   }
 
   // "Clock in" / "Clock out" on the fingerprint device, every two minutes in
