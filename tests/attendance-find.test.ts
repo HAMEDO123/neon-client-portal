@@ -71,6 +71,20 @@ describe("which machine is adopted", () => {
     assert.equal(cleanSerial(undefined), null);
     assert.equal(cleanSerial(42), null);
   });
+
+  // The same device, asked twice in a row on the live network, answered
+  // "CQE7232560015" and then "CQE7232560015=". Compared as they came it was a
+  // stranger to itself, and the first live search adopted nothing.
+  it("knows the device by its serial however the read was cut", () => {
+    assert.equal(cleanSerial("CQE7232560015="), "CQE7232560015");
+    assert.equal(cleanSerial("~SerialNumber=CQE7232560015\u0000"), "CQE7232560015");
+    const twice = [cleanSerial("CQE7232560015"), cleanSerial("CQE7232560015=")];
+    assert.equal(twice[0], twice[1]);
+    assert.deepEqual(chooseDevice([{ ip: "192.168.100.188", serial: twice[1]! }], twice[0]), {
+      ip: "192.168.100.188",
+      serial: "CQE7232560015",
+    });
+  });
 });
 
 describe("the address that is asked", () => {

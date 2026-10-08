@@ -55,10 +55,19 @@ export function maySearch(lastSearchedAt: string | null | undefined, now: number
   return Number.isNaN(last) || now - last >= SEARCH_EVERY_MS;
 }
 
-/** A serial number as the device reports it, without the padding it arrives in. */
+/**
+ * A serial number as the device reports it, without what it arrives wrapped in.
+ *
+ * Letters and digits only. The library cuts the serial out of the machine's
+ * answer at a fixed place, and what is left around it varies from one read to
+ * the next: the same device answered `CQE7232560015`, then `CQE7232560015=` a
+ * moment later, with NULs after either. Compared as they came, the device was
+ * a stranger to itself and the search adopted nothing — found on the first
+ * live run of this, which is the only reason it is known.
+ */
 export function cleanSerial(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
-  const serial = raw.replace(/[\0\s]/g, "");
+  const serial = raw.replace(/^~?SerialNumber=/i, "").replace(/[^A-Za-z0-9]/g, "");
   return serial.length >= 4 ? serial : null;
 }
 

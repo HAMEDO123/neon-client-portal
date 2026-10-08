@@ -137,10 +137,7 @@ async function readAndWrite(
     try {
       clock = await readClock(at, timeZone, now);
     } catch (error) {
-      return {
-        silent: true,
-        report: { ran: false, reason: "unreachable", error: error instanceof Error ? error.message : String(error) },
-      };
+      return { silent: true, report: { ran: false, reason: "unreachable", error: sayDeviceError(error) } };
     }
     if (Math.abs(clock.driftSeconds) > MAX_DRIFT_SECONDS) {
       return {
@@ -179,13 +176,28 @@ async function readAndWrite(
   } catch (error) {
     return {
       silent: false,
-      report: {
-        ran: false,
-        reason: "unreachable",
-        error: error instanceof Error ? error.message : String(error),
-      },
+      report: { ran: false, reason: "unreachable", error: sayDeviceError(error) },
     };
   }
+}
+
+/**
+ * What went wrong, in words.
+ *
+ * The device library rejects with a plain object — `{ err, ip, command }` —
+ * not an Error, so `String(error)` put **"[object Object]"** on the manager's
+ * screen and in the scheduler's log for as long as the device was unreachable.
+ */
+function sayDeviceError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const inner = (error as { err?: unknown; message?: unknown; code?: unknown }) ?? {};
+    const cause = inner.err instanceof Error ? inner.err.message : inner.err;
+    const said = [inner.message, cause, inner.code].find((part) => typeof part === "string" && part.trim());
+    if (typeof said === "string") return said;
+    return "the device did not answer";
+  }
+  return String(error);
 }
 
 /** The same pass, said in one line for a scheduler's log. */

@@ -34,6 +34,10 @@ export const DEVICE_SEARCHED_KEY = "attendance_device_searched_at";
 const KNOCK_MS = 1_500;
 /** No more than this many machines are asked who they are in one search. */
 const ASK_AT_MOST = 6;
+/** How long a machine is left alone between being knocked on and being asked. */
+const ASK_AFTER_MS = 1_200;
+
+const rest = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 async function remembered(): Promise<Remembered | null> {
   return readRemembered(await getSetting(DEVICE_AT_KEY));
@@ -121,7 +125,16 @@ export async function relocateDevice(tried: DeviceAddress, now = new Date()): Pr
     // whatever else happens to be listening on that port.
     const candidates: Candidate[] = [];
     for (const ip of open.slice(0, ASK_AT_MOST)) {
-      const serial = cleanSerial(await readSerial({ ip, port: tried.port }).catch(() => null));
+      // A moment first: the knock above has only just let go of the machine,
+      // and one asked again at once answers less cleanly than one given a second.
+      await rest(ASK_AFTER_MS);
+      let serial = cleanSerial(await readSerial({ ip, port: tried.port }).catch(() => null));
+      // Asked once more when the answer is not the serial on record: a garbled
+      // read must not make the studio's own device a stranger for ten minutes.
+      if (known?.serial && serial !== known.serial) {
+        await rest(ASK_AFTER_MS);
+        serial = cleanSerial(await readSerial({ ip, port: tried.port }).catch(() => null)) ?? serial;
+      }
       if (serial) candidates.push({ ip, serial });
     }
 
