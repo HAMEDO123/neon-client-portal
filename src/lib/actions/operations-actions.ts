@@ -15,11 +15,11 @@ import { syncAttendance, type SyncReport } from "@/lib/attendance-sync";
 import {
   clearDeviceLog,
   createDeviceUser,
-  deviceAddress,
   removeDeviceUser,
   setClock,
   type DeviceAddress,
 } from "@/lib/attendance-device";
+import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
@@ -361,7 +361,7 @@ export type DeviceWrite = { ok: true; message: string } | { ok: false; error: st
 async function writeToDevice(work: (at: DeviceAddress) => Promise<string>): Promise<DeviceWrite> {
   await requireAdmin();
 
-  const at = deviceAddress();
+  const at = await currentDeviceAddress();
   if (!at) return { ok: false, error: "No device is configured on this server." };
 
   try {
@@ -448,7 +448,7 @@ export type ClockResult =
 export async function setDeviceClockNow(): Promise<ClockResult> {
   await requireAdmin();
 
-  const at = deviceAddress();
+  const at = await currentDeviceAddress();
   if (!at) return { ok: false, reason: "no-device" };
 
   try {

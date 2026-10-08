@@ -1,5 +1,6 @@
 import { attendanceFromPunches, cutoffFor } from "@/lib/attendance";
 import { deviceAddress, readClock, readDeviceUsers, readPunches } from "@/lib/attendance-device";
+import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { dayKeyIn } from "@/lib/time";
@@ -15,13 +16,19 @@ import { dayKeyIn } from "@/lib/time";
 //
 //   node --env-file=.env.local --import tsx scripts/check-attendance-device.mts
 
-const at = deviceAddress();
-if (!at) {
+const configured = deviceAddress();
+// Where the platform is actually asking: the router can move the device, and a
+// search that found it elsewhere is remembered (lib/attendance-locate.ts).
+const at = await currentDeviceAddress();
+if (!at || !configured) {
   console.log("No ATTENDANCE_DEVICE_IP set — attendance is switched off on this machine.");
   process.exit(0);
 }
 
 console.log(`device: ${at.ip}:${at.port}`);
+if (at.ip !== configured.ip) {
+  console.log(`        (configured as ${configured.ip}; it was found here after it stopped answering there)`);
+}
 
 const now = new Date();
 // The timezone first: the device reports wall clock, and placing it takes the

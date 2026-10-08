@@ -50,6 +50,9 @@ declare module "zkteco-js" {
     getTime(): Promise<Date | string>;
     setTime(at: Date): Promise<unknown>;
 
+    /** The machine's own serial, padded with NULs as it comes off the wire. */
+    getSerialNumber(): Promise<string>;
+
     /**
      * The machine stops serving while it is disabled, so these always come in a
      * pair with the write between them — leaving it disabled would stop people

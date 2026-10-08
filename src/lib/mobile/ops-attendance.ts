@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { deviceAddress, readClock, readDeviceUsers, type DeviceClock, type DeviceUser } from "@/lib/attendance-device";
+import { readClock, readDeviceUsers, type DeviceClock, type DeviceUser } from "@/lib/attendance-device";
+import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
 import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
 import { buildMonth, monthBounds, monthKeyFor, type Month, type MonthEntry } from "@/lib/attendance-month";
@@ -23,7 +24,7 @@ export type AttendanceOverview = {
 };
 
 export async function attendanceOverview(): Promise<AttendanceOverview> {
-  const at = deviceAddress();
+  const at = await currentDeviceAddress();
   const timezone = await getTimezone();
 
   let clock: DeviceClock | null = null;

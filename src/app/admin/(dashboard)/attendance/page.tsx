@@ -1,6 +1,7 @@
 import { ChevronRight, Fingerprint } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { deviceAddress, readClock, readDeviceUsers, type DeviceClock, type DeviceUser } from "@/lib/attendance-device";
+import { readClock, readDeviceUsers, type DeviceClock, type DeviceUser } from "@/lib/attendance-device";
+import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
 import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
 import { buildMonth, monthBounds, monthKeyFor, type MonthEntry } from "@/lib/attendance-month";
@@ -29,7 +30,8 @@ export default async function AttendanceDevicePage({
   searchParams: Promise<{ month?: string }>;
 }) {
   const { month: askedMonth } = await searchParams;
-  const at = deviceAddress();
+  // Where it is now — the router can move it, and the platform follows.
+  const at = await currentDeviceAddress();
   const timezone = await getTimezone();
 
   let clock: DeviceClock | null = null;
