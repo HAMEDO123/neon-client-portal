@@ -16,18 +16,45 @@ import { projectsForVisits, siteVisitsFor } from "@/lib/site-visit-queries";
 import { assignedTasksForWeek } from "@/lib/assigned-tasks";
 import { weekDayKeys, weekLabel, weekStartKey } from "@/lib/week";
 import { prisma } from "@/lib/db";
+import { chipClass, chipCountClass } from "@/components/tasks/filter-chip";
+import { countByFilter, isLate, matchesFilter, readTaskFilter, type Filterable, type TaskFilter } from "@/lib/task-filters";
 
-const FILTERS = [
+// "Open" is still where the tab lands — what there is to do — and the four the
+// studio asked for sit beside it, so work under way, work with the manager and
+// work that is late are each one press away instead of one mixed list.
+// "Completed" rather than "Done": it is the word on the cards below.
+const FILTERS: { key: TaskFilter; label: string }[] = [
   { key: "open", label: "Open" },
-  { key: "completed", label: "Completed" },
+  { key: "progress", label: "In progress" },
+  { key: "review", label: "Sent for review" },
+  { key: "late", label: "Late" },
+  { key: "done", label: "Completed" },
   { key: "all", label: "All" },
-] as const;
+];
+
+// What an empty list says, which depends on what was asked for.
+const EMPTY: Record<TaskFilter, { title: string; description: string }> = {
+  open: {
+    title: "No tasks assigned",
+    description: "When an admin assigns you work, it appears here and you get a notification.",
+  },
+  all: {
+    title: "No tasks assigned",
+    description: "When an admin assigns you work, it appears here and you get a notification.",
+  },
+  progress: { title: "Nothing in progress", description: "Start a task and it is listed here." },
+  review: {
+    title: "Nothing waiting for review",
+    description: "Work you send in stays here until the manager has looked at it.",
+  },
+  late: { title: "Nothing is late", description: "Work that passes its day without being approved shows here." },
+  done: { title: "Nothing completed yet", description: "Tasks you finish will be listed here." },
+};
 
 // Everything on one list, soonest due first, whatever kind of work it is — a
 // step on a project and a job from the manager compete for the same hours.
-type ListItem =
-  | { kind: "board"; task: EmployeeTask; due: string }
-  | { kind: "assigned"; task: AssignedTaskView; due: string };
+type ListItem = Filterable &
+  ({ kind: "board"; task: EmployeeTask; due: string } | { kind: "assigned"; task: AssignedTaskView; due: string });
 
 const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 } as const;
 
@@ -98,23 +125,42 @@ export default async function EmployeeTasksPage({
     );
   }
 
-  const active = FILTERS.find((f) => f.key === filter)?.key ?? "open";
-  const tasks = await allTasks(employee.id, active === "all" ? undefined : active);
+  const active = readTaskFilter(filter);
+  const today = dayKeyIn(timezone, new Date());
+
+  // Everything, read once and narrowed here: each button says how many it
+  // holds, and a count needs the tasks the list is not showing.
+  const tasks = await allTasks(employee.id);
   const plan = await planForTasks(tasks);
+  const assigned = await myAssignedTasks(employee.id, { includeDone: true });
 
-  const assigned = (await myAssignedTasks(employee.id, { includeDone: true })).filter((task) =>
-    active === "completed" ? task.state === "DONE" : active === "open" ? task.state !== "DONE" : true
-  );
-
-  const items: ListItem[] = [
+  const everything: ListItem[] = [
     ...tasks.map((task) => {
-      const due = plan.get(task.id)?.dueBy ?? task.dueAt ?? task.scheduledFor;
-      return { kind: "board" as const, task, due: due ? dayKeyIn(timezone, due) : NO_DATE };
+      const deadline = plan.get(task.id)?.dueBy ?? null;
+      const due = deadline ?? task.dueAt ?? task.scheduledFor;
+      return {
+        kind: "board" as const,
+        task,
+        due: due ? dayKeyIn(timezone, due) : NO_DATE,
+        state: task.state,
+        // Late by the deadline the card counts down to, and by nothing else:
+        // the filter must list exactly the cards that say "late".
+        late: isLate(task.state, deadline ? dayKeyIn(timezone, deadline) : null, today),
+      };
     }),
-    ...assigned.map((task) => ({ kind: "assigned" as const, task, due: task.endKey })),
-  ].sort(
-    (a, b) => a.due.localeCompare(b.due) || PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority]
-  );
+    ...assigned.map((task) => ({
+      kind: "assigned" as const,
+      task,
+      due: task.endKey,
+      state: task.state,
+      late: isLate(task.state, task.endKey, today),
+    })),
+  ];
+
+  const counts = countByFilter(everything);
+  const items = everything
+    .filter((item) => matchesFilter(item, active))
+    .sort((a, b) => a.due.localeCompare(b.due) || PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -128,17 +174,18 @@ export default async function EmployeeTasksPage({
         <h1 className="text-xl font-semibold text-ink">My Tasks</h1>
       )}
 
-      <div className="flex gap-2">
+      {/* Wraps rather than scrolls: six buttons are two rows on a phone, and
+          every one of them stays in sight. */}
+      <div className="flex flex-wrap gap-2">
         {FILTERS.map((option) => (
           <Link
             key={option.key}
             href={`/employee/tasks?filter=${option.key}`}
-            className={cn(
-              "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
-              active === option.key ? "border-ink bg-ink text-bg" : "border-ink/12 bg-white/60 text-ink/60"
-            )}
+            scroll={false}
+            className={chipClass(option.key, active, counts[option.key])}
           >
             {option.label}
+            <span className={chipCountClass(option.key, active)}>{counts[option.key]}</span>
           </Link>
         ))}
       </div>
@@ -147,12 +194,8 @@ export default async function EmployeeTasksPage({
         <EmptyState
           className="mt-2"
           icon={ListChecks}
-          title={active === "completed" ? "Nothing completed yet" : "No tasks assigned"}
-          description={
-            active === "completed"
-              ? "Tasks you finish will be listed here."
-              : "When an admin assigns you work, it appears here and you get a notification."
-          }
+          title={EMPTY[active].title}
+          description={EMPTY[active].description}
         />
       ) : (
         <div className="flex flex-col gap-3">

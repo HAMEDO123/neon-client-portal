@@ -268,6 +268,24 @@ body:has(.employee-signin) {
   box-shadow: 0 10px 30px -14px rgba(44, 39, 34, 0.18);
 }
 
+/* A task card washed in its priority's colour (components/tasks/priority.ts).
+   The studio asked for the whole card, not only the word: a high priority is
+   red from across the room. Classes of their own, and written against .glass,
+   because .glass sets a gradient outside any layer and a bg-* utility cannot
+   override it — and after the portal's own .glass above, which it has to beat. */
+.glass.task-high,
+.employee-shell .glass.task-high {
+  background: linear-gradient(155deg, rgba(254, 226, 226, 0.96), rgba(254, 202, 202, 0.78));
+  border: 1px solid rgba(220, 38, 38, 0.5);
+  box-shadow: 0 10px 30px -14px rgba(220, 38, 38, 0.4);
+}
+
+.glass.task-low,
+.employee-shell .glass.task-low {
+  background: linear-gradient(155deg, rgba(241, 245, 249, 0.94), rgba(226, 232, 240, 0.66));
+  border: 1px solid rgba(100, 116, 139, 0.24);
+}
+
 /* The mark, in the studio's own colours instead of the cyan-purple-pink
    gradient the rest of the platform wears. */
 .wordmark-warm {

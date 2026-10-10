@@ -715,6 +715,8 @@ model ProjectTaskEntry {
   stateChanges  TaskStateChange[]
   waitsFor      TaskDependency[] @relation("DependentEntry")
   blocks        TaskDependency[] @relation("BlockingEntry")
+  // What was asked about this cell in a chat, from its own page.
+  questions     ChatMessage[]
 
   @@unique([projectId, taskId])
   @@index([taskId])
@@ -1180,6 +1182,18 @@ model ChatMessage {
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
+  // Optional context: the task this message asks about, when it was sent from
+  // the task's own page (lib/task-questions.ts) — a job handed out by hand or
+  // a cell of the board, never both. The title is copied in, as an author's
+  // name is: what the task was called when it was asked about. That keeps the
+  // read of a message at the relations it already has (see messageSelect), and
+  // a task deleted later leaves the question readable with nowhere to open.
+  aboutAssignedTaskId String?
+  aboutAssignedTask   AssignedTask?     @relation(fields: [aboutAssignedTaskId], references: [id], onDelete: SetNull)
+  aboutEntryId        String?
+  aboutEntry          ProjectTaskEntry? @relation(fields: [aboutEntryId], references: [id], onDelete: SetNull)
+  aboutTitle          String?
+
   // The assistant is the manager's tool, so its questions and answers stay out
   // of the team's view entirely rather than being hidden in the client.
   managerOnly Boolean @default(false)
@@ -1206,6 +1220,8 @@ model ChatMessage {
   @@index([channelId, createdAt])
   @@index([channelId, managerOnly, createdAt])
   @@index([channelId, pinnedAt])
+  @@index([aboutAssignedTaskId])
+  @@index([aboutEntryId])
 }
 
 // One person's one reaction to one message.
@@ -1709,6 +1725,9 @@ model AssignedTask {
   updatedAt DateTime @default(now()) @updatedAt
 
   stateChanges TaskStateChange[]
+
+  // What was asked about this job in a chat, from its own page.
+  questions ChatMessage[]
 
   // Handed out from a chat, as one person's part of a task card there. The card
   // carries the exact moment it is due; these days are the calendar span of it.

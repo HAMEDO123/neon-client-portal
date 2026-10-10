@@ -8,6 +8,9 @@ import { TaskBriefing } from "@/components/tasks/task-briefing";
 import { deleteAssignedTask, setAssignedTaskState } from "@/lib/actions/assigned-task-actions";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { StateBadge } from "@/components/ui/state-badge";
+import { PRIORITY_ROW } from "@/components/tasks/priority";
+import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
+import { countByFilter, isLate, matchesFilter, type TaskFilter } from "@/lib/task-filters";
 import { cn } from "@/lib/utils";
 
 // Handing work out, without the board.
@@ -24,6 +27,15 @@ import { cn } from "@/lib/utils";
 // go missing from.
 
 type Member = { id: string; name: string; color: string; role: string | null };
+
+// The manager's week has the same five (components/admin/week-board.tsx).
+const FILTERS: { key: TaskFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "progress", label: "In progress" },
+  { key: "review", label: "Sent for review" },
+  { key: "late", label: "Late" },
+  { key: "done", label: "Done" },
+];
 
 export function AssignWork({
   team,
@@ -47,8 +59,13 @@ export function AssignWork({
   // null = closed. { task: null } = writing a new one.
   const [dialog, setDialog] = useState<{ task: AssignedTaskView | null } | null>(null);
   const [pending, start] = useTransition();
+  const [filter, setFilter] = useState<TaskFilter>("all");
 
   const byPerson = new Map(team.map((member) => [member.id, member]));
+
+  const standing = (task: AssignedTaskView) => ({ state: task.state, late: isLate(task.state, task.endKey, todayKey) });
+  const counts = countByFilter(tasks.map(standing));
+  const listed = tasks.filter((task) => matchesFilter(standing(task), filter));
 
   return (
     <div className={cn("flex flex-col gap-4", pending && "opacity-95")}>
@@ -84,20 +101,26 @@ export function AssignWork({
         </WeekStep>
       </div>
 
-      {tasks.length === 0 ? (
+      {tasks.length > 0 && <TaskFilterBar options={FILTERS} active={filter} counts={counts} onPick={setFilter} />}
+
+      {listed.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-ink/12 px-4 py-10 text-center text-sm text-ink/40">
-          Nothing handed out this week yet.
+          {tasks.length === 0 ? "Nothing handed out this week yet." : "Nothing like that this week."}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {tasks.map((task) => {
+          {listed.map((task) => {
             const person = byPerson.get(task.employeeId);
             return (
               <li key={task.id}>
                 <button
                   type="button"
                   onClick={() => setDialog({ task })}
-                  className="flex w-full items-start gap-3 rounded-2xl border border-ink/8 bg-white/70 p-3 text-left transition-colors active:bg-white"
+                  className={cn(
+                    "flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition-colors",
+                    // The whole row wears its priority, until the job is done.
+                    PRIORITY_ROW[task.state === "DONE" ? "MEDIUM" : task.priority]
+                  )}
                 >
                   <StateBadge state={task.state} />
                   <span className="min-w-0 flex-1">

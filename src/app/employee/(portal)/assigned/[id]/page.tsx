@@ -27,6 +27,8 @@ import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
 import { Countdown } from "@/components/employee/countdown";
 import { AttachmentPreview } from "@/components/ui/attachment-preview";
+import { AskAboutTask } from "@/components/employee/ask-about-task";
+import { questionsAbout } from "@/lib/task-question-store";
 
 // One job the manager handed out directly.
 //
@@ -51,6 +53,14 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
     where: { assignments: { some: { id: task.id } } },
     select: { id: true, dueAt: true, channel: { select: { key: true } } },
   });
+
+  // What they have already asked about it, for the box at the foot of the page.
+  const asked = (await questionsAbout(employee.id, "assigned", task.id)).map((question) => ({
+    id: question.id,
+    where: question.where,
+    text: question.text,
+    when: `${formatDayIn(timezone, question.at) ?? ""} · ${formatTimeIn(timezone, question.at) ?? ""}`,
+  }));
 
   const chatConversation = fromChat ? conversationFromKey(fromChat.channel.key) : null;
   const chatHref =
@@ -191,6 +201,10 @@ export default async function AssignedTaskPage({ params }: { params: Promise<{ i
           </p>
         </section>
       )}
+
+      {/* A job that came from a chat is discussed under its own card there —
+          "Open in chat", above — so a second place to ask is not offered. */}
+      {!fromChat && <AskAboutTask kind="assigned" id={task.id} asked={asked} />}
 
       {submissions.length > 0 && (
         <section className="glass rounded-2xl p-4">

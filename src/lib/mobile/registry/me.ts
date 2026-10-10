@@ -16,6 +16,7 @@ import { createSupplyRequest, cancelSupplyRequest, submitReceipt, deleteReceipt,
 import { saveNotificationPreferences } from "@/lib/actions/employee-actions";
 import { setDeviceActive, forgetDevice } from "@/lib/actions/device-actions";
 import { setMyAssignedTaskStatus } from "@/lib/actions/my-assigned-actions";
+import { askAboutTask } from "@/lib/actions/task-question-actions";
 import {
   createAssignedTask,
   updateAssignedTask,
@@ -221,6 +222,13 @@ export const actions: ActionRegistry = {
   // canMove refuses it from this side exactly as the website does.
   "me/jobs/status": async (input) =>
     setMyAssignedTaskStatus(str(input.args[0], "id"), oneOf(input.args[1], ["TODO", "IN_PROGRESS"], "state") as TaskState),
+
+  // A question about one of my own tasks, into the chat with the manager or
+  // the team's group (lib/task-questions.ts). Form: `kind` ("assigned" for a
+  // job handed out by hand, "board" for a cell of the board), `id`, `where`
+  // ("manager" | "team") and `body`. It answers; `heard` makes a refusal the
+  // `{ error }` the app already reads.
+  "me/tasks/ask": async (input) => heard(await askAboutTask(input.form)),
 
   // Supplies, receipts, the daily report.
   "me/requests/supply/create": async (input) => createSupplyRequest(input.form),

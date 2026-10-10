@@ -5,13 +5,8 @@ import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { Countdown } from "@/components/employee/countdown";
 import { DeadlineMeter } from "@/components/employee/deadline-meter";
 import { dayKeyIn, formatTimeIn } from "@/lib/time";
+import { PRIORITY_CARD, PRIORITY_CHIP } from "@/components/tasks/priority";
 import { cn } from "@/lib/utils";
-
-const PRIORITY_STYLE = {
-  HIGH: "bg-pink/10 text-pink-strong border-pink/20",
-  MEDIUM: "bg-orange/10 text-orange-strong border-orange/20",
-  LOW: "bg-ink/5 text-ink/50 border-ink/10",
-} as const;
 
 export const STATE_STYLE = {
   DONE: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
@@ -50,6 +45,9 @@ export function TaskCard({
       href={`/employee/tasks/${task.id}`}
       className={cn(
         "glass block rounded-2xl p-3.5 transition-transform active:scale-[0.99]",
+        // The whole card wears its priority, until the work is finished:
+        // something done is no longer urgent, whatever it was.
+        !done && PRIORITY_CARD[task.priority],
         done && "opacity-70"
       )}
     >
@@ -63,7 +61,7 @@ export function TaskCard({
                 <span
                   className={cn(
                     "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                    PRIORITY_STYLE.HIGH
+                    PRIORITY_CHIP.HIGH
                   )}
                 >
                   High

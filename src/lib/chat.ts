@@ -184,6 +184,12 @@ export const messageSelect = {
   durationSeconds: true,
   managerOnly: true,
   createdAt: true,
+  // The task a message asks about, when it was sent from the task's own page
+  // (lib/task-questions.ts). Three columns and no relation, on purpose: see
+  // the note under this select on what a fifth relation does.
+  aboutAssignedTaskId: true,
+  aboutEntryId: true,
+  aboutTitle: true,
   project: { select: { id: true, name: true } },
   // A task message carries its card, so it arrives drawn rather than as a blank to fill in.
   task: { select: chatTaskSelect },

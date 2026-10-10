@@ -30,6 +30,8 @@ import { planForTasks } from "@/lib/stage-deadlines";
 import { Countdown } from "@/components/employee/countdown";
 import { SaveButton } from "@/components/admin/form-buttons";
 import { AttachmentPreview } from "@/components/ui/attachment-preview";
+import { AskAboutTask } from "@/components/employee/ask-about-task";
+import { questionsAbout } from "@/lib/task-question-store";
 
 export default async function EmployeeTaskDetail({ params }: { params: Promise<{ id: string }> }) {
   const employee = await requireEmployee();
@@ -45,6 +47,13 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
   // A question the day has already asked about this task and is still waiting
   // on. Answering it is the first thing on the page, above everything else.
   const asking = await openFollowUpForTask(employee.id, task.id);
+  // What they have already asked about it, for the box near the foot of the page.
+  const asked = (await questionsAbout(employee.id, "board", task.id)).map((question) => ({
+    id: question.id,
+    where: question.where,
+    text: question.text,
+    when: `${formatDayIn(timezone, question.at) ?? ""} · ${formatTimeIn(timezone, question.at) ?? ""}`,
+  }));
   const due = formatTimeIn(timezone, task.dueAt);
   const dueDay = formatDayIn(timezone, task.dueAt);
   const scheduled = formatDayIn(timezone, task.scheduledFor);
@@ -278,6 +287,8 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
           <p className="mt-2 whitespace-pre-wrap text-sm text-ink/70">{task.adminNote}</p>
         </section>
       )}
+
+      <AskAboutTask kind="board" id={task.id} asked={asked} />
 
       <form action={saveMyTaskNote.bind(null, task.id)} className="glass rounded-2xl p-4">
         <label htmlFor="employeeNote" className="text-xs font-semibold uppercase tracking-wider text-ink/40">

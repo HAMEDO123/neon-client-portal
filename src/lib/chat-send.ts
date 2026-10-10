@@ -82,13 +82,18 @@ async function managerRecipient(): Promise<Recipient[]> {
  *
  * Anybody who muted this conversation (their own setting, chat-prefs.ts) is
  * left out: no row, no push. Their list and unread count are unaffected.
+ *
+ * `alsoManager` is the one way the team's group reaches the manager's phone: a
+ * question about a job they handed out (lib/task-questions.ts), which is
+ * addressed to them wherever it was asked. Their own mute still applies.
  */
 async function notifyOfMessage(
   messageId: string,
   sender: ChatViewer,
   conversation: Conversation,
   channelId: string,
-  preview: string
+  preview: string,
+  alsoManager = false
 ) {
   try {
     const everyone: Recipient[] =
@@ -100,14 +105,17 @@ async function notifyOfMessage(
             ...(sender.type === "EMPLOYEE" ? await managerRecipient() : []),
           ]
         : conversation.kind === "team"
-        ? await prisma.employee.findMany({
-            where: {
-              active: true,
-              accessRole: "EMPLOYEE",
-              ...(sender.type === "EMPLOYEE" ? { NOT: { id: sender.id } } : {}),
-            },
-            select: { id: true },
-          })
+        ? [
+            ...(await prisma.employee.findMany({
+              where: {
+                active: true,
+                accessRole: "EMPLOYEE",
+                ...(sender.type === "EMPLOYEE" ? { NOT: { id: sender.id } } : {}),
+              },
+              select: { id: true },
+            })),
+            ...(alsoManager && sender.type === "EMPLOYEE" ? await managerRecipient() : []),
+          ]
         : conversation.kind === "peer"
           ? sender.type === "EMPLOYEE"
             ? [{ id: otherPeer(conversation, sender.id) }]
@@ -236,6 +244,12 @@ export type PostedMessage = {
   attachmentSize?: number | null;
   durationSeconds?: number | null;
   projectId?: string | null;
+  /** The task this message asks about — one of the two ids, and what it was called. */
+  aboutAssignedTaskId?: string | null;
+  aboutEntryId?: string | null;
+  aboutTitle?: string | null;
+  /** Tell the manager too, in a conversation that otherwise would not (see notifyOfMessage). */
+  alsoManager?: boolean;
 };
 
 /**
@@ -263,6 +277,9 @@ export async function postChatMessage(
       attachmentSize: input.attachmentSize ?? null,
       durationSeconds: input.durationSeconds ?? null,
       projectId: input.projectId ?? null,
+      aboutAssignedTaskId: input.aboutAssignedTaskId ?? null,
+      aboutEntryId: input.aboutEntryId ?? null,
+      aboutTitle: input.aboutTitle ?? null,
     },
   });
 
@@ -276,7 +293,8 @@ export async function postChatMessage(
     viewer,
     conversation,
     channelId,
-    chatPreview(input.kind, input.body, input.durationSeconds ?? null, input.attachmentName ?? null)
+    chatPreview(input.kind, input.body, input.durationSeconds ?? null, input.attachmentName ?? null),
+    input.alsoManager ?? false
   );
 
   return message;

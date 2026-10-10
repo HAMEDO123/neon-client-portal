@@ -32,6 +32,8 @@ import { ChatHeader } from "@/components/chat/chat-header";
 import { CallButtons } from "@/components/calls/call-buttons";
 import { FacesProvider, PersonAvatar } from "@/components/chat/person-avatar";
 import { TaskCard } from "@/components/chat/task-card";
+import { TaskQuote } from "@/components/chat/task-quote";
+import { aboutTaskUrl, splitQuestion } from "@/lib/task-questions";
 import { TaskSheet, type TaskSetup } from "@/components/chat/task-sheet";
 import { MeetingCard } from "@/components/chat/meeting-card";
 import { MeetingSheet, type MeetingSetup } from "@/components/chat/meeting-sheet";
@@ -439,6 +441,10 @@ export function ChatRoom({
         durationSeconds: draft.kind === "VOICE" ? draft.durationSeconds : null,
         managerOnly: false,
         createdAt: new Date(),
+        // A question about a task is sent from the task's page, never from here.
+        aboutAssignedTaskId: null,
+        aboutEntryId: null,
+        aboutTitle: null,
         project: projects.find((project) => project.id === draft.projectId) ?? null,
         task: null,
         call: null,
@@ -904,6 +910,10 @@ function Bubble({
 
   const isAgent = message.authorType === "AGENT";
   const created = new Date(message.createdAt);
+  // A question about a task names the task on its first line, so anything that
+  // only has the text can say what is being asked about. Here that line is
+  // drawn as a quote instead, and what is left is what was said.
+  const asked = splitQuestion(message.body, message.aboutTitle);
   // A face beside what somebody else said, so a long conversation reads at a glance.
   const withFace = studio && !mine && !isAgent;
 
@@ -1027,7 +1037,11 @@ function Bubble({
             </a>
           )}
 
-          {message.body && (
+          {asked.quoted && (
+            <TaskQuote title={asked.quoted} href={aboutTaskUrl(as, message, mine)} studio={studio} />
+          )}
+
+          {asked.text && (
             <p
               dir="auto"
               className={cn(
@@ -1035,7 +1049,7 @@ function Bubble({
                 studio ? "text-[15px] text-bark" : "text-[15px] text-ink"
               )}
             >
-              {message.body}
+              {asked.text}
             </p>
           )}
 

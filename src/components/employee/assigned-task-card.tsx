@@ -6,6 +6,7 @@ import { DeadlineMeter } from "@/components/employee/deadline-meter";
 import { STATE_STYLE } from "@/components/employee/task-card";
 import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { daysBetween, dayLabel } from "@/lib/week";
+import { PRIORITY_CARD, PRIORITY_CHIP } from "@/components/tasks/priority";
 import { cn } from "@/lib/utils";
 
 // A job the manager handed out directly — not a stage of any project, but it
@@ -14,12 +15,6 @@ import { cn } from "@/lib/utils";
 //
 // Titles are often Arabic, so they read in their own direction rather than
 // being forced left to right.
-
-const PRIORITY_STYLE = {
-  HIGH: "bg-pink/10 text-pink-strong border-pink/20",
-  MEDIUM: "bg-orange/10 text-orange-strong border-orange/20",
-  LOW: "bg-ink/5 text-ink/50 border-ink/10",
-} as const;
 
 export function AssignedTaskCard({ task, timezone }: { task: AssignedTaskView; timezone: string }) {
   const days = daysBetween(task.startKey, task.endKey) + 1;
@@ -32,6 +27,8 @@ export function AssignedTaskCard({ task, timezone }: { task: AssignedTaskView; t
       href={`/employee/assigned/${task.id}`}
       className={cn(
         "glass block rounded-2xl p-3.5 transition-transform active:scale-[0.99]",
+        // The whole card wears its priority, until the work is finished.
+        !done && PRIORITY_CARD[task.priority],
         done && "opacity-70"
       )}
     >
@@ -47,7 +44,7 @@ export function AssignedTaskCard({ task, timezone }: { task: AssignedTaskView; t
               <span
                 className={cn(
                   "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                  PRIORITY_STYLE.HIGH
+                  PRIORITY_CHIP.HIGH
                 )}
               >
                 High

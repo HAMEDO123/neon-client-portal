@@ -21,6 +21,9 @@ import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { daysBetween, dayLabel, moveSpanTo, placeInWeek, stackRows, weekLabel } from "@/lib/week";
 import { STATE_LABEL, dotTone } from "@/lib/task-board";
 import { StateBadge } from "@/components/ui/state-badge";
+import { PRIORITY_BAR } from "@/components/tasks/priority";
+import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
+import { countByFilter, isLate, matchesFilter, type TaskFilter } from "@/lib/task-filters";
 import { cn } from "@/lib/utils";
 import { shownError } from "@/lib/refusal";
 
@@ -55,11 +58,19 @@ function isWithin(key: string, dropKey: string, task: AssignedTaskView) {
   return offset >= 0 && offset <= length;
 }
 
-const PRIORITY_BAR = {
-  HIGH: "bg-pink/15 border-pink/30 text-pink-strong",
-  MEDIUM: "bg-cyan/15 border-cyan/35 text-cyan-strong",
-  LOW: "bg-ink/[0.06] border-ink/15 text-ink/60",
-} as const;
+// Which of the week's jobs are drawn. "All" is the board as it always was.
+const WEEK_FILTERS: { key: TaskFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "progress", label: "In progress" },
+  { key: "review", label: "Sent for review" },
+  { key: "late", label: "Late" },
+  { key: "done", label: "Done" },
+];
+
+/** Where a job stands, as the filters read it (lib/task-filters.ts). */
+function standing(task: AssignedTaskView, todayKey: string) {
+  return { state: task.state, late: isLate(task.state, task.endKey, todayKey) };
+}
 
 export function WeekBoard({
   team,
@@ -78,6 +89,9 @@ export function WeekBoard({
   const [editing, setEditing] = useState<AssignedTaskView | null>(null);
   const [adding, setAdding] = useState<{ employeeId: string; dayKey: string } | null>(null);
   const [pending, start] = useTransition();
+  // Which jobs are drawn. Everybody's row stays, so the week keeps its shape
+  // and a job can still be added to somebody the filter left empty.
+  const [filter, setFilter] = useState<TaskFilter>("all");
 
   // What is being dragged, and where it would land. Kept in state so the bar
   // can follow the finger; the drop is what actually writes anything.
@@ -105,15 +119,18 @@ export function WeekBoard({
     [tasks, moved]
   );
 
+  const counts = useMemo(() => countByFilter(shown.map((task) => standing(task, todayKey))), [shown, todayKey]);
+
   const byEmployee = useMemo(() => {
     const map = new Map<string, AssignedTaskView[]>();
     for (const task of shown) {
+      if (!matchesFilter(standing(task, todayKey), filter)) continue;
       const list = map.get(task.employeeId) ?? [];
       list.push(task);
       map.set(task.employeeId, list);
     }
     return map;
-  }, [shown]);
+  }, [shown, filter, todayKey]);
 
   /** Which day column and which row the pointer is over. */
   const dropTarget = useCallback(
@@ -248,6 +265,9 @@ export function WeekBoard({
           </button>
         </div>
       </div>
+
+      {/* The numbers are this week's: the board shows one week at a time. */}
+      <TaskFilterBar options={WEEK_FILTERS} active={filter} counts={counts} onPick={setFilter} />
 
       <div
         ref={gridRef}
