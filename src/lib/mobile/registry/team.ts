@@ -18,7 +18,7 @@ import {
   setEmployeePay,
 } from "@/lib/actions/operations-actions";
 import { getAttendanceForPeriod, getPayrollForPeriod, getReceiptsForPeriod } from "@/lib/payroll-queries";
-import { periodLabel, periodOf, previousPeriod } from "@/lib/payroll";
+import { isManagersFigure, periodLabel, periodOf, previousPeriod } from "@/lib/payroll";
 import { salesCountsForMonth, monthSalesFor } from "@/lib/sales-queries";
 import { WARNING_LIMIT } from "@/lib/warnings";
 import { getTimezone, getWorkHours } from "@/lib/settings";
@@ -223,6 +223,8 @@ export const reads: ReadRegistry = {
         vendor: receipt.vendor,
         rawAmount: receipt.rawAmount,
         countedAmount: receipt.countedAmount,
+        // The manager's own figure rather than the cap's (lib/payroll.ts).
+        managerSet: isManagersFigure(receipt.rawAmount, receipt.countedAmount),
       })),
     };
   }),

@@ -12,7 +12,7 @@ import {
 } from "@/lib/actions/operations-actions";
 import { getTimezone } from "@/lib/settings";
 import { todayKey } from "@/lib/time";
-import { periodLabel, periodOf, previousPeriod, RECEIPT_CAP } from "@/lib/payroll";
+import { isManagersFigure, periodLabel, periodOf, previousPeriod, RECEIPT_CAP } from "@/lib/payroll";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { AttendanceDeviceCard } from "@/components/admin/attendance-device";
@@ -396,8 +396,9 @@ export default async function AdminPayrollPage({
         Receipts · {periodLabel(period)}
       </h2>
       <p className="mt-1 text-xs text-ink/45">
-        Read from the photo automatically. Each receipt counts up to {RECEIPT_CAP} JOD — correct the amount here if
-        the reading is wrong.
+        Read from the photo automatically. By itself a receipt counts up to {RECEIPT_CAP} JOD. To pay more or less
+        for one, type the figure under &ldquo;Counts as&rdquo; — what you type is what is paid. Empty that box to go
+        back to the usual rule.
       </p>
 
       {receipts.length === 0 ? (
@@ -418,7 +419,10 @@ export default async function AdminPayrollPage({
                 </p>
               </div>
 
+              {/* Keyed on what is stored, so a save that changes a figure — "Counts
+                  as" following a corrected amount — is drawn, not left as typed. */}
               <form
+                key={`${receipt.vendor ?? ""}:${receipt.rawAmount ?? ""}:${receipt.countedAmount ?? ""}`}
                 action={correctReceipt.bind(null, receipt.id)}
                 className="flex flex-wrap items-end gap-2"
               >
@@ -435,19 +439,28 @@ export default async function AdminPayrollPage({
                   <input
                     name="rawAmount"
                     type="number"
-                    step="0.01"
+                    step="any"
                     min="0"
                     defaultValue={receipt.rawAmount ?? ""}
                     className="w-24 rounded-lg border border-ink/12 bg-white/70 px-2 py-1.5 text-sm outline-none focus:border-cyan-strong"
                   />
                 </label>
-                <div className="pb-1.5">
-                  <p className="text-[11px] text-ink/45">Counts as</p>
-                  <p className="text-sm font-semibold text-emerald-700">
-                    {(receipt.countedAmount ?? 0).toFixed(2)}
-                  </p>
-                </div>
-                <SaveButton label="Fix" />
+                {/* The manager's own figure, not held to the cap or to what was
+                    paid. Opens holding what the receipt counts for now. */}
+                <label>
+                  <span className="mb-1 block text-[11px] font-medium text-ink/45">
+                    Counts as{isManagersFigure(receipt.rawAmount, receipt.countedAmount) ? " · set by you" : ""}
+                  </span>
+                  <input
+                    name="countedAmount"
+                    type="number"
+                    step="any"
+                    min="0"
+                    defaultValue={receipt.countedAmount ?? ""}
+                    className="w-24 rounded-lg border border-emerald-600/25 bg-white/70 px-2 py-1.5 text-sm font-semibold text-emerald-700 outline-none focus:border-cyan-strong"
+                  />
+                </label>
+                <SaveButton label="Save" />
               </form>
             </div>
           ))}

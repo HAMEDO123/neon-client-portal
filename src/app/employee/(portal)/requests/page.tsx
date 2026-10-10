@@ -72,7 +72,7 @@ export default async function EmployeeRequestsPage({
             <p className="mt-1 text-2xl font-semibold text-ink">{counted.toFixed(2)} JOD</p>
             <p className="mt-1 text-xs text-ink/50">
               {receipts.length} receipt{receipts.length === 1 ? "" : "s"} · each one counts up to{" "}
-              {RECEIPT_CAP} JOD, added to this month&apos;s pay
+              {RECEIPT_CAP} JOD unless the manager sets another figure, added to this month&apos;s pay
             </p>
           </div>
 

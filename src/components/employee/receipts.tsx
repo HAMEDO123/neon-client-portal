@@ -6,6 +6,7 @@ import { deleteReceipt, submitReceipt } from "@/lib/actions/operations-actions";
 import { lastReply, reportUploadFailure, watchingReply } from "@/lib/action-reply";
 import { whileBusy } from "@/lib/busy";
 import { compressInBrowser } from "@/lib/client-image-compress";
+import { isManagersFigure } from "@/lib/payroll";
 import { tooBig, uploadFailure } from "@/lib/upload-limits";
 import type { ReceiptStatus } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
@@ -168,6 +169,8 @@ export function ReceiptList({
           receipt.rawAmount != null &&
           receipt.countedAmount != null &&
           receipt.countedAmount < receipt.rawAmount;
+        // More than the cap gives, or less: only the manager sets either.
+        const managers = isManagersFigure(receipt.rawAmount, receipt.countedAmount);
 
         return (
           <div key={receipt.id} className="glass flex gap-3 rounded-2xl p-3">
@@ -197,6 +200,7 @@ export function ReceiptList({
                   {capped && (
                     <p className="text-[10px] text-ink/40">of {receipt.rawAmount?.toFixed(2)} paid</p>
                   )}
+                  {managers && <p className="text-[10px] text-ink/40">set by the manager</p>}
                 </div>
               </div>
 

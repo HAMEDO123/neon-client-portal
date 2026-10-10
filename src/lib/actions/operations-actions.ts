@@ -9,7 +9,7 @@ import { answering, Refusal, type Answer } from "@/lib/refusal";
 import { saveFile } from "@/lib/storage";
 import { readReceipt } from "@/lib/ai/receipts";
 import { dispatchNotification } from "@/lib/notifications/engine";
-import { countedReceiptAmount, receiptPeriod } from "@/lib/payroll";
+import { correctedReceiptCount, countedReceiptAmount, readCountsBox, receiptPeriod } from "@/lib/payroll";
 import { MANUAL } from "@/lib/attendance";
 import { syncAttendance, type SyncReport } from "@/lib/attendance-sync";
 import {
@@ -238,23 +238,43 @@ export async function deleteReceipt(id: string) {
   refreshAdmin();
 }
 
-/** The manager can correct what the model read, and the cap re-applies. */
+/**
+ * The manager corrects what the model read, and says what a receipt counts for.
+ *
+ * The cap is what somebody's receipt gets by itself — `submitReceipt` above is
+ * the only way one of the team's reaches the table, and it never writes more.
+ * The manager's own figure is not held to it: see `correctedReceiptCount` for
+ * which of the two a saved form means. `countedAmount` is an optional field,
+ * because the phone app posts this form without it.
+ */
 export async function correctReceipt(id: string, formData: FormData) {
   await requireAdmin();
 
   const rawAmount = Number(formData.get("rawAmount") ?? "");
   const amount = Number.isFinite(rawAmount) && rawAmount > 0 ? rawAmount : null;
 
+  const stored = await prisma.expenseReceipt.findUnique({
+    where: { id },
+    select: { rawAmount: true, countedAmount: true },
+  });
+  // Taken back by whoever sent it while this page was open: nothing to correct.
+  if (!stored) {
+    refreshAdmin();
+    return;
+  }
+
   await prisma.expenseReceipt.update({
     where: { id },
     data: {
       rawAmount: amount,
-      countedAmount: countedReceiptAmount(amount),
+      countedAmount: correctedReceiptCount(stored, amount, readCountsBox(formData.get("countedAmount"))),
       vendor: String(formData.get("vendor") ?? "").trim().slice(0, 120) || null,
       status: "ANALYZED",
     },
   });
 
+  // The person who sent it sees what it counts for on their own list.
+  refreshEmployee();
   refreshAdmin();
 }
 

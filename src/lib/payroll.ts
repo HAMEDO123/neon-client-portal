@@ -37,6 +37,76 @@ export function countedReceiptAmount(rawAmount: number | null | undefined) {
   return Math.min(rawAmount, RECEIPT_CAP);
 }
 
+/** Half a fils: two figures closer than this are the same amount of money. */
+const SAME_MONEY = 0.0005;
+
+/**
+ * Whether what a receipt counts for is a figure the manager chose rather than
+ * the one the cap gives.
+ *
+ * Read off the two amounts instead of kept in a column of its own: a figure
+ * that differs from the rule's can only have come from the manager, because
+ * nothing else writes one, and a figure that equals it pays the same whoever
+ * typed it.
+ */
+export function isManagersFigure(rawAmount: number | null | undefined, countedAmount: number | null | undefined) {
+  if (countedAmount == null || !Number.isFinite(countedAmount)) return false;
+  return Math.abs(countedAmount - countedReceiptAmount(rawAmount)) >= SAME_MONEY;
+}
+
+/**
+ * The manager's "Counts as" box, as a form posted it: a figure, `"auto"` for a
+ * box emptied on purpose, or `undefined` for a form that has no such box.
+ *
+ * Three answers, and they have to stay three. `Number("")` and `Number(null)`
+ * are both 0, so read carelessly an emptied box and a form that never had one
+ * would each say "this receipt counts for nothing" — and the phone app, which
+ * sends only the vendor and the amount paid, would zero every receipt it saved.
+ */
+export type CountsBox = number | "auto" | undefined;
+
+export function readCountsBox(value: unknown): CountsBox {
+  if (value == null) return undefined;
+  const text = String(value).trim();
+  if (text === "") return "auto";
+  const figure = Number(text);
+  // Not a figure at all: nothing was said, rather than "nothing is paid".
+  if (!Number.isFinite(figure) || figure < 0) return undefined;
+  return Math.round(figure * 1000) / 1000;
+}
+
+/**
+ * What a receipt counts for after the manager has corrected it.
+ *
+ * The studio's rule, in its own words: somebody on the team is never given
+ * more than the cap for a receipt, and the manager may make it three or four
+ * or whatever they like — the figure they type is the figure paid. So the cap
+ * is what a receipt gets by itself, and the manager's figure is not held to it
+ * (or to what was paid).
+ *
+ * - An emptied box goes back to the cap's own answer.
+ * - A form with no box leaves a manager's figure alone, and otherwise follows
+ *   the amount paid as it always did.
+ * - The box opens holding what the receipt already counts for, so the same
+ *   figure coming back is a box nobody touched. Then it follows the amount
+ *   paid — correcting a misread 0.50 to 5.00 has to pay 2, not go on paying
+ *   0.50 — unless that figure was the manager's to begin with, which stays.
+ */
+export function correctedReceiptCount(
+  stored: { rawAmount: number | null; countedAmount: number | null },
+  rawAmount: number | null,
+  box: CountsBox
+) {
+  const byRule = countedReceiptAmount(rawAmount);
+  const managers = isManagersFigure(stored.rawAmount, stored.countedAmount);
+
+  if (box === "auto") return byRule;
+  if (box === undefined) return managers && stored.countedAmount != null ? stored.countedAmount : byRule;
+
+  const untouched = stored.countedAmount != null && Math.abs(box - stored.countedAmount) < SAME_MONEY;
+  return untouched && !managers ? byRule : box;
+}
+
 export type PayrollInput = {
   salaryAmount: number | null;
   payBasis: PayBasis;
