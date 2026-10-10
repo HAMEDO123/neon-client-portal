@@ -32,6 +32,7 @@ struct JobRow: View {
                 FlowRow {
                     meStateBadge(job.state)
                     priorityChip(job.priority)
+                    lateBadge(job.late)
                 }
                 MetaLabel(jobDateRange(startKey: job.startKey, endKey: job.endKey), symbol: "calendar")
             }
@@ -42,6 +43,7 @@ struct JobRow: View {
                 .padding(.top, 8)
         }
         .padding(.vertical, 4)
+        .taskPriorityWash(job.priority, state: job.state)
     }
 }
 
@@ -54,6 +56,9 @@ struct JobDetailView: View {
     @EnvironmentObject var api: APIClient
     @State private var job: MyAssignedJob?
     @State private var submissions: [JobSubmission] = []
+    /// From a chat's task card: discussed under that card, so no second
+    /// place to ask is offered here.
+    @State private var fromChat = false
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @State private var actionError: String?
@@ -70,6 +75,9 @@ struct JobDetailView: View {
                     actions(job)
                     detail(job)
                     if !submissions.isEmpty { sentSection }
+                    if !fromChat, api.identity?.id == job.employeeId {
+                        AskAboutTaskCard(kind: "assigned", id: job.id, isOffline: cachedAt != nil)
+                    }
                 } else if let errorMessage {
                     ErrorState(message: errorMessage) { await load() }
                 } else {
@@ -217,6 +225,7 @@ struct JobDetailView: View {
             let loaded = try await api.fetchJobDetail(id: jobId)
             job = loaded.value.job
             submissions = loaded.value.submissions
+            fromChat = loaded.value.fromChat ?? false
             cachedAt = loaded.cachedAt
             errorMessage = nil
         } catch {

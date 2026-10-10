@@ -19,9 +19,32 @@ struct MyAssignedJob: Decodable, Identifiable {
     let endKey: String
     let state: String
     let priority: String
+    /// From `me/tasks/mine`: its last day has gone and it is not approved.
+    var late: Bool? = nil
 }
 
 struct AssignedJobsResponse: Decodable { let jobs: [MyAssignedJob] }
+
+/// `me/tasks/mine`: everything on this person's list, read once — the
+/// board's steps and the jobs handed out by hand — as `/employee/tasks` reads
+/// it before narrowing anything. The buttons count it and narrow it here.
+struct MyTasksResponse: Decodable {
+    /// Today in the studio's calendar.
+    let todayKey: String
+    let tasks: [StaffTask]
+    let jobs: [MyAssignedJob]
+}
+
+/// One question already asked about a task — `questionsAbout`.
+struct AskedQuestion: Decodable, Identifiable {
+    let id: String
+    /// "manager" or "team".
+    let `where`: String
+    let text: String
+    let at: String
+}
+
+struct AskedQuestionsResponse: Decodable { let asked: [AskedQuestion] }
 
 /// What has been sent for a job so far — `TaskSubmission` rows.
 struct JobSubmission: Decodable, Identifiable {
@@ -35,6 +58,9 @@ struct JobSubmission: Decodable, Identifiable {
 struct JobDetailResponse: Decodable {
     let job: MyAssignedJob
     let submissions: [JobSubmission]
+    /// The job came from a task card in a chat, where it is discussed under
+    /// its own card. Absent from a server before questions about a task.
+    var fromChat: Bool? = nil
 }
 
 // MARK: - What the day asked (ScheduledFollowUp)

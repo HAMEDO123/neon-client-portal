@@ -27,11 +27,22 @@ func meStateBadge(_ state: String) -> StateBadge {
 }
 
 /// A priority chip only when it is worth a second chip on the card — HIGH.
-/// LOW and MEDIUM said nothing worth a whole badge for every row.
+/// LOW and MEDIUM said nothing worth a whole badge for every row. Solid red:
+/// the row it sits on is washed red too (`taskPriorityWash`), and the word
+/// has to read on it.
 @ViewBuilder
 func priorityChip(_ priority: String?) -> some View {
     if priority == "HIGH" {
-        BadgeView(text: L("High"), tone: .pink, symbol: "flame.fill")
+        TaskHighChip()
+    }
+}
+
+/// "Late" on exactly the rows the Late button lists: the day it was due has
+/// gone and it has not been approved (the server's `isLate`).
+@ViewBuilder
+func lateBadge(_ late: Bool?) -> some View {
+    if late == true {
+        BadgeView(text: L("Late"), tone: .danger, symbol: "clock.badge.exclamationmark.fill")
     }
 }
 

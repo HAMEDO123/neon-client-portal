@@ -120,6 +120,31 @@ describe("one reading of a task's standing, on every screen", () => {
   });
 });
 
+// The phone app counts and narrows the list itself (it is handed everything
+// once, by `me/tasks/mine`). So it has to be handed the "late" this page works
+// out, and keep the same six rules — a second reading in another language is
+// the one that drifts without a single check noticing.
+describe("the phone app's list", () => {
+  it("is handed late by the rule the website's page uses", () => {
+    const registry = read("src", "lib", "mobile", "registry", "me.ts");
+    assert.match(registry, /"me\/tasks\/mine": guarded\(requireEmployee/);
+    assert.match(registry, /const deadline = plan\.get\(task\.id\)\?\.dueBy \?\? null;/);
+    assert.match(registry, /late: isLate\(task\.state, deadline \? dayKeyIn\(timezone, deadline\) : null, today\)/);
+    assert.match(registry, /late: isLate\(job\.state, job\.endKey, today\)/);
+  });
+
+  it("narrows by the same six rules", () => {
+    const swift = read("ios", "Sources", "Features", "Tasks", "TaskListFilter.swift");
+    assert.match(swift, /case open, progress, review, late, done, all/);
+    assert.match(swift, /case \.all: return true/);
+    assert.match(swift, /case \.open: return item\.state != "DONE" && item\.state != "SUBMITTED"/);
+    assert.match(swift, /case \.progress: return item\.state == "IN_PROGRESS"/);
+    assert.match(swift, /case \.review: return item\.state == "SUBMITTED"/);
+    assert.match(swift, /case \.late: return item\.late/);
+    assert.match(swift, /case \.done: return item\.state == "DONE"/);
+  });
+});
+
 describe("a task wears its priority", () => {
   it("as the whole card, from one place", () => {
     const priority = read("src", "components", "tasks", "priority.ts");

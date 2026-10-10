@@ -198,8 +198,28 @@ struct ChatMessage: Decodable, Identifiable, Equatable {
     let task: TaskCard?
     let call: CallLine?
     let meeting: MeetingCard?
+    /// The task this message asks about, when it was sent from the task's own
+    /// page (lib/task-questions.ts): one of the two ids, and what the task
+    /// was called then. Absent from a server before questions about a task.
+    var aboutAssignedTaskId: String? = nil
+    var aboutEntryId: String? = nil
+    var aboutTitle: String? = nil
 
     struct ProjectTag: Decodable, Equatable, Identifiable { let id: String; let name: String }
+
+    /// `splitQuestion`: a question about a task names the task on its first
+    /// line — "📋 <title>" — so anything that only has the text still says
+    /// what is being asked about. Here that line is drawn as a quote instead,
+    /// and what is left is what was said. Only the exact line the server
+    /// wrote is taken off: a message that merely starts with a clipboard is
+    /// somebody's own words and stays whole.
+    var asked: (quoted: String?, text: String?) {
+        guard let aboutTitle, !aboutTitle.isEmpty else { return (nil, body) }
+        let head = "📋 \(aboutTitle)"
+        if body == head { return (aboutTitle, nil) }
+        if let body, body.hasPrefix(head + "\n") { return (aboutTitle, String(body.dropFirst(head.count + 1))) }
+        return (aboutTitle, body)
+    }
 
     struct CallLine: Decodable, Equatable {
         let kind: String?

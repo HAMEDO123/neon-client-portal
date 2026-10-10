@@ -344,3 +344,38 @@
 "This could not be given to anybody on the team." = "هاي ما انعطت لحدا من الفريق.";
 "This could not be turned into a task." = "هاي ما صارت مهمة.";
 "Nothing was sent." = "ما انبعت إشي.";
+
+/* The task filters, with their counts (TaskListFilter.swift) */
+"Nothing to do right now" = "لا شيء عليك الآن";
+"No tasks assigned" = "لا توجد مهام لك";
+"Nothing in progress" = "لا شيء قيد التنفيذ";
+"Nothing waiting for review" = "لا شيء بانتظار المراجعة";
+"Nothing is late" = "لا شيء متأخر";
+"Nothing completed yet" = "لا شيء مكتمل بعد";
+"Work you have sent in is under Sent for review. New work appears here and you get a notification." = "ما أرسلته موجود تحت «أُرسلت للمراجعة». أي عمل جديد يظهر هنا ويصلك إشعار به.";
+"Work the manager gives you appears here and you get a notification." = "أي عمل يعطيك إياه المدير يظهر هنا ويصلك إشعار به.";
+"Start a task and it is listed here." = "ابدأ مهمة وستظهر هنا.";
+"Work you send in stays here until the manager has looked at it." = "ما ترسله يبقى هنا إلى أن يراجعه المدير.";
+"Work that passes its day without being approved shows here." = "أي عمل يمرّ يومه من دون اعتماد يظهر هنا.";
+"Tasks you finish will be listed here." = "المهام التي تنهيها ستظهر هنا.";
+"Nothing like that" = "لا شيء من هذا النوع";
+"Nothing like that this week." = "لا شيء من هذا النوع هذا الأسبوع.";
+
+/* Asking about a task (AskAboutTask.swift) and its quote in a chat */
+"Ask about this task" = "اسأل عن هذه المهمة";
+"Your question goes into the chat with this task's name on it, and the answer comes back there." = "سؤالك يذهب إلى المحادثة وعليه اسم المهمة، والجواب يصلك هناك.";
+"Only the two of you" = "أنتما الاثنان فقط";
+"Team group" = "مجموعة الفريق";
+"Everybody sees it" = "يراه الجميع";
+"Who to ask" = "مَن تسأل";
+"Your question" = "سؤالك";
+"What do you need to know?" = "ماذا تريد أن تعرف؟";
+"Ask the group" = "اسأل المجموعة";
+"Ask the manager" = "اسأل المدير";
+"You asked the group" = "سألتَ المجموعة";
+"You asked the manager" = "سألتَ المدير";
+"Write your question first." = "اكتب سؤالك أولًا.";
+"Sent. The answer will come in the chat." = "أُرسل. الجواب سيصلك في المحادثة.";
+"About the task" = "عن المهمة";
+"About the task: %@" = "عن المهمة: %@";
+"Opens the task" = "يفتح المهمة";

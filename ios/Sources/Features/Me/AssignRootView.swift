@@ -15,6 +15,8 @@ struct AssignRootView: View {
     @State private var editing: MyAssignedJob?
     @State private var creating = false
     @State private var briefing = false
+    /// Which of the week's jobs are listed — the manager's week has the same five.
+    @State private var filter: TaskFilter = .all
 
     var body: some View {
         NeonScroll(spacing: NeonSpace.stack) {
@@ -36,9 +38,19 @@ struct AssignRootView: View {
                         card: true
                     )
                 } else {
-                    SectionHeader(L("This week"), count: week.tasks.count) { EmptyView() }
+                    let listed = week.tasks.filter { filter.matches(standing($0, week)) }
+                    TaskFilterBar(selection: $filter, options: TaskFilter.week, counts: TaskFilter.counts(week.tasks.map { standing($0, week) }))
+
+                    SectionHeader(L("This week"), count: listed.count) { EmptyView() }
+                    if listed.isEmpty {
+                        Text(L("Nothing like that this week."))
+                            .font(.neonSubtitle)
+                            .foregroundStyle(Color.neonTextTertiary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 28)
+                    }
                     VStack(spacing: NeonSpace.sm) {
-                        ForEach(Array(week.tasks.enumerated()), id: \.element.id) { index, job in
+                        ForEach(Array(listed.enumerated()), id: \.element.id) { index, job in
                             // A colleague can rewrite or delete a job the manager
                             // has already approved from here — so once it is
                             // SUBMITTED or DONE, tapping only opens it to read,
@@ -144,6 +156,7 @@ struct AssignRootView: View {
                 FlowRow {
                     meStateBadge(job.state)
                     priorityChip(job.priority)
+                    lateBadge(week.map { standing(job, $0).late })
                     if jobHasNoAcceptance(job) {
                         BadgeView(text: L("No finish line written"), tone: .warning, symbol: "exclamationmark.triangle.fill")
                     }
@@ -156,8 +169,14 @@ struct AssignRootView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .neonSurface(.glass, radius: NeonRadius.lg)
+        // The whole row wears its priority, until the job is done.
+        .taskPrioritySurface(job.priority, state: job.state)
         .neonContextShape(radius: NeonRadius.lg)
+    }
+
+    /// Where a job stands, as the filters read it.
+    private func standing(_ job: MyAssignedJob, _ week: AssignWeekResponse) -> TaskStanding {
+        TaskStanding(state: job.state, dueKey: job.endKey, todayKey: week.todayKey)
     }
 
     private func name(for employeeId: String) -> String {

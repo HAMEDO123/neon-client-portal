@@ -237,6 +237,9 @@ struct ChatMessageRow: View {
     var openVideo: (() -> Void)?
     /// Shows a sender's picture full screen, from their face beside a group's message.
     var openFace: ((ChatFacePayload) -> Void)?
+    /// Opens the task a question is about — only where this reader has
+    /// somewhere to go; nil leaves the quote a label.
+    var openAbout: (() -> Void)?
 
     @Environment(\.chatRoomPalette) private var palette
 
@@ -443,7 +446,12 @@ struct ChatMessageRow: View {
                 projectTag(project)
             }
 
-            if let body = message.body, !body.isEmpty {
+            let asked = message.asked
+            if let quoted = asked.quoted {
+                ChatTaskQuote(title: quoted, mine: mine, open: openAbout)
+            }
+
+            if let body = asked.text, !body.isEmpty {
                 attachment
                 // WhatsApp's layout: a short message keeps its time on the
                 // same line; a longer one wraps and puts it under the last line.
@@ -871,6 +879,69 @@ struct ChatVoiceSpeedPill: View {
     private var fill: Color {
         if mine { return Color.white.opacity(emphasised ? 0.3 : 0.18) }
         return Color.neonIndigo.opacity(emphasised ? 0.18 : 0.09)
+    }
+}
+
+/// The task a message asks about, drawn above what was said — the way a reply
+/// quotes what it answers (components/chat/task-quote.tsx). It opens the task
+/// where this reader has somewhere to go and is only a label where they have
+/// not: in the company's group everybody sees the quote, and a task's page is
+/// its owner's alone.
+struct ChatTaskQuote: View {
+    let title: String
+    let mine: Bool
+    var open: (() -> Void)?
+
+    var body: some View {
+        if let open {
+            Button {
+                Haptic.tap()
+                open()
+            } label: {
+                label
+            }
+            .buttonStyle(PressableStyle(scale: 0.98))
+            .accessibilityHint(L("Opens the task"))
+        } else {
+            label
+        }
+    }
+
+    private var label: some View {
+        let ink: Color = mine ? .white : .neonInk
+        return HStack(spacing: 8) {
+            Image(systemName: "list.clipboard")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(ink.opacity(0.6))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(L("About the task").uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.4)
+                    .foregroundStyle(ink.opacity(0.6))
+                    .lineLimit(1)
+                DirText(title, font: .system(.footnote, weight: .semibold), color: ink, fill: false, lineLimit: 1)
+            }
+            // No spacer: one would stretch the bubble to the screen's width.
+            if open != nil {
+                Image(systemName: "chevron.forward")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.45))
+            }
+        }
+        .padding(.leading, 11)
+        .padding(.trailing, 9)
+        .padding(.vertical, 7)
+        .frame(minWidth: 176, alignment: .leading)
+        .background(mine ? Color.white.opacity(0.16) : Color.neonInk.opacity(0.05))
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(mine ? Color.white.opacity(0.75) : Color.neonAccent)
+                .frame(width: 3)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(L("About the task: %@", title)))
     }
 }
 

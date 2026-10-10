@@ -395,6 +395,7 @@ struct TodayTaskRow: View {
                 FlowRow {
                     meStateBadge(task.state)
                     priorityChip(task.priority)
+                    lateBadge(task.late)
                     if !task.waitingOn.isEmpty {
                         BadgeView(text: L("Waiting"), tone: .orange)
                     }
@@ -416,6 +417,7 @@ struct TodayTaskRow: View {
             }
         }
         .padding(.vertical, 4)
+        .taskPriorityWash(task.priority, state: task.state)
     }
 }
 
@@ -453,6 +455,7 @@ struct TaskRow: View {
                 FlowRow {
                     meStateBadge(task.state)
                     priorityChip(task.priority)
+                    lateBadge(task.late)
                     if !task.waitingOn.isEmpty {
                         BadgeView(text: L("Waiting"), tone: .orange)
                     }

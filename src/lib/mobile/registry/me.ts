@@ -2,7 +2,12 @@ import { requireEmployee } from "@/lib/employee-session";
 import { requireTaskAssigner } from "@/lib/admin-guard";
 import { prisma } from "@/lib/db";
 import { getTimezone } from "@/lib/settings";
-import { todayKey, dayKeyToDate } from "@/lib/time";
+import { todayKey, dayKeyToDate, dayKeyIn } from "@/lib/time";
+import { allTasks } from "@/lib/employee-tasks";
+import { planForTasks } from "@/lib/stage-deadlines";
+import { isLate } from "@/lib/task-filters";
+import { questionsAbout } from "@/lib/task-question-store";
+import { readAboutKind } from "@/lib/task-questions";
 import { getMyReceipts } from "@/lib/payroll-queries";
 import { periodOf, periodLabel, RECEIPT_CAP } from "@/lib/payroll";
 import { getPreferences } from "@/lib/notifications/engine";
@@ -83,6 +88,44 @@ export const reads: ReadRegistry = {
     return { jobs: filtered };
   }),
 
+  // Everything on this person's list, as `/employee/tasks` reads it before it
+  // narrows anything: the board's steps and the jobs handed out by hand, each
+  // with where it stands for the filters (lib/task-filters.ts). The phone
+  // counts and narrows them itself, so its buttons say the same numbers the
+  // website's do — and "late" is worked out here, because it runs to the day a
+  // step's countdown ends (the stage plan), which the phone cannot work out.
+  // `dueKey` is the day the website sorts the list by; null sorts last.
+  "me/tasks/mine": guarded(requireEmployee, async (_params, me) => {
+    const timezone = await getTimezone();
+    const today = todayKey(timezone);
+    const tasks = await allTasks(me.id);
+    const plan = await planForTasks(tasks);
+    const jobs = await myAssignedTasks(me.id, { includeDone: true });
+
+    return {
+      todayKey: today,
+      tasks: tasks.map((task) => {
+        const deadline = plan.get(task.id)?.dueBy ?? null;
+        const due = deadline ?? task.dueAt ?? task.scheduledFor;
+        return {
+          ...task,
+          dueKey: due ? dayKeyIn(timezone, due) : null,
+          late: isLate(task.state, deadline ? dayKeyIn(timezone, deadline) : null, today),
+        };
+      }),
+      jobs: jobs.map((job) => ({ ...job, dueKey: job.endKey, late: isLate(job.state, job.endKey, today) })),
+    };
+  }),
+
+  // What this person has already asked about one of their tasks, newest first
+  // — the list under "Ask about this task" on the task's own page
+  // (`questionsAbout`). Only ever their own questions: it reads by who wrote.
+  "me/tasks/asked": guarded(requireEmployee, async (params, me) => {
+    const kind = readAboutKind(param(params, "kind"));
+    if (!kind) throw new RpcError("That task could not be found.", 404);
+    return { asked: await questionsAbout(me.id, kind, param(params, "id")) };
+  }),
+
   // The one open question the day owes about this task, as `/employee/tasks/[id]`
   // reads it: `openFollowUpForTask` — unanswered and already asked. `null` when
   // there is nothing to answer right now.
@@ -99,7 +142,10 @@ export const reads: ReadRegistry = {
     const job = await myAssignedTask(me.id, id);
     if (!job) throw new RpcError("Task not found.", 404);
     const submissions = await submissionsForAssignedTask(job.id);
-    return { job, submissions };
+    // A job that came from a chat's task card is discussed under that card,
+    // so its page offers no second place to ask (`/employee/assigned/[id]`).
+    const card = await prisma.chatTask.findFirst({ where: { assignments: { some: { id: job.id } } }, select: { id: true } });
+    return { job, submissions, fromChat: card !== null };
   }),
 
   // Everything `/employee/requests` shows across its three tabs, read once:

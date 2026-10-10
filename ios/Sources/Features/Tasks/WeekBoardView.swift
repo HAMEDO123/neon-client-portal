@@ -16,6 +16,9 @@ struct WeekBoardView: View {
     var proxy: ScrollViewProxy?
 
     @State private var person: String?
+    /// Which jobs are drawn. Every day stays, so the week keeps its shape and
+    /// a job can still be added to a day the filter left empty.
+    @State private var filter: TaskFilter = .all
     @State private var deleting: AssignedJob?
     /// A job about to be marked completed — asked first, as in the editor.
     @State private var completing: AssignedJob?
@@ -42,9 +45,11 @@ struct WeekBoardView: View {
                 SkeletonRows(count: 3)
             }
         } content: { week in
-            let jobs = week.tasks.filter { person == nil || $0.employeeId == person }
+            // The person's jobs this week, then the kind the buttons ask for.
+            let theirs = week.tasks.filter { person == nil || $0.employeeId == person }
+            let jobs = theirs.filter { filter.matches(standing($0, week)) }
             VStack(alignment: .leading, spacing: NeonSpace.stack) {
-                weekCard(week, jobs: jobs)
+                weekCard(week, jobs: theirs)
                     .neonAppear()
 
                 if !week.team.isEmpty {
@@ -52,11 +57,20 @@ struct WeekBoardView: View {
                         .padding(.horizontal, -NeonSpace.gutter)
                 }
 
+                // The numbers are this week's: the board shows one week at a time.
+                if !theirs.isEmpty {
+                    TaskFilterBar(selection: $filter, options: TaskFilter.week, counts: TaskFilter.counts(theirs.map { standing($0, week) }))
+                }
+
                 VStack(spacing: NeonSpace.stack) {
                     ForEach(Array(week.weekKeys.enumerated()), id: \.element) { index, day in
-                        dayCard(day, week: week, jobs: jobs.filter { $0.startKey <= day && day <= $0.endKey })
-                            .id("day-\(day)")
-                            .staggered(index)
+                        dayCard(
+                            day, week: week,
+                            jobs: jobs.filter { $0.startKey <= day && day <= $0.endKey },
+                            hidden: theirs.contains { $0.startKey <= day && day <= $0.endKey }
+                        )
+                        .id("day-\(day)")
+                        .staggered(index)
                     }
                 }
                 .id("days")
@@ -65,6 +79,7 @@ struct WeekBoardView: View {
             // sits on the last row's state.
             .padding(.bottom, NeonSize.fab + NeonSpace.xl)
             .animation(NeonMotion.smooth, value: person)
+            .animation(NeonMotion.smooth, value: filter)
         }
         .confirmDestructive(
             item: $deleting, title: { L("Delete \"%@\"?", $0.title) }, message: { _ in L("It comes off the week for good.") }, actionTitle: L("Delete")
@@ -84,6 +99,12 @@ struct WeekBoardView: View {
         } message: { _ in
             Text(L("Completed is your approval. It counts in the on-time and first-time figures straight away."))
         }
+    }
+
+    /// Where a job stands, as the filters read it: late once its last day
+    /// has gone without it being approved.
+    private func standing(_ job: AssignedJob, _ week: WeekBoardResponse) -> TaskStanding {
+        TaskStanding(state: job.state, dueKey: job.endKey, todayKey: week.todayKey)
     }
 
     // MARK: - The week
@@ -193,7 +214,9 @@ struct WeekBoardView: View {
 
     // MARK: - A day
 
-    private func dayCard(_ day: String, week: WeekBoardResponse, jobs: [AssignedJob]) -> some View {
+    /// `hidden`: the day has jobs the filter is not showing, so it is not
+    /// an empty day — only one with nothing of the kind asked for.
+    private func dayCard(_ day: String, week: WeekBoardResponse, jobs: [AssignedJob], hidden: Bool) -> some View {
         let parts = tasksDayParts(day)
         let today = day == week.todayKey
         let past = day < week.todayKey
@@ -236,14 +259,14 @@ struct WeekBoardView: View {
                                 .background(Capsule().fill(NeonHue.indigo.wash))
                         }
                     }
-                    Text(jobs.isEmpty ? L("Nothing planned") : (jobs.count == 1 ? L("1 job") : L("%d jobs", jobs.count)))
+                    Text(jobs.isEmpty ? (hidden ? L("Nothing like that") : L("Nothing planned")) : (jobs.count == 1 ? L("1 job") : L("%d jobs", jobs.count)))
                         .font(.neonSubtitle)
                         .foregroundStyle(jobs.isEmpty ? Color.neonTextTertiary : Color.neonTextSecondary)
                 }
                 Spacer(minLength: 8)
                 // One way to add for a day with work already (the floating
                 // "New job"); an empty day offers its own, quietly.
-                if jobs.isEmpty {
+                if jobs.isEmpty, !hidden {
                     NeonButton(L("Add a job"), symbol: "plus", kind: .ghost, size: .small) {
                         editing = .new(day: day)
                     }
@@ -298,9 +321,14 @@ struct WeekBoardView: View {
                 VStack(alignment: .trailing, spacing: 5) {
                     StateBadge(state: job.state)
                     HStack(spacing: 5) {
+                        if standing(job, week).late {
+                            Image(systemName: "clock.badge.exclamationmark.fill")
+                                .foregroundStyle(Color.neonDangerStrong)
+                                .accessibilityLabel(L("Late"))
+                        }
                         if job.priority == "HIGH" {
                             Image(systemName: "flame.fill")
-                                .foregroundStyle(Color.neonPinkStrong)
+                                .foregroundStyle(TaskPriorityLook.red)
                                 .accessibilityLabel(L("High"))
                         }
                         if job.chatTaskId?.isEmpty == false {
@@ -318,6 +346,8 @@ struct WeekBoardView: View {
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 14)
+            // The whole row wears its priority, until the job is done.
+            .taskPriorityWash(job.priority, state: job.state, inset: 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressableCard)

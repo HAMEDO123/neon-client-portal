@@ -534,7 +534,7 @@ final class APIClient: ObservableObject {
     }
 
     func fetchTasks(filter: TaskFilter) async throws -> Loaded<TasksResponse> {
-        try await load("tasks", query: [URLQueryItem(name: "filter", value: filter.rawValue)], as: TasksResponse.self)
+        try await load("tasks", query: [URLQueryItem(name: "filter", value: filter.olderWord)], as: TasksResponse.self)
     }
 
     func fetchTask(id: String) async throws -> Loaded<StaffTask> {

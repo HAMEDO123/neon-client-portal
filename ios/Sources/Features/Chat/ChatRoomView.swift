@@ -45,6 +45,8 @@ struct ChatRoomView: View {
     @State private var face: ChatFacePayload?
     @State private var afterFace: (() -> Void)?
     @State private var proofFor: ProofTarget?
+    /// The task a question is about, opened from its quote.
+    @State private var aboutTask: ChatAboutTask?
     @State private var showTaskCompose = false
     @State private var showMeetingCompose = false
     @State private var showAssistant = false
@@ -170,6 +172,13 @@ struct ChatRoomView: View {
         }
         .onChange(of: draft) { value in store.draftChanged(value) }
         .fullScreenCover(item: $viewer) { ImageViewerView(payload: $0).neonLanguage() }
+        .navigationDestination(isPresented: Binding(get: { aboutTask != nil }, set: { if !$0 { aboutTask = nil } })) {
+            switch aboutTask {
+            case .board(let id): TaskDetailView(taskId: id)
+            case .assigned(let id): JobDetailView(jobId: id)
+            case nil: EmptyView()
+            }
+        }
         .sheet(item: $proofFor) { target in
             ProofSheet(targetId: target.id, title: target.title, subtitle: target.detail) {
                 Task { await store.load() }
@@ -637,7 +646,8 @@ struct ChatRoomView: View {
                 onCardChanged: { Task { await store.load() } },
                 onMediaResize: { keepBottom(proxy) },
                 openVideo: { openVideo(message) },
-                openFace: { openFace($0) }
+                openFace: { openFace($0) },
+                openAbout: aboutTask(of: message, mine: mine).map { task in { aboutTask = task } }
             )
             .transition(.neonRise)
         case .album(let photos, let showAuthor):
@@ -712,6 +722,18 @@ struct ChatRoomView: View {
 
     private func react(_ message: ChatMessage, _ emoji: String) {
         Task { try? await api.toggleChatReaction(messageId: message.id, emoji: emoji) }
+    }
+
+    /// Where a quoted task opens, or nil when there is nowhere this reader
+    /// can go (`aboutTaskUrl`). Somebody on the team opens the task's own
+    /// page — but only whoever asked, because a task's page is its owner's
+    /// alone and in the company's group everybody else sees the quote. The
+    /// manager's week is not opened from here yet: the quote is a label.
+    private func aboutTask(of message: ChatMessage, mine: Bool) -> ChatAboutTask? {
+        guard mine, api.identity?.side == .employee else { return nil }
+        if let id = message.aboutAssignedTaskId, !id.isEmpty { return .assigned(id) }
+        if let id = message.aboutEntryId, !id.isEmpty { return .board(id) }
+        return nil
     }
 
     /// The full-screen viewer, able to swipe through every photo in the
@@ -814,6 +836,13 @@ struct ChatRoomView: View {
         store.sendVoice(file, seconds: seconds, project: taggedProject)
         Haptic.success()
     }
+}
+
+/// The task a question is about: a step on a project's board, or a job
+/// handed out by hand.
+enum ChatAboutTask: Equatable {
+    case board(String)
+    case assigned(String)
 }
 
 // MARK: - Where the reader is

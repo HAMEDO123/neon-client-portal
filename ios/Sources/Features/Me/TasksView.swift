@@ -1,19 +1,30 @@
 import PhotosUI
 import SwiftUI
 
-/// Everything on this person's plate, from `/tasks` — whose work it is is
-/// decided on the server by `ownedBy`, and this list only mirrors it.
+/// Everything on this person's plate — whose work it is is decided on the
+/// server by `ownedBy`, and this list only mirrors it.
+///
+/// Read once, whole (`me/tasks/mine`), and narrowed here: each button says
+/// how many it holds, and a count needs the tasks the list is not showing.
+/// The rules are the website's (TaskListFilter.swift), so the numbers match.
 struct TasksView: View {
     @EnvironmentObject var api: APIClient
     @State private var filter: TaskFilter = .open
-    @State private var tasks: [StaffTask]?
-    @State private var jobs: [MyAssignedJob]?
+    @State private var mine: MyTasksResponse?
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
-    /// Which filter the list on screen was read for.
-    @State private var shownFilter: TaskFilter?
     @StateObject private var cards = ChatCardsLoader()
     @State private var proofFor: ProofTarget?
+    #if DEBUG
+    /// The debug router's fixture: drawn from a fixed answer, reading nothing.
+    private var isPreview = false
+
+    init(preview: MyTasksResponse? = nil, filter: TaskFilter = .open) {
+        _mine = State(initialValue: preview)
+        _filter = State(initialValue: filter)
+        isPreview = preview != nil
+    }
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -24,34 +35,35 @@ struct TasksView: View {
                     AccountMenu()
                 }
 
-                PillFilterBar(selection: $filter, options: TaskFilter.allCases, title: { $0.label })
-
                 if let cachedAt { OfflineBanner(savedAt: cachedAt) }
 
-                if let tasks {
-                    SectionCard(L("On the project board"), subtitle: boardSubtitle, symbol: "square.stack.3d.up.fill", hue: .blue) {
-                        if tasks.isEmpty {
-                            EmptyState(
-                                symbol: "checklist",
-                                title: filter == .completed ? L("No approved work yet") : L("Nothing on your list"),
-                                detail: filter == .open ? L("Work the manager puts on the board for you appears here.") : nil,
-                                hue: .blue
-                            )
-                        } else {
+                if let mine {
+                    TaskFilterBar(selection: $filter, options: TaskFilter.mine, counts: counts(mine), mine: true)
+
+                    let board = boardTasks(mine)
+                    let jobs = handedJobs(mine)
+                    let fromChat = MyChatJobsSection.parts(cards: cards, viewer: api.identity, filter: filter, standing: standing(mine))
+
+                    if board.isEmpty && jobs.isEmpty && fromChat.isEmpty {
+                        EmptyState(symbol: "checklist", title: emptyTitle, detail: emptyDetail, hue: .blue, card: true)
+                    }
+
+                    if !board.isEmpty {
+                        SectionCard(L("On the project board"), subtitle: L("%d on the board", board.count), symbol: "square.stack.3d.up.fill", hue: .blue) {
                             VStack(spacing: NeonSpace.sm) {
-                                ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                                ForEach(Array(board.enumerated()), id: \.element.id) { index, task in
                                     NavigationLink(value: TaskRoute(id: task.id)) {
                                         TodayTaskRow(task: task)
                                     }
                                     .buttonStyle(.pressableCard)
                                     .staggered(index)
-                                    if task.id != tasks.last?.id { NeonDivider() }
+                                    if task.id != board.last?.id { NeonDivider() }
                                 }
                             }
                         }
                     }
 
-                    if let jobs, !jobs.isEmpty {
+                    if !jobs.isEmpty {
                         SectionCard(L("Handed to you"), subtitle: L("%d handed to you directly", jobs.count), symbol: "shippingbox.fill", hue: .purple) {
                             VStack(spacing: NeonSpace.sm) {
                                 ForEach(Array(jobs.enumerated()), id: \.element.id) { index, job in
@@ -66,7 +78,7 @@ struct TasksView: View {
                         }
                     }
 
-                    MyChatJobsSection(filter: filter, cards: cards, viewer: api.identity) { part, card in
+                    MyChatJobsSection(parts: fromChat) { part, card in
                         proofFor = ProofTarget(id: part.id, title: card.title, detail: card.description)
                     }
                 } else if let errorMessage {
@@ -90,42 +102,103 @@ struct TasksView: View {
             .navigationDestination(for: ChatRoute.self) { ChatRoomView(route: $0) }
             .neonAmbientBackground()
         }
-        // Runs again each time the tab comes back into view. It used to empty
-        // the list first, so every return to Tasks showed the skeleton and
-        // put the page back at its top; now only another filter starts the
-        // list over, and coming back reads it again in place.
-        .task(id: filter) {
-            if shownFilter != filter {
-                tasks = nil
-                jobs = nil
-            }
-            await load()
-        }
+        // Runs again each time the tab comes back into view, and reads the
+        // list again in place: what is on screen stays, where it was.
+        .task { await load() }
         .task { await cards.load(api) }
         .sheet(item: $proofFor) { target in
             ProofSheet(targetId: target.id, title: target.title, subtitle: target.detail) {
-                Task { await cards.load(api) }
+                Task {
+                    await load()
+                    await cards.load(api)
+                }
             }
         }
     }
 
-    private var boardSubtitle: String {
-        guard let tasks else { return "" }
-        return L("%d on the board", tasks.count)
+    // MARK: Narrowing
+
+    /// Everything the buttons count: the board's steps and the jobs handed
+    /// out by hand, as the website counts them. (A task card from a chat is
+    /// one of those jobs, so it is already in the number.)
+    private func counts(_ mine: MyTasksResponse) -> [TaskFilter: Int] {
+        TaskFilter.counts(
+            mine.tasks.map { TaskStanding(state: $0.state, late: $0.late ?? false) }
+                + mine.jobs.map { TaskStanding(state: $0.state, late: $0.late ?? false) }
+        )
+    }
+
+    /// Soonest due first, then the higher priority — the website's order.
+    /// Work with no date at all sorts after everything that has one.
+    private func boardTasks(_ mine: MyTasksResponse) -> [StaffTask] {
+        mine.tasks
+            .filter { filter.matches(TaskStanding(state: $0.state, late: $0.late ?? false)) }
+            .sorted { Self.before(($0.dueKey, $0.priority), ($1.dueKey, $1.priority)) }
+    }
+
+    private func handedJobs(_ mine: MyTasksResponse) -> [MyAssignedJob] {
+        mine.jobs
+            .filter { filter.matches(TaskStanding(state: $0.state, late: $0.late ?? false)) }
+            .sorted { Self.before(($0.endKey, $0.priority), ($1.endKey, $1.priority)) }
+    }
+
+    /// Where a job stands, by its id — for a chat's task card, whose part is
+    /// one of these jobs.
+    private func standing(_ mine: MyTasksResponse) -> [String: TaskStanding] {
+        Dictionary(mine.jobs.map { ($0.id, TaskStanding(state: $0.state, late: $0.late ?? false)) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private static func before(_ a: (due: String?, priority: String?), _ b: (due: String?, priority: String?)) -> Bool {
+        let noDate = "9999-12-31"
+        let (dueA, dueB) = (a.due ?? noDate, b.due ?? noDate)
+        if dueA != dueB { return dueA < dueB }
+        return rank(a.priority) < rank(b.priority)
+    }
+
+    private static func rank(_ priority: String?) -> Int {
+        switch priority {
+        case "HIGH": return 0
+        case "LOW": return 2
+        default: return 1
+        }
+    }
+
+    // What an empty list says, which depends on what was asked for. Not "no
+    // tasks assigned" under Open: somebody whose work is all with the manager
+    // has plenty assigned, and none of it is theirs to do right now.
+    private var emptyTitle: String {
+        switch filter {
+        case .open: return L("Nothing to do right now")
+        case .all: return L("No tasks assigned")
+        case .progress: return L("Nothing in progress")
+        case .review: return L("Nothing waiting for review")
+        case .late: return L("Nothing is late")
+        case .done: return L("Nothing completed yet")
+        }
+    }
+
+    private var emptyDetail: String {
+        switch filter {
+        case .open: return L("Work you have sent in is under Sent for review. New work appears here and you get a notification.")
+        case .all: return L("Work the manager gives you appears here and you get a notification.")
+        case .progress: return L("Start a task and it is listed here.")
+        case .review: return L("Work you send in stays here until the manager has looked at it.")
+        case .late: return L("Work that passes its day without being approved shows here.")
+        case .done: return L("Tasks you finish will be listed here.")
+        }
     }
 
     private func load() async {
-        async let tasksLoad = api.fetchTasks(filter: filter)
-        async let jobsLoad = api.fetchJobs(filter: filter)
+        #if DEBUG
+        if isPreview { return }
+        #endif
         do {
-            let (loadedTasks, loadedJobs) = try await (tasksLoad, jobsLoad)
-            tasks = loadedTasks.value.tasks
-            jobs = loadedJobs.value
-            shownFilter = filter
-            cachedAt = loadedTasks.cachedAt
+            let loaded = try await api.fetchMyTasks()
+            mine = loaded.value
+            cachedAt = loaded.cachedAt
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            if mine == nil { errorMessage = error.localizedDescription }
         }
     }
 }
@@ -161,6 +234,7 @@ struct TaskDetailView: View {
                     }
                     actions(task)
                     detail(task)
+                    AskAboutTaskCard(kind: "board", id: task.id, isOffline: cachedAt != nil)
                 } else if let errorMessage {
                     ErrorState(message: errorMessage) { await load() }
                 } else {

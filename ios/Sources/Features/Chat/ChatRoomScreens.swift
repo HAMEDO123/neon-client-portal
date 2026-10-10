@@ -25,12 +25,13 @@ import UIKit
 /// - chat-face-viewer-initials: a person with no photo — their initials on their colour
 /// - chat-face-viewer-group: a group the manager made, with its Group info button
 /// - chat-face-viewer-team: the team's conversation — the studio's mark
+/// - chat-task-quote: questions about a task, each drawn with its quote
 enum ChatRoomScreens {
     static let ids: [String] = [
         "chat-room-team", "chat-room-direct", "chat-room-group", "chat-room-search", "chat-room-cards",
         "chat-meetings", "chat-task-compose", "chat-meeting-compose", "chat-assistant",
         "chat-media", "chat-media-fast", "chat-video-player", "chat-face-viewer", "chat-face-viewer-initials",
-        "chat-face-viewer-group", "chat-face-viewer-team",
+        "chat-face-viewer-group", "chat-face-viewer-team", "chat-task-quote",
     ]
 
     private static let team = ChatRoute(slug: "team", title: "NEON Team", subtitle: nil, avatar: nil, isGroup: true)
@@ -59,6 +60,8 @@ enum ChatRoomScreens {
             return AnyView(ChatMeetingComposeSheet(conversationSlug: "team"))
         case "chat-assistant":
             return AnyView(ChatAssistantSheet())
+        case "chat-task-quote":
+            return AnyView(ChatTaskQuoteFixture())
         case "chat-media":
             return AnyView(ChatMediaFixtureRoom())
         case "chat-media-fast":
@@ -545,6 +548,65 @@ private struct ChatMediaFixtureRoom: View {
             task: nil,
             call: nil,
             meeting: nil
+        )
+    }
+}
+/// Questions about a task as a conversation draws them: somebody's, with
+/// the task quoted above what they asked; my own, whose quote opens the task;
+/// and one that is the quote alone.
+private struct ChatTaskQuoteFixture: View {
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 2) {
+                ChatDaySeparator(iso: ChatMediaFixtures.iso(minutesAgo: 30))
+                row(question("fx-q1", from: "fx-sally", "Sally Haddad", minutesAgo: 30, title: "تجهيز عينات الرخام للعميل",
+                             text: "هل أرسل العينات اليوم أم أنتظر موافقة العميل؟"), mine: false, opens: false)
+                row(question("fx-q2", from: nil, nil, minutesAgo: 22, title: "Working drawings · Villa Al Fulan",
+                             text: "Which revision of the plan should the sections follow?"), mine: true, opens: true)
+                row(question("fx-q3", from: "fx-omar", "Omar Khalil", minutesAgo: 9, title: "Order the kitchen handles", text: nil),
+                    mine: false, opens: false)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+        }
+        .background { ChatRoomWallpaper().ignoresSafeArea() }
+        .environment(\.chatRoomPalette, ChatRoomPalette(people: [
+            ChatPerson(id: "fx-sally", name: "Sally Haddad", role: nil, color: "pink", avatar: nil),
+            ChatPerson(id: "fx-omar", name: "Omar Khalil", role: nil, color: "cyan", avatar: nil),
+        ]))
+    }
+
+    private func row(_ message: ChatMessage, mine: Bool, opens: Bool) -> some View {
+        ChatMessageRow(
+            message: message, mine: mine, showAuthor: true, tail: true, delivery: mine ? .read : nil,
+            viewerIdentity: nil, tallies: [], isPinned: false, callSlug: "fixture", inGroup: true,
+            openImage: {}, sendProof: { _, _ in }, onReact: { _ in }, onPin: { _ in }, onDelete: nil, onCardChanged: {},
+            openAbout: opens ? {} : nil
+        )
+    }
+
+    private func question(_ id: String, from employee: String?, _ name: String?, minutesAgo: Double, title: String, text: String?) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            authorType: employee == nil ? "ADMIN" : "EMPLOYEE",
+            authorId: employee,
+            authorName: name ?? "Manager",
+            kind: "TEXT",
+            body: text.map { "📋 \(title)\n\($0)" } ?? "📋 \(title)",
+            attachmentUrl: nil,
+            attachmentName: nil,
+            attachmentType: nil,
+            attachmentSize: nil,
+            durationSeconds: nil,
+            managerOnly: nil,
+            createdAt: ChatMediaFixtures.iso(minutesAgo: minutesAgo),
+            project: nil,
+            task: nil,
+            call: nil,
+            meeting: nil,
+            aboutAssignedTaskId: "fx-job",
+            aboutEntryId: nil,
+            aboutTitle: title
         )
     }
 }

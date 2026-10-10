@@ -74,18 +74,6 @@ struct WorkHours: Decodable {
 
 // MARK: - /tasks
 
-enum TaskFilter: String, CaseIterable, Identifiable {
-    case open, completed, all
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .open: return L("Open")
-        case .completed: return L("Completed")
-        case .all: return L("All")
-        }
-    }
-}
-
 struct TasksResponse: Decodable {
     let tasks: [StaffTask]
 }
@@ -113,6 +101,11 @@ struct StaffTask: Decodable, Identifiable {
     let waitsFor: [Dependency]?
     let task: Step
     let project: ProjectRef
+    /// From `me/tasks/mine`: the day the list sorts it by, and whether the
+    /// day its countdown runs to has gone without it being approved. Absent
+    /// from the older reads (`/tasks`, `/tasks/<id>`).
+    var dueKey: String? = nil
+    var late: Bool? = nil
 
     struct Person: Decodable { let id: String; let name: String }
 

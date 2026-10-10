@@ -5,27 +5,42 @@ import SwiftUI
 /// Jobs handed to this person on a chat task card — their own part of each,
 /// with "Send proof" while it is still theirs to do.
 struct MyChatJobsSection: View {
-    let filter: TaskFilter
-    @ObservedObject var cards: ChatCardsLoader
-    let viewer: Identity?
+    /// One card and this person's part of it.
+    struct Part: Identifiable {
+        let item: ChatCardsLoader.Item
+        let card: TaskCard
+        let part: TaskCard.Assignment
+        var id: String { item.id }
+    }
+
+    let mine: [Part]
     let sendProof: (TaskCard.Assignment, TaskCard) -> Void
 
-    var body: some View {
-        let mine = cards.tasks.compactMap { item -> (ChatCardsLoader.Item, TaskCard, TaskCard.Assignment)? in
+    init(parts: [Part], sendProof: @escaping (TaskCard.Assignment, TaskCard) -> Void) {
+        self.mine = parts
+        self.sendProof = sendProof
+    }
+
+    /// This person's parts that the filter shows. A part is one of their
+    /// jobs, so where it stands is that job's own answer (`standing`, by the
+    /// job's id) — the same one its row in "Handed to you" is placed by; a
+    /// part with no job listed is placed by its state and is never late.
+    @MainActor
+    static func parts(cards: ChatCardsLoader, viewer: Identity?, filter: TaskFilter, standing: [String: TaskStanding]) -> [Part] {
+        cards.tasks.compactMap { item -> Part? in
             guard let card = item.message.task,
                   let part = card.assignments.first(where: { $0.employeeId == viewer?.id }) else { return nil }
-            switch filter {
-            case .open: return part.state == "DONE" ? nil : (item, card, part)
-            case .completed: return part.state == "DONE" ? (item, card, part) : nil
-            case .all: return (item, card, part)
-            }
+            let stands = standing[part.id] ?? TaskStanding(state: part.state, late: false)
+            return filter.matches(stands) ? Part(item: item, card: card, part: part) : nil
         }
+    }
 
+    var body: some View {
         if !mine.isEmpty {
             SectionCard(L("Handed out in chat"), subtitle: L("%d task card(s)", mine.count), symbol: "bubble.left.and.text.bubble.right.fill", hue: .cyan) {
                 VStack(spacing: NeonSpace.sm) {
-                    ForEach(Array(mine.enumerated()), id: \.element.0.id) { index, entry in
-                        let (item, card, part) = entry
+                    ForEach(Array(mine.enumerated()), id: \.element.id) { index, entry in
+                        let (item, card, part) = (entry.item, entry.card, entry.part)
                         VStack(alignment: .leading, spacing: 8) {
                             NavigationLink(value: ChatRoute(item.conversation)) {
                                 VStack(alignment: .leading, spacing: 6) {
@@ -59,7 +74,7 @@ struct MyChatJobsSection: View {
                             }
                         }
                         .staggered(index)
-                        if item.id != mine.last?.0.id { NeonDivider() }
+                        if item.id != mine.last?.id { NeonDivider() }
                     }
                 }
             }
