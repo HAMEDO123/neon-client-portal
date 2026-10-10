@@ -34,9 +34,11 @@ const FILTERS: { key: TaskFilter; label: string }[] = [
 
 // What an empty list says, which depends on what was asked for.
 const EMPTY: Record<TaskFilter, { title: string; description: string }> = {
+  // Not "no tasks assigned": somebody whose work is all with the manager has
+  // plenty assigned, and none of it is theirs to do right now.
   open: {
-    title: "No tasks assigned",
-    description: "When an admin assigns you work, it appears here and you get a notification.",
+    title: "Nothing to do right now",
+    description: "Work you have sent in is under Sent for review. New work appears here and you get a notification.",
   },
   all: {
     title: "No tasks assigned",

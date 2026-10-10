@@ -41,12 +41,19 @@ export function isLate(state: State, dueDayKey: string | null | undefined, today
   return dueDayKey < todayKey;
 }
 
+/**
+ * "Open" is what is still this person's to do. Work sent for review has left
+ * their hands — it is the manager's move now — so it is not open, and the
+ * studio asked for it out of that list: it has a button of its own. It comes
+ * back by itself if the manager sends it back, because that returns it to in
+ * progress.
+ */
 export function matchesFilter(item: Filterable, filter: TaskFilter) {
   switch (filter) {
     case "all":
       return true;
     case "open":
-      return item.state !== "DONE";
+      return item.state !== "DONE" && item.state !== "SUBMITTED";
     case "progress":
       return item.state === "IN_PROGRESS";
     case "review":

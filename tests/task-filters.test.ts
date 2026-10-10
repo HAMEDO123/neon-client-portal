@@ -52,11 +52,24 @@ describe("the filters", () => {
   it("each show one kind of work", () => {
     const shown = (filter: (typeof TASK_FILTERS)[number]) => items.filter((item) => matchesFilter(item, filter)).length;
     assert.equal(shown("all"), 9);
-    assert.equal(shown("open"), 7);
+    assert.equal(shown("open"), 5);
     assert.equal(shown("progress"), 2);
     assert.equal(shown("review"), 2);
     assert.equal(shown("late"), 3);
     assert.equal(shown("done"), 2);
+  });
+
+  // Sent for review is the manager's move, not this person's: the studio asked
+  // for it out of the open list. Late or not, it is under its own button.
+  it("leave work that is with the manager out of what is open", () => {
+    assert.equal(matchesFilter({ state: "SUBMITTED", late: false }, "open"), false);
+    assert.equal(matchesFilter({ state: "SUBMITTED", late: true }, "open"), false);
+    assert.equal(matchesFilter({ state: "SUBMITTED", late: true }, "review"), true);
+    assert.equal(matchesFilter({ state: "DONE", late: false }, "open"), false);
+    // Sent back by the manager is in progress again, and so open again.
+    for (const state of ["TODO", "IN_PROGRESS", "TOMORROW"] as const) {
+      assert.equal(matchesFilter({ state, late: false }, "open"), true, state);
+    }
   });
 
   // The number on a button and the list under it are worked out separately on
