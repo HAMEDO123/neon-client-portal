@@ -5,6 +5,7 @@ import path from "path";
 import { Readable } from "stream";
 import { prisma } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
+import { clientDocuments } from "@/lib/pricing-files";
 
 async function getFileBuffer(url: string): Promise<Buffer> {
   if (url.startsWith("/")) {
@@ -52,7 +53,8 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
         // skip
       }
     }
-    for (const doc of project.documents) {
+    // Without the pricing files while pricing is hidden (lib/pricing-files.ts).
+    for (const doc of clientDocuments(project)) {
       try {
         const buffer = await getFileBuffer(doc.fileUrl);
         archive.append(buffer, { name: `Documents/${sanitize(doc.category)}/${sanitize(doc.title)}.${doc.fileType}` });

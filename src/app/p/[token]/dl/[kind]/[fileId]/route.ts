@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
+import { clientMaySee } from "@/lib/pricing-files";
 
 export async function GET(request: Request, context: { params: Promise<{ token: string; kind: string; fileId: string }> }) {
   const { token, kind, fileId } = await context.params;
@@ -18,7 +19,9 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
     fileUrl = drawing?.fileUrl ?? null;
     label = drawing?.name ?? null;
   } else if (kind === "document") {
-    const doc = await prisma.document.findFirst({ where: { id: fileId, projectId: project.id } });
+    const found = await prisma.document.findFirst({ where: { id: fileId, projectId: project.id } });
+    // A pricing file is not the client's to download while pricing is hidden.
+    const doc = found && clientMaySee(found, project) ? found : null;
     fileUrl = doc?.fileUrl ?? null;
     label = doc?.title ?? null;
   } else if (kind === "image") {

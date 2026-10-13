@@ -5,6 +5,8 @@ import { SectionShell } from "@/components/client/section-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/client-i18n";
+import { DocumentRows } from "@/components/client/document-rows";
+import type { FullProject } from "@/lib/queries";
 
 export interface PricingRow {
   id: string;
@@ -17,7 +19,20 @@ export interface PricingRow {
 
 const BAR_COLORS = ["bg-cyan-strong", "bg-purple-strong", "bg-pink-strong", "bg-orange-strong"];
 
-export function PricingSection({ items, showDetailed }: { items: PricingRow[]; showDetailed: boolean }) {
+export function PricingSection({
+  items,
+  showDetailed,
+  files = [],
+  allowDownloads = false,
+  token = "",
+}: {
+  items: PricingRow[];
+  showDetailed: boolean;
+  /** The price as a file — documents filed under "Pricing" (lib/pricing-files.ts). */
+  files?: FullProject["documents"];
+  allowDownloads?: boolean;
+  token?: string;
+}) {
   const { t } = useI18n();
   const required = items.filter((i) => !i.isOptional);
   const optional = items.filter((i) => i.isOptional);
@@ -28,6 +43,14 @@ export function PricingSection({ items, showDetailed }: { items: PricingRow[]; s
     <SectionShell id="pricing">
       <SectionHeader eyebrow={t("Approve")} title={t("Execution Proposal")} description={t("A transparent breakdown of the investment required to bring this project to life.")} />
 
+      {/* The quotation itself comes first: where there is one, it is what the
+          client came to this section for. */}
+      {files.length > 0 && (
+        <DocumentRows className="mt-8" documents={files} allowDownloads={allowDownloads} token={token} showCategory={false} />
+      )}
+
+      {/* A project priced by a file alone has no breakdown and no total to draw. */}
+      {items.length > 0 && (
       <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-5">
         <div className="lg:col-span-3">
           {showDetailed ? (
@@ -78,6 +101,7 @@ export function PricingSection({ items, showDetailed }: { items: PricingRow[]; s
           </div>
         </div>
       </div>
+      )}
     </SectionShell>
   );
 }

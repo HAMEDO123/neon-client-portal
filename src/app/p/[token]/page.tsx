@@ -12,6 +12,7 @@ import { MaterialsSection } from "@/components/client/materials-section";
 import { FurnitureSection } from "@/components/client/furniture-section";
 import { BoqSection } from "@/components/client/boq-section";
 import { boqFilesOf, hasBoq } from "@/lib/boq-files";
+import { clientDocuments, hasPricing, pricingFilesOf } from "@/lib/pricing-files";
 import { PricingSection } from "@/components/client/pricing-section";
 import { DocumentsSection } from "@/components/client/documents-section";
 import { ApprovalsSection } from "@/components/client/approvals-section";
@@ -63,14 +64,17 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
   ) {
     navItems.push({ key: "moodboard", label: "Moodboard" });
   }
+  // What the client is handed as documents: everything, minus a pricing file
+  // while pricing is hidden (lib/pricing-files.ts).
+  const documents = clientDocuments(project);
   if (project.spaces.some((s) => s.images.length > 0)) navItems.push({ key: "gallery", label: "Gallery" });
   if (project.drawings.length > 0) navItems.push({ key: "drawings", label: "Drawings" });
   if (project.materials.length > 0) navItems.push({ key: "materials", label: "Materials" });
   if (project.furniture.length > 0) navItems.push({ key: "furniture", label: "Furniture" });
   // Items, a file, or both: a BOQ added as a spreadsheet is still a BOQ.
   if (hasBoq(project)) navItems.push({ key: "boq", label: "BOQ" });
-  if (project.showPricing && project.pricingItems.length > 0) navItems.push({ key: "pricing", label: "Pricing" });
-  if (project.documents.length > 0) navItems.push({ key: "documents", label: "Documents" });
+  if (hasPricing(project)) navItems.push({ key: "pricing", label: "Pricing" });
+  if (documents.length > 0) navItems.push({ key: "documents", label: "Documents" });
   if (project.approvals.length > 0) navItems.push({ key: "approvals", label: "Approvals" });
   navItems.push({ key: "feedback", label: "Feedback" });
   navItems.push({ key: "handover", label: "Handover" });
@@ -84,8 +88,8 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
     { label: "Bill of Quantities", done: hasBoq(project) },
     { label: "Material Schedule", done: project.materials.length > 0 },
     { label: "Furniture Schedule", done: project.furniture.length > 0 },
-    { label: "Execution Proposal", done: project.showPricing && project.pricingItems.length > 0 },
-    { label: "Specifications & Documents", done: project.documents.length > 0 },
+    { label: "Execution Proposal", done: hasPricing(project) },
+    { label: "Specifications & Documents", done: documents.length > 0 },
   ];
 
   return (
@@ -158,12 +162,18 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
         />
       )}
 
-      {project.showPricing && project.pricingItems.length > 0 && (
-        <PricingSection items={project.pricingItems} showDetailed={project.showDetailedPricing} />
+      {hasPricing(project) && (
+        <PricingSection
+          items={project.pricingItems}
+          showDetailed={project.showDetailedPricing}
+          files={pricingFilesOf(project.documents)}
+          allowDownloads={project.allowDownloads}
+          token={project.token}
+        />
       )}
 
-      {project.documents.length > 0 && (
-        <DocumentsSection documents={project.documents} allowDownloads={project.allowDownloads} token={project.token} />
+      {documents.length > 0 && (
+        <DocumentsSection documents={documents} allowDownloads={project.allowDownloads} token={project.token} />
       )}
 
       {project.approvals.length > 0 && <ApprovalsSection token={project.token} approvals={project.approvals} />}

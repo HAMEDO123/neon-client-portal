@@ -1,4 +1,5 @@
 import type { FullProject } from "@/lib/queries";
+import { clientDocuments } from "@/lib/pricing-files";
 
 // The project as a client's app is allowed to see it.
 //
@@ -84,7 +85,8 @@ export function clientPayload(project: FullProject) {
       revisionCount: drawing.revisions.length,
     })),
 
-    documents: project.documents.map((document) => ({
+    // A pricing file is left out while pricing is hidden (lib/pricing-files.ts).
+    documents: clientDocuments(project).map((document) => ({
       id: document.id,
       category: document.category,
       title: document.title,

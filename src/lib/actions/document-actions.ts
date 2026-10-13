@@ -11,6 +11,8 @@ function refresh(projectId: string) {
   // A document filed under "BOQ" is a BOQ file, and the BOQ tab lists those
   // (lib/boq-files.ts) — so adding or removing one here changes that screen too.
   refreshProject(projectId, { tab: "boq" });
+  // And the Pricing tab's: a document filed under "Pricing" is its file.
+  refreshProject(projectId, { tab: "pricing" });
 }
 
 export async function createDocument(projectId: string, formData: FormData) {

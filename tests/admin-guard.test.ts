@@ -47,7 +47,8 @@ const EXPECTED: Record<string, { admin: number; staff: number }> = {
   "document-actions.ts": { admin: 0, staff: 2 },
   // Two for the items and two for the BOQ as a file (lib/boq-files.ts).
   "boq-actions.ts": { admin: 0, staff: 4 },
-  "pricing-actions.ts": { admin: 0, staff: 2 },
+  // Two for the line items and two for the price as a file (lib/pricing-files.ts).
+  "pricing-actions.ts": { admin: 0, staff: 4 },
   "material-actions.ts": { admin: 0, staff: 2 },
   "furniture-actions.ts": { admin: 0, staff: 2 },
   "hotspot-actions.ts": { admin: 0, staff: 2 },

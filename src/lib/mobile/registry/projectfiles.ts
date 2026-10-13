@@ -9,7 +9,7 @@ import {
 import { createDocument, deleteDocument } from "@/lib/actions/document-actions";
 import { addBoqFile, createBoqItem, deleteBoqFile, deleteBoqItem } from "@/lib/actions/boq-actions";
 import { BOQ_FILE_CATEGORY } from "@/lib/boq-files";
-import { createPricingItem, deletePricingItem } from "@/lib/actions/pricing-actions";
+import { addPricingFile, createPricingItem, deletePricingFile, deletePricingItem } from "@/lib/actions/pricing-actions";
 import { createMaterial, deleteMaterial } from "@/lib/actions/material-actions";
 import { createFurnitureItem, deleteFurnitureItem } from "@/lib/actions/furniture-actions";
 import { createApproval, deleteApproval } from "@/lib/actions/approval-actions";
@@ -240,6 +240,11 @@ export const actions: ActionRegistry = {
   // `files`. Answers with its refusal; `heard` sends the app `{ error }`.
   "projectfiles/addBoqFile": async (input) => heard(await addBoqFile(str(input.args[0], "projectId"), input.form)),
   "projectfiles/deleteBoqFile": (input) => deleteBoqFile(str(input.args[0], "projectId"), str(input.args[1], "id")),
+  // The price as a file (lib/pricing-files.ts): the same shape as a BOQ file —
+  // args [projectId], form `file`, `title?`, `version?`. It is a document
+  // filed under "Pricing", so it comes back with the project's documents.
+  "projectfiles/addPricingFile": async (input) => heard(await addPricingFile(str(input.args[0], "projectId"), input.form)),
+  "projectfiles/deletePricingFile": (input) => deletePricingFile(str(input.args[0], "projectId"), str(input.args[1], "id")),
   "projectfiles/deleteBoqItem": (input) => deleteBoqItem(str(input.args[0], "projectId"), str(input.args[1], "id")),
 
   "projectfiles/createPricingItem": (input) => createPricingItem(str(input.args[0], "projectId"), input.form),
