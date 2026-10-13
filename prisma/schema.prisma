@@ -466,36 +466,38 @@ model ProjectActivity {
 // A member of the NEON team. Owns a slice of the shared delivery process, and
 // gets one column group on the task board.
 model Employee {
-  id     String  @id @default(cuid())
-  name   String
+  routines   RoutineTask[]
+  deductions Deduction[]
+  id         String        @id @default(cuid())
+  name       String
   // Job title shown on the board ("3D Visualizer") — not an access role.
-  role   String?
+  role       String?
   // Accent used for this employee's column group on the board.
-  color  String  @default("cyan")
+  color      String        @default("cyan")
   // Their face. Null for anybody who has not been given one, which is every
   // employee until somebody uploads one — `PersonAvatar` then draws initials
   // on `color` as it always has, so a studio that never uses this looks
   // exactly as it did.
-  photoUrl String?
-  order  Int     @default(0)
+  photoUrl   String?
+  order      Int           @default(0)
   // Doubles as the account status: a disabled employee cannot sign in.
-  active Boolean @default(true)
+  active     Boolean       @default(true)
 
   // Sign-in details. Null until the admin gives this person an account, so
   // people added to the board before employee accounts existed still work.
-  email        String?   @unique
-  passwordHash String?
-  phone        String?
-  employeeCode String?   @unique
+  email            String?   @unique
+  passwordHash     String?
+  phone            String?
+  employeeCode     String?   @unique
   // The user number this person has on the fingerprint device, as the device
   // itself knows them. Null until somebody maps them, and unique so two people
   // can never be tied to one finger — attendance decides pay, and a name match
   // would quietly deduct from the wrong person the first time two names are
   // spelled alike.
-  deviceUserId String?   @unique
+  deviceUserId     String?   @unique
   // Only one access role exists today; the column keeps the check explicit
   // and leaves room for another role later.
-  accessRole   String    @default("EMPLOYEE")
+  accessRole       String    @default("EMPLOYEE")
   // Whether this person may read the company WhatsApp number's conversations
   // in the portal, and answer in them as the studio.
   //
@@ -509,19 +511,19 @@ model Employee {
   //
   // Named for reading because it started there; reading and replying are one
   // permission, and renaming a column is a migration for a word.
-  canReadWhatsApp Boolean @default(true)
+  canReadWhatsApp  Boolean   @default(true)
   // Whether this person may hand work out to the rest of the team: the week
   // board, and ticking a project's steps. Off for everyone by default and
   // granted one person at a time, like the WhatsApp tick above it. It does not
   // make them the manager — creating or deleting a project, editing the shared
   // delivery process, payroll, settings and approving finished work all stay
   // where they were.
-  canAssignTasks  Boolean @default(false)
+  canAssignTasks   Boolean   @default(false)
   // Whether this person keeps the studio's site-visit diary: scheduling a
   // visit, saying afterwards whether they went, and writing up what came of
   // it. Off by default and granted one person at a time, like the two above.
-  canLogSiteVisits Boolean @default(false)
-  lastLoginAt  DateTime?
+  canLogSiteVisits Boolean   @default(false)
+  lastLoginAt      DateTime?
 
   // Payroll. The amount is per pay period: a month for monthly staff, a week
   // for weekly staff, which is what decides the hourly divisor.
@@ -635,8 +637,8 @@ model ProcessTask {
   acceptance    String? @db.Text
   estimateHours Float?
   // What proof to send back, and the checks to run through while doing it.
-  evidence  String? @db.Text
-  checklist String? @db.Text
+  evidence      String? @db.Text
+  checklist     String? @db.Text
 
   // Whether work of this kind may be settled without a person looking. Refused
   // outright when no acceptance criteria are written, however this is set:
@@ -713,8 +715,8 @@ model ProjectTaskEntry {
   notifications Notification[]
   submissions   TaskSubmission[]
   stateChanges  TaskStateChange[]
-  waitsFor      TaskDependency[] @relation("DependentEntry")
-  blocks        TaskDependency[] @relation("BlockingEntry")
+  waitsFor      TaskDependency[]  @relation("DependentEntry")
+  blocks        TaskDependency[]  @relation("BlockingEntry")
   // What was asked about this cell in a chat, from its own page.
   questions     ChatMessage[]
 
@@ -800,7 +802,7 @@ model ScheduledFollowUp {
   day DateTime @db.Date
 
   // Which question: day-start, block-start, block-middle, block-end, day-end.
-  kind String
+  kind       String
   // Which block of that day's plan, and what it points at on the board. All
   // null for a question about the day as a whole.
   blockIndex Int?
@@ -809,7 +811,7 @@ model ScheduledFollowUp {
 
   // The instant it becomes askable, already moved out of lunch and out of the
   // evening by lib/follow-ups.ts before it was written.
-  dueAt  DateTime
+  dueAt   DateTime
   askedAt DateTime?
 
   // Closed without asking: by the time it came due the work was already
@@ -1199,9 +1201,9 @@ model ChatMessage {
   managerOnly Boolean @default(false)
 
   // The card, when this message is a task.
-  task ChatTask?
+  task    ChatTask?
   // The call, when this message is the line a call left behind.
-  call Call?
+  call    Call?
   // The card, when this message is a meeting.
   meeting ChatMeeting?
 
@@ -1473,11 +1475,10 @@ model AttendanceRecord {
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  day        DateTime @db.Date
-  delayHours Float    @default(0)
+  day        DateTime  @db.Date
+  delayHours Float     @default(0)
   /**
    * When they clocked in, as the device saw it.
-   *
    * Kept as a moment rather than only inside `note`, because a manager
    * checking a disputed deduction wants the time, and a sentence is not
    * something a screen can sort, compare or format in the studio's own clock.
@@ -1487,7 +1488,6 @@ model AttendanceRecord {
   arrivedAt  DateTime?
   /**
    * When they clocked out, where the device saw them do it.
-   *
    * Null means nobody clocked out — one read that day, or a second so soon
    * after the first that it is a repeated scan on the way in. The device
    * cannot tell that from a short day, so the platform says nothing rather
@@ -1501,10 +1501,10 @@ model AttendanceRecord {
    * earns nothing, and a negative number here would pay overtime through
    * payroll's multiplication.
    */
-  earlyHours Float    @default(0)
+  earlyHours Float     @default(0)
   note       String?
   // MANUAL for now; DEVICE once the attendance machine feeds this table.
-  source     String   @default("MANUAL")
+  source     String    @default("MANUAL")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -1627,6 +1627,72 @@ model SalaryAdjustment {
   @@index([periodKey])
 }
 
+// Something one person does every working day — open the office, post the
+// day's story, back up the drawings. The row is the standing instruction; each
+// working day it becomes that day's AssignedTask (routineId), which is what
+// the person starts, sends proof for and has approved.
+model RoutineTask {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  title      String
+  note       String?      @db.Text
+  // What a day's photo is checked against, copied onto each day's job.
+  acceptance String?      @db.Text
+  priority   TaskPriority @default(MEDIUM)
+  // Paused rather than deleted, so it can come back as it was.
+  active     Boolean      @default(true)
+
+  createdAt DateTime @default(now())
+
+  days AssignedTask[]
+
+  @@index([employeeId, active])
+}
+
+// Money taken off somebody's pay for a stated reason, one row each.
+//
+// SalaryAdjustment is one row per person, month and kind — right for a figure
+// counted from something else, wrong for these: the manager may take something
+// off twice in a month, and every task not handed in is its own charge that
+// can be taken back on its own. Payroll adds both.
+//
+// `hours` is what was charged where it was charged in time; `amount` is the
+// money, fixed when the row is written, so a later change of salary does not
+// reprice something already said to the person.
+model Deduction {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // The studio's calendar day it is for, and the pay period that day is in.
+  day       DateTime @db.Date
+  periodKey String
+
+  // MANUAL: typed by the manager. TASK: a job not handed in by the hour.
+  kind   String
+  hours  Float?
+  amount Float
+  reason String @db.Text
+
+  // The job it was for, kept when the job is later deleted.
+  assignedTaskId String?
+  assignedTask   AssignedTask? @relation(fields: [assignedTaskId], references: [id], onDelete: SetNull)
+
+  // What makes an automatic charge happen once: "TASK:<job id>". Null for the
+  // manager's own, which may repeat.
+  dedupeKey String? @unique
+
+  // Taken back by the manager. Kept, so what was charged and undone is on record.
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([periodKey])
+  @@index([employeeId, periodKey])
+}
+
 // A part of the delivery process, and the unit work is handed out in.
 model ProcessSection {
   id    String @id @default(cuid())
@@ -1741,6 +1807,18 @@ model AssignedTask {
   siteVisitId String?    @unique
   siteVisit   SiteVisit? @relation(fields: [siteVisitId], references: [id], onDelete: Cascade)
 
+  // The routine this job is one day of (lib/routines.ts). A routine is a job
+  // that comes round every working day; each day's is an ordinary job, so the
+  // list, the week, proof and review all work on it unchanged. SetNull: taking
+  // a routine away keeps the days that were already done. One per routine per
+  // day — the index is what makes "today's" safe to ask for on every pass.
+  routineId String?
+  routine   RoutineTask? @relation(fields: [routineId], references: [id], onDelete: SetNull)
+
+  // Money taken off for it (lib/deductions.ts): not handed in by the hour.
+  deductions Deduction[]
+
+  @@unique([routineId, startDay])
   @@index([employeeId, startDay])
   @@index([startDay, endDay])
   @@index([chatTaskId])
@@ -1979,9 +2057,9 @@ model SiteVisit {
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  title     String
+  title       String
   /// Where it is, in the words somebody would give a driver.
-  location  String?
+  location    String?
   /// Who the visit is for, and the number the review is asked of.
   ///
   /// Kept on the visit rather than only on the project, because the first
@@ -1991,7 +2069,7 @@ model SiteVisit {
   clientName  String?
   clientPhone String?
   /// What they are going to do there, written before they go.
-  purpose   String? @db.Text
+  purpose     String?   @db.Text
   /// When it happens. **Null means nobody has set a date yet** — the manager
   /// can write a visit down and leave the when to whoever is going, which is
   /// usually the person who knows the site and their own week. A visit with no
@@ -2001,7 +2079,7 @@ model SiteVisit {
 
   state      SiteVisitState @default(PLANNED)
   /// What came of it — or, on a visit that did not happen, why not.
-  report     String?   @db.Text
+  report     String?        @db.Text
   reportedAt DateTime?
   /// When the manager agreed the visit is finished. Null until they do.
   approvedAt DateTime?
@@ -2029,11 +2107,11 @@ model SupplyRequestLine {
   requestId String
   request   SupplyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  name     String
+  name          String
   /// How many of them. A number, which replaced the free text it used to be
   /// ("2 boxes"): a count is what somebody actually types on a phone, and
   /// anything needing words goes in the request's own note.
-  count    Int?
+  count         Int?
   /// What this line is expected to cost **altogether**, in JOD — not each, so
   /// nothing anywhere multiplies it by the count. The studio chose that way
   /// round. The request's own total is the sum of its lines.
@@ -2078,7 +2156,7 @@ model StaffLocation {
   employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   latitude   Float?
   longitude  Float?
-  accuracy   Float?    // metres, as the phone reported it
+  accuracy   Float? // metres, as the phone reported it
   fixedAt    DateTime? // when the phone took the fix
   permission String    @default("unknown") // always | when-in-use | denied | restricted | not-determined | unknown
   precise    Boolean   @default(true)
@@ -2090,19 +2168,20 @@ model StaffLocation {
 /// a count and two times. What the 1 JOD a day without location is decided on
 /// (lib/location-fine.ts). One row per person per day.
 model LocationDay {
-  id          String    @id @default(cuid())
-  employeeId  String
-  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  day         DateTime  @db.Date
-  fixes       Int       @default(0)
-  firstAt     DateTime?
-  lastAt      DateTime?
-  warnedAt    DateTime? // the first warning
-  warned2At   DateTime? // the second
-  finedAt     DateTime?
-  forgivenAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(cuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  day        DateTime  @db.Date
+  fixes      Int       @default(0)
+  firstAt    DateTime?
+  lastAt     DateTime?
+  warnedAt   DateTime? // the first warning
+  warned2At  DateTime? // the second
+  finedAt    DateTime?
+  forgivenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
   @@unique([employeeId, day])
   @@index([day])
 }

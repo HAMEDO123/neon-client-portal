@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Check, Loader2, Undo2 } from "lucide-react";
 import { approveSubmission, rejectSubmission } from "@/lib/actions/submission-actions";
+import { useReviewItem } from "@/components/admin/review-item";
+import { whileBusy } from "@/lib/busy";
 import { shownError } from "@/lib/refusal";
 
 // Accept or send back, and say why.
@@ -13,7 +15,8 @@ import { shownError } from "@/lib/refusal";
 export function ReviewActions({ submissionId }: { submissionId: string }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const [pending, setPending] = useState(false);
+  const item = useReviewItem();
 
   function run(kind: "approve" | "reject") {
     if (kind === "reject" && note.trim().length === 0) {
@@ -25,15 +28,23 @@ export function ReviewActions({ submissionId }: { submissionId: string }) {
     const formData = new FormData();
     formData.set("reviewNote", note);
 
-    start(async () => {
-      try {
-        if (kind === "approve") await approveSubmission(submissionId, formData);
-        else await rejectSubmission(submissionId, formData);
-        setNote("");
-      } catch (cause) {
-        setError(shownError(cause, "That did not go through."));
-      }
-    });
+    // The card leaves now; the server catches up behind it. Held against the
+    // live refresh, which would cancel an answer still on its way — and the
+    // queue is exactly where a refresh is always about to happen, since every
+    // answer given here changes what the page shows.
+    item?.leave();
+    setPending(true);
+    void whileBusy(async () => {
+      if (kind === "approve") await approveSubmission(submissionId, formData);
+      else await rejectSubmission(submissionId, formData);
+    })
+      .then(() => setNote(""))
+      .catch((cause) => {
+        // Refused: back on screen, saying so, with the note still in the box.
+        item?.comeBack();
+        setError(shownError(cause, "That did not go through. Try again."));
+      })
+      .finally(() => setPending(false));
   }
 
   return (

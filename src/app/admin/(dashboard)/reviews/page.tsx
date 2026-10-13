@@ -5,6 +5,7 @@ import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ReviewActions } from "@/components/admin/review-actions";
+import { ReviewItem } from "@/components/admin/review-item";
 import { SubmissionChecks } from "@/components/admin/submission-checks";
 import { AttachmentPreview } from "@/components/ui/attachment-preview";
 
@@ -41,7 +42,7 @@ export default async function ReviewsPage() {
             const context = submission.entry?.project.name ?? "Handed out by you";
 
             return (
-            <li key={submission.id} className="glass rounded-2xl p-4">
+            <ReviewItem key={submission.id} className="glass rounded-2xl p-4">
               <div className="flex flex-col gap-4 sm:flex-row">
                 <a
                   href={submission.imageUrl}
@@ -89,7 +90,7 @@ export default async function ReviewsPage() {
                   </div>
                 </div>
               </div>
-            </li>
+            </ReviewItem>
             );
           })}
         </ul>

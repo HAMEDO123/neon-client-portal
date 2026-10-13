@@ -30,7 +30,9 @@ import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-querie
 import { facesFor } from "@/lib/faces";
 import { refreshTeamLocations, setLocationRequired, setOfficeLocation, teamLocations } from "@/lib/mobile/location-service";
 import { forgiveLocationDay, setLocationFine } from "@/lib/location-fine-store";
-import { bool, guarded, guardedAction, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { RpcError, bool, guarded, guardedAction, heard, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { addCutoff, removeCutoff, setTaskCutoff } from "@/lib/actions/deduction-actions";
+import { createRoutine, deleteRoutine, setRoutineActive } from "@/lib/actions/routine-actions";
 
 // The "team" area of the phone API: employees, payroll, and the map of where
 // the team is. See lib/mobile/rpc.ts: keys are "team/<name>"; every read is
@@ -231,6 +233,24 @@ export const reads: ReadRegistry = {
 };
 
 export const actions: ActionRegistry = {
+  // Cutoffs (lib/task-cutoff.ts), the manager's alone. Each answers; `heard`
+  // makes a refusal the `{ error }` the app already reads.
+  //   add:    form `employeeId`, `hours` or `amount`, `reason`, `day?`
+  //   remove: args [id] — takes one back, the manager's own or an automatic one
+  //   rule:   args [true | false] — an hour per task not handed in by 9 PM
+  "team/cutoffs/add": async (input) => heard(await addCutoff(input.form)),
+  "team/cutoffs/remove": async (input) => heard(await removeCutoff(str(input.args[0], "id"))),
+  "team/cutoffs/rule": async (input) => {
+    if (typeof input.args[0] !== "boolean") throw new RpcError("Say whether the rule is on or off.");
+    return heard(await setTaskCutoff(input.args[0]));
+  },
+  // Routine tasks (lib/routine-store.ts): done every working day.
+  //   create: form `employeeId`, `title`, `acceptance?`, `note?`, `priority?`
+  "team/routines/create": async (input) => heard(await createRoutine(input.form)),
+  "team/routines/active": async (input) =>
+    heard(await setRoutineActive(str(input.args[0], "id"), input.args[1] === true)),
+  "team/routines/delete": async (input) => heard(await deleteRoutine(str(input.args[0], "id"))),
+
   "team/createEmployee": async (input) => createEmployeeAccount(input.form),
   "team/updateEmployee": async (input) => updateEmployeeAccount(str(input.args[0], "id"), input.form),
   "team/setEmployeeActive": async (input) =>

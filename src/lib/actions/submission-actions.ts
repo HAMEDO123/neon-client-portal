@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-guard";
 import { requireEmployee } from "@/lib/employee-session";
@@ -131,16 +132,22 @@ export async function approveSubmission(submissionId: string, formData?: FormDat
 
   await settle(submission, "DONE", submission.reviewNote);
 
+  // Told once the answer has gone back to the manager, not before it: reaching
+  // somebody's phones takes up to a second, and a page runs its actions one at
+  // a time, so every approval used to wait on the notification of the one
+  // before it.
   const subject = describe(submission);
-  await dispatchNotification({
-    employeeId: submission.employeeId,
-    type: "SYSTEM_NOTIFICATION",
-    title: "Work approved",
-    message: `${subject.name} was approved.`,
-    url: subject.url,
-    entryId: subject.entryId,
-    dedupeKey: `SUBMISSION_APPROVED:${submission.id}`,
-  }).catch(() => {});
+  after(() =>
+    dispatchNotification({
+      employeeId: submission.employeeId,
+      type: "SYSTEM_NOTIFICATION",
+      title: "Work approved",
+      message: `${subject.name} was approved.`,
+      url: subject.url,
+      entryId: subject.entryId,
+      dedupeKey: `SUBMISSION_APPROVED:${submission.id}`,
+    }).catch(() => {})
+  );
 
   refresh(submission);
 }
@@ -162,15 +169,17 @@ export async function rejectSubmission(submissionId: string, formData?: FormData
   await settle(submission, "IN_PROGRESS", reason);
 
   const subject = describe(submission);
-  await dispatchNotification({
-    employeeId: submission.employeeId,
-    type: "SYSTEM_NOTIFICATION",
-    title: "Work sent back",
-    message: reason ? `${subject.name} needs more work: ${reason}` : `${subject.name} was sent back for more work.`,
-    url: subject.url,
-    entryId: subject.entryId,
-    dedupeKey: `SUBMISSION_REJECTED:${submission.id}`,
-  }).catch(() => {});
+  after(() =>
+    dispatchNotification({
+      employeeId: submission.employeeId,
+      type: "SYSTEM_NOTIFICATION",
+      title: "Work sent back",
+      message: reason ? `${subject.name} needs more work: ${reason}` : `${subject.name} was sent back for more work.`,
+      url: subject.url,
+      entryId: subject.entryId,
+      dedupeKey: `SUBMISSION_REJECTED:${submission.id}`,
+    }).catch(() => {})
+  );
 
   refresh(submission);
 }

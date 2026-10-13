@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { computePayroll, periodRange, type PayrollBreakdown } from "@/lib/payroll";
+import { liveDeductions } from "@/lib/deduction-store";
 
 // Assembling a month's payroll: for each employee, the hours they arrived
 // late, the receipts they are owed, and the resulting pay. The arithmetic
@@ -52,8 +53,12 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
     select: { employeeId: true, amount: true, reason: true },
   });
 
+  // Cutoffs — the manager's own, and a task not handed in by nine — are money
+  // off like any other adjustment, one row each. Ones taken back are not read.
+  const deductions = await liveDeductions(period);
+
   const adjustmentBy = new Map<string, { amount: number; reason: string }[]>();
-  for (const row of adjustments) {
+  for (const row of [...adjustments, ...deductions]) {
     const list = adjustmentBy.get(row.employeeId) ?? [];
     list.push({ amount: row.amount, reason: row.reason });
     adjustmentBy.set(row.employeeId, list);

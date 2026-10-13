@@ -9,6 +9,8 @@ import { syncAttendance } from "@/lib/attendance-sync";
 import { tellIfDeviceSilent } from "@/lib/notifications/attendance-events";
 import { runClockReminders } from "@/lib/notifications/clock-events";
 import { runLocationKeeper } from "@/lib/notifications/location-keeper";
+import { runTaskCutoffs } from "@/lib/notifications/task-cutoff-events";
+import { ensureTodaysRoutines } from "@/lib/routine-store";
 import { getTimezone, setSetting } from "@/lib/settings";
 import { hourIn } from "@/lib/time";
 import { cronStampKey, cronStampValue } from "@/lib/status";
@@ -163,6 +165,25 @@ async function run(request: Request) {
   // so a position never outlives the day by more than a minute.
   if (forced === "location" || !forced) {
     ran.location = await runLocationKeeper(new Date()).catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  // Routine tasks (lib/routine-store.ts): today's job for each, on every pass.
+  // One per routine per day is a unique index, so every pass after the first
+  // makes nothing. Before the cutoffs below, so a routine is among what is due.
+  if (forced === "routines" || !forced) {
+    ran.routines = await ensureTodaysRoutines(new Date()).catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  // The nine o'clock rule (lib/task-cutoff.ts): the notice, the warning at
+  // eight, and an hour's pay for each job due today and still not handed in at
+  // nine. Every message and every charge is keyed, so overlapping passes say
+  // and charge each thing once. It reports rather than throws.
+  if (forced === "cutoffs" || !forced) {
+    ran.cutoffs = await runTaskCutoffs(new Date()).catch((error) => ({
       error: error instanceof Error ? error.message : String(error),
     }));
   }

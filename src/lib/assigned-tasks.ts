@@ -26,6 +26,8 @@ export type AssignedTaskView = {
    * so a screen showing one offers the way there instead of the camera.
    */
   siteVisitId: string | null;
+  /** Set when this is one day of a routine task (lib/routine-store.ts). */
+  routineId: string | null;
 };
 
 function toView(row: {
@@ -40,6 +42,7 @@ function toView(row: {
   state: AssignedTaskView["state"];
   priority: AssignedTaskView["priority"];
   siteVisitId: string | null;
+  routineId: string | null;
 }): AssignedTaskView {
   return {
     id: row.id,
@@ -53,6 +56,7 @@ function toView(row: {
     state: row.state,
     priority: row.priority,
     siteVisitId: row.siteVisitId,
+    routineId: row.routineId,
   };
 }
 
@@ -73,6 +77,7 @@ const view = {
   state: true,
   priority: true,
   siteVisitId: true,
+  routineId: true,
 } as const;
 
 /**

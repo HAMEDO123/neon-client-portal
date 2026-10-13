@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarRange, ChevronRight, ClipboardList } from "lucide-react";
+import { CalendarRange, ChevronRight, ClipboardList, Repeat } from "lucide-react";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { Countdown } from "@/components/employee/countdown";
 import { DeadlineMeter } from "@/components/employee/deadline-meter";
@@ -36,8 +36,9 @@ export function AssignedTaskCard({ task, timezone }: { task: AssignedTaskView; t
         <div className="min-w-0 flex-1">
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-ink/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
-              <ClipboardList size={10} strokeWidth={2.5} />
-              From the manager
+              {/* A routine says so: it will be back tomorrow whatever happens today. */}
+              {task.routineId ? <Repeat size={10} strokeWidth={2.5} /> : <ClipboardList size={10} strokeWidth={2.5} />}
+              {task.routineId ? "Every day" : "From the manager"}
             </span>
             {/* Only a high priority earns its own chip here too. */}
             {task.priority === "HIGH" && (

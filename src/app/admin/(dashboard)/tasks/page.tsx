@@ -10,6 +10,8 @@ import { weekDayKeys, weekStartKey } from "@/lib/week";
 import { TaskBoard } from "@/components/admin/task-board";
 import { WeekView } from "@/components/admin/week-view";
 import { TaskBriefing } from "@/components/tasks/task-briefing";
+import { Routines } from "@/components/admin/routines";
+import { listRoutines } from "@/lib/routine-store";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +37,7 @@ export default async function TasksPage({
   // Sequential, like the rest of the multi-query pages here.
   const board = await getTaskBoard();
   const assigned = await assignedTasksForWeek(anchor);
+  const routines = await listRoutines();
 
   // The same rule the board's own percentages use: work marked "not counted"
   // is out of the totals, and a job handed out for tomorrow is due tomorrow
@@ -111,6 +114,21 @@ export default async function TasksPage({
 
           <TaskBoard board={board} todayKey={today} tomorrowKey={tomorrow} />
         </section>
+      )}
+
+      {/* What comes round every working day, above the week it lands on. */}
+      {board.team.length > 0 && (
+        <Routines
+          team={board.team.map((member) => ({ id: member.id, name: member.name }))}
+          routines={routines.map((routine) => ({
+            id: routine.id,
+            title: routine.title,
+            acceptance: routine.acceptance,
+            priority: routine.priority,
+            active: routine.active,
+            employee: routine.employee,
+          }))}
+        />
       )}
 
       {/* Three quarters to the week, a quarter to what is coming: the seven

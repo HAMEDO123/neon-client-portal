@@ -16,6 +16,11 @@ import { isManagersFigure, periodLabel, periodOf, previousPeriod, RECEIPT_CAP } 
 import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { AttendanceDeviceCard } from "@/components/admin/attendance-device";
+import { Cutoffs } from "@/components/admin/cutoffs";
+import { deductionsForPeriod } from "@/lib/deduction-store";
+import { CUTOFF_SETTING, cutoffOn } from "@/lib/task-cutoff";
+import { getSetting } from "@/lib/settings";
+import { formatDayIn } from "@/lib/time";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +47,8 @@ export default async function AdminPayrollPage({
   const rows = await getPayrollForPeriod(period);
   const attendance = await getAttendanceForPeriod(period);
   const receipts = await getReceiptsForPeriod(period);
+  const deductions = await deductionsForPeriod(period);
+  const ruleOn = cutoffOn(await getSetting(CUTOFF_SETTING));
   const employees = await prisma.employee.findMany({
     where: { active: true, accessRole: "EMPLOYEE" },
     orderBy: { order: "asc" },
@@ -390,6 +397,25 @@ export default async function AdminPayrollPage({
           </table>
         </div>
       )}
+
+      {/* --- Cutoffs ------------------------------------------------------ */}
+      <Cutoffs
+        team={employees.map((employee) => ({ id: employee.id, name: employee.name }))}
+        ruleOn={ruleOn}
+        thisMonth={isThisMonth}
+        rows={deductions.map((row) => ({
+          id: row.id,
+          employeeName: row.employee.name,
+          kind: row.kind,
+          hours: row.hours,
+          amount: row.amount,
+          reason: row.reason,
+          // A day, stored as that day's UTC midnight: read back in UTC so it
+          // cannot slip to the evening before.
+          dayLabel: formatDayIn("UTC", row.day) ?? "",
+          cancelled: row.cancelledAt != null,
+        }))}
+      />
 
       {/* --- Receipts ----------------------------------------------------- */}
       <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-ink/40">
