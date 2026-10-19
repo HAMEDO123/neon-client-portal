@@ -338,24 +338,28 @@ describe("a day whose arrival the manager set", () => {
     assert.equal(mayDeviceWrite(ARRIVAL), false);
   });
 
-  // Their only read may be the clock-out itself — which on its own, as the
-  // first read of the day, would have been "arrived at seven".
-  it("takes the device's last read as the departure, measured from that arrival", () => {
-    const [day] = attendanceFromPunches([at(THURSDAY, "16:02")], hours, TZ);
-    assert.equal(day.departedAt, null, "on its own, one read is not a clock-out");
+  // They scan when they remember. On 2026-10-19 that was 1:37 PM, and read as
+  // a clock-out it charged six hours of leaving early.
+  it("takes the first read as the forgotten clock-in, never as leaving", () => {
+    const [day] = attendanceFromPunches([at(THURSDAY, "10:37")], hours, TZ);
+    assert.deepEqual(departureAfter(arrivedAt, day), { departedAt: null, departedLocal: null, earlyHours: 0 });
+  });
+
+  it("takes a later read as the departure, measured from that arrival", () => {
+    const [day] = attendanceFromPunches([at(THURSDAY, "10:37"), at(THURSDAY, "16:02")], hours, TZ);
     const left = departureAfter(arrivedAt, day);
     assert.equal(left.departedAt?.toISOString(), `${THURSDAY}T16:02:00.000Z`);
     assert.equal(left.earlyHours, 0, "7:02 PM is after the day's end");
   });
 
   it("charges leaving early the way any other day does", () => {
-    const [day] = attendanceFromPunches([at(THURSDAY, "14:00")], hours, TZ);
+    const [day] = attendanceFromPunches([at(THURSDAY, "10:37"), at(THURSDAY, "14:00")], hours, TZ);
     // 5:00 PM on a day ending at 7:00 PM.
     assert.equal(departureAfter(arrivedAt, day).earlyHours, 2);
   });
 
   it("does not call a read within an hour of the arrival a departure", () => {
-    const [day] = attendanceFromPunches([at(THURSDAY, "08:30")], hours, TZ);
+    const [day] = attendanceFromPunches([at(THURSDAY, "08:10"), at(THURSDAY, "08:30")], hours, TZ);
     assert.deepEqual(departureAfter(arrivedAt, day), { departedAt: null, departedLocal: null, earlyHours: 0 });
   });
 });

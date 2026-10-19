@@ -305,15 +305,25 @@ export const ARRIVAL = "ARRIVAL";
 
 /**
  * The other end of a day whose arrival the manager set: the device's last read,
- * measured against that arrival rather than against the first read — which, for
- * somebody who forgot to clock in, may be the clock-out itself.
+ * measured against that arrival rather than against the first read.
  *
- * The same rule as every other day: a last read within an hour of the arrival
- * is not called a departure, and leaving early is charged as `earlyHours` does.
+ * **The first read of such a day is the forgotten clock-in, never a departure.**
+ * Somebody who forgot to clock in scans when they remember — on 2026-10-19 at
+ * 1:37 PM — and taken as a clock-out that would have charged six hours of
+ * leaving early. So a departure needs a second read. One read and no more
+ * leaves the day without a clock-out, which costs nothing and is chased by the
+ * evening's reminders until they scan again.
+ *
+ * Otherwise the same rule as every other day: a last read within an hour of
+ * the arrival is not called a departure, and leaving early is charged as
+ * `earlyHours` does.
  */
-export function departureAfter(arrivedAt: Date, day: Pick<DayAttendance, "lastAt" | "lastLocal" | "earlyAtLast">) {
+export function departureAfter(
+  arrivedAt: Date,
+  day: Pick<DayAttendance, "lastAt" | "lastLocal" | "earlyAtLast" | "punches">
+) {
   const worked = (day.lastAt.getTime() - arrivedAt.getTime()) / 60_000;
-  if (worked < MIN_SHIFT_MINUTES) return { departedAt: null, departedLocal: null, earlyHours: 0 };
+  if (day.punches < 2 || worked < MIN_SHIFT_MINUTES) return { departedAt: null, departedLocal: null, earlyHours: 0 };
   return { departedAt: day.lastAt, departedLocal: day.lastLocal, earlyHours: day.earlyAtLast };
 }
 

@@ -202,10 +202,28 @@ describe("what the sync knows about itself", () => {
       },
     });
 
-    // The device's only read is the clock-out, which as a first read would be
-    // "arrived at 7 PM, eight hours late".
+    // Remembered at 1:37 PM: one read, which must not be taken as leaving.
+    await applyAttendance([
+      {
+        ...day(`${PREFIX}901`, 3, "2026-09-21", 0),
+        arrivedAt: new Date("2026-09-21T10:37:00.000Z"),
+        lastAt: new Date("2026-09-21T10:37:00.000Z"),
+        lastLocal: "1:37 PM",
+        earlyAtLast: 6,
+        departedAt: null,
+        punches: 1,
+      },
+    ]);
+    const midday = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { employeeId_day: { employeeId: amal.id, day: date } },
+    });
+    assert.equal(midday.departedAt, null, "the forgotten clock-in is not a departure");
+    assert.equal(midday.earlyHours, 0);
+    assert.equal(midday.delayHours, 0);
+
+    // Then the clock-out: a second read, which is.
     const outcome = await applyAttendance([
-      { ...day(`${PREFIX}901`, 8, "2026-09-21", 0), arrivedAt: new Date("2026-09-21T16:00:00.000Z"), departedAt: null, punches: 1 },
+      { ...day(`${PREFIX}901`, 3, "2026-09-21", 0), arrivedAt: new Date("2026-09-21T10:37:00.000Z"), punches: 2 },
     ]);
     assert.equal(outcome.updated, 1);
 
@@ -219,7 +237,7 @@ describe("what the sync knows about itself", () => {
     assert.equal(row.note, "Arrived on time — forgot to clock in · device: left 7:00 PM");
 
     // Again: the same note, not a longer one.
-    await applyAttendance([{ ...day(`${PREFIX}901`, 8, "2026-09-21", 0), punches: 1 }]);
+    await applyAttendance([{ ...day(`${PREFIX}901`, 3, "2026-09-21", 0), punches: 2 }]);
     const again = await prisma.attendanceRecord.findUniqueOrThrow({ where: { id: row.id }, select: { note: true } });
     assert.equal(again.note, row.note);
   });
