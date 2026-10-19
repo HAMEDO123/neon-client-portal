@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ARRIVAL, DEVICE, MANUAL } from "@/lib/attendance";
 import { monthLabel, shiftMonth, type Month, type MonthEntry } from "@/lib/attendance-month";
+import { AttendanceCell } from "@/components/admin/attendance-cell";
 
 // The month, as a sheet: people down the side, every day across the top.
 //
@@ -116,7 +117,28 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
                             day.isToday && "bg-clay/10"
                           )}
                         >
-                          <Mark entry={entry} future={day.isFuture} worked={day.worked} />
+                          {/* Any day that has happened can be set by hand: hours
+                              late, hours left early, or the record taken away. */}
+                          {day.isFuture ? (
+                            <Mark entry={entry} future={day.isFuture} worked={day.worked} />
+                          ) : (
+                            <AttendanceCell
+                              employeeId={row.employeeId}
+                              name={row.name}
+                              dayKey={day.dayKey}
+                              entry={
+                                entry && {
+                                  delayHours: entry.delayHours,
+                                  earlyHours: entry.earlyHours,
+                                  note: entry.note,
+                                  source: entry.source,
+                                  clockedOut: entry.clockedOut,
+                                }
+                              }
+                            >
+                              <Mark entry={entry} future={day.isFuture} worked={day.worked} />
+                            </AttendanceCell>
+                          )}
                         </td>
                       );
                     })}
@@ -166,7 +188,8 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
             An empty day means nothing was recorded — not that somebody was away. A day the device did not read,
             or one nobody has synced, looks exactly the same here. {recorded} {recorded === 1 ? "day is" : "days are"}{" "}
             recorded this month. A hollow dot is a day somebody arrived and no clock-out was read: nothing is
-            deducted for it, because the device cannot tell a forgotten scan from an early finish.
+            deducted for it, because the device cannot tell a forgotten scan from an early finish. Click any day to
+            change its hours or remove it.
           </p>
         </>
       )}

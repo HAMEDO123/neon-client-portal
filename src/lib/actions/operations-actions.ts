@@ -327,6 +327,63 @@ export async function setAttendance(formData: FormData) {
   refreshAdmin();
 }
 
+/** "1.5" → 1.5, "" → 0, and anything else is not a number of hours. */
+function readHours(value: FormDataEntryValue | null): number | null {
+  const text = String(value ?? "").trim();
+  if (text === "") return 0;
+  const hours = Number(text);
+  if (!Number.isFinite(hours) || hours < 0 || hours > 24) return null;
+  return Math.round(hours * 100) / 100;
+}
+
+/**
+ * One day of the attendance month, as the manager says it was: hours late,
+ * hours left early, and why. From a cell of the grid on /admin/attendance.
+ *
+ * The row becomes the manager's (MANUAL), so the device never writes over it
+ * again — the same rule as the payroll screen's form. What the device saw
+ * (arrived, left) is kept on the row; only the hours and the note change.
+ * Answers in words rather than throwing them (lib/refusal.ts).
+ */
+export async function editAttendanceDay(formData: FormData): Promise<Answer> {
+  return answering(async () => {
+    await requireAdmin();
+
+    const employeeId = String(formData.get("employeeId") ?? "");
+    const day = String(formData.get("day") ?? "");
+    if (!employeeId || !/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Refusal("That day could not be found.");
+
+    const delayHours = readHours(formData.get("delayHours"));
+    const earlyHours = readHours(formData.get("earlyHours"));
+    if (delayHours == null || earlyHours == null) throw new Refusal("Hours are a number from 0 to 24.");
+
+    const person = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+    if (!person) throw new Refusal("That person could not be found.");
+
+    const note = String(formData.get("note") ?? "").trim().slice(0, 200) || null;
+    const date = dayKeyToDate(day);
+    await prisma.attendanceRecord.upsert({
+      where: { employeeId_day: { employeeId, day: date } },
+      create: { employeeId, day: date, delayHours, earlyHours, source: MANUAL, note },
+      update: { delayHours, earlyHours, source: MANUAL, note },
+    });
+
+    refreshAdmin();
+    revalidatePath("/admin/attendance");
+  });
+}
+
+/** Takes one day's record away — on today, the device writes it again at its next read. */
+export async function removeAttendanceDay(employeeId: string, day: string): Promise<Answer> {
+  return answering(async () => {
+    await requireAdmin();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Refusal("That day could not be found.");
+    await prisma.attendanceRecord.deleteMany({ where: { employeeId, day: dayKeyToDate(day) } });
+    refreshAdmin();
+    revalidatePath("/admin/attendance");
+  });
+}
+
 export async function deleteAttendance(id: string) {
   await requireAdmin();
   await prisma.attendanceRecord.delete({ where: { id } });
