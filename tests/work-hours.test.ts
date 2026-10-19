@@ -183,3 +183,60 @@ describe("when somebody may be chased", () => {
     });
   });
 });
+
+// Saturday ends at 18:00 at this studio; every other day at 19:00.
+describe("a day that ends at a different time", async () => {
+  const { hoursOn, parseEndByDay, parseWorkHours, DEFAULT_WORK_HOURS: base } = await import("../src/lib/work-hours");
+  const { attendanceFromPunches } = await import("../src/lib/attendance");
+  const { clockWindows } = await import("../src/lib/clock-reminders");
+  const { locationWindow } = await import("../src/lib/staff-location");
+  const { readFileSync } = await import("node:fs");
+
+  const studio = { ...base, days: [0, 1, 2, 3, 4, 6], endByDay: { 6: "18:00" } };
+  const SATURDAY = "2026-10-24";
+  const SUNDAY = "2026-10-25";
+
+  it("ends that day at its own time and every other day as usual", () => {
+    assert.equal(hoursOn(studio, SATURDAY).end, "18:00");
+    assert.equal(hoursOn(studio, SUNDAY).end, "19:00");
+    assert.equal(hoursOn(base, SATURDAY).end, "19:00", "a studio with no such day is unchanged");
+  });
+
+  it("is read from what was saved, and nothing unreadable is guessed at", () => {
+    assert.deepEqual(parseEndByDay('{"6":"18:00"}', "11:00"), { 6: "18:00" });
+    assert.deepEqual(parseEndByDay('{"6":"10:00","9":"18:00","5":"x"}', "11:00"), {}, "before the start, no such day, not a time");
+    assert.deepEqual(parseEndByDay("not json", "11:00"), {});
+    assert.deepEqual(parseEndByDay(null, "11:00"), {});
+    assert.deepEqual(parseWorkHours({ start: "11:00", end: "19:00", endByDay: '{"6":"18:00"}' }).endByDay, { 6: "18:00" });
+  });
+
+  // Leaving at 6 on a Saturday is leaving on time, and costs nothing.
+  it("charges leaving early against that day's own end", () => {
+    // 18:00 and 17:00 in Amman.
+    const [sat] = attendanceFromPunches(
+      [{ deviceUserId: "7", at: new Date(`${SATURDAY}T08:00:00Z`) }, { deviceUserId: "7", at: new Date(`${SATURDAY}T15:00:00Z`) }],
+      studio,
+      "Asia/Amman"
+    );
+    assert.equal(sat.earlyHours, 0);
+    const [early] = attendanceFromPunches(
+      [{ deviceUserId: "7", at: new Date(`${SATURDAY}T08:00:00Z`) }, { deviceUserId: "7", at: new Date(`${SATURDAY}T14:00:00Z`) }],
+      studio,
+      "Asia/Amman"
+    );
+    assert.equal(early.earlyHours, 1);
+  });
+
+  it("closes the clock-out reminders and the location window at that day's end", () => {
+    assert.equal(clockWindows(studio, SATURDAY, "Asia/Amman")?.end.toISOString(), `${SATURDAY}T15:00:00.000Z`);
+    assert.equal(locationWindow(studio, SATURDAY, "Asia/Amman")?.end.toISOString(), `${SATURDAY}T15:00:00.000Z`);
+    assert.equal(clockWindows(studio, SUNDAY, "Asia/Amman")?.end.toISOString(), `${SUNDAY}T16:00:00.000Z`);
+  });
+
+  // The phone app posts the working-day form without the boxes; reading their
+  // absence as "no different days" would put Saturday back to 7 on every save.
+  it("is only saved from a form that has the boxes", () => {
+    const action = readFileSync("src/lib/actions/settings-actions.ts", "utf8");
+    assert.match(action, /if \(formData\.get\("endByDay"\) === "present"\) \{/);
+  });
+});

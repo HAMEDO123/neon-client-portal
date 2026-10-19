@@ -3,7 +3,7 @@ import { deviceIsSilent, silentCopy, silentKey } from "@/lib/attendance-find";
 import { LAST_SYNC_KEY, type SyncReport } from "@/lib/attendance-sync";
 import { getSetting, getTimezone, getWorkHours } from "@/lib/settings";
 import { dayKeyIn, instantAt } from "@/lib/time";
-import { isWorkingDay } from "@/lib/work-hours";
+import { hoursOn, isWorkingDay } from "@/lib/work-hours";
 
 // Telling the manager the fingerprint device has gone quiet.
 //
@@ -31,7 +31,7 @@ export async function tellIfDeviceSilent(report: SyncReport, now = new Date()): 
     const hours = await getWorkHours();
     const dayKey = dayKeyIn(timeZone, now);
     const start = instantAt(dayKey, hours.start, timeZone);
-    const end = instantAt(dayKey, hours.end, timeZone);
+    const end = instantAt(dayKey, hoursOn(hours, dayKey).end, timeZone);
     const working = isWorkingDay(hours, dayKey) && Boolean(start && end && now >= start && now < end);
 
     const last = await getSetting(LAST_SYNC_KEY);

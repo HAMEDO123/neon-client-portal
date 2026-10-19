@@ -199,6 +199,26 @@ export default async function AdminSettingsPage({
             <Field label="Allowed late (min)" name="graceMinutes" type="number" value={String(workHours.graceMinutes)} />
           </div>
 
+          {/* A day that ends at a different time — Saturday at 6 here. Empty is
+              the usual end. The marker says this form has the boxes, so a form
+              without them (the phone app's) does not clear them. */}
+          <input type="hidden" name="endByDay" value="present" />
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-ink/50">Days that end at a different time</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-7">
+              {DAY_NAMES.map((label, day) => (
+                <Field
+                  key={day}
+                  label={label}
+                  name={`endOn-${day}`}
+                  type="time"
+                  value={workHours.endByDay[day] ?? ""}
+                />
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-ink/40">Leave a day empty and it ends at {workHours.end}.</p>
+          </div>
+
           {/* The number that matters, worked out rather than typed: it is what
               a plan is allowed to fill. */}
           <p className="text-xs text-ink/50">

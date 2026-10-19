@@ -1,5 +1,5 @@
 import { bool, RpcError } from "@/lib/mobile/rpc";
-import { isWorkingDay, type WorkHours } from "@/lib/work-hours";
+import { hoursOn, isWorkingDay, type WorkHours } from "@/lib/work-hours";
 import { dayKeyIn, instantAt, shiftDayKey } from "@/lib/time";
 
 // Where the team is, for the manager's map — what a phone may share, when,
@@ -97,7 +97,7 @@ export type StoredLocation = {
 export function locationWindow(hours: WorkHours, dayKey: string, timeZone: string): LocationWindow | null {
   if (!isWorkingDay(hours, dayKey)) return null;
   const start = instantAt(dayKey, hours.start, timeZone);
-  const end = instantAt(dayKey, hours.end, timeZone);
+  const end = instantAt(dayKey, hoursOn(hours, dayKey).end, timeZone);
   if (!start || !end || end <= start) return null;
   return { start, end };
 }

@@ -1,4 +1,4 @@
-import { isWorkingDay, type WorkHours } from "@/lib/work-hours";
+import { hoursOn, isWorkingDay, type WorkHours } from "@/lib/work-hours";
 import { instantAt } from "@/lib/time";
 
 // Reminding somebody to clock in and out on the fingerprint device — when, and
@@ -37,7 +37,7 @@ export type ClockDue = { employeeId: string; kind: ClockKind };
 export function clockWindows(hours: WorkHours, dayKey: string, timeZone: string) {
   if (!isWorkingDay(hours, dayKey)) return null;
   const start = instantAt(dayKey, hours.start, timeZone);
-  const end = instantAt(dayKey, hours.end, timeZone);
+  const end = instantAt(dayKey, hoursOn(hours, dayKey).end, timeZone);
   if (!start || !end || end <= start) return null;
   const minute = 60_000;
   return {

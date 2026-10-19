@@ -1,4 +1,5 @@
 import {
+  hoursOn,
   isWorkingTime,
   lunchWindow,
   minutesOf,
@@ -109,6 +110,8 @@ export function followUpsFor({
   blocks: PlannedSlot[];
   midCheckAfterMinutes?: number;
 }): FollowUp[] {
+  // That day's own end: Saturday's is earlier.
+  hours = hoursOn(hours, dayKey);
   const found: FollowUp[] = [];
 
   const push = (kind: FollowUpKind, block: number | null, time: string) => {

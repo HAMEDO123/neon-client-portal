@@ -30,6 +30,16 @@ export type WorkHours = {
    * because it decides pay: `lateHours` takes it off before charging anything.
    */
   graceMinutes: number;
+  /**
+   * A day of the week that ends at a different time — Saturday at 18:00 here —
+   * as weekday → "HH:MM". Empty for a studio whose every day ends alike.
+   *
+   * Read through `hoursOn`, never directly: everything that asks when *a* day
+   * ends is handed that day's hours, so `end` below is always the right answer
+   * for the day in hand. Reading `end` without going through it is the way to
+   * get Saturday wrong.
+   */
+  endByDay: Record<number, string>;
 };
 
 /** What the studio runs on until somebody says otherwise. */
@@ -45,7 +55,45 @@ export const DEFAULT_WORK_HOURS: WorkHours = {
   // pay, and a default that invented one would hand back money nobody agreed to
   // give; this studio's 5 minutes is saved in Settings, not written in here.
   graceMinutes: 0,
+  endByDay: {},
 };
+
+/**
+ * The working day as it is on one particular day: the same hours, with that
+ * weekday's own end where it has one. Every caller with a day in hand goes
+ * through this before reading `end`.
+ */
+export function hoursOn(hours: WorkHours, dayKey: string): WorkHours {
+  const end = hours.endByDay?.[weekdayOf(dayKey)];
+  return end ? { ...hours, end } : hours;
+}
+
+/**
+ * The days that end differently, read from what was saved: JSON of weekday →
+ * "HH:MM". Anything unreadable is dropped rather than guessed at, and an end
+ * that is not after the start of the day is not an end.
+ */
+export function parseEndByDay(raw: string | null | undefined, start: string): Record<number, string> {
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== "object") return {};
+
+  const from = minutesOf(start) ?? 0;
+  const out: Record<number, string> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const day = Number(key);
+    if (!Number.isInteger(day) || day < 0 || day > 6 || typeof value !== "string") continue;
+    const at = minutesOf(value);
+    if (at == null || at <= from) continue;
+    out[day] = value.trim();
+  }
+  return out;
+}
 
 const TIME = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 
@@ -68,6 +116,7 @@ export function timeOf(minutes: number): string {
  * value is treated as a suggestion until it parses.
  */
 export function parseWorkHours(raw: Partial<Record<keyof WorkHours, string | null>>): WorkHours {
+  const parsedStart = minutesOf(raw.start ?? "") == null ? DEFAULT_WORK_HOURS.start : (raw.start as string).trim();
   // Empty parts are dropped before they are read as numbers: "" becomes 0,
   // which is a perfectly valid Sunday, so an unset setting would otherwise
   // parse as "Sundays only" instead of falling back to the working week.
@@ -95,6 +144,7 @@ export function parseWorkHours(raw: Partial<Record<keyof WorkHours, string | nul
     lunchAt,
     bufferMinutes: minutesSetting(raw.bufferMinutes, DEFAULT_WORK_HOURS.bufferMinutes),
     graceMinutes: minutesSetting(raw.graceMinutes, DEFAULT_WORK_HOURS.graceMinutes),
+    endByDay: parseEndByDay(raw.endByDay, ordered ? start : parsedStart),
   };
 }
 
@@ -207,7 +257,7 @@ export function nextWorkingMoment(
 ): { dayKey: string; time: string } {
   const at = minutesOf(time) ?? 0;
   const start = minutesOf(hours.start) ?? 0;
-  const end = minutesOf(hours.end) ?? 0;
+  const end = minutesOf(hoursOn(hours, dayKey).end) ?? 0;
   const lunch = lunchWindow(hours);
 
   if (!isWorkingDay(hours, dayKey)) {

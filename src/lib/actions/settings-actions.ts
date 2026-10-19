@@ -38,6 +38,14 @@ export async function saveWorkHours(formData: FormData) {
     lunchAt: String(formData.get("lunchAt") ?? ""),
     bufferMinutes: String(formData.get("bufferMinutes") ?? ""),
     graceMinutes: String(formData.get("graceMinutes") ?? ""),
+    // One box per day of the week, "endOn-6" for Saturday; empty is the usual end.
+    endByDay: JSON.stringify(
+      Object.fromEntries(
+        [0, 1, 2, 3, 4, 5, 6]
+          .map((day) => [day, String(formData.get(`endOn-${day}`) ?? "").trim()] as const)
+          .filter(([, time]) => time !== "")
+      )
+    ),
   });
 
   // One after another, like every other multi-write here.
@@ -48,6 +56,12 @@ export async function saveWorkHours(formData: FormData) {
   await setSetting(WORK_HOURS_KEYS.lunchAt, hours.lunchAt);
   await setSetting(WORK_HOURS_KEYS.bufferMinutes, String(hours.bufferMinutes));
   await setSetting(WORK_HOURS_KEYS.graceMinutes, String(hours.graceMinutes));
+  // Only from a form that has the boxes. The phone app posts this form without
+  // them, and an absent box read as "no different days" would quietly put
+  // Saturday back to the usual end every time somebody saved from a phone.
+  if (formData.get("endByDay") === "present") {
+    await setSetting(WORK_HOURS_KEYS.endByDay, JSON.stringify(hours.endByDay));
+  }
 
   revalidatePath("/admin/settings");
   revalidatePath("/admin/tasks");

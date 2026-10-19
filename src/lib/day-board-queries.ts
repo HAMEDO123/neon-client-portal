@@ -3,7 +3,7 @@ import { getDayPlan } from "@/lib/day-plan-store";
 import { allTasks } from "@/lib/employee-tasks";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { readinessOf } from "@/lib/task-readiness";
-import { minutesOf, remainingMinutes, capacityMinutes, type WorkHours } from "@/lib/work-hours";
+import { hoursOn, minutesOf, remainingMinutes, capacityMinutes, type WorkHours } from "@/lib/work-hours";
 import { dayKeyToDate, todayKey, wallClockIn } from "@/lib/time";
 import type { PersonDay } from "@/lib/day-board";
 
@@ -85,7 +85,8 @@ async function personDay(
       taskName: row.entryId ? (names.get(row.entryId) ?? null) : null,
     }));
 
-  const capacity = dayKey === today ? remainingMinutes(hours, wallClockIn(timezone)) : capacityMinutes(hours);
+  const dayHours = hoursOn(hours, dayKey);
+  const capacity = dayKey === today ? remainingMinutes(dayHours, wallClockIn(timezone)) : capacityMinutes(dayHours);
 
   return {
     employeeId: employee.id,

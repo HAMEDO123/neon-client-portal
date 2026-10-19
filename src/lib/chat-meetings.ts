@@ -2,7 +2,7 @@ import type { MeetingMode, MeetingRsvp } from "@/generated/prisma/enums";
 import type { ChatViewer, Conversation } from "@/lib/chat-conversations";
 import { dayKeyIn, instantAt } from "@/lib/time";
 import { daysBetween } from "@/lib/week";
-import { isWorkingDay, minutesOf, nextWorkingDay, timeOf, type WorkHours } from "@/lib/work-hours";
+import { hoursOn, isWorkingDay, minutesOf, nextWorkingDay, timeOf, type WorkHours } from "@/lib/work-hours";
 
 // Meetings the manager sets from a chat, shown there as cards.
 //
@@ -125,7 +125,7 @@ export function readMinutes(value: string | null | undefined, allowed: number[],
  */
 export function defaultWhen(hours: WorkHours, timeZone: string, now: Date): { dayKey: string; time: string } {
   const today = dayKeyIn(timeZone, now);
-  const endToday = instantAt(today, hours.end, timeZone);
+  const endToday = instantAt(today, hoursOn(hours, today).end, timeZone);
 
   // Round up to the next half hour, so a form opened at 2:11 proposes 2:30.
   const rounded = new Date(Math.ceil(now.getTime() / (30 * 60_000)) * 30 * 60_000);

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { ASSISTANT_MODEL, describeAiError, getAiClient, isAiConfigured } from "@/lib/ai/client";
 import { allTasks } from "@/lib/employee-tasks";
 import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
-import { capacityMinutes, remainingMinutes } from "@/lib/work-hours";
+import { capacityMinutes, hoursOn, remainingMinutes } from "@/lib/work-hours";
 import { readinessOf } from "@/lib/task-readiness";
 import {
   DAY_PLAN_SYSTEM,
@@ -91,7 +91,8 @@ export async function proposeDay(employeeId: string, dayKey: string): Promise<Da
   if (!employee) return { ok: false, error: "That employee no longer exists." };
 
   const timezone = await getTimezone();
-  const hours = await getWorkHours();
+  // The day being planned, with its own end: Saturday's is earlier.
+  const hours = hoursOn(await getWorkHours(), dayKey);
   const notes = await getPlanningNotes();
   const open = await allTasks(employeeId, "open");
   const tasks = open.map((task) => toPlanTask(task, dayKey, timezone));

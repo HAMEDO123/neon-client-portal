@@ -2,7 +2,7 @@ import { getDayPlan } from "@/lib/day-plan-store";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { nowAndNext, type NowNext, type PlanSlot } from "@/lib/now-next";
 import { todayKey, wallClockIn } from "@/lib/time";
-import type { WorkHours } from "@/lib/work-hours";
+import { hoursOn, type WorkHours } from "@/lib/work-hours";
 
 // Reading one person's place in their own day.
 //
@@ -13,8 +13,9 @@ import type { WorkHours } from "@/lib/work-hours";
 export async function myDay(employeeId: string): Promise<{ state: NowNext; hours: WorkHours; dayKey: string }> {
   // One after another, the convention everywhere here.
   const timezone = await getTimezone();
-  const hours = await getWorkHours();
   const dayKey = todayKey(timezone);
+  // Today's own hours: Saturday ends earlier.
+  const hours = hoursOn(await getWorkHours(), dayKey);
   const plan = await getDayPlan(employeeId, dayKey);
 
   // Only a plan that was actually put on the day counts: a draft nobody

@@ -2,7 +2,7 @@ import type { TaskPriority, TaskState } from "@/generated/prisma/enums";
 import type { ChatViewer, Conversation } from "@/lib/chat-conversations";
 import { dayKeyIn, instantAt } from "@/lib/time";
 import { daysBetween } from "@/lib/week";
-import { isWorkingDay, minutesOf, nextWorkingDay, type WorkHours } from "@/lib/work-hours";
+import { hoursOn, isWorkingDay, minutesOf, nextWorkingDay, type WorkHours } from "@/lib/work-hours";
 
 // Tasks the manager hands out from a chat, shown there as cards.
 //
@@ -99,12 +99,14 @@ export function readDue(dayKey: string, time: string, timeZone: string, now: Dat
  */
 export function defaultDue(hours: WorkHours, timeZone: string, now: Date): { dayKey: string; time: string } {
   const today = dayKeyIn(timeZone, now);
-  const endToday = instantAt(today, hours.end, timeZone);
+  const todayEnds = hoursOn(hours, today).end;
+  const endToday = instantAt(today, todayEnds, timeZone);
 
   if (isWorkingDay(hours, today) && endToday && endToday.getTime() - now.getTime() >= 60 * 60_000) {
-    return { dayKey: today, time: hours.end };
+    return { dayKey: today, time: todayEnds };
   }
-  return { dayKey: nextWorkingDay(hours, today), time: hours.end };
+  const next = nextWorkingDay(hours, today);
+  return { dayKey: next, time: hoursOn(hours, next).end };
 }
 
 type Part = { state: TaskState };

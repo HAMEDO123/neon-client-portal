@@ -1,5 +1,5 @@
 import { dayKeyIn, formatTimeIn, wallClockIn } from "@/lib/time";
-import { isWorkingDay, minutesOf, type WorkHours } from "@/lib/work-hours";
+import { hoursOn, isWorkingDay, minutesOf, type WorkHours } from "@/lib/work-hours";
 
 // Turning a fingerprint device's punches into the one number payroll already
 // understands: how many hours somebody arrived late on a given day.
@@ -220,14 +220,15 @@ export function attendanceFromPunches(
       arrivedLocal: formatTimeIn(timeZone, arrivedAt) ?? wallClockIn(timeZone, arrivedAt),
       lastAt,
       lastLocal: formatTimeIn(timeZone, lastAt) ?? wallClockIn(timeZone, lastAt),
-      earlyAtLast: earlyHours(hours, wallClockIn(timeZone, lastAt)),
+      // Against that day's own end: Saturday's is earlier.
+      earlyAtLast: earlyHours(hoursOn(hours, dayKey), wallClockIn(timeZone, lastAt)),
       departedAt,
       departedLocal: departedAt ? formatTimeIn(timeZone, departedAt) ?? wallClockIn(timeZone, departedAt) : null,
       punches: sorted.length,
       delayHours: lateHours(hours, wallClockIn(timeZone, arrivedAt), graceMinutes),
       // Nothing is deducted for a day nobody clocked out of: the device cannot
       // tell a forgotten scan from an early finish, and it must not invent one.
-      earlyHours: departedAt ? earlyHours(hours, wallClockIn(timeZone, departedAt)) : 0,
+      earlyHours: departedAt ? earlyHours(hoursOn(hours, dayKey), wallClockIn(timeZone, departedAt)) : 0,
     });
   }
 
