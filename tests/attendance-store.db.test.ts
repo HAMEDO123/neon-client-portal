@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { prisma } from "@/lib/db";
-import { DEVICE, MANUAL, type DayAttendance } from "@/lib/attendance";
+import { ARRIVAL, DEVICE, MANUAL, type DayAttendance } from "@/lib/attendance";
 import { applyAttendance, mappedByDeviceUser, newestDeviceDay } from "@/lib/attendance-store";
 import { dayKeyToDate } from "@/lib/time";
 import { databaseTarget } from "./db-target";
@@ -68,6 +68,8 @@ const day = (
   arrivedAt: new Date(`${dayKey}T08:30:00.000Z`),
   arrivedLocal: "11:30 AM",
   lastAt: new Date(`${dayKey}T16:00:00.000Z`),
+  lastLocal: "7:00 PM",
+  earlyAtLast: earlyHours,
   departedAt: new Date(`${dayKey}T16:00:00.000Z`),
   departedLocal: "7:00 PM",
   punches: 2,
@@ -180,6 +182,46 @@ describe("what the sync knows about itself", () => {
     const mapped = await mappedByDeviceUser();
     assert.equal(mapped.get(`${PREFIX}901`)?.id, amal.id);
     assert.equal(mapped.has("ztest-att-999"), false);
+  });
+
+  // Came in on time, forgot to clock in: the arrival is the manager's, the
+  // clock-out is still the device's.
+  it("keeps an arrival the manager set and records the clock-out beside it", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    const date = dayKeyToDate("2026-09-21");
+    await prisma.attendanceRecord.create({
+      data: {
+        employeeId: amal.id,
+        day: date,
+        delayHours: 0,
+        earlyHours: 0,
+        arrivedAt: new Date("2026-09-21T08:00:00.000Z"),
+        source: ARRIVAL,
+        note: "Arrived on time — forgot to clock in",
+      },
+    });
+
+    // The device's only read is the clock-out, which as a first read would be
+    // "arrived at 7 PM, eight hours late".
+    const outcome = await applyAttendance([
+      { ...day(`${PREFIX}901`, 8, "2026-09-21", 0), arrivedAt: new Date("2026-09-21T16:00:00.000Z"), departedAt: null, punches: 1 },
+    ]);
+    assert.equal(outcome.updated, 1);
+
+    const row = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { employeeId_day: { employeeId: amal.id, day: date } },
+    });
+    assert.equal(row.source, ARRIVAL, "still the manager's");
+    assert.equal(row.delayHours, 0, "not late");
+    assert.equal(row.arrivedAt?.toISOString(), "2026-09-21T08:00:00.000Z", "arrived when the manager said");
+    assert.equal(row.departedAt?.toISOString(), "2026-09-21T16:00:00.000Z", "left when the device saw");
+    assert.equal(row.note, "Arrived on time — forgot to clock in · device: left 7:00 PM");
+
+    // Again: the same note, not a longer one.
+    await applyAttendance([{ ...day(`${PREFIX}901`, 8, "2026-09-21", 0), punches: 1 }]);
+    const again = await prisma.attendanceRecord.findUniqueOrThrow({ where: { id: row.id }, select: { note: true } });
+    assert.equal(again.note, row.note);
   });
 
   it("finds the newest day it has written", async (t) => {

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { DEVICE, mayDeviceWrite, type DayAttendance } from "@/lib/attendance";
+import { ARRIVAL, DEVICE, departureAfter, mayDeviceWrite, type DayAttendance } from "@/lib/attendance";
 import { dayKeyToDate } from "@/lib/time";
 
 // Writing what the fingerprint device saw into the table payroll already reads.
@@ -83,8 +83,26 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
     const date = dayKeyToDate(day.dayKey);
     const existing = await prisma.attendanceRecord.findUnique({
       where: { employeeId_day: { employeeId: person.id, day: date } },
-      select: { id: true, source: true },
+      select: { id: true, source: true, arrivedAt: true, note: true },
     });
+
+    // The manager set the arrival; the device still says when they left —
+    // and nothing else. The arrival and its lateness stay exactly as set.
+    if (existing?.source === ARRIVAL && existing.arrivedAt) {
+      const left = departureAfter(existing.arrivedAt, day);
+      // The manager's own words kept, the device's part rewritten each sync.
+      const head = (existing.note ?? "Arrival set by the manager").split(" · device: ")[0];
+      await prisma.attendanceRecord.update({
+        where: { id: existing.id },
+        data: {
+          departedAt: left.departedAt,
+          earlyHours: left.earlyHours,
+          note: `${head} · device: ${left.departedLocal ? `left ${left.departedLocal}` : "no clock-out yet"}`.slice(0, 300),
+        },
+      });
+      outcome.updated += 1;
+      continue;
+    }
 
     if (existing && !mayDeviceWrite(existing.source)) {
       outcome.keptManual += 1;

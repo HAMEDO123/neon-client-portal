@@ -1,9 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  ARRIVAL,
   DEVICE,
   MANUAL,
   attendanceFromPunches,
+  departureAfter,
   cutoffFor,
   deviceWallClock,
   earlyHours,
@@ -323,5 +325,37 @@ describe("how far back a sync may reach", () => {
     assert.equal(cutoffFor("last tuesday", today), today);
     assert.equal(cutoffFor("2026-9-1", today), today, "a real date badly written is still not a day key");
     assert.equal(cutoffFor("2026-09", today), today);
+  });
+});
+
+// Somebody came in on time and forgot to clock in: the manager sets the
+// arrival, and the device still records when they leave.
+describe("a day whose arrival the manager set", () => {
+  // 11:00 in Amman, the day's start.
+  const arrivedAt = new Date(`${THURSDAY}T08:00:00.000Z`);
+
+  it("is never written over at the start of the day", () => {
+    assert.equal(mayDeviceWrite(ARRIVAL), false);
+  });
+
+  // Their only read may be the clock-out itself — which on its own, as the
+  // first read of the day, would have been "arrived at seven".
+  it("takes the device's last read as the departure, measured from that arrival", () => {
+    const [day] = attendanceFromPunches([at(THURSDAY, "16:02")], hours, TZ);
+    assert.equal(day.departedAt, null, "on its own, one read is not a clock-out");
+    const left = departureAfter(arrivedAt, day);
+    assert.equal(left.departedAt?.toISOString(), `${THURSDAY}T16:02:00.000Z`);
+    assert.equal(left.earlyHours, 0, "7:02 PM is after the day's end");
+  });
+
+  it("charges leaving early the way any other day does", () => {
+    const [day] = attendanceFromPunches([at(THURSDAY, "14:00")], hours, TZ);
+    // 5:00 PM on a day ending at 7:00 PM.
+    assert.equal(departureAfter(arrivedAt, day).earlyHours, 2);
+  });
+
+  it("does not call a read within an hour of the arrival a departure", () => {
+    const [day] = attendanceFromPunches([at(THURSDAY, "08:30")], hours, TZ);
+    assert.deepEqual(departureAfter(arrivedAt, day), { departedAt: null, departedLocal: null, earlyHours: 0 });
   });
 });

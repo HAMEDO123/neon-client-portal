@@ -38,6 +38,14 @@ export type DayAttendance = {
   arrivedLocal: string;
   /** The last read of the day. Not necessarily a clock-out — see `departedAt`. */
   lastAt: Date;
+  /** The last read on the studio's clock, for a screen. */
+  lastLocal: string;
+  /**
+   * What leaving at the last read would cost, in hours — whether or not it is
+   * called a departure here. A day whose arrival the manager set measures the
+   * departure against that arrival instead of the first read (`departureAfter`).
+   */
+  earlyAtLast: number;
   /**
    * When they clocked out, where they did.
    *
@@ -211,6 +219,8 @@ export function attendanceFromPunches(
       arrivedAt,
       arrivedLocal: formatTimeIn(timeZone, arrivedAt) ?? wallClockIn(timeZone, arrivedAt),
       lastAt,
+      lastLocal: formatTimeIn(timeZone, lastAt) ?? wallClockIn(timeZone, lastAt),
+      earlyAtLast: earlyHours(hours, wallClockIn(timeZone, lastAt)),
       departedAt,
       departedLocal: departedAt ? formatTimeIn(timeZone, departedAt) ?? wallClockIn(timeZone, departedAt) : null,
       punches: sorted.length,
@@ -281,6 +291,31 @@ export function cutoffFor(since: string | undefined | null, today: string): stri
 /** How an attendance row came to exist. */
 export const MANUAL = "MANUAL";
 export const DEVICE = "DEVICE";
+/**
+ * The manager set when somebody arrived — they came in on time and forgot to
+ * clock in — and the device still records when they leave.
+ *
+ * MANUAL would have kept the arrival safe and lost the other end: a sync never
+ * touches a MANUAL row, so the clock-out that evening would go unrecorded, the
+ * clock-out reminders would chase somebody who had just clocked out, and
+ * leaving early would cost nothing. So this row is the manager's at the start
+ * of the day and the device's at the end of it (`departureAfter`).
+ */
+export const ARRIVAL = "ARRIVAL";
+
+/**
+ * The other end of a day whose arrival the manager set: the device's last read,
+ * measured against that arrival rather than against the first read — which, for
+ * somebody who forgot to clock in, may be the clock-out itself.
+ *
+ * The same rule as every other day: a last read within an hour of the arrival
+ * is not called a departure, and leaving early is charged as `earlyHours` does.
+ */
+export function departureAfter(arrivedAt: Date, day: Pick<DayAttendance, "lastAt" | "lastLocal" | "earlyAtLast">) {
+  const worked = (day.lastAt.getTime() - arrivedAt.getTime()) / 60_000;
+  if (worked < MIN_SHIFT_MINUTES) return { departedAt: null, departedLocal: null, earlyHours: 0 };
+  return { departedAt: day.lastAt, departedLocal: day.lastLocal, earlyHours: day.earlyAtLast };
+}
 
 /**
  * Whether a sync from the device may write over a row that is already there.

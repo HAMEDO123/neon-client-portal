@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { MANUAL } from "@/lib/attendance";
+import { ARRIVAL, DEVICE, MANUAL } from "@/lib/attendance";
 import { monthLabel, shiftMonth, type Month, type MonthEntry } from "@/lib/attendance-month";
 
 // The month, as a sheet: people down the side, every day across the top.
@@ -202,7 +202,8 @@ function Mark({ entry, future, worked }: { entry: MonthEntry | null; future: boo
     return <span className="text-bark/15">{future || !worked ? "" : "·"}</span>;
   }
 
-  const typed = entry.source === MANUAL;
+  // Set by the manager, wholly or (ARRIVAL) at the start of the day.
+  const typed = entry.source !== DEVICE;
   const lost = entry.delayHours + entry.earlyHours;
 
   if (lost > 0) {
@@ -248,7 +249,12 @@ function Mark({ entry, future, worked }: { entry: MonthEntry | null; future: boo
 function describe(name: string, dayKey: string, entry: MonthEntry | null) {
   if (!entry) return `${name} · ${dayKey} · nothing recorded`;
 
-  const how = entry.source === MANUAL ? "typed by the manager" : "from the device";
+  const how =
+    entry.source === MANUAL
+      ? "typed by the manager"
+      : entry.source === ARRIVAL
+        ? "arrival set by the manager, leaving from the device"
+        : "from the device";
 
   const parts: string[] = [];
   if (entry.delayHours > 0) parts.push(`${entry.delayHours}h late`);
