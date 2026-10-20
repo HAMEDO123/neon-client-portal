@@ -331,13 +331,14 @@ function ClockTimes({
               </summary>
 
               <div className="overflow-x-auto border-t border-warm-line/60 px-3 pb-2">
-                <table className="w-full min-w-[32rem] text-left text-sm">
+                <table className="w-full min-w-[40rem] text-left text-sm">
                   <thead className="text-xs uppercase tracking-wider text-bark/35">
                     <tr>
                       <th className="py-2 pr-3 font-medium">Employee</th>
                       <th className="py-2 pr-3 font-medium">In</th>
+                      <th className="py-2 pr-3 font-medium">Step out</th>
+                      <th className="py-2 pr-3 font-medium">Step back</th>
                       <th className="py-2 pr-3 font-medium">Out</th>
-                      <th className="py-2 pr-3 font-medium">Stepped out</th>
                       <th className="py-2 text-right font-medium">Hours off</th>
                     </tr>
                   </thead>
@@ -356,6 +357,23 @@ function ClockTimes({
                           <td className="py-2 pr-3 tabular-nums text-bark/70">
                             {formatTimeIn(timezone, row.arrivedAt)}
                           </td>
+                          {/* The day in the order it happened: in, out for a
+                              while, back, gone. Both halves are the manager's
+                              own "HH:MM", printed exactly as typed. */}
+                          <td className="py-2 pr-3 tabular-nums">
+                            {stepped.length > 0 ? (
+                              <span className="text-bark/70">{stepped.map((item) => item.out).join(", ")}</span>
+                            ) : (
+                              <span className="text-bark/30">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums">
+                            {stepped.length > 0 ? (
+                              <span className="text-bark/70">{stepped.map((item) => item.back).join(", ")}</span>
+                            ) : (
+                              <span className="text-bark/30">—</span>
+                            )}
+                          </td>
                           <td className="py-2 pr-3 tabular-nums">
                             {row.departedAt ? (
                               <span className="text-bark/70">{formatTimeIn(timezone, row.departedAt)}</span>
@@ -364,15 +382,6 @@ function ClockTimes({
                               // here reads as "stayed to the end", which is the
                               // one thing the device cannot tell anybody.
                               <span className="text-amber-700">no clock-out</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-3 tabular-nums">
-                            {stepped.length > 0 ? (
-                              <span className="text-bark/70">
-                                {stepped.map((item) => `${item.out}–${item.back}`).join(", ")}
-                              </span>
-                            ) : (
-                              <span className="text-bark/30">—</span>
                             )}
                           </td>
                           <td
