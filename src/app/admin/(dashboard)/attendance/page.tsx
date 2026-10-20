@@ -243,6 +243,8 @@ function ClockTimes({
     departedAt: Date | null;
     delayHours: number;
     earlyHours: number;
+    awayHours: number;
+    breaks: unknown;
     source: string;
     employee: { name: string };
   }[];
@@ -267,9 +269,14 @@ function ClockTimes({
       dayKey,
       entries: [...entries].sort((a, b) => a.employee.name.localeCompare(b.employee.name)),
       // What the day cost, so a closed section still answers the question the
-      // screen is opened with.
+      // screen is opened with: lateness, leaving early, and time stepped out —
+      // the same three payroll charges for (lostHours in lib/payroll.ts).
+      // Leaving the step-out out of this total made a day read cheaper here
+      // than it was actually deducted for.
       hoursOff:
-        Math.round(entries.reduce((total, row) => total + row.delayHours + row.earlyHours, 0) * 100) / 100,
+        Math.round(
+          entries.reduce((total, row) => total + row.delayHours + row.earlyHours + row.awayHours, 0) * 100
+        ) / 100,
       missing: entries.filter((row) => row.departedAt === null).length,
     }));
 
@@ -324,18 +331,25 @@ function ClockTimes({
               </summary>
 
               <div className="overflow-x-auto border-t border-warm-line/60 px-3 pb-2">
-                <table className="w-full min-w-[26rem] text-left text-sm">
+                <table className="w-full min-w-[32rem] text-left text-sm">
                   <thead className="text-xs uppercase tracking-wider text-bark/35">
                     <tr>
                       <th className="py-2 pr-3 font-medium">Employee</th>
                       <th className="py-2 pr-3 font-medium">In</th>
                       <th className="py-2 pr-3 font-medium">Out</th>
+                      <th className="py-2 pr-3 font-medium">Stepped out</th>
                       <th className="py-2 text-right font-medium">Hours off</th>
                     </tr>
                   </thead>
                   <tbody>
                     {day.entries.map((row) => {
-                      const off = Math.round((row.delayHours + row.earlyHours) * 100) / 100;
+                      const off =
+                        Math.round((row.delayHours + row.earlyHours + row.awayHours) * 100) / 100;
+                      // The manager types these in the studio's own clock and
+                      // they are stored as "HH:MM", so they are the only times on
+                      // this screen that must NOT go through formatTimeIn: there
+                      // is no instant to convert, and converting one would move it.
+                      const stepped = storedBreaks(row.breaks);
                       return (
                         <tr key={row.id} className="border-t border-warm-line/50">
                           <td className="py-2 pr-3 font-medium text-bark">{row.employee.name}</td>
@@ -350,6 +364,15 @@ function ClockTimes({
                               // here reads as "stayed to the end", which is the
                               // one thing the device cannot tell anybody.
                               <span className="text-amber-700">no clock-out</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums">
+                            {stepped.length > 0 ? (
+                              <span className="text-bark/70">
+                                {stepped.map((item) => `${item.out}–${item.back}`).join(", ")}
+                              </span>
+                            ) : (
+                              <span className="text-bark/30">—</span>
                             )}
                           </td>
                           <td
