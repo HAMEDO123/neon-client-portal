@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { storedBreaks } from "@/lib/attendance-breaks";
 import { readClock, readDeviceUsers, type DeviceClock, type DeviceUser } from "@/lib/attendance-device";
 import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
@@ -109,6 +110,8 @@ export async function attendanceMonthFor(askedMonth: string | null): Promise<Att
             employeeId: row.employeeId,
             dayKey,
             delayHours: row.delayHours,
+            awayHours: row.awayHours,
+            breaks: storedBreaks(row.breaks),
             // The same reading as the admin attendance page: hours left
             // unworked at the end, and whether a clock-out exists at all.
             earlyHours: row.earlyHours,

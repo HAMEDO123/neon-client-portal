@@ -1502,6 +1502,14 @@ model AttendanceRecord {
    * payroll's multiplication.
    */
   earlyHours Float     @default(0)
+  /**
+   * Stepping out in the middle of the day and coming back
+   * (lib/attendance-breaks.ts): the times, as [{ out, back }] in "HH:MM", and
+   * what they cost — whole hours, rounded up, as lateness is. Set by the
+   * manager; a sync never touches either.
+   */
+  breaks    Json?
+  awayHours Float    @default(0)
   note       String?
   // MANUAL for now; DEVICE once the attendance machine feeds this table.
   source     String    @default("MANUAL")

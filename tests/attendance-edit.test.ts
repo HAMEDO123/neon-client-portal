@@ -26,8 +26,8 @@ describe("editing a day of the month", () => {
   // not put the device's figure back.
   it("makes the day the manager's, so the device leaves it alone", () => {
     const code = body("editAttendanceDay");
-    assert.match(code, /create: \{ employeeId, day: date, delayHours, earlyHours, source: MANUAL, note \}/);
-    assert.match(code, /update: \{ delayHours, earlyHours, source: MANUAL, note \}/);
+    assert.match(code, /create: \{ employeeId, day: date, delayHours, earlyHours, breaks, awayHours, source: MANUAL, note \}/);
+    assert.match(code, /update: \{ delayHours, earlyHours, breaks, awayHours, source: MANUAL, note \}/);
     // What the device saw — when they arrived and left — is kept.
     assert.equal(/arrivedAt|departedAt/.test(code), false);
   });

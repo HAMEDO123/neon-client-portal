@@ -10,6 +10,7 @@ import { getTimezone, getWorkHours } from "@/lib/settings";
 import { dateToDayKey, dayKeyToDate, formatDayIn, formatTimeIn, todayKey } from "@/lib/time";
 import { AttendanceConsole } from "@/components/admin/attendance-console";
 import { AttendanceMonth } from "@/components/admin/attendance-month";
+import { storedBreaks } from "@/lib/attendance-breaks";
 import { DeviceUsers } from "@/components/admin/device-users";
 import { SaveButton } from "@/components/admin/form-buttons";
 
@@ -84,6 +85,8 @@ export default async function AttendanceDevicePage({
             dayKey,
             delayHours: row.delayHours,
             earlyHours: row.earlyHours,
+            awayHours: row.awayHours,
+            breaks: storedBreaks(row.breaks),
             // A departure the device actually recorded, not an assumption
             // about a day that has none.
             clockedOut: row.departedAt !== null,

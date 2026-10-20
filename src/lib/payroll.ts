@@ -120,6 +120,8 @@ export type PayrollInput = {
    * default for a field somebody forgot.
    */
   earlyHours: number;
+  /** Hours out in the middle of a day and back (lib/attendance-breaks.ts). Charged like lateness. */
+  awayHours?: number;
   receiptTotal: number;
   /** Deductions decided elsewhere — a performance shortfall, say. Positive is money off. */
   adjustmentTotal?: number;
@@ -132,7 +134,9 @@ export type PayrollBreakdown = {
   hourlyRate: number;
   delayHours: number;
   earlyHours: number;
-  /** The two together — what the hourly rate is actually multiplied by. */
+  /** Out in the middle of a day and back. */
+  awayHours: number;
+  /** All three together — what the hourly rate is actually multiplied by. */
   lostHours: number;
   cutoff: number;
   adjustmentTotal: number;
@@ -147,10 +151,11 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
   const rate = hourlyRate(salary, input.payBasis);
   const delayHours = Math.max(0, input.delayHours);
   const earlyHours = Math.max(0, input.earlyHours);
+  const awayHours = Math.max(0, input.awayHours ?? 0);
   // Both ends of the day cost the same hourly rate, so they are one number
   // before the multiplication. Kept apart in the breakdown, because a manager
   // deciding whether a deduction is fair wants to know which end it came from.
-  const lostHours = delayHours + earlyHours;
+  const lostHours = delayHours + earlyHours + awayHours;
 
   // Lost time can reduce the salary to nothing but never below it — a
   // deduction must not turn into a debt the employee owes.
@@ -168,6 +173,7 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
     hourlyRate: round(rate),
     delayHours: round(delayHours),
     earlyHours: round(earlyHours),
+    awayHours: round(awayHours),
     lostHours: round(lostHours),
     cutoff,
     adjustmentTotal,

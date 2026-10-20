@@ -126,6 +126,7 @@ export default async function AdminPayrollPage({
                     {breakdown.delayHours.toFixed(2)} h{delayDays > 0 && ` (${delayDays}d)`}
                   </Line>
                   <Line label="Left early">{breakdown.earlyHours.toFixed(2)} h</Line>
+                  {breakdown.awayHours > 0 && <Line label="Stepped out">{breakdown.awayHours.toFixed(2)} h</Line>}
                   <Line label="Cutoff" className="text-red-600">
                     −{breakdown.cutoff.toFixed(2)}
                   </Line>
@@ -195,7 +196,12 @@ export default async function AdminPayrollPage({
                       {breakdown.delayHours.toFixed(2)} h
                       {delayDays > 0 && <span className="ml-1 text-xs text-ink/35">({delayDays}d)</span>}
                     </td>
-                    <td className="px-4 py-3 text-ink/60">{breakdown.earlyHours.toFixed(2)} h</td>
+                    <td className="px-4 py-3 text-ink/60">
+                      {breakdown.earlyHours.toFixed(2)} h
+                      {breakdown.awayHours > 0 && (
+                        <span className="ml-1 text-xs text-ink/45">+ {breakdown.awayHours.toFixed(2)} h out</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-red-600">−{breakdown.cutoff.toFixed(2)}</td>
                     <td className="px-4 py-3">
                       {breakdown.adjustmentTotal === 0 ? (

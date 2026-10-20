@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Trash2, X } from "lucide-react";
+import { Loader2, Plus, Trash2, X } from "lucide-react";
+import { awayHoursOf } from "@/lib/attendance-breaks";
 import { editAttendanceDay, removeAttendanceDay } from "@/lib/actions/operations-actions";
 import { refusalOf } from "@/lib/ask";
 import type { Answer } from "@/lib/refusal";
@@ -17,6 +18,8 @@ import type { Answer } from "@/lib/refusal";
 type Entry = {
   delayHours: number;
   earlyHours: number;
+  /** Out in the middle of the day and back. */
+  breaks: { out: string; back: string }[];
   note: string | null;
   source: string;
   clockedOut: boolean;
@@ -40,6 +43,10 @@ export function AttendanceCell({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The times out, as rows of boxes. Kept here so a row can be added or taken
+  // away without losing what was typed in the others.
+  const [breaks, setBreaks] = useState(entry?.breaks ?? []);
+  const complete = breaks.filter((item) => item.out && item.back && item.back > item.out);
 
   // The day as the studio's calendar writes it; the key is UTC midnight of it.
   const label = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" }).format(
@@ -67,7 +74,11 @@ export function AttendanceCell({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setBreaks(entry?.breaks ?? []);
+          setError(null);
+          setOpen(true);
+        }}
         title={`Change ${name}'s ${label}`}
         className="inline-flex h-7 w-full min-w-[1.75rem] items-center justify-center rounded transition-colors hover:bg-clay-soft"
       >
@@ -95,7 +106,9 @@ export function AttendanceCell({
 
             <p className="mt-3 text-xs text-bark/50">
               {entry
-                ? `Now: ${entry.delayHours}h late · ${entry.earlyHours}h left early${entry.clockedOut ? "" : " · no clock-out"} · ${
+                ? `Now: ${entry.delayHours}h late · ${entry.earlyHours}h left early${
+                    entry.breaks.length > 0 ? ` · out ${entry.breaks.map((item) => `${item.out}–${item.back}`).join(", ")}` : ""
+                  }${entry.clockedOut ? "" : " · no clock-out"} · ${
                     entry.source === "MANUAL" ? "set by you" : entry.source === "ARRIVAL" ? "arrival set by you" : "from the device"
                   }`
                 : "Nothing is recorded for this day."}
@@ -110,6 +123,60 @@ export function AttendanceCell({
                 <span className="mb-1 block text-xs font-medium text-bark/55">Hours left early</span>
                 <input name="earlyHours" type="number" step="any" min="0" max="24" defaultValue={entry?.earlyHours ?? 0} className={FIELD} />
               </label>
+              {/* Out in the middle of the day and back: one row each time. */}
+              <div className="col-span-2">
+                <span className="mb-1 block text-xs font-medium text-bark/55">Stepped out and came back</span>
+                {breaks.map((item, index) => (
+                  <div key={index} className="mb-2 flex items-center gap-2">
+                    <input
+                      name="breakOut"
+                      type="time"
+                      aria-label="Clocked out at"
+                      value={item.out}
+                      onChange={(event) =>
+                        setBreaks((rows) => rows.map((row, i) => (i === index ? { ...row, out: event.target.value } : row)))
+                      }
+                      className={FIELD}
+                    />
+                    <span className="text-xs text-bark/40">to</span>
+                    <input
+                      name="breakBack"
+                      type="time"
+                      aria-label="Clocked back in at"
+                      value={item.back}
+                      onChange={(event) =>
+                        setBreaks((rows) => rows.map((row, i) => (i === index ? { ...row, back: event.target.value } : row)))
+                      }
+                      className={FIELD}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove this time out"
+                      onClick={() => {
+                        setBreaks((rows) => rows.filter((_, i) => i !== index));
+                        setError(null);
+                      }}
+                      className="rounded-lg p-1.5 text-bark/40 hover:bg-clay-soft hover:text-red-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setBreaks((rows) => [...rows, { out: "", back: "" }])}
+                  className="inline-flex items-center gap-1 rounded-lg border border-dashed border-warm-line px-2.5 py-1.5 text-xs font-medium text-bark/60 hover:bg-clay-soft"
+                >
+                  <Plus size={13} />
+                  Add a clock-out and clock-in
+                </button>
+                {complete.length > 0 && (
+                  <p className="mt-1.5 text-[11px] text-bark/50">
+                    Out {awayHoursOf(complete)}h in all — the time away is rounded up to whole hours, as lateness is.
+                  </p>
+                )}
+              </div>
+
               <label className="col-span-2 block">
                 <span className="mb-1 block text-xs font-medium text-bark/55">Note (optional)</span>
                 <input name="note" dir="auto" maxLength={200} defaultValue={entry?.note ?? ""} className={FIELD} />

@@ -36,6 +36,10 @@ export type MonthEntry = {
   delayHours: number;
   /** Hours of the day left unworked at the end. Zero when nobody clocked out. */
   earlyHours: number;
+  /** Hours out in the middle of the day and back (lib/attendance-breaks.ts). */
+  awayHours: number;
+  /** Those times out, "HH:MM" to "HH:MM". */
+  breaks: { out: string; back: string }[];
   /** Whether a clock-out was recorded at all — a blank is not "stayed to the end". */
   clockedOut: boolean;
   /** MANUAL or DEVICE — who put the figure there. */
@@ -57,6 +61,8 @@ export type MonthRow = {
   hoursLate: number;
   /** Hours lost at the end of days, across the month. */
   hoursEarly: number;
+  /** Hours out in the middle of days and back, across the month. */
+  hoursAway: number;
   /** Days somebody arrived and no clock-out was recorded. */
   daysWithoutClockOut: number;
 };
@@ -153,6 +159,7 @@ export function buildMonth(input: {
       // screen nobody trusts.
       hoursLate: Math.round(recorded.reduce((total, cell) => total + cell.delayHours, 0) * 100) / 100,
       hoursEarly: Math.round(recorded.reduce((total, cell) => total + cell.earlyHours, 0) * 100) / 100,
+      hoursAway: Math.round(recorded.reduce((total, cell) => total + cell.awayHours, 0) * 100) / 100,
       // Days the device saw somebody arrive and never saw them leave. Not a
       // count of anything anybody did — it is the count of days the studio
       // knows nothing about the end of, which is the number worth chasing.

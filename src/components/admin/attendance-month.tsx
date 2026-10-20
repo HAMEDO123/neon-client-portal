@@ -130,6 +130,7 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
                                 entry && {
                                   delayHours: entry.delayHours,
                                   earlyHours: entry.earlyHours,
+                                  breaks: entry.breaks,
                                   note: entry.note,
                                   source: entry.source,
                                   clockedOut: entry.clockedOut,
@@ -148,14 +149,14 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
                         deduction on the payslip — the breakdown is in the
                         title, where somebody checking a figure will look. */}
                     <td
-                      title={`${row.hoursLate}h late · ${row.hoursEarly}h left early`}
+                      title={`${row.hoursLate}h late · ${row.hoursEarly}h left early · ${row.hoursAway}h stepped out`}
                       className={cell(
                         "px-3 py-2.5 text-right tabular-nums",
-                        row.hoursLate + row.hoursEarly > 0 ? "font-medium text-amber-700" : "text-bark/35"
+                        row.hoursLate + row.hoursEarly + row.hoursAway > 0 ? "font-medium text-amber-700" : "text-bark/35"
                       )}
                     >
-                      {row.hoursLate + row.hoursEarly > 0
-                        ? `${Math.round((row.hoursLate + row.hoursEarly) * 100) / 100}h`
+                      {row.hoursLate + row.hoursEarly + row.hoursAway > 0
+                        ? `${Math.round((row.hoursLate + row.hoursEarly + row.hoursAway) * 100) / 100}h`
                         : "—"}
                     </td>
                   </tr>
@@ -227,7 +228,7 @@ function Mark({ entry, future, worked }: { entry: MonthEntry | null; future: boo
 
   // Set by the manager, wholly or (ARRIVAL) at the start of the day.
   const typed = entry.source !== DEVICE;
-  const lost = entry.delayHours + entry.earlyHours;
+  const lost = entry.delayHours + entry.earlyHours + entry.awayHours;
 
   if (lost > 0) {
     return (
@@ -282,6 +283,8 @@ function describe(name: string, dayKey: string, entry: MonthEntry | null) {
   const parts: string[] = [];
   if (entry.delayHours > 0) parts.push(`${entry.delayHours}h late`);
   if (entry.earlyHours > 0) parts.push(`${entry.earlyHours}h left early`);
+  for (const item of entry.breaks) parts.push(`out ${item.out}–${item.back}`);
+  if (entry.awayHours > 0) parts.push(`${entry.awayHours}h stepped out`);
   if (!entry.clockedOut) parts.push("no clock-out recorded");
   if (parts.length === 0) parts.push("full day");
 

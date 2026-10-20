@@ -11,6 +11,7 @@ import { readReceipt } from "@/lib/ai/receipts";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { correctedReceiptCount, countedReceiptAmount, readCountsBox, receiptPeriod } from "@/lib/payroll";
 import { MANUAL } from "@/lib/attendance";
+import { awayHoursOf, readBreaks } from "@/lib/attendance-breaks";
 import { syncAttendance, type SyncReport } from "@/lib/attendance-sync";
 import {
   clearDeviceLog,
@@ -357,6 +358,12 @@ export async function editAttendanceDay(formData: FormData): Promise<Answer> {
     const earlyHours = readHours(formData.get("earlyHours"));
     if (delayHours == null || earlyHours == null) throw new Refusal("Hours are a number from 0 to 24.");
 
+    // Out in the middle of the day and back, as many times as were typed.
+    const away = readBreaks(formData.getAll("breakOut"), formData.getAll("breakBack"));
+    if (!away.ok) throw new Refusal(away.error);
+    const breaks = away.breaks;
+    const awayHours = awayHoursOf(breaks);
+
     const person = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
     if (!person) throw new Refusal("That person could not be found.");
 
@@ -364,8 +371,8 @@ export async function editAttendanceDay(formData: FormData): Promise<Answer> {
     const date = dayKeyToDate(day);
     await prisma.attendanceRecord.upsert({
       where: { employeeId_day: { employeeId, day: date } },
-      create: { employeeId, day: date, delayHours, earlyHours, source: MANUAL, note },
-      update: { delayHours, earlyHours, source: MANUAL, note },
+      create: { employeeId, day: date, delayHours, earlyHours, breaks, awayHours, source: MANUAL, note },
+      update: { delayHours, earlyHours, breaks, awayHours, source: MANUAL, note },
     });
 
     refreshAdmin();

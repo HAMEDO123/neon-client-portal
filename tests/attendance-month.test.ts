@@ -30,6 +30,8 @@ const entry = (
   dayKey,
   delayHours,
   earlyHours,
+  awayHours: 0,
+  breaks: [],
   clockedOut,
   source,
   note: null,
