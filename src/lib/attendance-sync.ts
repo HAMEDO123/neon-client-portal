@@ -219,6 +219,9 @@ export function describeSync(report: SyncReport): string {
     `${outcome.updated} updated`,
   ];
   if (outcome.keptManual > 0) parts.push(`${outcome.keptManual} left as the manager set them`);
+  if (outcome.departuresFilled > 0) {
+    parts.push(`${outcome.departuresFilled} clock-out${outcome.departuresFilled === 1 ? "" : "s"} filled in`);
+  }
   if (outcome.skippedInactive > 0) parts.push(`${outcome.skippedInactive} skipped (not on the team)`);
   if (outcome.unmapped.length > 0) parts.push(`unpaired device numbers: ${outcome.unmapped.join(", ")}`);
 

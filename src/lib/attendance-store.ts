@@ -31,6 +31,12 @@ export type SyncOutcome = {
   updated: number;
   /** Days left alone because the manager had set them by hand. */
   keptManual: number;
+  /**
+   * Days the manager had corrected that were still missing their clock-out,
+   * and the device has now supplied it. Counted apart from `updated` because
+   * only that one field was written — everything the manager set stands.
+   */
+  departuresFilled: number;
   /** Days belonging to somebody who is no longer on the team. */
   skippedInactive: number;
   /** Numbers on the device that no employee is paired with, each once. */
@@ -64,6 +70,7 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
     created: 0,
     updated: 0,
     keptManual: 0,
+    departuresFilled: 0,
     skippedInactive: 0,
     unmapped: [],
   };
@@ -83,7 +90,7 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
     const date = dayKeyToDate(day.dayKey);
     const existing = await prisma.attendanceRecord.findUnique({
       where: { employeeId_day: { employeeId: person.id, day: date } },
-      select: { id: true, source: true, arrivedAt: true, note: true },
+      select: { id: true, source: true, arrivedAt: true, departedAt: true, note: true },
     });
 
     // The manager set the arrival; the device still says when they left —
@@ -102,6 +109,38 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
       });
       outcome.updated += 1;
       continue;
+    }
+
+    // A correction owns the figures, not the rest of the day.
+    //
+    // Typing a step-out at noon, or fixing an arrival, turns the row MANUAL —
+    // and from that moment the device was locked out of it entirely, including
+    // the clock-out that had not happened yet. Nobody had said anything about
+    // when that person went home; the field was simply empty. So on four
+    // evenings in a row the tap was made, refused, and typed in by hand.
+    //
+    // An empty departure may therefore be filled by the device, and nothing
+    // else may. A departure the manager DID set is still never touched, and
+    // the hours are never recomputed: on a manual row the money stays theirs,
+    // which is the whole point of MANUAL and is why this writes no earlyHours.
+    //
+    // It needs an arrival to measure against — MIN_SHIFT_MINUTES is what stops
+    // a second scan on the way in from being read as leaving — so a typed row
+    // carrying hours and no times is left exactly as it was.
+    if (existing && !mayDeviceWrite(existing.source) && !existing.departedAt && existing.arrivedAt) {
+      const left = departureAfter(existing.arrivedAt, day);
+      if (left.departedAt) {
+        const head = (existing.note ?? "Set by the manager").split(" · device: ")[0];
+        await prisma.attendanceRecord.update({
+          where: { id: existing.id },
+          data: {
+            departedAt: left.departedAt,
+            note: `${head} · device: left ${left.departedLocal}`.slice(0, 300),
+          },
+        });
+        outcome.departuresFilled += 1;
+        continue;
+      }
     }
 
     if (existing && !mayDeviceWrite(existing.source)) {

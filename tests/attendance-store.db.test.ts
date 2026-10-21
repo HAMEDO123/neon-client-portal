@@ -155,6 +155,72 @@ describe("what a sync writes", () => {
     assert.equal(row.note, "Was on site");
   });
 
+  it("fills a clock-out the manager never set, and leaves everything else alone", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // The shape four evenings in a row produced: a step-out was typed, which
+    // turned the row MANUAL, and the clock-out had not happened yet. Nobody
+    // had said anything about when this person went home.
+    const date = dayKeyToDate("2026-09-22");
+    await prisma.attendanceRecord.create({
+      data: {
+        employeeId: amal.id,
+        day: date,
+        delayHours: 0,
+        earlyHours: 0,
+        awayHours: 4,
+        breaks: [{ out: "11:10", back: "14:45" }],
+        arrivedAt: new Date("2026-09-22T08:30:00.000Z"),
+        source: MANUAL,
+        note: "Device · arrived 11:30 AM · stepped out",
+      },
+    });
+
+    const outcome = await applyAttendance([day(`${PREFIX}901`, 3, "2026-09-22", 2)]);
+    assert.equal(outcome.departuresFilled, 1);
+    assert.equal(outcome.keptManual, 0, "the day was not refused outright");
+
+    const row = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { employeeId_day: { employeeId: amal.id, day: date } },
+    });
+    assert.equal(row.departedAt?.toISOString(), "2026-09-22T16:00:00.000Z", "the device supplied the clock-out");
+    assert.equal(row.source, MANUAL, "still the manager's row");
+    assert.equal(row.delayHours, 0, "the correction stands");
+    // The device saw two hours left early; a manual row never has its money
+    // recomputed, which is the whole point of MANUAL.
+    assert.equal(row.earlyHours, 0, "no hours were charged by the fill");
+    assert.equal(row.awayHours, 4, "the step-out is untouched");
+    assert.equal(row.note, "Device · arrived 11:30 AM · stepped out · device: left 7:00 PM");
+  });
+
+  it("never replaces a clock-out the manager did set", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    const date = dayKeyToDate("2026-09-23");
+    await prisma.attendanceRecord.create({
+      data: {
+        employeeId: amal.id,
+        day: date,
+        delayHours: 0,
+        earlyHours: 0,
+        arrivedAt: new Date("2026-09-23T08:30:00.000Z"),
+        departedAt: new Date("2026-09-23T15:00:00.000Z"),
+        source: MANUAL,
+        note: "Left for a site visit",
+      },
+    });
+
+    const outcome = await applyAttendance([day(`${PREFIX}901`, 3, "2026-09-23", 2)]);
+    assert.equal(outcome.keptManual, 1, "a departure that was set is still refused");
+    assert.equal(outcome.departuresFilled, 0);
+
+    const row = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { employeeId_day: { employeeId: amal.id, day: date } },
+    });
+    assert.equal(row.departedAt?.toISOString(), "2026-09-23T15:00:00.000Z", "the manager's time stands");
+    assert.equal(row.note, "Left for a site visit");
+  });
+
   it("does not record somebody who has left the team", async (t) => {
     if (!reachable) return t.skip("no database");
 
