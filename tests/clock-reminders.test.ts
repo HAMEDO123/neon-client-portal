@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clockWindows, dueClockReminders, anyWindowOpen, type ClockSent } from "../src/lib/clock-reminders";
+import {
+  clockWindows,
+  dueClockReminders,
+  anyWindowOpen,
+  endForPerson,
+  type ClockSent,
+} from "../src/lib/clock-reminders";
 import { DEFAULT_WORK_HOURS } from "../src/lib/work-hours";
 
 const tz = "Asia/Amman";
@@ -68,4 +74,33 @@ test("the device is only read while a window is open", () => {
   assert.equal(anyWindowOpen(windows, at("15:00")), false);
   assert.equal(anyWindowOpen(windows, at("18:52")), true);
   assert.equal(anyWindowOpen(windows, at("21:00")), false);
+});
+
+test("the clock-out chase follows each person's own end, not the studio's", () => {
+  // Somebody who arrived at 2 PM is owed until 10, so at 7 they are still
+  // working and the old rule was chasing them three hours early.
+  const late = [{ id: "a", arrivedAt: at("14:00"), departedAt: null, endsAt: at("22:00") }];
+  assert.deepEqual(due("19:00", late), [], "not chased at the studio's end");
+  assert.deepEqual(due("21:50", late), ["a:out-soon"], "ten minutes before their own");
+  assert.deepEqual(due("22:00", late), ["a:out"]);
+
+  // Beside them, somebody on time is still chased at 7 as before.
+  const onTime = [{ id: "b", arrivedAt: at("11:00"), departedAt: null, endsAt: at("19:00") }];
+  assert.deepEqual(due("19:00", onTime), ["b:out"]);
+});
+
+test("the device is watched until the latest day ends", () => {
+  // One person owed until 10 keeps the window open long past the studio's 7.
+  assert.equal(anyWindowOpen(windows, at("21:00")), false, "nothing owed that late by default");
+  assert.equal(anyWindowOpen(windows, at("21:00"), [at("22:00")]), true);
+  assert.equal(anyWindowOpen(windows, at("23:10"), [at("22:00")]), false, "an hour after, it stops");
+});
+
+test("a day that began late is owed later, and one nobody started is not owed at all", () => {
+  const studio = { ...hours, graceMinutes: 5 };
+  // 2 PM is 2h55 late once the allowance is off, so 19:00 becomes 21:55.
+  assert.equal(endForPerson(studio, day, tz, at("14:00"))?.toISOString(), at("21:55").toISOString());
+  // Out 11:10 to 14:45 on top of arriving on time.
+  assert.equal(endForPerson(studio, day, tz, at("11:00"), 215)?.toISOString(), at("22:35").toISOString());
+  assert.equal(endForPerson(studio, day, tz, null), null, "the device never saw them");
 });
