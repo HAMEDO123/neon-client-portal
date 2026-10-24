@@ -133,6 +133,9 @@ private struct WorkingDayCard: View {
     @State private var lunchMinutes: Int
     @State private var bufferMinutes: Int
     @State private var graceMinutes: Int
+    /// Weekday → the time that day ends at, for the days that end other than
+    /// at `end`. A day missing from it ends at the usual time.
+    @State private var endOn: [Int: Date]
     @State private var error: String?
 
     init(workHours: OpsWorkHours, dayLengthMinutes: Int, capacityMinutes: Int, onTimeUntil: String, onSaved: @escaping () async -> Void) {
@@ -148,6 +151,29 @@ private struct WorkingDayCard: View {
         _lunchMinutes = State(initialValue: workHours.lunchMinutes)
         _bufferMinutes = State(initialValue: workHours.bufferMinutes)
         _graceMinutes = State(initialValue: workHours.graceMinutes)
+        _endOn = State(initialValue: Self.endOnDates(workHours.endByDay ?? [:]))
+    }
+
+    private static func endOnDates(_ stored: [String: String]) -> [Int: Date] {
+        Dictionary(uniqueKeysWithValues: stored.compactMap { key, time in
+            guard let day = Int(key), (0...6).contains(day), minutesOfTime(time) != nil else { return nil }
+            return (day, timeStringToDate(time))
+        })
+    }
+
+    /// Only a server that sends the boxes' values gets the boxes back. One
+    /// from before them would not know `endByDay` — and a newer one, sent the
+    /// marker with empty boxes the app never filled, would clear Saturday.
+    private var hasEndByDay: Bool { workHours.endByDay != nil }
+
+    /// What the boxes hold, as the form posts them: "HH:MM", or nothing for
+    /// the usual end.
+    private var endOnStrings: [Int: String] {
+        endOn.mapValues(dateToTimeString)
+    }
+
+    private var storedEndOn: [Int: String] {
+        Dictionary(uniqueKeysWithValues: (workHours.endByDay ?? [:]).compactMap { key, time in Int(key).map { ($0, time) } })
     }
 
     var body: some View {
@@ -167,6 +193,25 @@ private struct WorkingDayCard: View {
                 OpsTimeField(label: L("Starts"), time: $start)
                 OpsTimeField(label: L("Ends"), time: $end)
             }
+
+            // A day of the week that ends at another time — Saturday at six,
+            // here. One box per working day; empty is the usual end.
+            if hasEndByDay {
+                SectionLabel(L("Ends at a different time on…"))
+                VStack(spacing: NeonSpace.sm) {
+                    ForEach(days.sorted(), id: \.self) { day in
+                        EndOnRow(
+                            name: weekdayNames[day],
+                            time: Binding(get: { endOn[day] }, set: { endOn[day] = $0 }),
+                            suggested: end
+                        )
+                    }
+                }
+                Text(L("Leave a day empty and it ends at %@.", end.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.current.locale))))
+                    .font(.neonFootnote)
+                    .foregroundStyle(Color.neonTextSecondary)
+            }
+
             HStack(spacing: NeonSpace.md) {
                 OpsTimeField(label: L("Lunch at"), time: $lunchAt)
                 NumberField(L("Lunch"), value: $lunchMinutes, unit: L("min"))
@@ -187,7 +232,7 @@ private struct WorkingDayCard: View {
 
             NeonButton(L("Save the working day"), kind: isDirty ? .primary : .secondary, size: .medium) {
                 do {
-                    try await api.opsSaveWorkHours(form: [
+                    var form: [String: Any] = [
                         "days": days.sorted(),
                         "start": dateToTimeString(start),
                         "end": dateToTimeString(end),
@@ -195,7 +240,16 @@ private struct WorkingDayCard: View {
                         "lunchMinutes": lunchMinutes,
                         "bufferMinutes": bufferMinutes,
                         "graceMinutes": graceMinutes,
-                    ])
+                    ]
+                    // The marker and all seven boxes, or neither: the server
+                    // writes the different ends only when the marker is
+                    // there. A day not worked keeps whatever it had, since
+                    // its box is sent even though it is not shown.
+                    if hasEndByDay {
+                        form["endByDay"] = "present"
+                        for day in 0...6 { form["endOn-\(day)"] = endOnStrings[day] ?? "" }
+                    }
+                    try await api.opsSaveWorkHours(form: form)
                     Toast.success(L("Saved"))
                     error = nil
                     await onSaved()
@@ -211,8 +265,20 @@ private struct WorkingDayCard: View {
     /// same index `workHours.days` uses, just narrow enough for seven to
     /// share one row instead of wrapping onto three.
     private var weekdaySymbols: [String] {
-        let calendar = Calendar(identifier: .gregorian)
-        return AppLanguage.current == .arabic ? calendar.veryShortWeekdaySymbols : calendar.shortWeekdaySymbols
+        // In the app's language, and the one-letter form in both: the
+        // three-letter English names did not fit seven chips across a phone
+        // and drew as "…", and without the locale Arabic got English letters.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = AppLanguage.current.locale
+        return calendar.veryShortWeekdaySymbols
+    }
+
+    /// Whole weekday names, Sunday first, in the app's language — the boxes'
+    /// labels, where there is room for the word.
+    private var weekdayNames: [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = AppLanguage.current.locale
+        return calendar.weekdaySymbols
     }
 
     /// So the button only invites a tap once something has actually changed
@@ -226,6 +292,57 @@ private struct WorkingDayCard: View {
             || lunchMinutes != workHours.lunchMinutes
             || bufferMinutes != workHours.bufferMinutes
             || graceMinutes != workHours.graceMinutes
+            || (hasEndByDay && endOnStrings != storedEndOn)
+    }
+}
+
+/// One weekday's own end: its name on the leading side, and either its time
+/// (with a way to take it off) or "Usual end" to give it one. A row, not the
+/// kit's labelled `OptionalDateField`, because two of those side by side ran
+/// off the card once a time was set, and six stacked were most of a screen.
+private struct EndOnRow: View {
+    let name: String
+    @Binding var time: Date?
+    let suggested: Date
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(name)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.neonInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 8)
+            if let current = time {
+                DatePicker(name, selection: Binding(get: { time ?? current }, set: { time = $0 }), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .tint(.neonPurpleStrong)
+                    .fixedSize()
+                    .transition(.neonPop)
+                Button {
+                    Haptic.tap()
+                    withNeonAnimation { time = nil }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.neonTextFaint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L("Usual end"))
+            } else {
+                Button {
+                    Haptic.tap()
+                    withNeonAnimation { time = suggested }
+                } label: {
+                    Text(L("Usual end"))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.neonPurpleStrong)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .fieldChrome()
     }
 }
 
@@ -620,3 +737,20 @@ private func dateToTimeString(_ date: Date) -> String {
     let components = Calendar.current.dateComponents([.hour, .minute], from: date)
     return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
 }
+
+#if DEBUG
+/// The working day's card on its own, from a fixed answer and no network —
+/// `ops-workhours-fixture` (OpsScreens.swift). The card itself stays private
+/// to this file; this is the one door the debug router has to it.
+struct SettingsWorkingDayPreview: View {
+    let workHours: OpsWorkHours
+
+    var body: some View {
+        NeonScroll {
+            WorkingDayCard(workHours: workHours, dayLengthMinutes: 480, capacityMinutes: 420, onTimeUntil: "11:05", onSaved: {})
+        }
+        .navigationTitle(L("Settings"))
+        .neonAmbientBackground()
+    }
+}
+#endif

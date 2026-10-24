@@ -85,14 +85,67 @@ func relativeDayTime(_ iso: String?) -> String? {
 /// data cannot actually support. A device row is measured; a manual row at
 /// zero delay is only ever a stand-in for a number nobody measured, so it
 /// reads as exactly that rather than borrowing the device's own word for
-/// punctuality.
+/// punctuality. An ARRIVAL row's start is the manager's word too (the device
+/// measured only the leaving), so it says so in the same way.
 func attendanceBadge(_ entry: AttendanceMonth.Entry) -> (text: String, tone: BadgeTone) {
     var parts: [String] = []
     if entry.delayHours > 0 { parts.append(L("Late %@", describeMinutes(entry.delayHours * 60))) }
     if let early = entry.earlyHours, early > 0 { parts.append(L("Left early %@", describeMinutes(early * 60))) }
+    if let away = entry.awayHours, away > 0 { parts.append(L("Stepped out %@", describeMinutes(away * 60))) }
     if !parts.isEmpty { return (parts.joined(separator: " · "), .warning) }
-    if entry.source == "MANUAL" { return (L("Set by hand · no lateness"), .neutral) }
+    if entry.source == attendanceSourceManual { return (L("Set by hand · no lateness"), .neutral) }
+    if entry.source == attendanceSourceArrival { return (L("Arrival set by you · no lateness"), .neutral) }
     return (L("On time"), .success)
+}
+
+/// `MANUAL`, `ARRIVAL` and `DEVICE` in src/lib/attendance.ts — who put a
+/// day's figure there. Only the device's is measured from end to end.
+let attendanceSourceManual = "MANUAL"
+let attendanceSourceArrival = "ARRIVAL"
+
+/// Who a day's figure came from, in the website's words (attendance-cell.tsx):
+/// "set by you", "arrival set by you", "from the device".
+func attendanceSourceLabel(_ source: String) -> String {
+    switch source {
+    case attendanceSourceManual: return L("Set by you")
+    case attendanceSourceArrival: return L("Arrival set by you")
+    default: return L("From the device")
+    }
+}
+
+/// "HH:MM" as this phone writes a time of day. The server keeps the 24-hour
+/// form because it is a storage format, not something to read.
+func attendanceClock(_ time: String) -> String {
+    guard let minutes = minutesOfTime(time) else { return time }
+    var components = DateComponents()
+    components.year = 2000
+    components.month = 1
+    components.day = 1
+    components.hour = minutes / 60
+    components.minute = minutes % 60
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    guard let date = calendar.date(from: components) else { return time }
+    var style = Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.current.locale)
+    style.timeZone = calendar.timeZone
+    return date.formatted(style)
+}
+
+/// "Out 1:00 PM–1:40 PM, 4:10 PM–4:30 PM", or nil for a day nobody stepped
+/// out of. Every time out is listed, not only the total, because the total is
+/// rounded up and the times are what somebody checking it needs to see.
+func attendanceBreaksLine(_ entry: AttendanceMonth.Entry) -> String? {
+    let breaks = entry.breaks ?? []
+    guard !breaks.isEmpty else { return nil }
+    let spans = breaks.map { L("%@ to %@", attendanceClock($0.out), attendanceClock($0.back)) }
+    return L("Out %@", spans.joined(separator: L(", ")))
+}
+
+/// What a day cost altogether — late, left early and stepped out. The
+/// website's grid writes this one number in a cell, because it is one
+/// deduction on the payslip.
+func attendanceHoursOff(_ entry: AttendanceMonth.Entry) -> Double {
+    entry.delayHours + (entry.earlyHours ?? 0) + (entry.awayHours ?? 0)
 }
 
 struct AttendanceMonth: Decodable {
@@ -112,8 +165,23 @@ struct AttendanceMonth: Decodable {
         let earlyHours: Double?
         /// Whether a clock-out was recorded at all — a blank is not "stayed to the end".
         let clockedOut: Bool?
+        /// Hours out in the middle of the day and back, charged in whole
+        /// hours as lateness is. Nil from a server before stepping out.
+        let awayHours: Double?
+        /// Those times out, "HH:MM" to "HH:MM". Nil from an older server.
+        let breaks: [Break]?
+        /// DEVICE, MANUAL or ARRIVAL (the manager set the arrival, the
+        /// device the leaving) — `attendanceSourceLabel` says which.
         let source: String
         let note: String?
+
+        /// Set by the manager, wholly (MANUAL) or at the start of the day
+        /// (ARRIVAL): the website rings these cells, and so does the app.
+        var isTyped: Bool { source == attendanceSourceManual || source == attendanceSourceArrival }
+    }
+    struct Break: Decodable, Hashable {
+        let out: String
+        let back: String
     }
     struct Row: Decodable, Identifiable {
         let employeeId: String
@@ -122,7 +190,17 @@ struct AttendanceMonth: Decodable {
         let cells: [Entry?]
         let daysRecorded: Int
         let hoursLate: Double
+        /// Hours lost at the end of days, across the month. Nil from an older server.
+        let hoursEarly: Double?
+        /// Hours out in the middle of days and back, across the month.
+        let hoursAway: Double?
+        /// Days somebody arrived and no clock-out was recorded.
+        let daysWithoutClockOut: Int?
         var id: String { employeeId }
+
+        /// Late, left early and stepped out together: one deduction on the
+        /// payslip, so one number — the website's "Hours off" column.
+        var hoursOff: Double { hoursLate + (hoursEarly ?? 0) + (hoursAway ?? 0) }
     }
 
     let monthKey: String
@@ -306,6 +384,11 @@ struct OpsWorkHours: Decodable {
     let lunchAt: String
     let bufferMinutes: Int
     let graceMinutes: Int
+    /// Weekday ("0" Sunday … "6" Saturday) → the "HH:MM" that day ends at,
+    /// only for days that end other than at `end`. Nil from a server before
+    /// the boxes existed — and then the form must not send them
+    /// (`WorkingDayCard`), or it would clear values it never saw.
+    let endByDay: [String: String]?
 }
 
 struct OpsSettings: Decodable {
