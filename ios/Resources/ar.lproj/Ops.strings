@@ -336,3 +336,49 @@
 /* Site visits */
 "Choose who logs visits" = "اختر من يسجّل الزيارات";
 "Only people with “Logs site visits” ticked on their page can plan one." = "فقط من فُعِّل له خيار «تسجيل زيارات الموقع» في صفحته يمكنه التخطيط لزيارة.";
+
+/* --- Attendance: stepping out, editing any day --- */
+"Stepped out %@" = "خرج وعاد %@";
+"Stepped out" = "خرج وعاد";
+"Left early" = "مغادرة مبكرة";
+"None" = "لا شيء";
+"Arrival set by you · no lateness" = "الوصول حدّدته أنت · بلا تأخير";
+"Set by you" = "أدخلته أنت";
+"Arrival set by you" = "الوصول حدّدته أنت";
+"From the device" = "من الجهاز";
+"%@ to %@" = "%@ إلى %@";
+"Out %@" = "خارج %@";
+", " = "، ";
+"Nothing is recorded for this day." = "لا شيء مسجَّل لهذا اليوم.";
+"Recorded now" = "المسجَّل الآن";
+"h" = "س";
+"Hours are a number from 0 to 24." = "الساعات رقم من 0 إلى 24.";
+"Stepped out and came back" = "خرج ثم عاد";
+"Add a clock-out and clock-in" = "إضافة خروج وعودة";
+"Out %@ in all — the time away is rounded up to whole hours, as lateness is." = "خارج %@ في المجموع — وقت الغياب يُقرَّب لأعلى إلى ساعات كاملة، كما في التأخير.";
+"Note (optional)" = "ملاحظة (اختياري)";
+"Saved by hand, this day becomes Manual." = "بالحفظ اليدوي يصبح هذا اليوم يدويًا.";
+"Each hour is taken off their pay at their hourly rate. This is today: once you save, the device no longer changes this day — and their clock-out tonight will not be recorded." = "كل ساعة تُخصم من راتبه بسعر ساعته. هذا اليوم هو اليوم: بعد الحفظ لن يغيّر الجهاز هذا اليوم — ولن يُسجَّل انصرافه الليلة.";
+"Each hour is taken off their pay at their hourly rate. Once you save, the device no longer changes this day." = "كل ساعة تُخصم من راتبه بسعر ساعته. بعد الحفظ لن يغيّر الجهاز هذا اليوم.";
+"Remove this day's record…" = "إزالة سجل هذا اليوم…";
+"Remove %@'s record for %@?" = "إزالة سجل %1$@ ليوم %2$@؟";
+"This deletes the day outright — it is not the same as setting it to zero. On today, the device records it again at its next read." = "هذا يحذف اليوم كليًا — وهو ليس مثل جعله صفرًا. في يوم اليوم يسجّله الجهاز من جديد عند قراءته التالية.";
+"This deletes the day outright — it is not the same as setting it to zero." = "هذا يحذف اليوم كليًا — وهو ليس مثل جعله صفرًا.";
+"Not late" = "بلا تأخير";
+"Out at" = "خرج الساعة";
+"Back at" = "عاد الساعة";
+"Remove this time out" = "إزالة هذا الخروج";
+"They came back after they left: the time back has to be later." = "العودة تكون بعد الخروج: وقت العودة يجب أن يكون أبعد.";
+"Tap a day that has happened to change it." = "اضغط على أي يوم مضى لتغييره.";
+"An empty day means nothing was recorded — not that somebody was away. A day the device did not read, or one nobody has synced, looks exactly the same here." = "اليوم الفارغ يعني أنه لم يُسجَّل شيء — وليس أن أحدًا كان غائبًا. اليوم الذي لم يقرأه الجهاز، أو الذي لم يُزامَن، يبدو هنا بالشكل نفسه تمامًا.";
+"Recorded days" = "الأيام المسجَّلة";
+"Full day" = "يوم كامل";
+"No clock-out" = "بلا انصراف";
+"Hours off" = "ساعات مخصومة";
+"Not a working day" = "ليس يوم عمل";
+
+/* --- Settings: a different end on one weekday --- */
+"Ends at a different time on…" = "ينتهي في وقت مختلف يوم…";
+"Usual end" = "النهاية المعتادة";
+"Leave a day empty and it ends at %@." = "اترك اليوم فارغًا لينتهي الساعة %@.";
+"Time out %d" = "خروج %d";

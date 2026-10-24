@@ -74,6 +74,42 @@ extension APIClient {
         try await perform("ops/deleteAttendance", args: [id])
     }
 
+    /// `editAttendanceDay` in operations-actions.ts — the attendance month's
+    /// own cell editor: the hours, a note, and every time somebody stepped
+    /// out and came back. `breakOut` and `breakBack` go as arrays, one pair
+    /// per time out, which the server appends field by field as a website
+    /// form would post them; an empty pair of arrays clears the times out.
+    /// The day becomes MANUAL, so the device never writes over it again. A
+    /// refusal (overlapping times, a time back before the time out) arrives
+    /// as `APIError.refused` with the server's own sentence.
+    func opsEditAttendanceDay(
+        employeeId: String,
+        day: String,
+        delayHours: Double,
+        earlyHours: Double,
+        note: String,
+        breaks: [AttendanceMonth.Break]
+    ) async throws {
+        try await perform(
+            "ops/editAttendanceDay",
+            form: [
+                "employeeId": employeeId,
+                "day": day,
+                "delayHours": delayHours,
+                "earlyHours": earlyHours,
+                "note": note,
+                "breakOut": breaks.map(\.out),
+                "breakBack": breaks.map(\.back),
+            ]
+        )
+    }
+
+    /// `removeAttendanceDay`: takes one person's record for one day away
+    /// outright. On today, the device writes it again at its next read.
+    func opsRemoveAttendanceDay(employeeId: String, day: String) async throws {
+        try await perform("ops/removeAttendanceDay", args: [employeeId, day])
+    }
+
     func opsSetDeviceUserId(employeeId: String, deviceUserId: String) async throws {
         try await perform("ops/setDeviceUserId", args: [employeeId], form: ["deviceUserId": deviceUserId])
     }

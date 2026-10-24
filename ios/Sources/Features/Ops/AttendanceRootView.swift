@@ -18,6 +18,21 @@ struct AttendanceRootView: View {
     @State private var monthCachedAt: Date?
     @State private var monthKey: String?
 
+    /// A debug screen drawn from fixed answers reads nothing at all.
+    private var isPreview = false
+
+    init() {}
+
+    #if DEBUG
+    /// The screen from fixed answers, with no network — `ops-attendance-fixture`.
+    init(preview month: AttendanceMonth, overview: AttendanceOverview?) {
+        _month = State(initialValue: month)
+        _overview = State(initialValue: overview)
+        _monthKey = State(initialValue: month.monthKey)
+        isPreview = true
+    }
+    #endif
+
     var body: some View {
         ScrollViewReader { proxy in
             NeonScroll {
@@ -34,13 +49,18 @@ struct AttendanceRootView: View {
                     if month.rows.allSatisfy({ $0.daysRecorded == 0 }) {
                         EmptyState(symbol: "calendar.badge.clock", title: L("Nothing recorded this month"), hue: .grey, card: true)
                     } else {
-                        CardList(month.rows.sorted { $0.hoursLate > $1.hoursLate || ($0.hoursLate == $1.hoursLate && $0.name < $1.name) }) { row in
+                        // Ordered by everything the month cost them — late,
+                        // left early and stepped out are one deduction.
+                        CardList(month.rows.sorted { $0.hoursOff > $1.hoursOff || ($0.hoursOff == $1.hoursOff && $0.name < $1.name) }) { row in
                             NavigationLink(value: AttendancePersonRoute(row: row, monthKey: month.monthKey)) {
                                 ListRow(
                                     row.name,
-                                    subtitle: row.daysRecorded == 0 ? L("Nothing recorded") : daysRecordedLabel(row.daysRecorded),
+                                    subtitle: monthSubtitle(row),
                                     leading: .avatar(url: facePhotoURL(month.photos?[row.employeeId]), name: row.name),
-                                    value: row.hoursLate > 0 ? L("Late %@", describeMinutes(row.hoursLate * 60)) : nil,
+                                    // The bare figure: the subtitle says what it is
+                                    // made of, and a word here cost the subtitle
+                                    // the room it needs.
+                                    value: row.hoursOff > 0 ? describeMinutes(row.hoursOff * 60) : nil,
                                     badge: row.active ? nil : L("Left the team"),
                                     badgeTone: .neutral,
                                     chevron: true
@@ -84,10 +104,11 @@ struct AttendanceRootView: View {
         .navigationTitle(L("Attendance"))
         .navigationDestination(for: AttendancePersonRoute.self) { route in
             AttendancePersonDetail(
-                row: route.row,
+                // The fresh row once the month is read again after a save —
+                // the route only carries the one it was opened with.
+                row: month?.rows.first { $0.employeeId == route.row.employeeId } ?? route.row,
                 days: month?.days ?? [],
                 monthKey: route.monthKey,
-                recordIds: month?.recordIds ?? [:],
                 onChanged: { await loadMonth() }
             )
         }
@@ -97,7 +118,22 @@ struct AttendanceRootView: View {
             }
         }
         .neonAmbientBackground()
-        .task { await loadAll() }
+        .task {
+            guard !isPreview else { return }
+            await loadAll()
+        }
+    }
+
+    /// "12 days recorded · late 2h · stepped out 1h" — what the trailing
+    /// figure is made of, so the one number never hides which end of the day
+    /// it came from.
+    private func monthSubtitle(_ row: AttendanceMonth.Row) -> String {
+        guard row.daysRecorded > 0 else { return L("Nothing recorded") }
+        var parts = [daysRecordedLabel(row.daysRecorded)]
+        if row.hoursLate > 0 { parts.append(L("Late %@", describeMinutes(row.hoursLate * 60))) }
+        if let early = row.hoursEarly, early > 0 { parts.append(L("Left early %@", describeMinutes(early * 60))) }
+        if let away = row.hoursAway, away > 0 { parts.append(L("Stepped out %@", describeMinutes(away * 60))) }
+        return parts.joined(separator: " · ")
     }
 
     /// "‹ September 2026 ›" with ≥44pt hit areas either side, in place of
@@ -577,34 +613,69 @@ private func monthLabel(_ monthKey: String) -> String {
     return date.formatted(style)
 }
 
+
 private struct RecordedDay: Identifiable {
     let day: AttendanceMonth.Day
     let entry: AttendanceMonth.Entry
     var id: String { day.dayKey }
 }
 
-/// One person's month, day by day — the drill-down from the summary list.
-/// Tapping a recorded day, or "Correct a day" for one with nothing on it,
-/// opens `AttendanceCorrectionSheet` — the payroll screen's own
-/// `setAttendance`/`deleteAttendance`, carried over unchanged.
+/// The day an edit sheet is open on — with its record, or with none.
+private struct EditingDay: Identifiable {
+    let day: AttendanceMonth.Day
+    let entry: AttendanceMonth.Entry?
+    var id: String { day.dayKey }
+}
+
+/// One person's month: the website's grid row, as a calendar a phone can
+/// hold (`AttendanceMonthGrid`), then the days that have a record, each with
+/// what it cost. Tapping any day that has happened — recorded or blank —
+/// opens `AttendanceCorrectionSheet`, the website's cell editor.
 struct AttendancePersonDetail: View {
     let row: AttendanceMonth.Row
     let days: [AttendanceMonth.Day]
     let monthKey: String
-    let recordIds: [String: String]
     let onChanged: () async -> Void
 
-    @State private var correcting: RecordedDay?
-    @State private var addingDayKey: String?
+    @State private var editing: EditingDay?
 
     /// Manual entries at zero delay are a stand-in the manager typed, not a
     /// measured day — "Days recorded" shouldn't read as though the device
     /// vouched for all of them without saying so.
     private var handSetCount: Int {
-        row.cells.compactMap { $0 }.filter { $0.source == "MANUAL" && $0.delayHours == 0 && ($0.earlyHours ?? 0) == 0 }.count
+        row.cells.compactMap { $0 }.filter { $0.source == attendanceSourceManual && attendanceHoursOff($0) == 0 }.count
+    }
+
+    private var recorded: [RecordedDay] {
+        zip(days, row.cells).compactMap { day, entry in entry.map { RecordedDay(day: day, entry: $0) } }
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            content.debugScroll(proxy)
+        }
+        .navigationTitle(row.name)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { beginCorrection() } label: {
+                    Label(L("Correct a day"), systemImage: "square.and.pencil")
+                }
+            }
+        }
+        .sheet(item: $editing) { editing in
+            AttendanceCorrectionSheet(
+                employeeId: row.employeeId,
+                employeeName: row.name,
+                dayKey: editing.day.dayKey,
+                entry: editing.entry,
+                isToday: editing.day.isToday,
+                onSaved: onChanged
+            )
+        }
+        .neonAmbientBackground()
+    }
+
+    private var content: some View {
         NeonScroll {
             StatGrid {
                 StatTile(
@@ -617,9 +688,38 @@ struct AttendancePersonDetail: View {
                     L("Late"), text: row.hoursLate > 0 ? describeMinutes(row.hoursLate * 60) : L("On time"),
                     symbol: "hourglass", tint: row.hoursLate > 0 ? .neonWarningStrong : .neonSuccessStrong
                 )
+                // Only from a server that reports them: a missing figure is
+                // not a zero, so an older answer shows no tile at all.
+                if let early = row.hoursEarly {
+                    StatTile(
+                        L("Left early"), text: early > 0 ? describeMinutes(early * 60) : L("None"),
+                        symbol: "clock.arrow.circlepath", tint: early > 0 ? .neonWarningStrong : .neonTextSecondary
+                    )
+                }
+                if let away = row.hoursAway {
+                    StatTile(
+                        L("Stepped out"), text: away > 0 ? describeMinutes(away * 60) : L("None"),
+                        symbol: "arrow.uturn.backward.circle", tint: away > 0 ? .neonWarningStrong : .neonTextSecondary
+                    )
+                }
             }
 
-            let recorded = zip(days, row.cells).compactMap { day, entry in entry.map { RecordedDay(day: day, entry: $0) } }
+            SectionCard(monthLabel(monthKey), subtitle: L("Tap a day that has happened to change it."), symbol: "calendar", hue: .blue) {
+                AttendanceMonthGrid(days: days, cells: row.cells) { index in
+                    Haptic.selection()
+                    editing = EditingDay(day: days[index], entry: row.cells[index])
+                }
+                AttendanceGridLegend()
+                    .id("legend")
+            }
+            .id("grid")
+
+            // Said outright, because a calendar of blanks is exactly the
+            // shape that invites the other reading.
+            Text(L("An empty day means nothing was recorded — not that somebody was away. A day the device did not read, or one nobody has synced, looks exactly the same here."))
+                .font(.neonFootnote)
+                .foregroundStyle(Color.neonTextTertiary)
+
             if recorded.isEmpty {
                 EmptyState(
                     symbol: "calendar.badge.clock",
@@ -629,19 +729,21 @@ struct AttendancePersonDetail: View {
                     action: { beginCorrection() }
                 )
             } else {
+                SectionHeader(L("Recorded days"))
+                    .id("days")
                 CardList(recorded) { entry in
                     let badge = attendanceBadge(entry.entry)
                     Button {
                         Haptic.selection()
-                        correcting = entry
+                        editing = EditingDay(day: entry.day, entry: entry.entry)
                     } label: {
                         ListRow(
                             // The weekday and day only: the page is already
                             // scoped to one month, so the year just crowded
                             // out the date and wrapped it to two lines.
                             formattedWeekdayDay(entry.day.dayKey),
-                            subtitle: entry.entry.note,
-                            meta: entry.entry.clockedOut == false ? L("no clock-out") : nil,
+                            subtitle: daySubtitle(entry.entry),
+                            meta: dayMeta(entry.entry),
                             leading: .icon(
                                 entry.day.worked ? "calendar" : "calendar.badge.exclamationmark",
                                 tint: leadingTint(for: badge.tone, worked: entry.day.worked)
@@ -653,53 +755,217 @@ struct AttendancePersonDetail: View {
                     }
                     .buttonStyle(.pressableCard)
                 }
-
-                // Discoverable next to the list, not only as a lone glyph in
-                // the nav bar.
-                Button { beginCorrection() } label: {
-                    Label(L("Correct a day"), systemImage: "square.and.pencil")
-                }
-                .buttonStyle(.neon(.secondary, size: .medium))
             }
         }
-        .navigationTitle(row.name)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { beginCorrection() } label: {
-                    Label(L("Correct a day"), systemImage: "square.and.pencil")
-                }
-            }
-        }
-        .sheet(item: $correcting) { entry in
-            AttendanceCorrectionSheet(
-                employeeId: row.employeeId,
-                employeeName: row.name,
-                dayKey: entry.day.dayKey,
-                recordId: recordIds["\(row.employeeId)|\(entry.day.dayKey)"],
-                entry: entry.entry,
-                onSaved: onChanged
-            )
-        }
-        .sheet(item: Binding(get: { addingDayKey.map { IdentifiedDayKey($0) } }, set: { addingDayKey = $0?.value })) { boxed in
-            AttendanceCorrectionSheet(
-                employeeId: row.employeeId,
-                employeeName: row.name,
-                dayKey: boxed.value,
-                onSaved: onChanged
-            )
-        }
-        .neonAmbientBackground()
     }
 
+    /// The times out, then the manager's note — what the badge's figures
+    /// were made of, and why.
+    private func daySubtitle(_ entry: AttendanceMonth.Entry) -> String? {
+        let parts = [attendanceBreaksLine(entry), entry.note?.trimmingCharacters(in: .whitespacesAndNewlines)]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Who the figure came from (only when it was not the device), and a
+    /// missing clock-out — which costs nothing, and is not "stayed to the end".
+    private func dayMeta(_ entry: AttendanceMonth.Entry) -> String? {
+        var parts: [String] = []
+        if entry.isTyped { parts.append(attendanceSourceLabel(entry.source)) }
+        if entry.clockedOut == false { parts.append(L("no clock-out")) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Today when it is in this month, else the last day that has happened.
     private func beginCorrection() {
-        addingDayKey = days.first(where: { $0.isToday })?.dayKey ?? days.last?.dayKey ?? monthKey
+        let index = days.firstIndex(where: \.isToday) ?? days.lastIndex(where: { !$0.isFuture })
+        guard let index else { return }
+        editing = EditingDay(day: days[index], entry: row.cells.indices.contains(index) ? row.cells[index] : nil)
     }
 }
 
-private struct IdentifiedDayKey: Identifiable {
-    let value: String
-    var id: String { value }
-    init(_ value: String) { self.value = value }
+// MARK: - The month as a calendar
+
+/// A person's month, a week to a row and Sunday first — the way the studio's
+/// week runs and the week board counts. Each day carries the website grid's
+/// mark (`AttendanceDayMark`); every day that has happened is a button, with
+/// or without a record, and a day still to come is not.
+private struct AttendanceMonthGrid: View {
+    let days: [AttendanceMonth.Day]
+    let cells: [AttendanceMonth.Entry?]
+    let onTap: (Int) -> Void
+
+    private enum Slot: Hashable {
+        case heading(Int)
+        case blank(Int)
+        case day(Int)
+    }
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 4) {
+            ForEach(slots, id: \.self) { slot in
+                switch slot {
+                case .heading(let weekday):
+                    Text(weekdaySymbols[weekday])
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextTertiary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, 2)
+                case .blank:
+                    Color.clear.frame(height: 1)
+                case .day(let index):
+                    let day = days[index]
+                    let entry = cells.indices.contains(index) ? cells[index] : nil
+                    Button { onTap(index) } label: {
+                        AttendanceGridCell(day: day, entry: entry)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(day.isFuture)
+                    .accessibilityLabel(accessibilityLabel(day: day, entry: entry))
+                }
+            }
+        }
+    }
+
+    /// The seven headings, the blanks before the 1st falls, then every day.
+    private var slots: [Slot] {
+        let lead = days.first.map { $0.weekday } ?? 0
+        return (0..<7).map(Slot.heading) + (0..<lead).map(Slot.blank) + days.indices.map(Slot.day)
+    }
+
+    /// Sunday-first narrow names whatever the phone's own first weekday is,
+    /// because `weekday` is the server's index (0 is Sunday).
+    private var weekdaySymbols: [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = AppLanguage.current.locale
+        return calendar.veryShortWeekdaySymbols
+    }
+
+    private func accessibilityLabel(day: AttendanceMonth.Day, entry: AttendanceMonth.Entry?) -> String {
+        let date = formattedWeekdayDay(day.dayKey)
+        guard let entry else { return "\(date), \(L("Nothing recorded"))" }
+        var parts = [date, attendanceBadge(entry).text]
+        if let line = attendanceBreaksLine(entry) { parts.append(line) }
+        if entry.clockedOut == false { parts.append(L("no clock-out")) }
+        if entry.isTyped { parts.append(attendanceSourceLabel(entry.source)) }
+        return parts.joined(separator: ", ")
+    }
+}
+
+private struct AttendanceGridCell: View {
+    let day: AttendanceMonth.Day
+    let entry: AttendanceMonth.Entry?
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: NeonRadius.xs, style: .continuous)
+        VStack(spacing: 4) {
+            Text(NeonFormat.integer(day.dayOfMonth))
+                .font(.system(.caption, weight: day.isToday ? .bold : .medium))
+                .monospacedDigit()
+                .foregroundStyle(numberColor)
+            AttendanceDayMark(entry: entry, day: day)
+                .frame(height: 18)
+        }
+        .frame(maxWidth: .infinity, minHeight: 50)
+        // Days the studio does not work are shaded, from Settings — never a
+        // weekend written in here.
+        .background(shape.fill(day.worked ? Color.neonSurfaceSunken.opacity(0.55) : Color.neonInk.opacity(0.07)))
+        .overlay(shape.strokeBorder(day.isToday ? Color.neonAccent : Color.clear, lineWidth: 1.5))
+        .contentShape(shape)
+    }
+
+    private var numberColor: Color {
+        if day.isToday { return .neonAccent }
+        if day.isFuture { return .neonTextFaint }
+        return day.worked ? .neonTextSecondary : .neonTextTertiary
+    }
+}
+
+/// What one day says at a glance, as the website's grid draws it: nothing at
+/// all for a day with no record (three different reasons, so it says none of
+/// them), the hours it cost in amber, a hollow dot for a day with no
+/// clock-out, a solid one for a full day — and a violet ring on anything the
+/// manager typed (MANUAL, or ARRIVAL: the arrival set by hand).
+struct AttendanceDayMark: View {
+    let entry: AttendanceMonth.Entry?
+    let day: AttendanceMonth.Day
+
+    var body: some View {
+        if let entry {
+            let lost = attendanceHoursOff(entry)
+            if lost > 0 {
+                Text(NeonFormat.number(lost, decimals: 2))
+                    .font(.system(.caption2, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.neonWarningStrong)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.neonWarning.opacity(0.14)))
+                    .overlay(Capsule().strokeBorder(entry.isTyped ? attendanceTypedTint : Color.clear, lineWidth: 1.2))
+            } else if entry.clockedOut == false {
+                // A day nobody clocked out of is not a full day: it is a day
+                // the studio knows nothing about the end of.
+                Circle()
+                    .strokeBorder(entry.isTyped ? attendanceTypedTint : Color.neonSuccessStrong.opacity(0.7), lineWidth: 2)
+                    .frame(width: 9, height: 9)
+            } else {
+                Circle()
+                    .fill(entry.isTyped ? attendanceTypedTint : Color.neonSuccessStrong)
+                    .frame(width: 9, height: 9)
+                    .overlay(Circle().stroke(entry.isTyped ? attendanceTypedTint.opacity(0.28) : Color.clear, lineWidth: 3))
+            }
+        } else {
+            Text(day.isFuture || !day.worked ? " " : "·")
+                .font(.system(.body, weight: .bold))
+                .foregroundStyle(Color.neonTextFaint)
+        }
+    }
+}
+
+/// "Typed by you" — the website's clay, in the app's violet.
+private let attendanceTypedTint = Color.neonPurpleStrong
+
+/// The key under the calendar, in the website's own words.
+private struct AttendanceGridLegend: View {
+    private let columns = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            item(L("Full day")) {
+                Circle().fill(Color.neonSuccessStrong).frame(width: 9, height: 9)
+            }
+            item(L("No clock-out")) {
+                Circle().strokeBorder(Color.neonSuccessStrong.opacity(0.7), lineWidth: 2).frame(width: 9, height: 9)
+            }
+            item(L("Hours off")) {
+                Text(NeonFormat.number(1.5, decimals: 1))
+                    .font(.system(.caption2, weight: .bold))
+                    .foregroundStyle(Color.neonWarningStrong)
+            }
+            item(L("Set by you")) {
+                Circle().fill(attendanceTypedTint).frame(width: 9, height: 9)
+                    .overlay(Circle().stroke(attendanceTypedTint.opacity(0.28), lineWidth: 3))
+            }
+            item(L("Not a working day")) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Color.neonInk.opacity(0.09)).frame(width: 12, height: 12)
+            }
+        }
+    }
+
+    private func item<Mark: View>(_ title: String, @ViewBuilder mark: () -> Mark) -> some View {
+        HStack(spacing: 6) {
+            mark().frame(minWidth: 16)
+            Text(title)
+                .font(.neonCaption)
+                .foregroundStyle(Color.neonTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 }
 
 /// The leading tile's tint, matched to the same status the trailing badge
