@@ -106,6 +106,8 @@ enum DecodeCheck {
                 await check("team/employee") { _ = try await api.read("team/employee", ["id": employeeId], as: TeamEmployeeResponse.self) }
             }
             await check("team/payroll") { _ = try await api.read("team/payroll", as: TeamPayrollResponse.self) }
+            await check("team/cutoffs") { _ = try await api.fetchCutoffs(period: nil) }
+            await check("team/routines") { _ = try await api.fetchRoutines() }
 
             await check("ops/attendanceOverview") { _ = try await api.read("ops/attendanceOverview", as: AttendanceOverview.self) }
             await check("ops/attendanceMonth") { _ = try await api.read("ops/attendanceMonth", as: AttendanceMonth.self) }

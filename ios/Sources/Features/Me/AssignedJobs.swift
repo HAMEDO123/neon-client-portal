@@ -25,9 +25,15 @@ struct JobRow: View {
                 // default) an Arabic title sits flush against the chevron
                 // while the rest of the card sits at the leading edge.
                 DirText(job.title, font: .neonRowTitle, fill: false)
-                Text(L("Handed out directly"))
-                    .font(.neonCaption)
-                    .foregroundStyle(Color.neonTextTertiary)
+                // A routine's day was put on the list that morning, not
+                // handed out: it says so where a job says who gave it.
+                if job.isRoutine {
+                    MetaLabel(L("Every day"), symbol: "repeat")
+                } else {
+                    Text(L("Handed out directly"))
+                        .font(.neonCaption)
+                        .foregroundStyle(Color.neonTextTertiary)
+                }
 
                 FlowRow {
                     meStateBadge(job.state)
@@ -96,7 +102,7 @@ struct JobDetailView: View {
                 ProofSheet(
                     targetId: job.id,
                     title: job.title,
-                    subtitle: L("Handed out directly"),
+                    subtitle: job.isRoutine ? L("Every day") : L("Handed out directly"),
                     acceptance: linesOf(job.acceptance)
                 ) {
                     justSubmitted = true
@@ -114,7 +120,11 @@ struct JobDetailView: View {
     private func header(_ job: MyAssignedJob) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                BadgeView(text: L("Handed out directly"), tone: .neutral, symbol: "shippingbox.fill")
+                if job.isRoutine {
+                    BadgeView(text: L("Every day"), tone: .purple, symbol: "repeat")
+                } else {
+                    BadgeView(text: L("Handed out directly"), tone: .neutral, symbol: "shippingbox.fill")
+                }
                 Spacer()
             }
             DirText(job.title, font: .neonTitle2)

@@ -48,6 +48,16 @@ Source of truth read: `src/app/admin/(dashboard)/employees/page.tsx`,
 - [x] Fingerprint device pairing by device user number (not by name)
 - [x] Receipts: list with photo, summary, counted amount; correct vendor/
       amount in a sheet
+- [x] Cutoffs (`PayrollCutoffs.swift`, web `components/admin/cutoffs.tsx`):
+      `team/cutoffs?period=` for the month on screen; the end-of-day rule's
+      switch (`team/cutoffs/rule`, turning it on is asked first) with the
+      times the read returns; each cutoff (person, day, automatic or by you,
+      reason, JOD and hours) with "Take back" (`team/cutoffs/remove`), taken
+      back ones struck through; "Add a cutoff" (`team/cutoffs/add`: who,
+      hours or JOD, reason required) on this month only. Any change reads
+      payroll again. A pay-sheet adjustment that is not the performance
+      sentence is titled "Taken off", since cutoffs arrive there too.
+      Debug: `payroll-cutoffs-fixture`, `-off`, `payroll-cutoff-add-fixture`.
 
 ## Faces
 - [x] Employees list: each row draws the person's photo (`team/employees`

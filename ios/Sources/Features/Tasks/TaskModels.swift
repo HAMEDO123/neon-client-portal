@@ -162,12 +162,50 @@ struct AssignedJob: Decodable, Identifiable {
     let lastUpdateNote: String?
     let lastUpdateAt: String?
     let nextStep: String?
+    /// Set when this is one day of a routine task: the server made it that
+    /// morning from the standing instruction, so nobody handed it out today.
+    /// Missing from a server before routines, which reads as an ordinary job.
+    var routineId: String? = nil
 
     var days: Int { max(1, (dayIndex(endKey) - dayIndex(startKey)) + 1) }
 }
 
 private func dayIndex(_ key: String) -> Int {
     Int((parseISODate("\(key)T00:00:00.000Z")?.timeIntervalSince1970 ?? 0) / 86400)
+}
+
+// MARK: - Routine tasks (team/routines)
+
+/// `team/routines`: what somebody does every working day. The row is the
+/// standing instruction, not the work — each working day the server turns
+/// every active one into that day's ordinary `AssignedJob`, carrying its
+/// `routineId`, so the week board and the person's list already know it.
+struct RoutinesResponse: Decodable {
+    let routines: [RoutineTask]
+}
+
+struct RoutineTask: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let note: String?
+    /// What the day's photo is checked against.
+    let acceptance: String?
+    /// "LOW", "MEDIUM" or "HIGH".
+    let priority: String
+    /// False while paused: it makes no more days, and the ones it made stay.
+    let active: Bool
+    let createdAt: String?
+    let employee: RoutinePerson
+}
+
+/// Who a routine is for. `active` is the person's account, not the routine:
+/// a routine can outlive an account that was switched off.
+struct RoutinePerson: Decodable {
+    let id: String
+    let name: String
+    let color: String
+    let photoUrl: String?
+    let active: Bool
 }
 
 // MARK: - The process (tasks/process)

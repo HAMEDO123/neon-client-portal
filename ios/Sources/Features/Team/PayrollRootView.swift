@@ -15,6 +15,24 @@ struct PayrollRootView: View {
     @State private var showRecordAttendance = false
     @State private var showAllAttendance = false
     @State private var removingAttendance: TeamAttendanceRecord?
+    /// The month's cutoffs, read beside payroll for the same period. Kept
+    /// apart so a server without them still shows the pay sheet.
+    @State private var cutoffs: TeamCutoffsResponse?
+    @State private var cutoffsError: String?
+    @State private var showAddCutoff = false
+    #if DEBUG
+    /// A debug fixture: drawn from fixed answers, reading nothing.
+    private var isPreview = false
+
+    init() {}
+
+    init(preview: TeamPayrollResponse, cutoffs: TeamCutoffsResponse?) {
+        _response = State(initialValue: preview)
+        _cutoffs = State(initialValue: cutoffs)
+        _period = State(initialValue: preview.period)
+        isPreview = true
+    }
+    #endif
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -23,6 +41,7 @@ struct PayrollRootView: View {
                     periodSwitch(data).id("totals")
                     totals(data)
                     paySheet(data).id("paysheet")
+                    cutoffsSection(data).id("cutoffs")
                     attendanceSection(data).id("attendance")
                     receiptsSection(data).id("receipts")
                 }
@@ -41,6 +60,14 @@ struct PayrollRootView: View {
         }
         .sheet(item: $editingReceipt) { receipt in
             CorrectReceiptSheet(receipt: receipt) { await load() }
+        }
+        .sheet(isPresented: $showAddCutoff) {
+            if let data = response {
+                AddCutoffSheet(
+                    employees: data.employees,
+                    rates: Dictionary(data.rows.map { ($0.employee.id, $0.breakdown.hourlyRate) }, uniquingKeysWith: { first, _ in first })
+                ) { await load() }
+            }
         }
         .sheet(isPresented: $showRecordAttendance) {
             if let data = response {
@@ -155,6 +182,16 @@ struct PayrollRootView: View {
         }
     }
 
+    // MARK: - Cutoffs
+
+    /// Any change to a cutoff or the rule reads payroll again with it: the
+    /// total payable includes every cutoff still counting.
+    private func cutoffsSection(_ data: TeamPayrollResponse) -> some View {
+        PayrollCutoffsCard(data: cutoffs, error: cutoffsError, isThisMonth: data.isThisMonth, onAdd: { showAddCutoff = true }) {
+            await load()
+        }
+    }
+
     // MARK: - Attendance
 
     @ViewBuilder
@@ -254,6 +291,9 @@ struct PayrollRootView: View {
     // MARK: - Loading
 
     private func load(period newPeriod: String? = nil) async {
+        #if DEBUG
+        if isPreview { return }
+        #endif
         if let newPeriod { period = newPeriod }
         do {
             let loaded = try await api.read("team/payroll", ["period": period], as: TeamPayrollResponse.self)
@@ -262,8 +302,25 @@ struct PayrollRootView: View {
                 cachedAt = loaded.cachedAt
                 errorMessage = nil
             }
+            // The cutoffs of the month payroll answered for, so the two can
+            // never be of different months.
+            await loadCutoffs(period: loaded.value.period)
         } catch {
             if response == nil { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func loadCutoffs(period: String) async {
+        do {
+            let loaded = try await api.fetchCutoffs(period: period)
+            withNeonAnimation(NeonMotion.gentle) {
+                cutoffs = loaded.value
+                cutoffsError = nil
+            }
+        } catch {
+            // Another month's list must not stay up under this month's name.
+            if cutoffs?.period != period { cutoffs = nil }
+            if cutoffs == nil { cutoffsError = error.localizedDescription }
         }
     }
 }
@@ -353,7 +410,7 @@ private struct AdjustmentRow: View {
             )
         } else {
             ListRow(
-                L("Performance"),
+                L("Taken off"),
                 subtitle: adjustment.reason,
                 leading: .icon("slider.horizontal.3", tint: .neonDangerStrong),
                 value: NeonFormat.money(adjustment.amount, decimals: 2)

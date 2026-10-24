@@ -21,6 +21,11 @@ struct MyAssignedJob: Decodable, Identifiable {
     let priority: String
     /// From `me/tasks/mine`: its last day has gone and it is not approved.
     var late: Bool? = nil
+    /// Set when this is one day of a routine task — put on the list that
+    /// morning rather than handed out. Nil from a server before routines.
+    var routineId: String? = nil
+
+    var isRoutine: Bool { routineId?.isEmpty == false }
 }
 
 struct AssignedJobsResponse: Decodable { let jobs: [MyAssignedJob] }
