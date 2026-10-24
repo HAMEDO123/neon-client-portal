@@ -218,3 +218,26 @@
 
 /* Formats */
 "%@ %@" = "%@ %@";
+
+/* The BOQ and the price as a file, on the BOQ and Pricing tabs */
+"Files" = "الملفات";
+"Add a file" = "إضافة ملف";
+"Add File" = "إضافة الملف";
+"Add BOQ File" = "إضافة ملف جدول كميات";
+"Add Pricing File" = "إضافة ملف تسعير";
+"File added" = "تمت إضافة الملف";
+"e.g. Full BOQ" = "مثال: جدول الكميات الكامل";
+"e.g. Quotation" = "مثال: عرض السعر";
+"Leave it empty to use the file's own name." = "اتركه فارغاً ليُستخدم اسم الملف نفسه.";
+"The client sees each file exactly as it is." = "يرى العميل كل ملف كما هو تماماً.";
+"The client sees these only while pricing is shown." = "يرى العميل هذه الملفات فقط ما دام التسعير ظاهراً له.";
+"The client sees this file exactly as it is" = "يرى العميل هذا الملف كما هو تماماً";
+"The quantity and price switches hide columns of the items list only. Nothing can hide a column inside a spreadsheet or a PDF." = "مفاتيح الكميات والأسعار تُخفي أعمدة من قائمة البنود فقط، ولا شيء يستطيع إخفاء عمود داخل جدول بيانات أو ملف PDF.";
+"The client sees this only while pricing is shown" = "يرى العميل هذا فقط ما دام التسعير ظاهراً له";
+"Pricing is shown to the client now, so they can open this file as soon as it is added." = "التسعير ظاهر للعميل الآن، لذا يستطيع فتح هذا الملف فور إضافته.";
+"Pricing is hidden from the client now, so only your team sees this file until it is shown." = "التسعير مخفي عن العميل الآن، لذا لا يرى هذا الملف إلا فريقك إلى أن يُظهَر التسعير.";
+"It is removed from Documents and from the client's page too." = "سيُحذف أيضاً من المستندات ومن صفحة العميل.";
+"Add cost breakdown line items, or the price as a file." = "أضف بنود تفصيل التكلفة، أو التسعير كملف.";
+"Priced as a file" = "التسعير كملف";
+"Add quantities and specifications, or the BOQ as a file." = "أضف الكميات والمواصفات، أو جدول الكميات كملف.";
+"The BOQ as a file" = "جدول الكميات كملف";
