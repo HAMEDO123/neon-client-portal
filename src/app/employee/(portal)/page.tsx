@@ -21,6 +21,8 @@ import { periodOf } from "@/lib/payroll";
 import { cn } from "@/lib/utils";
 import { myDay } from "@/lib/now-next-queries";
 import { NowNextCard } from "@/components/employee/now-next-card";
+import { ClockCard } from "@/components/employee/clock-card";
+import { myClockDay } from "@/lib/clock-day";
 
 function greeting(hour: number) {
   if (hour < 12) return "Good Morning";
@@ -83,6 +85,10 @@ export default async function EmployeeDashboard({
   // Read on its own, like everything else on this page.
   const { state: nowNext, hours } = await myDay(employee.id);
 
+  // Their own day: when the device saw them in, and when they have to be gone
+  // by. One after the other, like everything else on this page.
+  const clockDay = await myClockDay(employee.id, todayDay, hours, timezone);
+
   // A job handed out by hand belongs to the first of today and tomorrow it
   // touches. One that started on or before today is today's — including one
   // whose days have run out, because unfinished work does not stop being
@@ -129,6 +135,10 @@ export default async function EmployeeDashboard({
             : `${openToday} task${openToday === 1 ? "" : "s"} still open today.`}
         </p>
       </div>
+
+      {/* First, because the end of the day is no longer the same for everybody
+          and this is the only place the person it belongs to can read it. */}
+      <ClockCard day={clockDay} timezone={timezone} />
 
       <WarningsCard warnings={warnings} timezone={timezone} />
 
