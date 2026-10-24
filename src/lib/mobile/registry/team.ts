@@ -28,6 +28,11 @@ import { getDayPlan } from "@/lib/day-plan-store";
 import { isAiConfigured } from "@/lib/ai/client";
 import { performanceFor, sinceDays, WINDOW_DAYS } from "@/lib/performance-queries";
 import { facesFor } from "@/lib/faces";
+import { listRoutines } from "@/lib/routine-store";
+import { deductionsForPeriod } from "@/lib/deduction-store";
+import { CUTOFF_SETTING, CUTOFF_TIME, HOURS_PER_TASK, WARN_TIME, cutoffOn } from "@/lib/task-cutoff";
+import { getSetting } from "@/lib/settings";
+import { dateToDayKey } from "@/lib/time";
 import { refreshTeamLocations, setLocationRequired, setOfficeLocation, teamLocations } from "@/lib/mobile/location-service";
 import { forgiveLocationDay, setLocationFine } from "@/lib/location-fine-store";
 import { RpcError, bool, guarded, guardedAction, heard, optParam, param, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
@@ -168,6 +173,57 @@ export const reads: ReadRegistry = {
   //     fixedAt, precise, permission, atOffice, metresFromOffice, arrivedAt, departedAt,
   //     sharedToday, finedThisMonth: ["YYYY-MM-DD", …] }] }
   "team/locations": guarded(requireAdmin, async () => teamLocations()),
+
+  // Routine tasks (lib/routine-store.ts, components/admin/routines.tsx): the
+  // standing instructions, on first, with whose each one is and their face.
+  // → { routines: [{ id, title, note, acceptance, priority, active, createdAt,
+  //     employee: { id, name, color, photoUrl, active } }] }
+  "team/routines": guarded(requireAdmin, async () => {
+    const rows = await listRoutines();
+    const faces = await facesFor(rows.map((row) => row.employee.id));
+    return {
+      routines: rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        note: row.note,
+        acceptance: row.acceptance,
+        priority: row.priority,
+        active: row.active,
+        createdAt: row.createdAt,
+        employee: { ...row.employee, photoUrl: faces[row.employee.id] ?? null },
+      })),
+    };
+  }),
+
+  // One month's cutoffs (components/admin/cutoffs.tsx), ?period=YYYY-MM, this
+  // month by default — taken-back ones included, marked, because they stay on
+  // record — and the nightly rule: whether it is on, when it charges, and what.
+  // → { period, periodLabel, rule: { on, at, warnAt, hoursPerTask },
+  //     cutoffs: [{ id, employeeId, employeeName, day, kind, hours, amount, reason, cancelledAt, createdAt }] }
+  "team/cutoffs": guarded(requireAdmin, async (params) => {
+    const timezone = await getTimezone();
+    const requested = optParam(params, "period");
+    const period = requested && /^\d{4}-\d{2}$/.test(requested) ? requested : periodOf(todayKey(timezone));
+    const rows = await deductionsForPeriod(period);
+    const setting = await getSetting(CUTOFF_SETTING);
+    return {
+      period,
+      periodLabel: periodLabel(period),
+      rule: { on: cutoffOn(setting), at: CUTOFF_TIME, warnAt: WARN_TIME, hoursPerTask: HOURS_PER_TASK },
+      cutoffs: rows.map((row) => ({
+        id: row.id,
+        employeeId: row.employee.id,
+        employeeName: row.employee.name,
+        day: dateToDayKey(row.day),
+        kind: row.kind,
+        hours: row.hours,
+        amount: row.amount,
+        reason: row.reason,
+        cancelledAt: row.cancelledAt,
+        createdAt: row.createdAt,
+      })),
+    };
+  }),
 
   // Mirrors src/app/admin/(dashboard)/payroll/page.tsx.
   "team/payroll": guarded(requireAdmin, async (params) => {

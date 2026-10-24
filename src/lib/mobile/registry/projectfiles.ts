@@ -9,6 +9,7 @@ import {
 import { createDocument, deleteDocument } from "@/lib/actions/document-actions";
 import { addBoqFile, createBoqItem, deleteBoqFile, deleteBoqItem } from "@/lib/actions/boq-actions";
 import { BOQ_FILE_CATEGORY } from "@/lib/boq-files";
+import { PRICING_FILE_CATEGORY } from "@/lib/pricing-files";
 import { addPricingFile, createPricingItem, deletePricingFile, deletePricingItem } from "@/lib/actions/pricing-actions";
 import { createMaterial, deleteMaterial } from "@/lib/actions/material-actions";
 import { createFurnitureItem, deleteFurnitureItem } from "@/lib/actions/furniture-actions";
@@ -130,9 +131,24 @@ export const reads: ReadRegistry = {
       prisma.project.findUnique({ where: { id: projectId }, select: { showPricing: true } }),
     ]);
     const total = items.filter((p) => !p.isOptional).reduce((sum, p) => sum + p.amount, 0);
+    // The price as a file, beside the items: documents filed under "Pricing"
+    // (lib/pricing-files.ts), the same shape as the BOQ's `files`.
+    const files = await prisma.document.findMany({
+      where: { projectId, category: PRICING_FILE_CATEGORY },
+      orderBy: { order: "asc" },
+    });
     return {
       showPricing: project?.showPricing ?? false,
       total,
+      files: files.map((d) => ({
+        id: d.id,
+        title: d.title,
+        fileUrl: d.fileUrl,
+        fileType: d.fileType,
+        fileSize: d.fileSize,
+        version: d.version,
+        createdAt: d.createdAt,
+      })),
       items: items.map((i) => ({
         id: i.id,
         category: i.category,

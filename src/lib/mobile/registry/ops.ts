@@ -17,6 +17,8 @@ import {
   setDeviceClockNow,
   setDeviceUserId,
   syncAttendanceNow,
+  editAttendanceDay,
+  removeAttendanceDay,
 } from "@/lib/actions/operations-actions";
 import { deleteSiteVisit, reportSiteVisit, scheduleSiteVisit, updateSiteVisit } from "@/lib/actions/site-visit-actions";
 import { savePlanningNotes, saveWorkHours } from "@/lib/actions/settings-actions";
@@ -116,6 +118,14 @@ export const actions: ActionRegistry = {
   // the next sync leaves it alone), delayHours/earlyHours clamped to 0–24.
   "ops/setAttendance": async (input) => setAttendance(input.form),
   "ops/deleteAttendance": async (input) => deleteAttendance(str(input.args[0], "id")),
+  // One day from the month's grid (components/admin/attendance-cell.tsx).
+  //   edit:   form `employeeId`, `day`, `delayHours`, `earlyHours`, `note?`, and
+  //           `breakOut` / `breakBack` as lists, one "HH:MM" pair per time out.
+  //           Saving makes the day MANUAL: the device never writes over it.
+  //   remove: args [employeeId, "YYYY-MM-DD"]
+  "ops/editAttendanceDay": async (input) => heard(await editAttendanceDay(input.form)),
+  "ops/removeAttendanceDay": async (input) =>
+    heard(await removeAttendanceDay(str(input.args[0], "employeeId"), str(input.args[1], "day"))),
   "ops/setDeviceUserId": async (input) => setDeviceUserId(str(input.args[0], "employeeId"), input.form),
   "ops/syncAttendanceNow": async () => syncAttendanceNow(),
   "ops/setDeviceClockNow": async () => setDeviceClockNow(),
