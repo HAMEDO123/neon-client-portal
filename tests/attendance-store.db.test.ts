@@ -231,6 +231,27 @@ describe("what a sync writes", () => {
     assert.equal(made.delayHours, 3, "the lateness is still what happened");
   });
 
+  it("reports when each person's day ends, so they can be told", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    const context = { hours: { ...DEFAULT_WORK_HOURS, graceMinutes: 5 }, timeZone: "Asia/Amman" };
+    const outcome = await applyAttendance(
+      [
+        {
+          ...day(`${PREFIX}901`, 3, "2026-09-25", 0),
+          arrivedAt: new Date("2026-09-25T11:00:00.000Z"), // 2:00 PM in Amman
+          arrivedLocal: "2:00 PM",
+        },
+      ],
+      context
+    );
+
+    const ends = outcome.dayEnds.find((row) => row.dayKey === "2026-09-25");
+    // 19:00 pushed back by the 2:55 they were late: 21:55, as minutes.
+    assert.equal(ends?.endsAtMinutes, 21 * 60 + 55);
+    assert.equal(ends?.employeeId, amal.id);
+  });
+
   it("never replaces a clock-out the manager did set", async (t) => {
     if (!reachable) return t.skip("no database");
 

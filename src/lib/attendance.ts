@@ -253,6 +253,51 @@ export function minutesInDay(time: string, startedAt: string): number | null {
  * because there is nothing to measure against and their figure is the whole
  * record of it.
  */
+export function dayCharge(input: {
+  hours: WorkHours;
+  timeZone: string;
+  dayKey: string;
+  arrivedAt: Date | null;
+  departedAt: Date | null;
+  awayMinutes?: number;
+  typed?: { delayHours: number; earlyHours: number; awayHours: number };
+}): { shortHours: number; endsAtMinutes: number | null } {
+  const { hours, timeZone, dayKey, arrivedAt, departedAt } = input;
+
+  if (!arrivedAt) {
+    const typed = input.typed;
+    const shortHours = typed
+      ? Math.max(0, typed.delayHours) + Math.max(0, typed.earlyHours) + Math.max(0, typed.awayHours)
+      : 0;
+    // Nothing to tell anybody: without an arrival there is no end to work out.
+    return { shortHours, endsAtMinutes: null };
+  }
+
+  const arrival = wallClockIn(timeZone, arrivedAt);
+  const endsAtMinutes = endOfDayMinutes(hours, dayKey, arrival, input.awayMinutes ?? 0);
+  // No clock-out costs nothing: the device cannot tell a forgotten scan from an
+  // early finish, and this must not invent one.
+  const left = departedAt ? minutesInDay(wallClockIn(timeZone, departedAt), arrival) : null;
+  return { shortHours: hoursShort(endsAtMinutes, left), endsAtMinutes };
+}
+
+/**
+ * A time somebody reads, from minutes past the day's midnight.
+ *
+ * Past midnight it carries on into the next morning rather than wrapping back
+ * to the start of the same day: a day that owes until 1443 ends at 12:03 AM,
+ * and saying "12:03 AM" to somebody who started at four in the afternoon is
+ * the only honest way to put it.
+ */
+export function clockLabel(minutes: number): string {
+  const total = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  const hour24 = Math.floor(total / 60);
+  const minute = total % 60;
+  const suffix = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
 export function chargedHours(input: {
   hours: WorkHours;
   timeZone: string;
@@ -264,20 +309,7 @@ export function chargedHours(input: {
   /** What the manager typed, for a day that has no times at all. */
   typed?: { delayHours: number; earlyHours: number; awayHours: number };
 }): number {
-  const { hours, timeZone, dayKey, arrivedAt, departedAt } = input;
-
-  if (!arrivedAt) {
-    const typed = input.typed;
-    if (!typed) return 0;
-    return Math.max(0, typed.delayHours) + Math.max(0, typed.earlyHours) + Math.max(0, typed.awayHours);
-  }
-
-  const arrival = wallClockIn(timeZone, arrivedAt);
-  const owedUntil = endOfDayMinutes(hours, dayKey, arrival, input.awayMinutes ?? 0);
-  // No clock-out costs nothing: the device cannot tell a forgotten scan from an
-  // early finish, and this must not invent one.
-  const left = departedAt ? minutesInDay(wallClockIn(timeZone, departedAt), arrival) : null;
-  return hoursShort(owedUntil, left);
+  return dayCharge(input).shortHours;
 }
 
 /**

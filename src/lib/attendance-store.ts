@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import {
   ARRIVAL,
   DEVICE,
-  chargedHours,
+  dayCharge,
   departureAfter,
   mayDeviceWrite,
   type DayAttendance,
@@ -60,6 +60,15 @@ export type SyncOutcome = {
   skippedInactive: number;
   /** Numbers on the device that no employee is paired with, each once. */
   unmapped: string[];
+  /**
+   * When each person's day ends, for the ones the device has seen arrive.
+   *
+   * Reported rather than acted on here: this file writes rows, and deciding
+   * whether somebody should be told is the sync's business. The end moves when
+   * a step-out is typed, so the same day can appear with a different time and
+   * is meant to.
+   */
+  dayEnds: { employeeId: string; dayKey: string; endsAtMinutes: number }[];
 };
 
 /**
@@ -90,6 +99,7 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
     updated: 0,
     keptManual: 0,
     departuresFilled: 0,
+    dayEnds: [],
     skippedInactive: 0,
     unmapped: [],
   };
@@ -115,11 +125,27 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
     // Step-outs already on the row push the end of this person's day back, so
     // they are part of what the day costs rather than a charge of their own.
     const awayMinutes = awayMinutesOf(storedBreaks(existing?.breaks));
-    /** What the day costs once written — nothing to say without a working day. */
-    const charge = (arrivedAt: Date | null, departedAt: Date | null) =>
-      context
-        ? { shortHours: chargedHours({ ...context, dayKey: day.dayKey, arrivedAt, departedAt, awayMinutes }) }
-        : {};
+    /**
+     * What the day costs once written, and when it ends — nothing to say
+     * without a working day to measure against.
+     *
+     * The end is collected on the way past because this is the only place that
+     * has the arrival, the step-outs and the studio's day in one hand.
+     */
+    const charge = (arrivedAt: Date | null, departedAt: Date | null) => {
+      if (!context) return {};
+      const { shortHours, endsAtMinutes } = dayCharge({
+        ...context,
+        dayKey: day.dayKey,
+        arrivedAt,
+        departedAt,
+        awayMinutes,
+      });
+      if (endsAtMinutes != null) {
+        outcome.dayEnds.push({ employeeId: person.id, dayKey: day.dayKey, endsAtMinutes });
+      }
+      return { shortHours };
+    };
 
     // The manager set the arrival; the device still says when they left —
     // and nothing else. The arrival and its lateness stay exactly as set.

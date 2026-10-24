@@ -1,9 +1,11 @@
-import { attendanceFromPunches, cutoffFor } from "@/lib/attendance";
+import { attendanceFromPunches, clockLabel, cutoffFor } from "@/lib/attendance";
 import { readClock, readPunches, type DeviceAddress, type DeviceClock } from "@/lib/attendance-device";
 import { currentDeviceAddress, relocateDevice, rememberDevice } from "@/lib/attendance-locate";
 import { applyAttendance, type SyncOutcome } from "@/lib/attendance-store";
+import { dispatchNotification } from "@/lib/notifications/engine";
 import { getSetting, getTimezone, getWorkHours, setSetting } from "@/lib/settings";
 import { dayKeyIn } from "@/lib/time";
+import { hoursOn, minutesOf, type WorkHours } from "@/lib/work-hours";
 
 // One pass of "ask the machine what it saw, and write it down".
 //
@@ -164,6 +166,7 @@ async function readAndWrite(
     const since = cutoffFor(options.since, dayKeyIn(timeZone, now));
     const days = all.filter((day) => day.dayKey >= since);
     const outcome = await applyAttendance(days, { hours, timeZone });
+    await tellWhenTheirDayEnds(outcome, hours);
     await setSetting(LAST_SYNC_KEY, new Date().toISOString()).catch(() => undefined);
 
     return {
@@ -226,4 +229,41 @@ export function describeSync(report: SyncReport): string {
   if (outcome.unmapped.length > 0) parts.push(`unpaired device numbers: ${outcome.unmapped.join(", ")}`);
 
   return `attendance: ${parts.join(", ")}`;
+}
+
+/**
+ * Tells somebody their own day has moved, and when it now ends.
+ *
+ * **Only when it has moved.** A message every morning saying the day ends at
+ * 7:00 PM is one nobody is reading by the end of the week, and the whole point
+ * of this one is that today is different.
+ *
+ * The time is part of the key, so a step-out typed at noon sends the new end
+ * rather than leaving somebody working to the old one — while the sync ten
+ * minutes later, with nothing changed, says nothing at all.
+ *
+ * Never throws into the sync: a message that could not be sent must not cost
+ * the studio the attendance it was reading.
+ */
+async function tellWhenTheirDayEnds(outcome: SyncOutcome, hours: WorkHours) {
+  for (const end of outcome.dayEnds) {
+    const usual = minutesOf(hoursOn(hours, end.dayKey).end);
+    if (usual == null || end.endsAtMinutes <= usual) continue;
+
+    const ends = clockLabel(end.endsAtMinutes);
+    // Said in as many words, because "ends at 12:03 AM" on its own reads as a
+    // mistake to somebody who started the same afternoon.
+    const midnight = end.endsAtMinutes >= 24 * 60 ? ", after midnight" : "";
+
+    await dispatchNotification({
+      employeeId: end.employeeId,
+      type: "ATTENDANCE_REMINDER",
+      title: `Your day ends at ${ends}`,
+      message:
+        `Today's hours end at ${ends}${midnight} instead of ${clockLabel(usual)} — the day is ` +
+        `the same length wherever it starts. Clock out then and nothing is taken off.`,
+      url: "/employee",
+      dedupeKey: `day-end:${end.employeeId}:${end.dayKey}:${end.endsAtMinutes}`,
+    }).catch(() => null);
+  }
 }

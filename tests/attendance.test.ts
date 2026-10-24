@@ -9,6 +9,7 @@ import {
   cutoffFor,
   deviceWallClock,
   earlyHours,
+  clockLabel,
   endOfDayMinutes,
   groupPunches,
   hoursShort,
@@ -415,5 +416,22 @@ describe("a day that is always eight hours", () => {
     assert.equal(minutesInDay("00:08", "16:08"), 24 * 60 + 8);
     assert.equal(minutesInDay("19:00", "11:00"), 19 * 60);
     assert.equal(minutesInDay("not a time", "11:00"), null);
+  });
+});
+
+describe("the time somebody is told their day ends", () => {
+  it("reads as a clock does", () => {
+    assert.equal(clockLabel(11 * 60), "11:00 AM");
+    assert.equal(clockLabel(12 * 60), "12:00 PM", "noon is twelve, not zero");
+    assert.equal(clockLabel(19 * 60), "7:00 PM");
+    assert.equal(clockLabel(22 * 60), "10:00 PM");
+    assert.equal(clockLabel(0), "12:00 AM", "midnight is twelve too");
+  });
+
+  it("carries on into the next morning rather than wrapping back", () => {
+    // Owed until three minutes past midnight: saying "12:03 AM" is the only
+    // honest answer for somebody who started at four in the afternoon.
+    assert.equal(clockLabel(24 * 60 + 3), "12:03 AM");
+    assert.equal(clockLabel(25 * 60 + 30), "1:30 AM");
   });
 });
