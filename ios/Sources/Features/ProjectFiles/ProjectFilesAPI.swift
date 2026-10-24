@@ -103,6 +103,20 @@ extension APIClient {
         try await perform("projectfiles/deleteBoqItem", args: [projectId, id])
     }
 
+    // The BOQ as a file. The server files it under "BOQ" itself and names it
+    // after the file when no title comes, so an empty title or version is
+    // left out rather than sent as a blank one.
+    func addBoqFile(projectId: String, title: String, version: String, file: UploadFile) async throws {
+        try await performUpload(
+            "projectfiles/addBoqFile", args: [projectId],
+            fields: tabFileFields(title: title, version: version), files: [refield(file, "file")]
+        )
+    }
+
+    func deleteBoqFile(projectId: String, id: String) async throws {
+        try await perform("projectfiles/deleteBoqFile", args: [projectId, id])
+    }
+
     // MARK: Pricing
 
     func createPricingItem(projectId: String, category: String, label: String, description: String, amount: Double, isOptional: Bool) async throws {
@@ -113,6 +127,27 @@ extension APIClient {
 
     func deletePricingItem(projectId: String, id: String) async throws {
         try await perform("projectfiles/deletePricingItem", args: [projectId, id])
+    }
+
+    // The price as a file — the same shape as a BOQ file, filed under "Pricing".
+    func addPricingFile(projectId: String, title: String, version: String, file: UploadFile) async throws {
+        try await performUpload(
+            "projectfiles/addPricingFile", args: [projectId],
+            fields: tabFileFields(title: title, version: version), files: [refield(file, "file")]
+        )
+    }
+
+    func deletePricingFile(projectId: String, id: String) async throws {
+        try await perform("projectfiles/deletePricingFile", args: [projectId, id])
+    }
+
+    private func tabFileFields(title: String, version: String) -> [String: String] {
+        var fields: [String: String] = [:]
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let version = version.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { fields["title"] = title }
+        if !version.isEmpty { fields["version"] = version }
+        return fields
     }
 
     // MARK: Materials

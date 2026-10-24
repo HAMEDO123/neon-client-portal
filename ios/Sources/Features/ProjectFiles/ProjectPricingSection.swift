@@ -2,7 +2,9 @@ import SwiftUI
 
 // Execution pricing — the web's pricing tab
 // (src/app/admin/(dashboard)/projects/[id]/pricing/page.tsx). The total is
-// the same sum the web computes: every non-optional line item.
+// the same sum the web computes: every non-optional line item. The price can
+// also be a file (a quotation, a priced spreadsheet), listed above the items
+// by `PFTabFilesBlock`; a file has no amount, so it never enters the total.
 
 struct ProjectPricingSection: View {
     let projectId: String
@@ -13,33 +15,59 @@ struct ProjectPricingSection: View {
     @State private var errorMessage: String?
     @State private var showAdd = false
     @State private var toDelete: PFPricingItem?
+    @State private var showAddFile = false
+    @State private var fileToDelete: PFTabFile?
+    #if DEBUG
+    /// The debug router's fixture: drawn from a fixed answer, reading nothing.
+    private var isPreview = false
+
+    init(projectId: String, preview: PFPricingResponse? = nil) {
+        self.projectId = projectId
+        _response = State(initialValue: preview)
+        isPreview = preview != nil
+    }
+    #endif
+
+    /// A file is pricing as much as a line item is: a project priced by one
+    /// PDF has pricing, and must not be told "No pricing yet".
+    private func hasPricing(_ data: PFPricingResponse) -> Bool {
+        !data.items.isEmpty || !(data.files ?? []).isEmpty
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
+            // The header's "Add Line Item" shows whenever the tab has
+            // anything on it — with only a file there is no empty state
+            // below to carry that action instead.
             pfSectionHeader(
                 L("Pricing"), subtitle: headerSubtitle, section: .pricing,
-                addTitle: L("Add Line Item"), showAdd: !(response?.items.isEmpty ?? true)
+                addTitle: L("Add Line Item"), showAdd: response.map(hasPricing) ?? false
             ) { showAdd = true }
 
             LoadStateView(value: response, error: errorMessage, cachedAt: cachedAt, retry: load) { data in
                 // Only worth a note once there's something to hide: a warning
                 // above an empty list read as two stacked cards about having
-                // nothing at all.
-                if !data.showPricing && !data.items.isEmpty {
+                // nothing at all. A pricing file is hidden by the same switch.
+                if !data.showPricing && hasPricing(data) {
                     hiddenNote
                 }
 
-                if data.items.isEmpty {
+                PFTabFilesBlock(
+                    kind: .pricing, files: data.files ?? [],
+                    onAdd: { showAddFile = true }, onDelete: { fileToDelete = $0 }
+                )
+
+                if !hasPricing(data) {
                     EmptyState(
                         symbol: PFSection.pricing.symbol,
                         title: L("No pricing yet"),
-                        detail: L("Add cost breakdown line items."),
+                        detail: L("Add cost breakdown line items, or the price as a file."),
                         actionTitle: L("Add Line Item"),
                         action: { showAdd = true },
                         hue: PFSection.pricing.hue,
                         card: true
                     )
-                } else {
+                } else if !data.items.isEmpty {
                     CardList(data.items) { item in
                         ListRow(
                             item.label,
@@ -90,6 +118,20 @@ struct ProjectPricingSection: View {
         .confirmDestructive(item: $toDelete, title: { L("Delete “%@”?", $0.label) }, actionTitle: L("Delete")) { item in
             Task { await delete(item) }
         }
+        .sheet(isPresented: $showAddFile) {
+            AddTabFileSheet(projectId: projectId, kind: .pricing, pricingShown: response?.showPricing ?? false) {
+                Haptic.success(); Toast.success(L("File added")); Task { await load() }
+            }
+        }
+        // It is the same record as the one under Documents, so the warning
+        // says it goes from there too rather than leaving that a surprise.
+        .confirmDestructive(
+            item: $fileToDelete, title: { L("Delete “%@”?", $0.title) },
+            message: { _ in L("It is removed from Documents and from the client's page too.") },
+            actionTitle: L("Delete")
+        ) { file in
+            Task { await deleteFile(file) }
+        }
     }
 
     // The note used to send people to "the project's Overview", which only
@@ -119,11 +161,17 @@ struct ProjectPricingSection: View {
     }
 
     private var headerSubtitle: String {
-        guard let response, !response.items.isEmpty else { return L("Cost breakdown line items") }
+        guard let response else { return L("Cost breakdown line items") }
+        guard !response.items.isEmpty else {
+            return (response.files ?? []).isEmpty ? L("Cost breakdown line items") : L("Priced as a file")
+        }
         return L("%d line items · %@", response.items.count, NeonFormat.money(response.total))
     }
 
     private func load() async {
+        #if DEBUG
+        if isPreview { return }
+        #endif
         do {
             let loaded = try await api.fetchPricing(projectId: projectId)
             response = loaded.value
@@ -160,6 +208,17 @@ struct ProjectPricingSection: View {
     private func delete(_ item: PFPricingItem) async {
         do {
             try await api.deletePricingItem(projectId: projectId, id: item.id)
+            Haptic.success()
+            await load()
+        } catch {
+            Haptic.error()
+            Toast.error(error)
+        }
+    }
+
+    private func deleteFile(_ file: PFTabFile) async {
+        do {
+            try await api.deletePricingFile(projectId: projectId, id: file.id)
             Haptic.success()
             await load()
         } catch {

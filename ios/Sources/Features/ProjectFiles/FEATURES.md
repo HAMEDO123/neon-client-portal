@@ -28,6 +28,10 @@ mobile-registry test, xcodegen + xcodebuild all green).
 - [x] Delete (confirm)
 - No total row — the web admin tab doesn't show one either (only the client
   page does, gated by `showBoqQuantities`/`showBoqPrices`, which is a client-page concern).
+- [x] The BOQ as a file (`addBoqFile` / `deleteBoqFile`, `ProjectTabFiles.swift`): a
+  "Files" list above the items (title, type, size, version, day; tap to open), add
+  (file, optional title and version) and delete (confirm). The sheet says the client
+  sees the file exactly as it is. With a file and no items there is no "No BOQ items yet".
 
 ## Pricing (`pricing-actions.ts`)
 - [x] "Pricing hidden from client" banner when `project.showPricing` is off
@@ -35,6 +39,13 @@ mobile-registry test, xcodegen + xcodebuild all green).
 - [x] Total Project Cost — same sum the web computes (non-optional lines), computed server-side in the read
 - [x] Add: category (menu), label, amount (required), description, optional toggle
 - [x] Delete (confirm)
+- [x] The price as a file (`addPricingFile` / `deletePricingFile`): the same "Files"
+  list, add and delete as BOQ's. The sheet says the client sees it only while pricing
+  is shown, and whether that is now; the hidden banner covers a file too. A project
+  priced by a file alone is never told "No pricing yet".
+- Debug screens from fixed answers, no network: `projectfiles-pricing-files-fixture`,
+  `-pricing-files-only-fixture`, `-boq-files-fixture`, `-boq-files-only-fixture`, and the
+  sheets `projectfiles-pricing-file-add`, `-pricing-file-add-hidden`, `-boq-file-add`.
 
 ## Materials (`material-actions.ts`)
 - [x] Grid with reference photo, category badge, name, brand, price

@@ -3,37 +3,61 @@ import SwiftUI
 // The Bill of Quantities — the web's boq tab
 // (src/app/admin/(dashboard)/projects/[id]/boq/page.tsx). No total row here:
 // the web admin doesn't show one either (only the client page does, gated by
-// showBoqQuantities/showBoqPrices).
+// showBoqQuantities/showBoqPrices). A BOQ the studio already has as a
+// spreadsheet or a PDF is listed above the items by `PFTabFilesBlock`.
 
 struct ProjectBoqSection: View {
     let projectId: String
 
     @EnvironmentObject private var api: APIClient
     @State private var items: [PFBoqItem]?
+    @State private var files: [PFTabFile] = []
     @State private var cachedAt: Date?
     @State private var errorMessage: String?
     @State private var showAdd = false
     @State private var toDelete: PFBoqItem?
+    @State private var showAddFile = false
+    @State private var fileToDelete: PFTabFile?
+    #if DEBUG
+    /// The debug router's fixture: drawn from a fixed answer, reading nothing.
+    private var isPreview = false
+
+    init(projectId: String, preview: PFBoqResponse? = nil) {
+        self.projectId = projectId
+        _items = State(initialValue: preview?.items)
+        _files = State(initialValue: preview?.files ?? [])
+        isPreview = preview != nil
+    }
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: NeonSpace.lg) {
+            // With only a file there is no empty state below to carry
+            // "Add Item", so the header carries it whenever there is anything.
             pfSectionHeader(
                 L("BOQ"), subtitle: headerSubtitle, section: .boq,
-                addTitle: L("Add Item"), showAdd: !(items?.isEmpty ?? true)
+                addTitle: L("Add Item"), showAdd: !(items?.isEmpty ?? true) || (items != nil && !files.isEmpty)
             ) { showAdd = true }
 
             LoadStateView(value: items, error: errorMessage, cachedAt: cachedAt, retry: load) { rows in
-                if rows.isEmpty {
+                PFTabFilesBlock(
+                    kind: .boq, files: files,
+                    onAdd: { showAddFile = true }, onDelete: { fileToDelete = $0 }
+                )
+
+                // A BOQ that is one file is a BOQ: "No BOQ items yet" under
+                // it would read as though the file did not count.
+                if rows.isEmpty && files.isEmpty {
                     EmptyState(
                         symbol: PFSection.boq.symbol,
                         title: L("No BOQ items yet"),
-                        detail: L("Add quantities and specifications."),
+                        detail: L("Add quantities and specifications, or the BOQ as a file."),
                         actionTitle: L("Add Item"),
                         action: { showAdd = true },
                         hue: PFSection.boq.hue,
                         card: true
                     )
-                } else {
+                } else if !rows.isEmpty {
                     CardList(rows) { item in
                         ListRow(
                             item.name,
@@ -91,6 +115,20 @@ struct ProjectBoqSection: View {
         .confirmDestructive(item: $toDelete, title: { L("Delete “%@”?", $0.name) }, actionTitle: L("Delete")) { item in
             Task { await delete(item) }
         }
+        .sheet(isPresented: $showAddFile) {
+            AddTabFileSheet(projectId: projectId, kind: .boq) {
+                Haptic.success(); Toast.success(L("File added")); Task { await load() }
+            }
+        }
+        // The same record as the one under Documents, so it says it goes
+        // from there too rather than leaving that a surprise.
+        .confirmDestructive(
+            item: $fileToDelete, title: { L("Delete “%@”?", $0.title) },
+            message: { _ in L("It is removed from Documents and from the client's page too.") },
+            actionTitle: L("Delete")
+        ) { file in
+            Task { await deleteFile(file) }
+        }
     }
 
     private func pricedLines(_ rows: [PFBoqItem]) -> [Double] {
@@ -98,16 +136,22 @@ struct ProjectBoqSection: View {
     }
 
     private var headerSubtitle: String {
-        guard let items, !items.isEmpty else { return L("Quantities and specifications") }
+        guard let items, !items.isEmpty else {
+            return files.isEmpty ? L("Quantities and specifications") : L("The BOQ as a file")
+        }
         let priced = pricedLines(items)
         guard !priced.isEmpty else { return L("%d lines", items.count) }
         return L("%d lines · %@", items.count, NeonFormat.money(priced.reduce(0, +)))
     }
 
     private func load() async {
+        #if DEBUG
+        if isPreview { return }
+        #endif
         do {
             let loaded = try await api.fetchBoq(projectId: projectId)
             items = loaded.value.items
+            files = loaded.value.files ?? []
             cachedAt = loaded.cachedAt
             errorMessage = nil
         } catch {
@@ -118,6 +162,17 @@ struct ProjectBoqSection: View {
     private func delete(_ item: PFBoqItem) async {
         do {
             try await api.deleteBoqItem(projectId: projectId, id: item.id)
+            Haptic.success()
+            await load()
+        } catch {
+            Haptic.error()
+            Toast.error(error)
+        }
+    }
+
+    private func deleteFile(_ file: PFTabFile) async {
+        do {
+            try await api.deleteBoqFile(projectId: projectId, id: file.id)
             Haptic.success()
             await load()
         } catch {

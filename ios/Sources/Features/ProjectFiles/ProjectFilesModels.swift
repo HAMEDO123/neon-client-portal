@@ -38,6 +38,21 @@ struct PFDocument: Codable, Identifiable, Equatable {
     let createdAt: String
 }
 
+/// A BOQ or a price that already exists as a file — a spreadsheet, a PDF.
+/// On the server it is a `Document` filed under "BOQ" or "Pricing", not a
+/// table of its own, so it is the same record the Documents tab lists. The
+/// read leaves the category out because the tab it comes back on already
+/// says which one it is.
+struct PFTabFile: Codable, Identifiable, Equatable {
+    let id: String
+    let title: String
+    let fileUrl: String
+    let fileType: String
+    let fileSize: Int?
+    let version: String?
+    let createdAt: String
+}
+
 struct PFBoqItem: Codable, Identifiable, Equatable {
     let id: String
     let category: String
@@ -118,8 +133,10 @@ struct PFComment: Codable, Identifiable, Equatable {
 
 struct PFDrawingsResponse: Codable { let drawings: [PFDrawing] }
 struct PFDocumentsResponse: Codable { let documents: [PFDocument] }
-struct PFBoqResponse: Codable { let items: [PFBoqItem] }
-struct PFPricingResponse: Codable { let showPricing: Bool; let total: Double; let items: [PFPricingItem] }
+// `files` is optional on both: a server from before a file could be added
+// leaves it out, and that has to read as "no files", not fail the whole tab.
+struct PFBoqResponse: Codable { let files: [PFTabFile]?; let items: [PFBoqItem] }
+struct PFPricingResponse: Codable { let showPricing: Bool; let total: Double; let files: [PFTabFile]?; let items: [PFPricingItem] }
 struct PFMaterialsResponse: Codable { let materials: [PFMaterial] }
 struct PFFurnitureResponse: Codable { let furniture: [PFFurnitureItem] }
 struct PFApprovalsResponse: Codable { let approvals: [PFApproval] }
