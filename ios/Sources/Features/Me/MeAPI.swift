@@ -134,6 +134,16 @@ extension APIClient {
         try await perform("me/requests/report/save", form: ["text": text])
     }
 
+    /// One more thing done, added to today's report from the Today screen.
+    ///
+    /// The same report the long box on Requests writes — appended to rather
+    /// than replaced, so the day can be written in pieces as it happens and
+    /// the box still edits the whole thing afterwards.
+    @discardableResult
+    func addToDailyReport(line: String) async throws -> ActionOutcome {
+        try await perform("me/requests/report/add", form: ["line": line])
+    }
+
     // MARK: - Profile tab
 
     func fetchProfile() async throws -> Loaded<ProfileResponse> {

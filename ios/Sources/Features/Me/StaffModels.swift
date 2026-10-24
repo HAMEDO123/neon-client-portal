@@ -39,10 +39,21 @@ let warningLimit = 3
 
 struct TodayResponse: Decodable {
     let dayKey: String
+    /// Today's report so far. Optional, so the app still decodes against a
+    /// server that predates it.
+    let report: TodayReport?
     let nowNext: NowNext
     let hours: WorkHours
     let tasks: [StaffTask]
     let tomorrow: [StaffTask]
+}
+
+/// The day in the employee's own words: the whole text, and the lines it is
+/// made of, so the Today screen can show what has been written without
+/// splitting it a second way.
+struct TodayReport: Decodable {
+    let text: String
+    let lines: [String]
 }
 
 struct NowNext: Decodable {

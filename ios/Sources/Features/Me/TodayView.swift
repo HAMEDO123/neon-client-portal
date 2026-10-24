@@ -39,6 +39,14 @@ struct TodayView: View {
                     if let day {
                         TodayHero(dayKey: day.dayKey, employeeName: employeeName, tasks: day.tasks)
                         NowNextCard(state: day.nowNext, hours: day.hours)
+
+                        // Written where the work is, a line at a time. The
+                        // report lived under More and was remembered at the end
+                        // of the day, which is the one moment the morning has
+                        // already gone.
+                        TodayReportCard(lines: day.report?.lines ?? []) { line in
+                            await addToReport(line)
+                        }
                         // What this phone shares with the team map, and when.
                         LocationSharingCard()
 
@@ -125,6 +133,17 @@ struct TodayView: View {
         async let dayTask: Void = loadDay()
         async let meTask: Void = loadName()
         _ = await (dayTask, meTask)
+    }
+
+    private func addToReport(_ line: String) async {
+        do {
+            try await api.addToDailyReport(line: line)
+            Haptic.success()
+            Toast.success(L("Added"))
+            await loadDay()
+        } catch {
+            Toast.error(error.localizedDescription)
+        }
     }
 
     private func loadDay() async {
@@ -487,4 +506,63 @@ struct TaskRow: View {
 /// badge draws as a plain pulsing dot instead of a symbol.
 private func taskRowGlyph(_ state: String) -> String {
     StateBadge.symbol(for: state) ?? "play.circle.fill"
+}
+
+/// Today's report, written a line at a time as things are finished.
+///
+/// It is the same report as the long box under More — appended to, never
+/// replaced — so there is one account of the day and no question of which is
+/// the real one. Asking for a day's work in one sitting asks for it at the
+/// worst moment: by the end of it, what gets written is the part somebody can
+/// still remember.
+private struct TodayReportCard: View {
+    let lines: [String]
+    let onAdd: (String) async -> Void
+
+    @State private var line = ""
+    @State private var saving = false
+
+    private var said: String { line.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        SectionCard(
+            L("Today's report"),
+            subtitle: lines.isEmpty ? L("Add each thing as you finish it") : L("%d written so far", lines.count),
+            symbol: "square.and.pencil",
+            hue: .indigo
+        ) {
+            VStack(alignment: .leading, spacing: NeonSpace.sm) {
+                ForEach(Array(lines.enumerated()), id: .offset) { index, written in
+                    Text(written)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.neonInk)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if index != lines.count - 1 { NeonDivider() }
+                }
+
+                NeonTextField(
+                    "",
+                    text: $line,
+                    prompt: L("Finished the kitchen drawings…"),
+                    submitLabel: .done,
+                    onSubmit: { Task { await add() } }
+                )
+
+                NeonButton(L("Add to today's report"), symbol: "plus") {
+                    await add()
+                }
+                .disabled(saving || said.isEmpty)
+            }
+        }
+    }
+
+    private func add() async {
+        guard !said.isEmpty, !saving else { return }
+        saving = true
+        await onAdd(said)
+        // Cleared by hand: the next line usually follows the last one straight
+        // away, and the field is where the thumb already is.
+        line = ""
+        saving = false
+    }
 }
