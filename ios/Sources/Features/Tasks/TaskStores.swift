@@ -146,6 +146,30 @@ extension APIClient {
     func setJobState(id: String, state: String) async throws -> ActionOutcome {
         try await perform("tasks/setJobState", args: [id, state])
     }
+
+    // MARK: Routine tasks — the manager's alone
+
+    func fetchRoutines() async throws -> Loaded<RoutinesResponse> {
+        try await read("team/routines", as: RoutinesResponse.self)
+    }
+
+    /// Form: `employeeId`, `title`, and optionally `acceptance`, `note`, `priority`.
+    @discardableResult
+    func createRoutine(form: [String: Any]) async throws -> ActionOutcome {
+        try await perform("team/routines/create", form: form)
+    }
+
+    /// Pauses a routine or brings it back. Bringing it back puts today's on the list.
+    @discardableResult
+    func setRoutineActive(id: String, active: Bool) async throws -> ActionOutcome {
+        try await perform("team/routines/active", args: [id, active])
+    }
+
+    /// For good. The days it already handed out stay, as ordinary jobs.
+    @discardableResult
+    func deleteRoutine(id: String) async throws -> ActionOutcome {
+        try await perform("team/routines/delete", args: [id])
+    }
 }
 
 // MARK: - Loaders
@@ -181,8 +205,23 @@ final class TaskWeekStore: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var loaded = false
     @Published var week: String?
+    #if DEBUG
+    /// A debug fixture: drawn from a fixed answer, reading nothing.
+    private var isPreview = false
+
+    convenience init(preview: WeekBoardResponse) {
+        self.init()
+        value = preview
+        loaded = true
+        week = preview.weekStart
+        isPreview = true
+    }
+    #endif
 
     func load(_ api: APIClient) async {
+        #if DEBUG
+        if isPreview { return }
+        #endif
         do {
             let loaded = try await api.fetchTaskWeek(week: week)
             value = loaded.value
@@ -190,6 +229,43 @@ final class TaskWeekStore: ObservableObject {
             errorMessage = nil
             self.loaded = true
             week = loaded.value.weekStart
+        } catch {
+            if !self.loaded { errorMessage = error.localizedDescription }
+        }
+    }
+}
+
+/// The routine tasks: what somebody does every working day. Read with the
+/// week, whose card says how many there are, and again after any change —
+/// which changes today's jobs too, so the week is read again as well.
+@MainActor
+final class TaskRoutinesStore: ObservableObject {
+    @Published private(set) var value: RoutinesResponse?
+    @Published private(set) var cachedAt: Date?
+    @Published private(set) var errorMessage: String?
+    @Published private(set) var loaded = false
+    #if DEBUG
+    /// A debug fixture: drawn from a fixed answer, reading nothing.
+    private var isPreview = false
+
+    convenience init(preview: RoutinesResponse) {
+        self.init()
+        value = preview
+        loaded = true
+        isPreview = true
+    }
+    #endif
+
+    func load(_ api: APIClient) async {
+        #if DEBUG
+        if isPreview { return }
+        #endif
+        do {
+            let loaded = try await api.fetchRoutines()
+            value = loaded.value
+            cachedAt = loaded.cachedAt
+            errorMessage = nil
+            self.loaded = true
         } catch {
             if !self.loaded { errorMessage = error.localizedDescription }
         }

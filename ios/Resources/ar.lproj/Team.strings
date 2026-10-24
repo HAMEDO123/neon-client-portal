@@ -240,3 +240,44 @@
 "%@ · %@" = "%@ · %@";
 
 "You · manager" = "أنت · المدير";
+
+/* Cutoffs on the payroll screen (PayrollCutoffs.swift) */
+"Taken off" = "خصم";
+"Cutoffs" = "الخصومات";
+"Money taken off for a reason." = "مبالغ تُخصم لسبب.";
+"Add one yourself, or take any of them back — the person is told either way." = "أضف خصمًا بنفسك، أو تراجع عن أي خصم — ويُبلَّغ الشخص في الحالتين.";
+"The cutoffs could not be read" = "تعذّرت قراءة الخصومات";
+"Add a cutoff" = "إضافة خصم";
+"A cutoff is added to this month's pay, so it is added while looking at this month." = "يُضاف الخصم إلى راتب هذا الشهر، لذا يُضاف من صفحة هذا الشهر.";
+"Turn the rule on?" = "تفعيل القاعدة؟";
+"Turn on" = "تفعيل";
+"Everybody is told about it first, and only the days after that count." = "يُبلَّغ الجميع بها أولًا، ولا تُحتسب إلا الأيام التي تلي ذلك.";
+"Off. Nothing is taken off automatically for a late task." = "متوقفة. لا يُخصم شيء تلقائيًا عن مهمة متأخرة.";
+"One hour per task not handed in by %@" = "ساعة عن كل مهمة لم تُسلَّم قبل %@";
+"%@ hours per task not handed in by %@" = "%@ ساعات عن كل مهمة لم تُسلَّم قبل %@";
+"an hour's pay" = "أجر ساعة";
+"%@ hours' pay" = "أجر %@ ساعات";
+"On. Everybody is warned at %@ about tasks due that day and still out; at %@ each one costs %@. Nobody is charged before they were told about the rule." = "مفعّلة. يُنبَّه الجميع الساعة %@ إلى المهام المستحقة ذلك اليوم ولم تُسلَّم؛ وعند %@ تكلّف كل واحدة منها %@. لا يُخصم من أحد قبل أن يُبلَّغ بالقاعدة.";
+"The rule is on" = "القاعدة مفعّلة";
+"The rule is off" = "القاعدة متوقفة";
+"Everybody is told first." = "يُبلَّغ الجميع أولًا.";
+"No cutoffs this month" = "لا خصومات هذا الشهر";
+"1 cutoff counts this month" = "خصم واحد محتسب هذا الشهر";
+"%d cutoffs count this month" = "%d خصومات محتسبة هذا الشهر";
+"Show fewer" = "عرض أقل";
+"Show all %d" = "عرض الكل (%d)";
+"Taken back" = "تم التراجع عنه";
+"%@ has been told." = "تم إبلاغ %@.";
+"automatic" = "تلقائي";
+"by you" = "منك";
+"Take back" = "تراجع";
+"Take this cutoff back?" = "التراجع عن هذا الخصم؟";
+"%@ gets it back and is told. It stays on record, struck through." = "يسترد %@ المبلغ ويُبلَّغ بذلك. ويبقى الخصم في السجل مشطوبًا.";
+"About %@ at %@'s rate now." = "قرابة %@ بأجر %@ الحالي.";
+"Taken off this month's pay. They are told the reason." = "يُخصم من راتب هذا الشهر. ويُبلَّغ الشخص بالسبب.";
+"Add cutoff" = "إضافة الخصم";
+"Who" = "من";
+"Hours of pay" = "ساعات من الأجر";
+"Amount in JOD" = "مبلغ بالدينار";
+"The reason — they are told it" = "السبب — يُبلَّغ به الشخص";
+"Cutoff added" = "تمت إضافة الخصم";

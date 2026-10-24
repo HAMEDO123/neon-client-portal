@@ -379,3 +379,33 @@
 "About the task" = "عن المهمة";
 "About the task: %@" = "عن المهمة: %@";
 "Opens the task" = "يفتح المهمة";
+
+/* Routine tasks (RoutinesView.swift), and a routine's day on a job row */
+"Every day" = "كل يوم";
+"Opens the routine tasks" = "يفتح المهام اليومية";
+"Done every working day" = "تُنجز كل يوم عمل";
+"No routine tasks yet." = "لا توجد مهام يومية بعد.";
+"1 routine task, on the list each working day" = "مهمة يومية واحدة، على القائمة كل يوم عمل";
+"%d routine tasks, on the list each working day" = "%d مهام يومية، على القائمة كل يوم عمل";
+"%@ · %d paused" = "%@ · %d متوقفة مؤقتًا";
+"New routine task" = "مهمة يومية جديدة";
+"Remove this routine task?" = "إزالة هذه المهمة اليومية؟";
+"The days already handed out stay." = "الأيام التي أُسندت من قبل تبقى.";
+"Routine tasks" = "المهام اليومية";
+"Each one is put on that person's list every morning as a task of its own, due that day." = "كل واحدة توضع على قائمة صاحبها كل صباح كمهمة مستقلة، موعدها ذلك اليوم.";
+"Add one, and it is on that person's list from today." = "أضف واحدة، وتظهر على قائمة صاحبها من اليوم.";
+"Add a routine task" = "إضافة مهمة يومية";
+"Resume" = "استئناف";
+"%@ · every working day" = "%@ · كل يوم عمل";
+"%@ · this person's account is off" = "%@ · حساب هذا الشخص موقوف";
+"Resumed" = "تم الاستئناف";
+"Today's is on the list, if the studio works today." = "مهمة اليوم على القائمة، إن كان اليوم يوم عمل.";
+"It makes no more days. The ones it made stay." = "لن تُضاف أيام جديدة. الأيام السابقة تبقى.";
+"Done every working day, as a task of its own" = "تُنجز كل يوم عمل، كمهمة مستقلة";
+"Routine task" = "المهمة اليومية";
+"Who does it" = "من يقوم بها";
+"What is done every day" = "ما الذي يُنجز كل يوم";
+"What the day's photo is checked against — optional" = "ما تُطابَق عليه صورة اليوم — اختياري";
+"On the list from today" = "على القائمة من اليوم";
+"If the studio works today, today's is handed out as soon as it is added. A day the studio does not work makes none." = "إن كان اليوم يوم عمل، تُسند مهمة اليوم فور إضافتها. اليوم الذي لا يعمل فيه الاستوديو لا يُضيف شيئًا.";
+"Every working day, from today." = "كل يوم عمل، من اليوم.";

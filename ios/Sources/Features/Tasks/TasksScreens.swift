@@ -12,6 +12,10 @@ import SwiftUI
 ///   tasks-team    team · people
 ///   tasks-person  lists
 ///   tasks-process sections · steps · owners · periods
+///
+/// `tasks-routines-fixture`, `tasks-routine-new-fixture` and
+/// `tasks-week-fixture` draw the routine tasks and a week with a routine's
+/// day on it from fixed answers (`TasksFixtures`), reading nothing.
 enum TasksScreens {
     static let ids: [String] = [
         "tasks-board", "tasks-week", "tasks-chat", "tasks-team",
@@ -23,6 +27,7 @@ enum TasksScreens {
         "tasks-process-owner", "tasks-process-owner-new",
         "tasks-process-period", "tasks-process-period-new",
         "tasks-briefing", "tasks-briefing-list",
+        "tasks-routines-fixture", "tasks-routine-new-fixture", "tasks-week-fixture",
     ]
 
     private static let briefingTeam = [
@@ -55,6 +60,19 @@ enum TasksScreens {
         // made up here, so nothing is asked of the assistant or sent anywhere.
         case "tasks-briefing": return AnyView(TaskBriefingView(preview: "", answer: nil, team: briefingTeam))
         case "tasks-briefing-list": return AnyView(TaskBriefingView(preview: briefingWords, answer: briefingAnswer, team: briefingTeam))
+
+        // Routine tasks from fixed answers: the list, the form over it, and
+        // a week whose card and rows show them.
+        case "tasks-routines-fixture":
+            return debugPushed(RoutinesView(store: TaskRoutinesStore(preview: TasksFixtures.routines), team: TasksFixtures.week.team))
+        case "tasks-routine-new-fixture":
+            return AnyView(
+                NavigationStack { RoutinesView(store: TaskRoutinesStore(preview: TasksFixtures.routines), team: TasksFixtures.week.team) }
+                    .sheet(isPresented: .constant(true)) {
+                        RoutineEditorSheet(team: TasksFixtures.week.team) {}
+                    }
+            )
+        case "tasks-week-fixture": return AnyView(TasksDebugWeekFixture())
         case "tasks-board": return AnyView(TasksRootView(initialSegment: .board))
         case "tasks-week": return AnyView(TasksRootView(initialSegment: .week))
         case "tasks-chat": return AnyView(TasksRootView(initialSegment: .chat))
@@ -163,6 +181,75 @@ enum TasksScreens {
         if let job = week.tasks.first { return FoundJob(job: job, team: week.team) }
         let before = try await api.fetchTaskWeek(week: week.previousWeek).value
         return before.tasks.first.map { FoundJob(job: $0, team: before.team) }
+    }
+}
+
+/// Fixed answers for the routine screens. Decoded from JSON, as the server
+/// would send them, so a model that stops matching the answer fails here too.
+enum TasksFixtures {
+    static let week: WeekBoardResponse = {
+        let json = """
+        {"timezone":"Asia/Amman","todayKey":"2026-10-21","tomorrowKey":"2026-10-22","weekStart":"2026-10-18",
+         "weekKeys":["2026-10-18","2026-10-19","2026-10-20","2026-10-21","2026-10-22","2026-10-23","2026-10-24"],
+         "previousWeek":"2026-10-11","nextWeek":"2026-10-25",
+         "team":[
+           {"id":"fx-w","name":"Wael","role":"Designer","color":"cyan"},
+           {"id":"fx-s","name":"Sally","role":"3D visualiser","color":"pink"},
+           {"id":"fx-a","name":"Amro","role":"Site engineer","color":"orange"}
+         ],
+         "tasks":[
+           {"id":"fx-j1","employeeId":"fx-w","title":"تصوير لوحة الموقع وإرسالها","startKey":"2026-10-21","endKey":"2026-10-21",
+            "state":"TODO","priority":"MEDIUM","routineId":"fx-r1"},
+           {"id":"fx-j2","employeeId":"fx-s","title":"Update the render log","startKey":"2026-10-21","endKey":"2026-10-21",
+            "state":"SUBMITTED","priority":"HIGH","routineId":"fx-r2"},
+           {"id":"fx-j3","employeeId":"fx-a","title":"Site visit — Abdoun villa","startKey":"2026-10-20","endKey":"2026-10-22",
+            "state":"IN_PROGRESS","priority":"MEDIUM"},
+           {"id":"fx-j4","employeeId":"fx-w","title":"تصوير لوحة الموقع وإرسالها","startKey":"2026-10-20","endKey":"2026-10-20",
+            "state":"DONE","priority":"MEDIUM","routineId":"fx-r1"}
+         ]}
+        """
+        // A fixture that does not decode is a bug in this file; crash loudly.
+        return try! JSONDecoder().decode(WeekBoardResponse.self, from: Data(json.utf8))
+    }()
+
+    static let routines: RoutinesResponse = {
+        let json = """
+        {"routines":[
+          {"id":"fx-r1","title":"تصوير لوحة الموقع وإرسالها","note":null,
+           "acceptance":"صورة واضحة للوحة\\nمرسلة قبل الخامسة","priority":"MEDIUM","active":true,"createdAt":"2026-10-01T08:00:00.000Z",
+           "employee":{"id":"fx-w","name":"Wael","color":"cyan","photoUrl":null,"active":true}},
+          {"id":"fx-r2","title":"Update the render log","note":"Every render sent to a client that day.",
+           "acceptance":"A screenshot of today's rows","priority":"HIGH","active":true,"createdAt":"2026-10-02T08:00:00.000Z",
+           "employee":{"id":"fx-s","name":"Sally","color":"pink","photoUrl":null,"active":true}},
+          {"id":"fx-r3","title":"Check the site store's stock","note":null,"acceptance":null,
+           "priority":"LOW","active":false,"createdAt":"2026-09-20T08:00:00.000Z",
+           "employee":{"id":"fx-a","name":"Amro","color":"orange","photoUrl":null,"active":true}},
+          {"id":"fx-r4","title":"Water the office plants","note":null,"acceptance":null,
+           "priority":"MEDIUM","active":true,"createdAt":"2026-09-01T08:00:00.000Z",
+           "employee":{"id":"fx-n","name":"Nizar","color":"purple","photoUrl":null,"active":false}}
+        ]}
+        """
+        return try! JSONDecoder().decode(RoutinesResponse.self, from: Data(json.utf8))
+    }()
+}
+
+/// The Week segment drawn from the fixture: the week card, the "Every day"
+/// card under it, and the days, with no network.
+private struct TasksDebugWeekFixture: View {
+    @StateObject private var week = TaskWeekStore(preview: TasksFixtures.week)
+    @StateObject private var routines = TaskRoutinesStore(preview: TasksFixtures.routines)
+
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { proxy in
+                NeonScroll(spacing: NeonSpace.stack) {
+                    WeekBoardView(store: week, routines: routines, editing: .constant(nil), proxy: proxy)
+                }
+                .debugScroll(proxy)
+            }
+            .navigationTitle(L("Tasks"))
+            .navigationBarTitleDisplayMode(.inline)
+        }
     }
 }
 

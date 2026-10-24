@@ -46,6 +46,7 @@ struct TasksRootView: View {
     @Environment(\.isPresented) private var isPushed
     @StateObject private var boardStore = TaskBoardStore()
     @StateObject private var weekStore = TaskWeekStore()
+    @StateObject private var routinesStore = TaskRoutinesStore()
     @StateObject private var peopleStore = TaskPeopleStore()
     @StateObject private var chatCards = ChatCardsLoader()
     @State private var segment: Segment
@@ -68,14 +69,18 @@ struct TasksRootView: View {
         .task {
             await boardStore.load(api)
             await weekStore.load(api)
+            await routinesStore.load(api)
         }
         .onReceive(NotificationCenter.default.publisher(for: .neonDataChanged)) { note in
             // A task moved — or somebody's face changed, which every chip,
             // job row and person card here draws.
-            guard let name = note.object as? String, name.hasPrefix("tasks/") || isFaceChange(name) else { return }
+            // A routine added or brought back puts today's job on the week.
+            guard let name = note.object as? String,
+                  name.hasPrefix("tasks/") || name.hasPrefix("team/routines/") || isFaceChange(name) else { return }
             Task {
                 await boardStore.load(api)
                 await weekStore.load(api)
+                if name.hasPrefix("team/routines/") || isFaceChange(name) { await routinesStore.load(api) }
                 // Read once the Team segment has been opened; until then it
                 // loads itself when it first appears.
                 if peopleStore.loaded { await peopleStore.load(api) }
@@ -100,7 +105,7 @@ struct TasksRootView: View {
                 Group {
                     switch segment {
                     case .board: TaskBoardView(store: boardStore)
-                    case .week: WeekBoardView(store: weekStore, editing: $jobSheet, proxy: proxy)
+                    case .week: WeekBoardView(store: weekStore, routines: routinesStore, editing: $jobSheet, proxy: proxy)
                     case .chat: ManagerTasksView(cards: chatCards, team: weekStore.value?.team ?? boardStore.value?.team ?? []) { openingTeamChat = true }
                     case .team: TaskPeopleView(store: peopleStore)
                     }

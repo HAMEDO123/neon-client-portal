@@ -75,6 +75,18 @@ Everything below is implemented natively unless marked **NOT BUILT**.
   done when" (acceptance), note, and — once a job exists — its own
   TODO/IN_PROGRESS/DONE state buttons and delete-this-job.
 - A job that came from a chat task card shows a "from a chat task card" note.
+- A job with `routineId` (one day of a routine task) wears an "Every day"
+  badge under its owner's name; so does the person's own row and job page
+  in Me, in place of "Handed out directly".
+- "Every day" card under the week card (`RoutinesView.swift`, web
+  `components/admin/routines.tsx`): how many routines run, whose faces,
+  opening the list (`team/routines`): face, title, who, what counts as done,
+  On/Paused, priority; Pause/Resume (`team/routines/active`), Remove with
+  confirmation (`team/routines/delete`); the floating + adds one (who, title,
+  priority, counts as done when, note — `team/routines/create`). A routine
+  change reads the week again, since it puts today's job on it.
+  Debug: `tasks-routines-fixture`, `tasks-routine-new-fixture`,
+  `tasks-week-fixture` (fixed answers, no network).
 - Delete with confirmation (the row's context menu and inside the editor —
   the days are cards on a scroll now, not a `List`, so there is no swipe).
 

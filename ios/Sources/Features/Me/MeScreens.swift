@@ -89,8 +89,8 @@ private struct MeFixtureTasks: View {
 }
 
 enum MeFixtures {
-    /// Six pieces of work: two under way (one high priority and late), one
-    /// to do, two with the manager, one approved.
+    /// Seven pieces of work: two under way (one high priority and late), two
+    /// to do (one of them a routine's day), two with the manager, one approved.
     static let tasks: MyTasksResponse? = {
         let json = """
         {"todayKey":"2026-10-10","tasks":[
@@ -106,7 +106,9 @@ enum MeFixtures {
           {"id":"fx-j1","employeeId":"fx-me","title":"تجهيز عينات الرخام للعميل","startKey":"2026-10-10","endKey":"2026-10-11",
            "state":"IN_PROGRESS","priority":"HIGH","late":false},
           {"id":"fx-j2","employeeId":"fx-me","title":"Order the kitchen handles","startKey":"2026-10-09","endKey":"2026-10-12",
-           "state":"SUBMITTED","priority":"LOW","late":false}
+           "state":"SUBMITTED","priority":"LOW","late":false},
+          {"id":"fx-j3","employeeId":"fx-me","title":"تصوير لوحة الموقع وإرسالها","startKey":"2026-10-10","endKey":"2026-10-10",
+           "state":"TODO","priority":"MEDIUM","late":false,"routineId":"fx-r1"}
         ]}
         """
         return try? JSONDecoder().decode(MyTasksResponse.self, from: Data(json.utf8))

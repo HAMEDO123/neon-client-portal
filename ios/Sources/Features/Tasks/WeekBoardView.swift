@@ -11,6 +11,8 @@ import SwiftUI
 struct WeekBoardView: View {
     @EnvironmentObject var api: APIClient
     @ObservedObject var store: TaskWeekStore
+    /// The routine tasks, for the "Every day" card under the week.
+    @ObservedObject var routines: TaskRoutinesStore
     @Binding var editing: JobSheetTarget?
     /// The page's scroll, so tapping a day in the strip goes to its card.
     var proxy: ScrollViewProxy?
@@ -51,6 +53,11 @@ struct WeekBoardView: View {
             VStack(alignment: .leading, spacing: NeonSpace.stack) {
                 weekCard(week, jobs: theirs)
                     .neonAppear()
+
+                // What is handed out every working day, by itself: each day
+                // it makes is one of the jobs below.
+                RoutinesCard(store: routines, team: week.team)
+                    .neonAppear(delay: 0.05)
 
                 if !week.team.isEmpty {
                     TasksPersonFilter(selection: $person, people: week.team)
@@ -315,6 +322,10 @@ struct WeekBoardView: View {
                             .font(.system(.caption, weight: .medium))
                             .foregroundStyle(Color.neonTextTertiary)
                             .lineLimit(1)
+                    }
+                    // Nobody handed this one out today: a routine made it.
+                    if job.routineId?.isEmpty == false {
+                        BadgeView(text: L("Every day"), tone: .purple, symbol: "repeat")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

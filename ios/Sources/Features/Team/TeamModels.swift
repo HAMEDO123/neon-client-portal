@@ -264,7 +264,77 @@ struct TeamReceipt: Decodable, Identifiable {
     let countedAmount: Double?
 }
 
+// MARK: - Cutoffs (team/cutoffs)
+
+/// `team/cutoffs?period=YYYY-MM`: money taken off for a stated reason, one
+/// row each — the manager's own and the ones the end-of-day rule makes —
+/// and that rule's switch. Payroll's totals already include every live one.
+struct TeamCutoffsResponse: Decodable {
+    let period: String
+    let periodLabel: String?
+    let rule: TeamCutoffRule
+    let cutoffs: [TeamCutoff]
+}
+
+/// The rule as the server runs it. The times are the server's own
+/// ("23:59", "22:59" on the studio's clock), so the screen says whatever it
+/// is told rather than a time written into the app.
+struct TeamCutoffRule: Decodable {
+    let on: Bool
+    let at: String
+    let warnAt: String
+    let hoursPerTask: Double
+}
+
+struct TeamCutoff: Decodable, Identifiable {
+    let id: String
+    let employeeId: String
+    let employeeName: String
+    /// The studio's day it is charged on.
+    let day: String
+    /// "MANUAL" (the manager's) or "TASK" (a job not handed in in time).
+    let kind: String
+    /// Hours of pay, when it was given in hours; the money is fixed on the
+    /// row either way, priced at that person's rate when it was written.
+    let hours: Double?
+    let amount: Double
+    /// What the person was told.
+    let reason: String
+    /// Set once it was taken back: it stays on record, struck through.
+    let cancelledAt: String?
+    let createdAt: String?
+
+    var isTakenBack: Bool { cancelledAt != nil }
+    var isAutomatic: Bool { kind == "TASK" }
+}
+
 // MARK: - Shared formatting for this area
+
+/// A studio clock time from the server ("23:59") in the reader's own way of
+/// writing one — "11:59 PM", "١١:٥٩ م". Anything that is not HH:MM is shown
+/// as it came rather than guessed at.
+func teamClockTime(_ hhmm: String) -> String {
+    let parts = hhmm.split(separator: ":").compactMap { Int($0) }
+    guard parts.count == 2, (0..<24).contains(parts[0]), (0..<60).contains(parts[1]) else { return hhmm }
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    guard let date = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: parts[0], minute: parts[1])) else { return hhmm }
+    var style = Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.current.locale)
+    style.timeZone = calendar.timeZone
+    return date.formatted(style)
+}
+
+/// Somebody's name set inside a sentence of the app's own, isolated, so a
+/// Latin name first in an Arabic sentence does not make the whole sentence
+/// read left to right.
+func teamIsolated(_ name: String) -> String {
+    "\u{2068}\(name)\u{2069}"
+}
+
+/// A day the server sends either as a day key or as UTC midnight of it.
+func teamDayLabel(_ day: String) -> String {
+    day.count == 10 ? formattedDayKey(day) : (formattedDay(day) ?? day)
+}
 
 /// `data.periodLabel`/`sales.period` arrive as the server's own en-US
 /// `Intl.DateTimeFormat` text, so an Arabic reader would see "September 2026"
