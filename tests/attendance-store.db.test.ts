@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { ARRIVAL, DEVICE, MANUAL, type DayAttendance } from "@/lib/attendance";
 import { applyAttendance, mappedByDeviceUser, newestDeviceDay } from "@/lib/attendance-store";
 import { dayKeyToDate } from "@/lib/time";
+import { DEFAULT_WORK_HOURS } from "@/lib/work-hours";
 import { databaseTarget } from "./db-target";
 
 // Refuses the studio's live database outright — see tests/db-target.ts.
@@ -191,6 +192,43 @@ describe("what a sync writes", () => {
     assert.equal(row.earlyHours, 0, "no hours were charged by the fill");
     assert.equal(row.awayHours, 4, "the step-out is untouched");
     assert.equal(row.note, "Device · arrived 11:30 AM · stepped out · device: left 7:00 PM");
+  });
+
+  it("charges a day by what it fell short of the end that person owed", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // The studio's day is 11:00 to 19:00 with five minutes' allowance, so
+    // arriving at 2 PM owes until 21:55 rather than 19:00.
+    const context = { hours: { ...DEFAULT_WORK_HOURS, graceMinutes: 5 }, timeZone: "Asia/Amman" };
+    const dayKey = "2026-09-24";
+    const date = dayKeyToDate(dayKey);
+    const late = {
+      ...day(`${PREFIX}901`, 3, dayKey, 0),
+      arrivedAt: new Date("2026-09-24T11:00:00.000Z"), // 2:00 PM in Amman
+      arrivedLocal: "2:00 PM",
+    };
+
+    // Left at 7 PM, when the studio's day ends but theirs did not.
+    await applyAttendance(
+      [{ ...late, lastAt: new Date("2026-09-24T16:00:00.000Z"), departedAt: new Date("2026-09-24T16:00:00.000Z"), departedLocal: "7:00 PM" }],
+      context
+    );
+    const short = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { employeeId_day: { employeeId: amal.id, day: date } },
+    });
+    assert.equal(short.shortHours, 3, "owed until 21:55 and left at 19:00");
+    assert.equal(short.delayHours, 3, "still recorded as having been late");
+
+    // The same day, stayed to the end of it.
+    await applyAttendance(
+      [{ ...late, lastAt: new Date("2026-09-24T19:00:00.000Z"), departedAt: new Date("2026-09-24T19:00:00.000Z"), departedLocal: "10:00 PM" }],
+      context
+    );
+    const made = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { employeeId_day: { employeeId: amal.id, day: date } },
+    });
+    assert.equal(made.shortHours, 0, "three hours late, three hours made up, nothing owed");
+    assert.equal(made.delayHours, 3, "the lateness is still what happened");
   });
 
   it("never replaces a clock-out the manager did set", async (t) => {

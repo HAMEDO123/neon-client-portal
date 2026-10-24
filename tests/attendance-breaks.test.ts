@@ -49,7 +49,7 @@ describe("what a time out costs in pay", () => {
 
   it("is summed into the month with the rest of the day's hours", () => {
     const queries = readFileSync(join(process.cwd(), "src", "lib", "payroll-queries.ts"), "utf8");
-    assert.match(queries, /_sum: \{ delayHours: true, earlyHours: true, awayHours: true \}/);
+    assert.match(queries, /_sum: \{ delayHours: true, earlyHours: true, awayHours: true, shortHours: true \}/);
     assert.match(queries, /awayHours: delay\?\._sum\.awayHours \?\? 0/);
     const action = readFileSync(join(process.cwd(), "src", "lib", "actions", "operations-actions.ts"), "utf8");
     assert.match(action, /readBreaks\(formData\.getAll\("breakOut"\), formData\.getAll\("breakBack"\)\)/);

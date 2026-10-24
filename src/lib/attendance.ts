@@ -157,6 +157,130 @@ export function earlyHours(hours: WorkHours, departure: string): number {
 }
 
 /**
+ * When somebody's own day ends, as minutes past that day's midnight.
+ *
+ * The studio's day is a fixed length — 11:00 to 19:00 here, an hour shorter on
+ * Saturday — and the studio asked that it stay that length however it is
+ * worked. Arriving late does not shorten it, and stepping out in the middle
+ * does not either: both push the end back by the same amount, so what is owed
+ * is always the same eight hours.
+ *
+ * Minutes rather than "HH:MM" because a day that began late can end after
+ * midnight — arriving at 4:08 PM owes until 00:03 — and a clock face cannot
+ * say that while a number can. 1443 is three minutes past midnight, on the day
+ * after the one that started.
+ *
+ * The allowance comes off before anything moves: arriving at 11:05 with five
+ * minutes' grace is not late, so that day still ends at 19:00. Arriving early
+ * does not move it either — there is no credit for turning up at ten.
+ */
+export function endOfDayMinutes(
+  hours: WorkHours,
+  dayKey: string,
+  arrival: string,
+  awayMinutes = 0,
+  graceMinutes = hours.graceMinutes ?? DEFAULT_GRACE_MINUTES
+): number {
+  // That day's own end: Saturday's is earlier, and reading `end` directly is
+  // how Saturday gets charged an extra hour.
+  const today = hoursOn(hours, dayKey);
+  const end = minutesOf(today.end);
+  if (end == null) return 0;
+
+  const start = minutesOf(today.start);
+  const arrived = minutesOf(arrival);
+  // An arrival nobody can read moves nothing, which leaves the studio's own
+  // end standing and charges no more than the old rule did.
+  const late =
+    start != null && arrived != null ? Math.max(0, arrived - start - Math.max(0, graceMinutes)) : 0;
+
+  return end + late + Math.max(0, awayMinutes);
+}
+
+/**
+ * How much of the day was still owed when somebody left — the one number this
+ * rule charges.
+ *
+ * Lateness and time stepped out are not charged in themselves any more: they
+ * have already moved `endMinutes`. So a day worked to its own end costs
+ * nothing however it was arranged, and a day cut short costs the difference
+ * whatever the reason.
+ *
+ * Whole hours rounded up and never negative, exactly as lateness is charged:
+ * the studio asked for its allowance at the start of the day only, and staying
+ * past the end earns nothing — a negative here would pay overtime through
+ * payroll's multiplication.
+ *
+ * No clock-out costs nothing. The device cannot tell a forgotten scan from an
+ * early finish, and it must not invent one.
+ */
+export function hoursShort(endMinutes: number, departureMinutes: number | null | undefined): number {
+  if (departureMinutes == null || !Number.isFinite(departureMinutes)) return 0;
+  const short = endMinutes - departureMinutes;
+  if (short <= 0) return 0;
+  return Math.min(Math.ceil(short / 60), MAX_DELAY_HOURS);
+}
+
+/**
+ * A wall-clock time in the working day's own frame, so it can be compared with
+ * `endOfDayMinutes`.
+ *
+ * A clock-out earlier on the clock than the arrival it belongs to happened
+ * after midnight: 00:08 is not eight minutes into a day that started at 4 PM,
+ * it is 1448. Reading it as the former is how a day that ran late reads as one
+ * that ended before it began — and it is the same midnight that put Salem's
+ * clock-out on the following morning as an arrival.
+ */
+export function minutesInDay(time: string, startedAt: string): number | null {
+  const minute = minutesOf(time);
+  const from = minutesOf(startedAt);
+  if (minute == null || from == null) return null;
+  return minute < from ? minute + 24 * 60 : minute;
+}
+
+/**
+ * What a day costs, in hours — the one number payroll multiplies by the rate.
+ *
+ * Used by every path that writes a day, so the device, a corrected row and a
+ * manager's own edit cannot drift into charging differently for the same
+ * afternoon.
+ *
+ * A day with times is measured against the end THIS person owed: the studio's
+ * day, pushed back by however late they were and however long they stepped
+ * out. Work to that end and the day costs nothing, however it was arranged.
+ *
+ * A day with no times keeps the older meaning — whatever the manager typed —
+ * because there is nothing to measure against and their figure is the whole
+ * record of it.
+ */
+export function chargedHours(input: {
+  hours: WorkHours;
+  timeZone: string;
+  dayKey: string;
+  arrivedAt: Date | null;
+  departedAt: Date | null;
+  /** From the step-outs on the row (lib/attendance-breaks.ts). */
+  awayMinutes?: number;
+  /** What the manager typed, for a day that has no times at all. */
+  typed?: { delayHours: number; earlyHours: number; awayHours: number };
+}): number {
+  const { hours, timeZone, dayKey, arrivedAt, departedAt } = input;
+
+  if (!arrivedAt) {
+    const typed = input.typed;
+    if (!typed) return 0;
+    return Math.max(0, typed.delayHours) + Math.max(0, typed.earlyHours) + Math.max(0, typed.awayHours);
+  }
+
+  const arrival = wallClockIn(timeZone, arrivedAt);
+  const owedUntil = endOfDayMinutes(hours, dayKey, arrival, input.awayMinutes ?? 0);
+  // No clock-out costs nothing: the device cannot tell a forgotten scan from an
+  // early finish, and this must not invent one.
+  const left = departedAt ? minutesInDay(wallClockIn(timeZone, departedAt), arrival) : null;
+  return hoursShort(owedUntil, left);
+}
+
+/**
  * Punches grouped by the person and the calendar day they fall on **in the
  * company's timezone**.
  *

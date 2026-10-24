@@ -26,10 +26,13 @@ describe("editing a day of the month", () => {
   // not put the device's figure back.
   it("makes the day the manager's, so the device leaves it alone", () => {
     const code = body("editAttendanceDay");
-    assert.match(code, /create: \{ employeeId, day: date, delayHours, earlyHours, breaks, awayHours, source: MANUAL, note \}/);
-    assert.match(code, /update: \{ delayHours, earlyHours, breaks, awayHours, source: MANUAL, note \}/);
-    // What the device saw — when they arrived and left — is kept.
-    assert.equal(/arrivedAt|departedAt/.test(code), false);
+    assert.match(code, /create: \{ employeeId, day: date, delayHours, earlyHours, breaks, awayHours, shortHours, source: MANUAL, note \}/);
+    assert.match(code, /update: \{ delayHours, earlyHours, breaks, awayHours, shortHours, source: MANUAL, note \}/);
+    // What the device saw — when they arrived and left — is read now, because
+    // the day is charged by what it fell short of the end that person owed.
+    // It is still never written back by this form.
+    const upsert = code.slice(code.indexOf("attendanceRecord.upsert"));
+    assert.equal(/arrivedAt|departedAt/.test(upsert), false, "the times are never written here");
   });
 
   it("is offered on every day that has happened, and on none still to come", () => {

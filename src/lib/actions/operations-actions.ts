@@ -10,8 +10,8 @@ import { saveFile } from "@/lib/storage";
 import { readReceipt } from "@/lib/ai/receipts";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { correctedReceiptCount, countedReceiptAmount, readCountsBox, receiptPeriod } from "@/lib/payroll";
-import { MANUAL } from "@/lib/attendance";
-import { awayHoursOf, readBreaks } from "@/lib/attendance-breaks";
+import { MANUAL, chargedHours } from "@/lib/attendance";
+import { awayHoursOf, awayMinutesOf, readBreaks } from "@/lib/attendance-breaks";
 import { syncAttendance, type SyncReport } from "@/lib/attendance-sync";
 import {
   clearDeviceLog,
@@ -22,7 +22,7 @@ import {
 } from "@/lib/attendance-device";
 import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { notifyAdmin } from "@/lib/admin-notifications";
-import { getTimezone } from "@/lib/settings";
+import { getTimezone, getWorkHours } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
 import type { PayBasis, SupplyRequestStatus } from "@/generated/prisma/enums";
 
@@ -344,6 +344,13 @@ function readHours(value: FormDataEntryValue | null): number | null {
  * The row becomes the manager's (MANUAL), so the device never writes over it
  * again — the same rule as the payroll screen's form. What the device saw
  * (arrived, left) is kept on the row; only the hours and the note change.
+ *
+ * What it costs is worked out rather than typed. On a day the device gave
+ * times for, the charge is whatever the day fell short of the end this person
+ * owed — the studio's day pushed back by how late they were and by every
+ * minute of the step-outs typed here — so recording a step-out no longer
+ * charges for it by itself. Only a day with no times at all is charged the
+ * hours in the boxes, because then there is nothing to measure.
  * Answers in words rather than throwing them (lib/refusal.ts).
  */
 export async function editAttendanceDay(formData: FormData): Promise<Answer> {
@@ -369,10 +376,28 @@ export async function editAttendanceDay(formData: FormData): Promise<Answer> {
 
     const note = String(formData.get("note") ?? "").trim().slice(0, 200) || null;
     const date = dayKeyToDate(day);
+
+    // One after the other, as every multi-query path here is.
+    const existing = await prisma.attendanceRecord.findUnique({
+      where: { employeeId_day: { employeeId, day: date } },
+      select: { arrivedAt: true, departedAt: true },
+    });
+    const hours = await getWorkHours();
+    const timeZone = await getTimezone();
+    const shortHours = chargedHours({
+      hours,
+      timeZone,
+      dayKey: day,
+      arrivedAt: existing?.arrivedAt ?? null,
+      departedAt: existing?.departedAt ?? null,
+      awayMinutes: awayMinutesOf(breaks),
+      typed: { delayHours, earlyHours, awayHours },
+    });
+
     await prisma.attendanceRecord.upsert({
       where: { employeeId_day: { employeeId, day: date } },
-      create: { employeeId, day: date, delayHours, earlyHours, breaks, awayHours, source: MANUAL, note },
-      update: { delayHours, earlyHours, breaks, awayHours, source: MANUAL, note },
+      create: { employeeId, day: date, delayHours, earlyHours, breaks, awayHours, shortHours, source: MANUAL, note },
+      update: { delayHours, earlyHours, breaks, awayHours, shortHours, source: MANUAL, note },
     });
 
     refreshAdmin();

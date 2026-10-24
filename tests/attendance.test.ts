@@ -9,7 +9,10 @@ import {
   cutoffFor,
   deviceWallClock,
   earlyHours,
+  endOfDayMinutes,
   groupPunches,
+  hoursShort,
+  minutesInDay,
   lateHours,
   mayDeviceWrite,
   type Punch,
@@ -361,5 +364,56 @@ describe("a day whose arrival the manager set", () => {
   it("does not call a read within an hour of the arrival a departure", () => {
     const [day] = attendanceFromPunches([at(THURSDAY, "08:10"), at(THURSDAY, "08:30")], hours, TZ);
     assert.deepEqual(departureAfter(arrivedAt, day), { departedAt: null, departedLocal: null, earlyHours: 0 });
+  });
+});
+
+describe("a day that is always eight hours", () => {
+  // The studio's own: 11:00 to 19:00, five minutes' allowance, Saturday an
+  // hour shorter.
+  const studio: WorkHours = { ...hours, graceMinutes: 5 };
+  const withSaturday: WorkHours = { ...studio, days: [0, 1, 2, 3, 4, 6], endByDay: { 6: "18:00" } };
+  const MON = "2026-10-19";
+  const SAT = "2026-10-24";
+
+  it("ends when the studio does for somebody who was on time", () => {
+    assert.equal(endOfDayMinutes(studio, MON, "11:00"), 19 * 60);
+    assert.equal(endOfDayMinutes(studio, MON, "11:05"), 19 * 60, "inside the allowance");
+    assert.equal(endOfDayMinutes(studio, MON, "10:30"), 19 * 60, "coming early buys no early finish");
+  });
+
+  it("moves the end by however late somebody was", () => {
+    // 1:00 PM is two hours and fifty-five minutes late once the five are off.
+    assert.equal(endOfDayMinutes(studio, MON, "13:00"), 20 * 60 + 55);
+    assert.equal(endOfDayMinutes(studio, MON, "14:00"), 21 * 60 + 55);
+  });
+
+  it("moves it again by however long they stepped out", () => {
+    // Out 11:10, back 14:45 — the step-out Sally and Wael were charged 4h for.
+    assert.equal(endOfDayMinutes(studio, MON, "11:00", 215), 19 * 60 + 215);
+  });
+
+  it("can end after midnight, and says so as minutes rather than a clock face", () => {
+    // Salem on 2026-10-22, in at 4:08 PM: owed until three minutes past midnight.
+    assert.equal(endOfDayMinutes(studio, MON, "16:08"), 24 * 60 + 3);
+  });
+
+  it("follows Saturday's earlier end", () => {
+    assert.equal(endOfDayMinutes(withSaturday, SAT, "11:00"), 18 * 60);
+    assert.equal(endOfDayMinutes(withSaturday, SAT, "12:00"), 18 * 60 + 55);
+  });
+
+  it("charges only what the day was short, in whole hours", () => {
+    const owed = endOfDayMinutes(studio, MON, "14:00"); // until 21:55
+    assert.equal(hoursShort(owed, 21 * 60 + 55), 0, "worked to the end, nothing owed");
+    assert.equal(hoursShort(owed, 22 * 60 + 30), 0, "staying later earns nothing");
+    assert.equal(hoursShort(owed, 21 * 60 + 54), 1, "a minute short is an hour");
+    assert.equal(hoursShort(owed, 19 * 60), 3);
+    assert.equal(hoursShort(owed, null), 0, "no clock-out charges nothing");
+  });
+
+  it("reads a clock-out after midnight as later than the day, never earlier", () => {
+    assert.equal(minutesInDay("00:08", "16:08"), 24 * 60 + 8);
+    assert.equal(minutesInDay("19:00", "11:00"), 19 * 60);
+    assert.equal(minutesInDay("not a time", "11:00"), null);
   });
 });

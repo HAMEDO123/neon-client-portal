@@ -163,7 +163,7 @@ async function readAndWrite(
     const all = attendanceFromPunches(punches, hours, timeZone);
     const since = cutoffFor(options.since, dayKeyIn(timeZone, now));
     const days = all.filter((day) => day.dayKey >= since);
-    const outcome = await applyAttendance(days);
+    const outcome = await applyAttendance(days, { hours, timeZone });
     await setSetting(LAST_SYNC_KEY, new Date().toISOString()).catch(() => undefined);
 
     return {

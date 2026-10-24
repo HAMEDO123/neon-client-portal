@@ -1510,6 +1510,21 @@ model AttendanceRecord {
    */
   breaks    Json?
   awayHours Float    @default(0)
+  /**
+   * What the day actually costs, in hours — the only number payroll multiplies
+   * by the hourly rate.
+   *
+   * The studio's day is eight hours and stays eight hours however it is worked:
+   * arriving late pushes the end of the day back, and so does stepping out in
+   * the middle. So lateness and time away are no longer charges in themselves —
+   * they are facts about the day, kept in the columns above — and what is owed
+   * is whatever the day fell short of the end THIS person owed.
+   *
+   * A day with no times keeps the older meaning: whatever the manager typed.
+   * Every row written before this existed was backfilled with the sum it was
+   * already being charged, so no settled payslip moved.
+   */
+  shortHours Float   @default(0)
   note       String?
   // MANUAL for now; DEVICE once the attendance machine feeds this table.
   source     String    @default("MANUAL")

@@ -120,8 +120,23 @@ export type PayrollInput = {
    * default for a field somebody forgot.
    */
   earlyHours: number;
-  /** Hours out in the middle of a day and back (lib/attendance-breaks.ts). Charged like lateness. */
+  /** Hours out in the middle of a day and back (lib/attendance-breaks.ts). A fact about the day. */
   awayHours?: number;
+  /**
+   * What the days actually cost — AttendanceRecord.shortHours added up, and
+   * the only one of these four the hourly rate is multiplied by.
+   *
+   * The studio's day is eight hours however it is worked, so arriving late and
+   * stepping out are no longer charges of their own: each pushes the end of
+   * that person's day back, and what is owed is whatever the day fell short of
+   * it. The three above stay in the breakdown because a manager deciding
+   * whether a deduction is fair wants to know what happened, not only what it
+   * came to.
+   *
+   * Optional, and the three are added up when it is missing, so a caller
+   * written before this rule charges exactly what it charged before.
+   */
+  shortHours?: number;
   receiptTotal: number;
   /** Deductions decided elsewhere — a performance shortfall, say. Positive is money off. */
   adjustmentTotal?: number;
@@ -152,10 +167,10 @@ export function computePayroll(input: PayrollInput): PayrollBreakdown {
   const delayHours = Math.max(0, input.delayHours);
   const earlyHours = Math.max(0, input.earlyHours);
   const awayHours = Math.max(0, input.awayHours ?? 0);
-  // Both ends of the day cost the same hourly rate, so they are one number
-  // before the multiplication. Kept apart in the breakdown, because a manager
-  // deciding whether a deduction is fair wants to know which end it came from.
-  const lostHours = delayHours + earlyHours + awayHours;
+  // What the day fell short of the end this person owed. The three above are
+  // what happened; this is what it costs, and once a late start can be worked
+  // off by staying later they are no longer the same number.
+  const lostHours = Math.max(0, input.shortHours ?? delayHours + earlyHours + awayHours);
 
   // Lost time can reduce the salary to nothing but never below it — a
   // deduction must not turn into a debt the employee owes.

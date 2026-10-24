@@ -1,6 +1,25 @@
 import { prisma } from "@/lib/db";
-import { ARRIVAL, DEVICE, departureAfter, mayDeviceWrite, type DayAttendance } from "@/lib/attendance";
+import {
+  ARRIVAL,
+  DEVICE,
+  chargedHours,
+  departureAfter,
+  mayDeviceWrite,
+  type DayAttendance,
+} from "@/lib/attendance";
+import { awayMinutesOf, storedBreaks } from "@/lib/attendance-breaks";
 import { dayKeyToDate } from "@/lib/time";
+import type { WorkHours } from "@/lib/work-hours";
+
+/**
+ * The working day a sync writes against.
+ *
+ * Optional only so a caller with nothing but a list of days still works; every
+ * real sync passes it. Without it the charge on a row is left exactly as it
+ * was, because working one out means knowing when the studio's day ends and
+ * which timezone that is in.
+ */
+export type WorkContext = { hours: WorkHours; timeZone: string };
 
 // Writing what the fingerprint device saw into the table payroll already reads.
 // The arithmetic is lib/attendance.ts; talking to the machine is
@@ -63,7 +82,7 @@ export type SyncOutcome = {
  * at once is what the local Postgres proxy falls over on, and the whole sync is
  * a background job that nobody is waiting on.
  */
-export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcome> {
+export async function applyAttendance(days: DayAttendance[], context?: WorkContext): Promise<SyncOutcome> {
   const people = await mappedByDeviceUser();
 
   const outcome: SyncOutcome = {
@@ -90,8 +109,17 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
     const date = dayKeyToDate(day.dayKey);
     const existing = await prisma.attendanceRecord.findUnique({
       where: { employeeId_day: { employeeId: person.id, day: date } },
-      select: { id: true, source: true, arrivedAt: true, departedAt: true, note: true },
+      select: { id: true, source: true, arrivedAt: true, departedAt: true, breaks: true, note: true },
     });
+
+    // Step-outs already on the row push the end of this person's day back, so
+    // they are part of what the day costs rather than a charge of their own.
+    const awayMinutes = awayMinutesOf(storedBreaks(existing?.breaks));
+    /** What the day costs once written — nothing to say without a working day. */
+    const charge = (arrivedAt: Date | null, departedAt: Date | null) =>
+      context
+        ? { shortHours: chargedHours({ ...context, dayKey: day.dayKey, arrivedAt, departedAt, awayMinutes }) }
+        : {};
 
     // The manager set the arrival; the device still says when they left —
     // and nothing else. The arrival and its lateness stay exactly as set.
@@ -104,6 +132,7 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
         data: {
           departedAt: left.departedAt,
           earlyHours: left.earlyHours,
+          ...charge(existing.arrivedAt, left.departedAt),
           note: `${head} · device: ${left.departedLocal ? `left ${left.departedLocal}` : "no clock-out yet"}`.slice(0, 300),
         },
       });
@@ -135,6 +164,10 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
           where: { id: existing.id },
           data: {
             departedAt: left.departedAt,
+            // The clock-out is what decides whether the day fell short, and
+            // this is the moment it becomes known. The hours the manager typed
+            // still stand; the day is measured against the end they owed.
+            ...charge(existing.arrivedAt, left.departedAt),
             note: `${head} · device: left ${left.departedLocal}`.slice(0, 300),
           },
         });
@@ -157,6 +190,7 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
         arrivedAt: day.arrivedAt,
         departedAt: day.departedAt,
         earlyHours: day.earlyHours,
+        ...charge(day.arrivedAt, day.departedAt),
         source: DEVICE,
         note: noteFor(day),
       },
@@ -165,6 +199,7 @@ export async function applyAttendance(days: DayAttendance[]): Promise<SyncOutcom
         arrivedAt: day.arrivedAt,
         departedAt: day.departedAt,
         earlyHours: day.earlyHours,
+        ...charge(day.arrivedAt, day.departedAt),
         source: DEVICE,
         note: noteFor(day),
       },

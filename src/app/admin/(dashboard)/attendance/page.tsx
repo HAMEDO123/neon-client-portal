@@ -244,6 +244,7 @@ function ClockTimes({
     delayHours: number;
     earlyHours: number;
     awayHours: number;
+    shortHours: number;
     breaks: unknown;
     source: string;
     employee: { name: string };
@@ -269,14 +270,13 @@ function ClockTimes({
       dayKey,
       entries: [...entries].sort((a, b) => a.employee.name.localeCompare(b.employee.name)),
       // What the day cost, so a closed section still answers the question the
-      // screen is opened with: lateness, leaving early, and time stepped out —
-      // the same three payroll charges for (lostHours in lib/payroll.ts).
-      // Leaving the step-out out of this total made a day read cheaper here
-      // than it was actually deducted for.
-      hoursOff:
-        Math.round(
-          entries.reduce((total, row) => total + row.delayHours + row.earlyHours + row.awayHours, 0) * 100
-        ) / 100,
+      // screen is opened with.
+      //
+      // The one number payroll multiplies, not the three facts added up: the
+      // day is eight hours however it is worked, so a late start that was
+      // stayed for and a step-out that was made up cost nothing, and adding
+      // them here would show a deduction nobody is taking.
+      hoursOff: Math.round(entries.reduce((total, row) => total + row.shortHours, 0) * 100) / 100,
       missing: entries.filter((row) => row.departedAt === null).length,
     }));
 
@@ -344,8 +344,7 @@ function ClockTimes({
                   </thead>
                   <tbody>
                     {day.entries.map((row) => {
-                      const off =
-                        Math.round((row.delayHours + row.earlyHours + row.awayHours) * 100) / 100;
+                      const off = Math.round(row.shortHours * 100) / 100;
                       // The manager types these in the studio's own clock and
                       // they are stored as "HH:MM", so they are the only times on
                       // this screen that must NOT go through formatTimeIn: there
