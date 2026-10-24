@@ -23,7 +23,8 @@ import {
 import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { getTimezone, getWorkHours } from "@/lib/settings";
-import { dayKeyToDate, todayKey } from "@/lib/time";
+import { dayKeyToDate, todayKey, wallClockIn } from "@/lib/time";
+import { appendLine, REPORT_LIMIT } from "@/lib/daily-report";
 import type { PayBasis, SupplyRequestStatus } from "@/generated/prisma/enums";
 
 // Office supply requests, expense receipts and attendance.
@@ -82,6 +83,59 @@ export async function saveDailyReport(formData: FormData) {
 
   revalidatePath("/employee/requests");
   revalidatePath("/admin/requests");
+}
+
+/**
+ * One more thing done, added to today's report from the home screen.
+ *
+ * The report was a single box on another page, written at the end of the day
+ * if it was written at all — which is the wrong moment for it: by six o'clock
+ * the morning has gone. This adds a line where somebody already is, the moment
+ * they finish something, and the long box still edits the same text afterwards.
+ *
+ * The manager is told once a day, on the same key as the long box, so a report
+ * written in eight pieces is still one telling rather than eight.
+ */
+export async function addToDailyReport(formData: FormData): Promise<Answer> {
+  return answering(async () => {
+    const employee = await requireEmployee();
+
+    const line = String(formData.get("line") ?? "").trim().slice(0, REPORT_LIMIT);
+    if (!line) throw new Refusal("Write what you did before adding it.");
+
+    const timezone = await getTimezone();
+    const dayKey = todayKey(timezone);
+    const day = dayKeyToDate(dayKey);
+
+    // One after the other, as everything else here reads.
+    const existing = await prisma.dailyReport.findUnique({
+      where: { employeeId_day: { employeeId: employee.id, day } },
+      select: { text: true },
+    });
+
+    // The studio's own clock, never the server's: a line stamped 15:40 for
+    // something done at 18:40 is worse than no time at all.
+    const text = appendLine(existing?.text ?? "", line, wallClockIn(timezone, new Date()));
+
+    await prisma.dailyReport.upsert({
+      where: { employeeId_day: { employeeId: employee.id, day } },
+      create: { employeeId: employee.id, day, text },
+      update: { text },
+    });
+
+    await notifyAdmin({
+      type: "TASK_STATUS_CHANGED",
+      title: `${employee.name} wrote today's report`,
+      message: text.length > 200 ? `${text.slice(0, 200)}…` : text,
+      url: "/admin/requests",
+      dedupeKey: `DAILY_REPORT:${employee.id}:${dayKey}`,
+      employeeId: employee.id,
+    }).catch(() => null);
+
+    revalidatePath("/employee");
+    revalidatePath("/employee/requests");
+    revalidatePath("/admin/requests");
+  });
 }
 
 // --- Office supplies -------------------------------------------------------

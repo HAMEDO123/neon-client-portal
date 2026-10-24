@@ -22,7 +22,9 @@ import { cn } from "@/lib/utils";
 import { myDay } from "@/lib/now-next-queries";
 import { NowNextCard } from "@/components/employee/now-next-card";
 import { ClockCard } from "@/components/employee/clock-card";
+import { ReportLines } from "@/components/employee/report-lines";
 import { myClockDay } from "@/lib/clock-day";
+import { linesOf, reportForDay } from "@/lib/daily-report";
 
 function greeting(hour: number) {
   if (hour < 12) return "Good Morning";
@@ -89,6 +91,9 @@ export default async function EmployeeDashboard({
   // by. One after the other, like everything else on this page.
   const clockDay = await myClockDay(employee.id, todayDay, hours, timezone);
 
+  // What they have written down so far today, so the card shows it back.
+  const report = await reportForDay(employee.id, todayDay);
+
   // A job handed out by hand belongs to the first of today and tomorrow it
   // touches. One that started on or before today is today's — including one
   // whose days have run out, because unfinished work does not stop being
@@ -145,6 +150,11 @@ export default async function EmployeeDashboard({
       {/* What they are on right now, above everything else: the question the
           page exists to answer, before any summary of it. */}
       <NowNextCard state={nowNext} hours={hours} />
+
+      {/* Written where the work is, a line at a time. The report used to live
+          on another page and be remembered at the end of the day, which is the
+          one moment the morning has already gone. */}
+      <ReportLines lines={linesOf(report.text)} />
 
       <TodaySummary counts={todayCounts} />
 
