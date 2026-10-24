@@ -35,7 +35,7 @@ export function Cutoffs({
 }: {
   team: Member[];
   rows: Row[];
-  /** Whether a task not handed in by 9 PM costs an hour. */
+  /** Whether a task not handed in by 11:59 PM costs an hour. */
   ruleOn: boolean;
   /** A cutoff is added to the month being looked at only when that is this month. */
   thisMonth: boolean;
@@ -72,10 +72,10 @@ export function Cutoffs({
 
       <div className="glass mt-4 flex flex-wrap items-center gap-3 rounded-2xl p-3">
         <div className="min-w-48 flex-1">
-          <p className="text-sm font-medium text-ink">One hour per task not handed in by 9:00 PM</p>
+          <p className="text-sm font-medium text-ink">One hour per task not handed in by 11:59 PM</p>
           <p className="text-xs text-ink/50">
             {ruleOn
-              ? "On. Everybody is warned at 8:00 PM about tasks due that day and still out; at 9:00 PM each one costs an hour's pay."
+              ? "On. Everybody is warned at 10:59 PM about tasks due that day and still out; at 11:59 PM each one costs an hour's pay."
               : "Off. Nothing is taken off automatically for a late task."}
           </p>
         </div>

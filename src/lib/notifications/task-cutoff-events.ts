@@ -5,7 +5,7 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 import { getSetting, getTimezone, getWorkHours, setSetting } from "@/lib/settings";
 import {
   CUTOFF_ANNOUNCED,
-  CUTOFF_HOUR,
+  CUTOFF_TIME,
   CUTOFF_SETTING,
   chargeCopy,
   chargeKey,
@@ -21,8 +21,8 @@ import {
   warningCopy,
   warningKey,
 } from "@/lib/task-cutoff";
-import { dayKeyIn, dayKeyToDate, hourIn, instantAt } from "@/lib/time";
-import { isWorkingDay } from "@/lib/work-hours";
+import { dayKeyIn, dayKeyToDate, instantAt, wallClockIn } from "@/lib/time";
+import { isWorkingDay, minutesOf } from "@/lib/work-hours";
 
 // The nine o'clock rule, run on every scheduler pass (lib/task-cutoff.ts has
 // the rule itself, and why each safeguard is there). Safe to run as often as
@@ -64,7 +64,8 @@ export async function runTaskCutoffs(now = new Date()) {
     return { on: true as const, announced, warned: 0, charged: 0 };
   }
 
-  const phase = cutoffPhase(hourIn(timeZone, now));
+  // Minutes rather than the hour: the cutoff is 23:59, which no hour can name.
+  const phase = cutoffPhase(minutesOf(wallClockIn(timeZone, now)) ?? 0);
   if (phase === "before") return { on: true as const, announced, warned: 0, charged: 0 };
 
   // Every job due today, with who it belongs to.
@@ -72,7 +73,7 @@ export async function runTaskCutoffs(now = new Date()) {
     where: { endDay: dayKeyToDate(dayKey), employeeId: { in: team.map((person) => person.id) } },
     select: { id: true, title: true, state: true, createdAt: true, siteVisitId: true, employeeId: true },
   });
-  const cutoffAt = instantAt(dayKey, `${CUTOFF_HOUR}:00`, timeZone) ?? now;
+  const cutoffAt = instantAt(dayKey, CUTOFF_TIME, timeZone) ?? now;
   const out = due.filter((task) => chargeable(task, cutoffAt));
 
   if (phase === "warn") {

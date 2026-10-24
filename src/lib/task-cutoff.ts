@@ -1,11 +1,12 @@
 import type { PayBasis } from "@/generated/prisma/enums";
 import { hourlyRate } from "@/lib/payroll";
+import { minutesOf } from "@/lib/work-hours";
 
 // Money taken off for a reason: the manager's own cutoffs, and the studio's
 // rule that a task not handed in by nine in the evening costs an hour's pay.
 //
 // The rule, as the studio asked for it: every job due today that has not been
-// handed in — sent for review, or approved — by 21:00 costs its owner one
+// handed in — sent for review, or approved — by 23:59 costs its owner one
 // hour. What keeps that from being unfair is as much a part of it as the
 // hour, so it lives here, pure and tested, rather than in the job that runs it:
 //
@@ -16,10 +17,20 @@ import { hourlyRate } from "@/lib/payroll";
 // - A job given too late in the day to be finished by nine is not charged.
 // - A task is charged once, ever, and the manager can take any charge back.
 
-/** The hour, on the studio's clock, a day's work has to be handed in by. */
-export const CUTOFF_HOUR = 21;
-/** The hour the warning goes out. */
-export const WARN_HOUR = CUTOFF_HOUR - 1;
+/** The time, on the studio's clock, a day's work has to be handed in by. */
+export const CUTOFF_TIME = "23:59";
+/** The time the warning goes out: an hour before. */
+export const WARN_TIME = "22:59";
+/**
+ * The same two as minutes past midnight, which is what the phase is decided on.
+ *
+ * A whole hour was enough while the cutoff was 9 PM. The end of the day is
+ * 23:59, and an hour-based rule cannot say that: "24:00" is not a time any
+ * clock shows, and `hour >= 24` is a comparison that never becomes true — the
+ * charge would simply never run.
+ */
+export const CUTOFF_MINUTES = minutesOf(CUTOFF_TIME) ?? 0;
+export const WARN_MINUTES = minutesOf(WARN_TIME) ?? 0;
 /** What one task not handed in costs, in hours of pay. */
 export const HOURS_PER_TASK = 1;
 /** A job given later than this many hours before the cutoff is not charged that evening. */
@@ -40,10 +51,15 @@ export function handedIn(state: State) {
   return state === "SUBMITTED" || state === "DONE";
 }
 
-/** Where an evening stands: nothing yet, the warning hour, or past the cutoff. */
-export function cutoffPhase(hour: number): "before" | "warn" | "charge" {
-  if (hour >= CUTOFF_HOUR) return "charge";
-  return hour >= WARN_HOUR ? "warn" : "before";
+/**
+ * Where an evening stands: nothing yet, the warning, or past the cutoff.
+ *
+ * Takes minutes past midnight on the studio's clock, not an hour — see
+ * CUTOFF_MINUTES.
+ */
+export function cutoffPhase(minutes: number): "before" | "warn" | "charge" {
+  if (minutes >= CUTOFF_MINUTES) return "charge";
+  return minutes >= WARN_MINUTES ? "warn" : "before";
 }
 
 /**
@@ -102,22 +118,22 @@ const tasks = (count: number) => (count === 1 ? "1 task" : `${count} tasks`);
 
 export function noticeCopy() {
   return {
-    title: "Tasks are due by 9:00 PM",
+    title: "Tasks are due by 11:59 PM",
     message:
-      "From tomorrow, a task due that day and not handed in by 9:00 PM costs one hour's pay. You will be warned at 8:00 PM if anything is still out.",
+      "From tomorrow, a task due that day and not handed in by 11:59 PM costs one hour's pay. You will be warned at 10:59 PM if anything is still out.",
   };
 }
 
 export function warningCopy(count: number) {
   return {
     title: `${tasks(count)} not handed in yet`,
-    message: `Due today. Send ${count === 1 ? "it" : "them"} for review before 9:00 PM — after that each one costs one hour's pay.`,
+    message: `Due today. Send ${count === 1 ? "it" : "them"} for review before 11:59 PM — after that each one costs one hour's pay.`,
   };
 }
 
 export function chargeCopy(count: number, amount: number) {
   return {
-    title: `${tasks(count)} not handed in by 9:00 PM`,
+    title: `${tasks(count)} not handed in by 11:59 PM`,
     message: `${count === 1 ? "One hour's pay" : `${count} hours' pay`} (${money(amount)}) was taken off for today. Talk to the manager if that is not right.`,
   };
 }
@@ -125,7 +141,7 @@ export function chargeCopy(count: number, amount: number) {
 export function managerCopy(people: { name: string; count: number }[]) {
   const total = people.reduce((sum, person) => sum + person.count, 0);
   return {
-    title: `${tasks(total)} not handed in by 9:00 PM`,
+    title: `${tasks(total)} not handed in by 11:59 PM`,
     message: `One hour each was taken off: ${people.map((person) => `${person.name} (${person.count})`).join(", ")}. Any of them can be taken back on the payroll page.`,
   };
 }

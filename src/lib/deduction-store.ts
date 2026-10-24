@@ -80,7 +80,7 @@ export async function chargeLateTask(
         kind: "TASK",
         hours: HOURS_PER_TASK,
         amount: hoursAsMoney(employee.salaryAmount, employee.payBasis, HOURS_PER_TASK),
-        reason: `Not handed in by 9:00 PM: ${task.title}`.slice(0, 300),
+        reason: `Not handed in by 11:59 PM: ${task.title}`.slice(0, 300),
         assignedTaskId: task.id,
         dedupeKey: taskDedupe(task.id),
       },

@@ -87,7 +87,7 @@ describe("cutoffs", () => {
     assert.equal(pay.breakdown.finalPay, 508.5);
     assert.deepEqual(
       pay.adjustments.map((row) => row.reason).sort(),
-      ["Left the site unlocked", "Lost the key", "Not handed in by 9:00 PM: Send the drawings"]
+      ["Left the site unlocked", "Lost the key", "Not handed in by 11:59 PM: Send the drawings"]
     );
   });
 

@@ -237,7 +237,7 @@ export const actions: ActionRegistry = {
   // makes a refusal the `{ error }` the app already reads.
   //   add:    form `employeeId`, `hours` or `amount`, `reason`, `day?`
   //   remove: args [id] — takes one back, the manager's own or an automatic one
-  //   rule:   args [true | false] — an hour per task not handed in by 9 PM
+  //   rule:   args [true | false] — an hour per task not handed in by 11:59 PM
   "team/cutoffs/add": async (input) => heard(await addCutoff(input.form)),
   "team/cutoffs/remove": async (input) => heard(await removeCutoff(str(input.args[0], "id"))),
   "team/cutoffs/rule": async (input) => {

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
-  CUTOFF_HOUR,
+  CUTOFF_TIME,
   chargeable,
   cutoffOn,
   cutoffPhase,
@@ -28,19 +28,28 @@ const job = (state: Parameters<typeof handedIn>[0], createdAt: string, siteVisit
   siteVisitId,
 });
 
-describe("the nine o'clock rule", () => {
+describe("the end-of-day rule", () => {
   it("is on unless it was switched off", () => {
     assert.equal(cutoffOn(null), true);
     assert.equal(cutoffOn("true"), true);
     assert.equal(cutoffOn("false"), false);
   });
 
-  it("warns at eight and charges from nine", () => {
-    assert.equal(CUTOFF_HOUR, 21);
-    assert.equal(cutoffPhase(19), "before");
-    assert.equal(cutoffPhase(20), "warn");
-    assert.equal(cutoffPhase(21), "charge");
-    assert.equal(cutoffPhase(23), "charge");
+  it("warns an hour before and charges at the end of the day", () => {
+    assert.equal(CUTOFF_TIME, "23:59");
+
+    // Minutes past midnight, because the cutoff is a minute before midnight and
+    // no whole hour can say that.
+    const at = (time: string) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    assert.equal(cutoffPhase(at("19:00")), "before");
+    assert.equal(cutoffPhase(at("22:58")), "before");
+    assert.equal(cutoffPhase(at("22:59")), "warn");
+    assert.equal(cutoffPhase(at("23:58")), "warn", "still only a warning a minute before");
+    assert.equal(cutoffPhase(at("23:59")), "charge");
   });
 
   // Told at noon, nobody is charged that evening.
