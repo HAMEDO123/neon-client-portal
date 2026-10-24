@@ -498,6 +498,21 @@ model Employee {
   // Only one access role exists today; the column keeps the check explicit
   // and leaves room for another role later.
   accessRole       String    @default("EMPLOYEE")
+  /**
+   * Works whatever hours they work: no start to be late for, no end to leave
+   * early from.
+   *
+   * The studio's day is the rule for everybody else, and for somebody on open
+   * hours it is simply the wrong question — they clock in when the work needs
+   * them and what counts is how long they were here. So attendance records the
+   * times and charges nothing: no lateness, no leaving early, no shortfall.
+   * Pay is worked out from the hours themselves.
+   *
+   * Salem works this way. Before this existed the platform charged him for
+   * arriving at four in the afternoon and working until midnight — 19 hours in
+   * one month, on days he had worked a full one.
+   */
+  openHours        Boolean   @default(false)
   // Whether this person may read the company WhatsApp number's conversations
   // in the portal, and answer in them as the studio.
   //

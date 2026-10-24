@@ -44,7 +44,7 @@ async function cleanup() {
   await prisma.employee.deleteMany({ where: { name: { startsWith: PREFIX } } });
 }
 
-async function person(name: string, deviceUserId: string, active: boolean) {
+async function person(name: string, deviceUserId: string, active: boolean, openHours = false) {
   return prisma.employee.create({
     data: {
       name: `${PREFIX}${name}`,
@@ -52,6 +52,7 @@ async function person(name: string, deviceUserId: string, active: boolean) {
       accessRole: "EMPLOYEE",
       active,
       deviceUserId,
+      openHours,
     },
     select: { id: true },
   });
@@ -192,6 +193,42 @@ describe("what a sync writes", () => {
     assert.equal(row.earlyHours, 0, "no hours were charged by the fill");
     assert.equal(row.awayHours, 4, "the step-out is untouched");
     assert.equal(row.note, "Device · arrived 11:30 AM · stepped out · device: left 7:00 PM");
+  });
+
+  it("charges nothing to somebody who works open hours", async (t) => {
+    if (!reachable) return t.skip("no database");
+
+    // No start to be late for and no end to leave early from: the day records
+    // the times and costs nothing. Arriving at 4 PM and working till midnight
+    // is a full day for somebody on open hours, and the studio's clock has
+    // nothing to say about it.
+    const open = await person("Open", `${PREFIX}903`, true, true);
+    const context = { hours: { ...DEFAULT_WORK_HOURS, graceMinutes: 5 }, timeZone: "Asia/Amman" };
+    const dayKey = "2026-09-28";
+
+    await applyAttendance(
+      [
+        {
+          ...day(`${PREFIX}903`, 6, dayKey, 2),
+          arrivedAt: new Date("2026-09-28T13:00:00.000Z"), // 4:00 PM in Amman
+          arrivedLocal: "4:00 PM",
+          lastAt: new Date("2026-09-28T21:00:00.000Z"),
+          departedAt: new Date("2026-09-28T21:00:00.000Z"), // midnight
+          departedLocal: "12:00 AM",
+        },
+      ],
+      context
+    );
+
+    const row = await prisma.attendanceRecord.findUniqueOrThrow({
+      where: { employeeId_day: { employeeId: open.id, day: dayKeyToDate(dayKey) } },
+    });
+    assert.equal(row.delayHours, 0, "six hours late by the clock, and not late at all");
+    assert.equal(row.earlyHours, 0);
+    assert.equal(row.shortHours, 0, "nothing is charged");
+    // The times are still the record of the day — they are what it is paid on.
+    assert.equal(row.arrivedAt?.toISOString(), "2026-09-28T13:00:00.000Z");
+    assert.equal(row.departedAt?.toISOString(), "2026-09-28T21:00:00.000Z");
   });
 
   it("charges a day by what it fell short of the end that person owed", async (t) => {

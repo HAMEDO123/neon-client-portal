@@ -37,7 +37,7 @@ export async function mappedByDeviceUser() {
     // it like anybody else. Their row exists for exactly this and is kept out
     // of the team's working surfaces instead.
     where: { deviceUserId: { not: null } },
-    select: { id: true, name: true, active: true, deviceUserId: true },
+    select: { id: true, name: true, active: true, deviceUserId: true, openHours: true },
   });
 
   return new Map(rows.map((row) => [row.deviceUserId as string, row]));
@@ -125,6 +125,12 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
     // Step-outs already on the row push the end of this person's day back, so
     // they are part of what the day costs rather than a charge of their own.
     const awayMinutes = awayMinutesOf(storedBreaks(existing?.breaks));
+
+    // Somebody on open hours has no start to be late for and no end to leave
+    // early from, so the day records the times and costs nothing. Charging
+    // them against the studio's clock took 19 hours off one month from
+    // somebody who had worked full days, at four in the afternoon.
+    const open = person.openHours === true;
     /**
      * What the day costs once written, and when it ends — nothing to say
      * without a working day to measure against.
@@ -133,6 +139,7 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
      * has the arrival, the step-outs and the studio's day in one hand.
      */
     const charge = (arrivedAt: Date | null, departedAt: Date | null) => {
+      if (open) return { shortHours: 0 };
       if (!context) return {};
       const { shortHours, endsAtMinutes } = dayCharge({
         ...context,
@@ -157,7 +164,7 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
         where: { id: existing.id },
         data: {
           departedAt: left.departedAt,
-          earlyHours: left.earlyHours,
+          earlyHours: open ? 0 : left.earlyHours,
           ...charge(existing.arrivedAt, left.departedAt),
           note: `${head} · device: ${left.departedLocal ? `left ${left.departedLocal}` : "no clock-out yet"}`.slice(0, 300),
         },
@@ -212,19 +219,19 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
       create: {
         employeeId: person.id,
         day: date,
-        delayHours: day.delayHours,
+        delayHours: open ? 0 : day.delayHours,
         arrivedAt: day.arrivedAt,
         departedAt: day.departedAt,
-        earlyHours: day.earlyHours,
+        earlyHours: open ? 0 : day.earlyHours,
         ...charge(day.arrivedAt, day.departedAt),
         source: DEVICE,
         note: noteFor(day),
       },
       update: {
-        delayHours: day.delayHours,
+        delayHours: open ? 0 : day.delayHours,
         arrivedAt: day.arrivedAt,
         departedAt: day.departedAt,
-        earlyHours: day.earlyHours,
+        earlyHours: open ? 0 : day.earlyHours,
         ...charge(day.arrivedAt, day.departedAt),
         source: DEVICE,
         note: noteFor(day),
