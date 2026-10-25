@@ -33,8 +33,10 @@ final class WalkieCenter: NSObject, ObservableObject {
 
     @Published private(set) var state: State = .checking
     @Published var problem: String?
-    /// Playing what the manager said, right now.
     @Published private(set) var playing = false
+    /// Moves each time something said to this phone has played — the open
+    /// walkie-talkie screens read their conversation again.
+    @Published private(set) var heardCount = 0
 
     private var manager: PTChannelManager?
     /// iOS's own talk button is held: what is said is being recorded.
@@ -149,6 +151,8 @@ final class WalkieCenter: NSObject, ObservableObject {
             return
         }
         playing = true
+        // Answering is to whoever spoke last: iOS's own talk button replies to them.
+        if let from = message.fromKey, !from.isEmpty { Self.target = from }
         Task {
             do {
                 // Through the radio (WalkieRadio): static, the voice in a
@@ -156,7 +160,10 @@ final class WalkieCenter: NSObject, ObservableObject {
                 let (data, _) = try await URLSession.shared.data(from: message.url)
                 let file = FileManager.default.temporaryDirectory.appendingPathComponent("walkie-heard.m4a")
                 try data.write(to: file, options: .atomic)
-                try WalkieRadio.shared.play(file: file) { [weak self] in self?.finish() }
+                try WalkieRadio.shared.play(file: file) { [weak self] in
+                    self?.finish()
+                    self?.heard(message.id)
+                }
             } catch {
                 finish()
             }
@@ -198,6 +205,19 @@ final class WalkieCenter: NSObject, ObservableObject {
         background = UIApplication.shared.beginBackgroundTask { UIApplication.shared.endBackgroundTask(background) }
         Task {
             _ = try? await APIClient.shared.sendWalkie(to: target, audio: data, seconds: seconds)
+            UIApplication.shared.endBackgroundTask(background)
+        }
+    }
+
+    /// It has played to the end on this phone: the speaker sees "heard". It
+    /// runs with the app in the background, so it asks iOS for the time.
+    private func heard(_ id: String?) {
+        heardCount += 1
+        guard let id else { return }
+        var background = UIBackgroundTaskIdentifier.invalid
+        background = UIApplication.shared.beginBackgroundTask { UIApplication.shared.endBackgroundTask(background) }
+        Task {
+            await APIClient.shared.markWalkieHeard(id)
             UIApplication.shared.endBackgroundTask(background)
         }
     }
@@ -244,7 +264,7 @@ extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate {
         // "The manager" is the server's own words, said in the phone's language.
         let from = L((neon?["from"] as? String) ?? (pushPayload["activeSpeaker"] as? String) ?? "The manager")
         if let raw = neon?["audioUrl"] as? String, let url = resolvedMediaURL(raw) {
-            pending.put(PendingWalkie.Message(url: url))
+            pending.put(PendingWalkie.Message(url: url, id: neon?["id"] as? String, fromKey: neon?["fromKey"] as? String))
         }
         return .activeRemoteParticipant(PTParticipant(name: from, image: nil))
     }
@@ -291,7 +311,7 @@ extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate {
 /// What the last push said to play, between the push (on Apple's queue) and
 /// the audio opening (later, on another).
 final class PendingWalkie: @unchecked Sendable {
-    struct Message { let url: URL }
+    struct Message { let url: URL; let id: String?; let fromKey: String? }
     private let lock = NSLock()
     private var message: Message?
 

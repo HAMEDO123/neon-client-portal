@@ -2237,11 +2237,24 @@ model WalkieMessage {
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   fromName   String
+  /// Who spoke and who it is for, as the app names people: "admin" for the
+  /// manager, an employee's id otherwise — what a conversation is read by.
+  fromKey    String   @default("")
+  toKey      String   @default("")
+  /// "one" (to this person) or "all" (everybody), and the press it came from:
+  /// one press to everybody is one batch of rows.
+  scope      String   @default("one")
+  batch      String   @default("")
   audioUrl   String
   seconds    Int?
   /// Phones Apple accepted the push for. Zero is said to the manager, never hidden.
   phones     Int      @default(0)
+  /// When it finished playing on their phone — the phone says so. Null is
+  /// "not heard yet", never "ignored".
+  heardAt    DateTime?
   createdAt  DateTime @default(now())
 
   @@index([employeeId, createdAt])
+  @@index([fromKey, createdAt])
+  @@index([toKey, createdAt])
 }

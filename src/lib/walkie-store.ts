@@ -20,6 +20,11 @@ export async function walkieOpen(now = new Date()) {
   return walkieHoursOpen(wallClockIn(timeZone, now));
 }
 
+/** How the app names a speaker: "admin" for the manager, an employee's id otherwise. */
+export function speakerKey(speaker: WalkieSpeaker) {
+  return speaker.type === "ADMIN" ? "admin" : speaker.id;
+}
+
 /** The phone's own row: the employee's, or the manager's (null when there is none). */
 export async function speakerRow(speaker: WalkieSpeaker) {
   return speaker.type === "EMPLOYEE" ? speaker.id : await managerEmployeeId();
@@ -72,7 +77,7 @@ export async function leaveWalkie(employeeId: string, token: string | null) {
 }
 
 export type WalkieOutcome =
-  | { ok: true; heard: string[]; notOn: string[]; phones: number }
+  | { ok: true; batch: string; heard: string[]; notOn: string[]; phones: number }
   | { ok: false; reason: "closed" | "not-found" | "nobody" | "no-push"; names?: string[] };
 
 /**
@@ -112,6 +117,10 @@ export async function sayOnWalkie(input: {
   if (listening.length === 0) return { ok: false, reason: "nobody", names: notOn };
 
   const fromName = input.speaker.type === "ADMIN" ? "The manager" : input.speaker.name;
+  const fromKey = speakerKey(input.speaker);
+  const scope = input.target.kind === "all" ? "all" : "one";
+  // One press, one batch: what a conversation shows as a single message.
+  const batch = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   const prepared = await voiceFor(input.voice);
   const saved = await saveFile(prepared.file, "walkie", "audio", false);
   const seconds = input.seconds ?? prepared.seconds;
@@ -119,10 +128,11 @@ export async function sayOnWalkie(input: {
   const heard: string[] = [];
   let phones = 0;
   for (const person of listening) {
+    const toKey = person.id === managerRow ? "admin" : person.id;
     const message = await prisma.walkieMessage.create({
-      data: { employeeId: person.id, fromName, audioUrl: saved.url, seconds },
+      data: { employeeId: person.id, fromName, fromKey, toKey, scope, batch, audioUrl: saved.url, seconds },
     });
-    const payload = walkiePayload({ id: message.id, audioUrl: saved.url, seconds, fromName });
+    const payload = walkiePayload({ id: message.id, audioUrl: saved.url, seconds, fromName, fromKey, scope });
     let theirs = 0;
     for (const device of person.deviceTokens) {
       const result = await sendPushToTalk({ token: device.token, bundleId: device.bundleId, sandbox: device.sandbox }, payload);
@@ -142,5 +152,113 @@ export async function sayOnWalkie(input: {
     if (theirs > 0) heard.push(person.id === managerRow ? "The manager" : person.name);
   }
 
-  return { ok: true, heard, notOn, phones };
+  return { ok: true, batch, heard, notOn, phones };
+}
+
+// --- Conversations ------------------------------------------------------------
+
+export type WalkieItem = {
+  id: string;
+  /** Said by the one reading. */
+  mine: boolean;
+  fromName: string;
+  scope: string;
+  audioUrl: string;
+  seconds: number | null;
+  at: Date;
+  /** For what the reader said: how many of the phones Apple took it for, and when it was heard. */
+  phones: number;
+  heardAt: Date | null;
+  /** For a press to everybody, each person's own answer. */
+  recipients?: { key: string; phones: number; heardAt: Date | null }[];
+};
+
+/**
+ * One conversation, oldest first: what the reader and `withKey` said to each
+ * other — and, from them, what they said to everybody. `withKey` "all" is the
+ * reader's own presses to everybody, one item per press with each person's answer.
+ */
+export async function walkieThread(speaker: WalkieSpeaker, withKey: string, take = 80): Promise<WalkieItem[]> {
+  const me = speakerKey(speaker);
+
+  if (withKey === "all") {
+    const rows = await prisma.walkieMessage.findMany({
+      where: { fromKey: me, scope: "all" },
+      orderBy: { createdAt: "desc" },
+      take: take * 12,
+    });
+    const batches = new Map<string, WalkieItem>();
+    for (const row of rows) {
+      const key = row.batch || row.id;
+      const item = batches.get(key) ?? {
+        id: row.id,
+        mine: true,
+        fromName: row.fromName,
+        scope: "all",
+        audioUrl: row.audioUrl,
+        seconds: row.seconds,
+        at: row.createdAt,
+        phones: 0,
+        heardAt: null,
+        recipients: [],
+      };
+      item.phones += row.phones;
+      item.recipients!.push({ key: row.toKey, phones: row.phones, heardAt: row.heardAt });
+      batches.set(key, item);
+    }
+    return [...batches.values()].slice(0, take).reverse();
+  }
+
+  const rows = await prisma.walkieMessage.findMany({
+    where: {
+      OR: [
+        { fromKey: me, toKey: withKey, scope: "one" },
+        { fromKey: withKey, toKey: me },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take,
+  });
+  return rows.reverse().map((row) => ({
+    id: row.id,
+    mine: row.fromKey === me,
+    fromName: row.fromName,
+    scope: row.scope,
+    audioUrl: row.audioUrl,
+    seconds: row.seconds,
+    at: row.createdAt,
+    phones: row.phones,
+    heardAt: row.heardAt,
+  }));
+}
+
+/**
+ * Its owner's phone has played it. Only the one it was for can say so, and only
+ * once: the first time is the time it was heard.
+ */
+export async function markWalkieHeard(speaker: WalkieSpeaker, id: string) {
+  const result = await prisma.walkieMessage.updateMany({
+    where: { id, toKey: speakerKey(speaker), heardAt: null },
+    data: { heardAt: new Date() },
+  });
+  return result.count > 0;
+}
+
+/** For each person, when the reader and they last spoke, and how many of theirs the reader has not heard. */
+export async function walkieLatest(speaker: WalkieSpeaker) {
+  const me = speakerKey(speaker);
+  const rows = await prisma.walkieMessage.findMany({
+    where: { OR: [{ fromKey: me }, { toKey: me }] },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: { fromKey: true, toKey: true, scope: true, createdAt: true, heardAt: true },
+  });
+  const latest = new Map<string, { lastAt: Date; unheard: number }>();
+  for (const row of rows) {
+    const other = row.fromKey === me ? (row.scope === "all" ? "all" : row.toKey) : row.fromKey;
+    const entry = latest.get(other) ?? { lastAt: row.createdAt, unheard: 0 };
+    if (row.toKey === me && !row.heardAt) entry.unheard += 1;
+    latest.set(other, entry);
+  }
+  return latest;
 }

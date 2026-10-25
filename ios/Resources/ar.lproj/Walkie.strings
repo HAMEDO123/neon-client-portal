@@ -58,3 +58,12 @@
 "Choose who to talk to." = "اختار مع مين بدك تحكي.";
 "Nothing was recorded." = "ما انسجّل إشي.";
 "iPhone push isn't set up on the server, so nothing can reach a phone." = "إشعارات الآيفون مش مضبوطة على السيرفر، فولا إشي بيوصل لأي جوال.";
+"Nothing said yet" = "ما انحكى إشي لسا";
+"Hold the button and speak." = "اضغط مطوّل على الزر واحكي.";
+"To everybody" = "للكل";
+"Play" = "شغّل";
+"Heard by %d of %d" = "سمعه %d من %d";
+"%d not reached" = "%d ما وصلهم";
+"Heard" = "سمع";
+"Reached, not heard yet" = "وصل، لسا ما سمع";
+"Did not reach their phone" = "ما وصل لجواله";

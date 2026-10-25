@@ -1,7 +1,7 @@
 import { requireStaff } from "@/lib/admin-guard";
-import { guarded, guardedAction, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
+import { guarded, guardedAction, param, RpcError, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 import { readWalkieSeconds, readWalkieTarget } from "@/lib/walkie";
-import { leaveWalkie, sayOnWalkie, speakerRow, walkieAllowed, walkieOpen, walkiePeople } from "@/lib/walkie-store";
+import { leaveWalkie, markWalkieHeard, sayOnWalkie, speakerRow, walkieAllowed, walkieLatest, walkieOpen, walkiePeople, walkieThread } from "@/lib/walkie-store";
 
 // The "walkie" area of the phone API: the studio's walkie-talkie
 // (lib/walkie.ts). The manager and the team alike. See lib/mobile/rpc.ts: keys
@@ -9,11 +9,29 @@ import { leaveWalkie, sayOnWalkie, speakerRow, walkieAllowed, walkieOpen, walkie
 
 export const reads: ReadRegistry = {
   // Who the signed-in person can talk to — the manager as "admin", and the
-  // team — never themselves, and whether it may speak right now.
-  // → { open, people: [{ id, name, role, photoUrl, manager, allowed }] }
-  "walkie/people": guarded(requireStaff, async (_params, who) => ({
-    open: await walkieOpen(),
-    people: await walkiePeople(who),
+  // team — never themselves, whether it may speak right now, and for each
+  // conversation (and "all") when it last spoke and how much of theirs is unheard.
+  // → { open, people: [{ id, name, role, photoUrl, manager, allowed, lastAt, unheard }],
+  //     all: { lastAt, unheard } }
+  "walkie/people": guarded(requireStaff, async (_params, who) => {
+    const latest = await walkieLatest(who);
+    const people = await walkiePeople(who);
+    return {
+      open: await walkieOpen(),
+      people: people.map((person) => ({
+        ...person,
+        lastAt: latest.get(person.id)?.lastAt ?? null,
+        unheard: latest.get(person.id)?.unheard ?? 0,
+      })),
+      all: { lastAt: latest.get("all")?.lastAt ?? null, unheard: 0 },
+    };
+  }),
+
+  // One conversation, oldest first (?with= "all" | "admin" | employeeId).
+  // → { items: [{ id, mine, fromName, scope, audioUrl, seconds, at, phones, heardAt,
+  //     recipients?: [{ key, phones, heardAt }] }] }
+  "walkie/thread": guarded(requireStaff, async (params, who) => ({
+    items: await walkieThread(who, param(params, "with")),
   })),
 
   // This phone's owner: whether they have it on, and that it is required.
@@ -41,8 +59,13 @@ export const actions: ActionRegistry = {
       if (outcome.reason === "nobody") throw new RpcError("Nobody there has the walkie-talkie on yet.", 409);
       throw new RpcError("iPhone push isn't set up on the server, so nothing can reach a phone.", 503);
     }
-    return { heard: outcome.heard, notOn: outcome.notOn, phones: outcome.phones };
+    return { batch: outcome.batch, heard: outcome.heard, notOn: outcome.notOn, phones: outcome.phones };
   }),
+
+  // This phone has played it (args [messageId]): the speaker sees "heard".
+  "walkie/heard": guardedAction(requireStaff, async (input, who) => ({
+    heard: await markWalkieHeard(who, str(input.args[0], "id")),
+  })),
 
   // Turned off on this phone (args [token?]); without a token, on every phone.
   "walkie/leave": guardedAction(requireStaff, async (input, who) => {

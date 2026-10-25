@@ -43,14 +43,29 @@ export const WALKIE_MAX_SECONDS = 60;
 export type WalkiePayload = {
   /** What iOS shows as who is talking. */
   activeSpeaker: string;
-  neon: { kind: "walkie"; id: string; audioUrl: string; seconds: number | null; from: string };
+  neon: { kind: "walkie"; id: string; audioUrl: string; seconds: number | null; from: string; fromKey: string; scope: "one" | "all" };
 };
 
 /** What the phone is woken with: everything it needs to play, so playing waits on nothing else. */
-export function walkiePayload(input: { id: string; audioUrl: string; seconds: number | null; fromName: string }): WalkiePayload {
+export function walkiePayload(input: {
+  id: string;
+  audioUrl: string;
+  seconds: number | null;
+  fromName: string;
+  fromKey: string;
+  scope: "one" | "all";
+}): WalkiePayload {
   return {
     activeSpeaker: input.fromName,
-    neon: { kind: "walkie", id: input.id, audioUrl: input.audioUrl, seconds: input.seconds, from: input.fromName },
+    neon: {
+      kind: "walkie",
+      id: input.id,
+      audioUrl: input.audioUrl,
+      seconds: input.seconds,
+      from: input.fromName,
+      fromKey: input.fromKey,
+      scope: input.scope,
+    },
   };
 }
 

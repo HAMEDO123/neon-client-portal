@@ -104,27 +104,58 @@ struct WalkiePerson: Decodable, Identifiable, Equatable {
     let photoUrl: String?
     var manager: Bool? = nil
     let allowed: Bool
+    var lastAt: String? = nil
+    var unheard: Int? = nil
 
     /// "The manager" is the server's word, said in the app's language.
     var shownName: String { manager == true ? L("The manager") : name }
 }
 
 struct WalkiePeopleResponse: Decodable {
-    /// Inside today's working window: the walkie-talkie speaks only then.
+    /// Inside the walkie-talkie's hours: it speaks only then.
     let open: Bool?
     let people: [WalkiePerson]
+    var all: Latest? = nil
+    struct Latest: Decodable { let lastAt: String? }
 }
 
 struct WalkieSent: Decodable {
+    let batch: String?
     /// Who had a phone Apple took it for, and who has not turned it on.
     let heard: [String]
     let notOn: [String]
     let phones: Int
 }
 
+/// One thing said in a conversation (`walkie/thread`).
+struct WalkieItem: Decodable, Identifiable, Equatable {
+    let id: String
+    let mine: Bool
+    let fromName: String
+    let scope: String
+    let audioUrl: String
+    let seconds: Int?
+    let at: String
+    let phones: Int
+    let heardAt: String?
+    var recipients: [Recipient]? = nil
+
+    struct Recipient: Decodable, Equatable {
+        let key: String
+        let phones: Int
+        let heardAt: String?
+    }
+}
+
+struct WalkieThreadResponse: Decodable { let items: [WalkieItem] }
+
 extension APIClient {
     func fetchWalkiePeople() async throws -> Loaded<WalkiePeopleResponse> {
         try await read("walkie/people", as: WalkiePeopleResponse.self)
+    }
+
+    func fetchWalkieThread(with key: String) async throws -> [WalkieItem] {
+        try await readFresh("walkie/thread", ["with": key], as: WalkieThreadResponse.self).items
     }
 
     /// What one press said: to "all", to "admin", or to one person's id.
@@ -137,198 +168,102 @@ extension APIClient {
         )
         return try outcome.result(WalkieSent.self)
     }
+
+    /// This phone has played it: the speaker sees "heard".
+    func markWalkieHeard(_ id: String) async {
+        _ = try? await perform("walkie/heard", args: [id])
+    }
 }
 
-/// Choose somebody — or everybody — hold the button and speak; let go and it
-/// plays on their phones. The manager and the team alike, during working hours.
+/// Everybody to talk to, each a conversation — as a chat list: the last time
+/// you spoke, what of theirs you have not heard, and whether their walkie-talkie
+/// is on. The manager and the team alike.
 struct WalkieTalkieView: View {
     @EnvironmentObject var api: APIClient
-    @StateObject private var recorder = WalkieRecorder()
+    @ObservedObject private var center = WalkieCenter.shared
     @State private var people: [WalkiePerson]?
+    @State private var allLastAt: String?
     @State private var open = true
     @State private var errorMessage: String?
-    @State private var chosen = WalkieCenter.target
-    @State private var sending = false
-    @State private var lastSent: String?
+    @State private var opened: WalkieConversation?
     #if DEBUG
     private var preview: [WalkiePerson]?
-    init(preview: [WalkiePerson]? = nil, chosen: String = "all", open: Bool = true) {
+    init(preview: [WalkiePerson]? = nil, open: Bool = true) {
         self.preview = preview
         _people = State(initialValue: preview)
-        _chosen = State(initialValue: chosen)
         _open = State(initialValue: open)
     }
     #endif
 
-    private var target: (id: String, name: String)? {
-        if chosen == "all" { return ("all", L("everybody")) }
-        return people?.first { $0.id == chosen && $0.allowed }.map { ($0.id, $0.shownName) }
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            NeonScroll(spacing: NeonSpace.stack, lazy: false) {
-                WalkieHearCard()
-                if !open {
-                    StatusNote(symbol: "clock.fill", tone: .info, title: L("The walkie-talkie works from 10 AM to 7 PM."), detail: nil)
-                }
-                if let people {
-                    SectionCard(L("Who to talk to"), subtitle: L("Choose, then hold the button and speak."), symbol: "person.wave.2.fill", hue: .orange) {
-                        VStack(spacing: 8) {
-                            everybodyRow(count: people.filter(\.allowed).count)
-                            ForEach(people) { person in row(person) }
-                        }
-                    }
-                } else if let errorMessage {
-                    ErrorState(message: errorMessage) { await load() }
-                } else {
-                    SkeletonRows(count: 4)
-                }
+        NeonScroll(spacing: NeonSpace.stack, lazy: false) {
+            WalkieHearCard()
+            if !open {
+                StatusNote(symbol: "clock.fill", tone: .info, title: L("The walkie-talkie works from 10 AM to 7 PM."), detail: nil)
             }
-            talkBar
+            if let people {
+                let on = people.filter(\.allowed).count
+                VStack(spacing: 8) {
+                    row(WalkieConversation(key: "all", name: L("Everybody"), photo: nil),
+                        subtitle: L("%d with it on", on), lastAt: allLastAt, unheard: 0, allowed: true, everybody: true)
+                    ForEach(people) { person in
+                        row(WalkieConversation(key: person.id, name: person.shownName, photo: person.photoUrl),
+                            subtitle: person.allowed ? L("Walkie-talkie on") : L("Not turned on yet"),
+                            lastAt: person.lastAt, unheard: person.unheard ?? 0, allowed: person.allowed, everybody: false)
+                    }
+                }
+            } else if let errorMessage {
+                ErrorState(message: errorMessage) { await load() }
+            } else {
+                SkeletonRows(count: 4)
+            }
         }
         .navigationTitle(L("Walkie-talkie"))
         .navigationBarTitleDisplayMode(.inline)
-        .neonAmbientBackground()
+        .navigationDestination(isPresented: Binding(get: { opened != nil }, set: { if !$0 { opened = nil } })) {
+            if let opened { WalkieThreadView(conversation: opened, open: open) }
+        }
         .task { await load() }
         .refreshable { await load() }
+        // Something came in while this was open: its row moves.
+        .onChange(of: center.heardCount) { _ in Task { await load() } }
     }
 
-    private func everybodyRow(count: Int) -> some View {
-        choice(id: "all", enabled: true) {
-            IconTile("person.3.fill", hue: .orange, size: 42)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L("Everybody")).font(.neonRowTitle).foregroundStyle(Color.neonInk)
-                Text(L("%d with it on", count)).font(.neonCaption).foregroundStyle(Color.neonTextTertiary)
-            }
-        }
-    }
-
-    private func row(_ person: WalkiePerson) -> some View {
-        choice(id: person.id, enabled: person.allowed) {
-            AvatarView(url: facePhotoURL(person.photoUrl), name: person.shownName, size: 42)
-            VStack(alignment: .leading, spacing: 2) {
-                DirText(person.shownName, font: .neonRowTitle, fill: false, lineLimit: 1)
-                Text(person.allowed ? L("Walkie-talkie on") : L("Not turned on yet"))
-                    .font(.neonCaption)
-                    .foregroundStyle(person.allowed ? Color.neonSuccessStrong : Color.neonTextTertiary)
-            }
-        }
-    }
-
-    private func choice<Content: View>(id: String, enabled: Bool, @ViewBuilder content: () -> Content) -> some View {
-        let selected = chosen == id
+    private func row(_ conversation: WalkieConversation, subtitle: String, lastAt: String?, unheard: Int, allowed: Bool, everybody: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous)
         return Button {
-            guard enabled else { return }
-            Haptic.selection()
-            withNeonAnimation(NeonMotion.snappy) { chosen = id }
-            // iOS's own talk button, held on the lock screen, speaks to them too.
-            WalkieCenter.target = id
+            Haptic.tap()
+            opened = conversation
         } label: {
             HStack(spacing: 12) {
-                content()
-                Spacer(minLength: 0)
-                if selected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Color.neonAccent)
+                if everybody {
+                    IconTile("person.3.fill", hue: .orange, size: 46)
+                } else {
+                    AvatarView(url: facePhotoURL(conversation.photo), name: conversation.name, size: 46)
                 }
+                VStack(alignment: .leading, spacing: 3) {
+                    DirText(conversation.name, font: .neonRowTitle, fill: false, lineLimit: 1)
+                    Text(subtitle)
+                        .font(.neonCaption)
+                        .foregroundStyle(allowed ? Color.neonSuccessStrong : Color.neonTextTertiary)
+                }
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let time = chatListTime(lastAt) {
+                        Text(time).font(.neonCaption).foregroundStyle(Color.neonTextTertiary)
+                    }
+                    if unheard > 0 { CountBadge(unheard, tone: .danger, size: 20) }
+                }
+                Image(systemName: "chevron.forward")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.neonTextFaint)
             }
             .padding(10)
-            .background(shape.fill(selected ? NeonHue.orange.wash : Color.white.opacity(0.6)))
-            .overlay(shape.strokeBorder(selected ? Color.neonOrange.opacity(0.5) : Color.neonLine, lineWidth: 1))
-            .opacity(enabled ? 1 : 0.55)
+            .background(shape.fill(Color.white.opacity(0.75)))
+            .overlay(shape.strokeBorder(Color.neonLine, lineWidth: 1))
+            .opacity(allowed ? 1 : 0.6)
         }
         .buttonStyle(.pressableCard)
-        .disabled(!enabled)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    /// The button: held, it records; let go, it sends. Too short a press is
-    /// not sent — it is almost always a tap that meant something else.
-    private var talkBar: some View {
-        VStack(spacing: 10) {
-            if let note = recorder.problem ?? lastSent {
-                Text(note)
-                    .font(.neonFootnote)
-                    .foregroundStyle(recorder.problem != nil ? Color.neonDangerStrong : Color.neonTextSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            let ready = target != nil && !sending && open
-            ZStack {
-                Circle()
-                    .fill(recorder.recording ? AnyShapeStyle(Color.neonDanger) : AnyShapeStyle(ready ? LinearGradient.neonAccent : LinearGradient(colors: [.gray.opacity(0.4)], startPoint: .top, endPoint: .bottom)))
-                    .frame(width: 112, height: 112)
-                    .scaleEffect(recorder.recording ? 1.08 + recorder.level * 0.12 : 1)
-                    .shadow(color: (recorder.recording ? Color.neonDanger : Color.neonAccent).opacity(ready ? 0.35 : 0), radius: 16, x: 0, y: 6)
-                if sending {
-                    ProgressView().tint(.white).controlSize(.large)
-                } else {
-                    Image(systemName: recorder.recording ? "waveform" : "mic.fill")
-                        .font(.system(size: 38, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-            }
-            .animation(.easeOut(duration: 0.12), value: recorder.level)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard ready, !recorder.recording else { return }
-                        lastSent = nil
-                        Haptic.impact(.medium)
-                        recorder.start()
-                    }
-                    .onEnded { _ in
-                        guard recorder.recording else { return }
-                        Task { await release() }
-                    }
-            )
-            .accessibilityLabel(L("Hold to talk"))
-            Text(target.map { recorder.recording ? L("Talking to %@ — let go to send", $0.name) : L("Hold to talk to %@", $0.name) } ?? L("Choose who to talk to"))
-                .font(.system(.subheadline, weight: .semibold))
-                .foregroundStyle(Color.neonInk)
-                .multilineTextAlignment(.center)
-        }
-        .padding(.horizontal, NeonSpace.gutter)
-        .padding(.top, 14)
-        .padding(.bottom, 18)
-        .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
-    }
-
-    private func release() async {
-        guard let result = recorder.stop(), let target else { return }
-        // The channel closing, on the speaker's own phone.
-        WalkieRadio.shared.squelch()
-        guard result.seconds >= 0.6 else {
-            lastSent = L("Hold the button while you speak, then let go.")
-            return
-        }
-        sending = true
-        Haptic.soft()
-        do {
-            let sent = try await api.sendWalkie(to: target.id, audio: result.data, seconds: result.seconds)
-            Haptic.success()
-            lastSent = sent.map(Self.said) ?? L("Sent.")
-        } catch {
-            Haptic.error()
-            // The server's refusals are English sentences; the ones this
-            // screen knows are said in the app's language.
-            lastSent = L(error.localizedDescription)
-        }
-        sending = false
-    }
-
-    /// Who heard it, and who has not turned it on — as they are, never "sent"
-    /// over a phone that heard nothing.
-    private static func said(_ sent: WalkieSent) -> String {
-        let names = { (list: [String]) in list.map { L($0) }.joined(separator: L(", ")) }
-        var lines: [String] = []
-        lines.append(sent.heard.isEmpty ? L("No phone took it. Their phones may be off.") : L("Heard on: %@", names(sent.heard)))
-        if !sent.notOn.isEmpty { lines.append(L("Not turned on yet: %@", names(sent.notOn))) }
-        return lines.joined(separator: "\n")
     }
 
     private func load() async {
@@ -338,11 +273,286 @@ struct WalkieTalkieView: View {
         do {
             let loaded = try await api.fetchWalkiePeople()
             people = loaded.value.people
+            allLastAt = loaded.value.all?.lastAt
             open = loaded.value.open ?? true
             errorMessage = nil
         } catch {
             if people == nil { errorMessage = error.localizedDescription }
         }
+    }
+}
+
+/// Who a conversation is with: "all", "admin", or an employee's id.
+struct WalkieConversation: Hashable, Identifiable {
+    let key: String
+    let name: String
+    let photo: String?
+    var id: String { key }
+}
+
+/// One conversation: what you said and what they said, oldest at the top, each
+/// to play again — and for what you said, whether it reached their phone and
+/// whether it was heard there, kept up to date while it is open. The button at
+/// the foot talks to them.
+struct WalkieThreadView: View {
+    let conversation: WalkieConversation
+    var open = true
+
+    @EnvironmentObject var api: APIClient
+    @ObservedObject private var center = WalkieCenter.shared
+    @State private var items: [WalkieItem]?
+    @State private var errorMessage: String?
+    @State private var playingId: String?
+    #if DEBUG
+    private var preview: [WalkieItem]?
+    init(conversation: WalkieConversation, open: Bool = true, preview: [WalkieItem]? = nil) {
+        self.conversation = conversation
+        self.open = open
+        self.preview = preview
+        _items = State(initialValue: preview)
+    }
+    #endif
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 10) {
+                        if let items {
+                            if items.isEmpty {
+                                EmptyState(symbol: "antenna.radiowaves.left.and.right", title: L("Nothing said yet"),
+                                           detail: L("Hold the button and speak."), hue: .orange)
+                                    .padding(.top, 40)
+                            }
+                            ForEach(items) { item in bubble(item).id(item.id) }
+                        } else if let errorMessage {
+                            ErrorState(message: errorMessage) { await load() }
+                        } else {
+                            ProgressView().padding(.top, 60)
+                        }
+                        Color.clear.frame(height: 4).id("end")
+                    }
+                    .padding(NeonSpace.gutter)
+                }
+                .onChange(of: items?.count ?? 0) { _ in
+                    withAnimation { proxy.scrollTo("end", anchor: .bottom) }
+                }
+                .onAppear { proxy.scrollTo("end", anchor: .bottom) }
+            }
+            WalkieTalkBar(target: conversation.key, name: conversation.name, open: open) {
+                await load()
+            }
+        }
+        .navigationTitle(conversation.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .neonAmbientBackground()
+        .onAppear { WalkieCenter.target = conversation.key }
+        // While it is open: "reached" and "heard" arrive as the other phone says so.
+        .task {
+            #if DEBUG
+            if preview != nil { return }
+            #endif
+            while !Task.isCancelled {
+                await load()
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+            }
+        }
+        .onChange(of: center.heardCount) { _ in Task { await load() } }
+    }
+
+    private func bubble(_ item: WalkieItem) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        return HStack {
+            if item.mine { Spacer(minLength: 48) }
+            VStack(alignment: .leading, spacing: 6) {
+                if !item.mine, item.scope == "all" {
+                    Text(L("To everybody"))
+                        .font(.system(.caption2, weight: .semibold))
+                        .foregroundStyle(Color.neonOrangeStrong)
+                }
+                HStack(spacing: 10) {
+                    Button {
+                        Task { await play(item) }
+                    } label: {
+                        Image(systemName: playingId == item.id ? "speaker.wave.2.fill" : "play.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(item.mine ? Color.neonAccent : Color.white)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(item.mine ? Color.white : Color.neonOrangeStrong))
+                    }
+                    .buttonStyle(PressableStyle(scale: 0.9))
+                    .accessibilityLabel(L("Play"))
+                    Image(systemName: "waveform")
+                        .font(.system(size: 20))
+                        .foregroundStyle(item.mine ? Color.white.opacity(0.8) : Color.neonTextSecondary)
+                    if let seconds = item.seconds {
+                        Text(Self.length(seconds))
+                            .font(.system(.footnote, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(item.mine ? Color.white.opacity(0.9) : Color.neonTextSecondary)
+                    }
+                }
+                HStack(spacing: 6) {
+                    Text(chatClock(item.at))
+                        .font(.system(.caption2))
+                        .foregroundStyle(item.mine ? Color.white.opacity(0.75) : Color.neonTextTertiary)
+                    if item.mine { status(item) }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(shape.fill(item.mine ? AnyShapeStyle(LinearGradient.neonAccent) : AnyShapeStyle(Color.white)))
+            .overlay(shape.strokeBorder(item.mine ? Color.clear : Color.neonLine, lineWidth: 1))
+            if !item.mine { Spacer(minLength: 48) }
+        }
+    }
+
+    /// For what I said: not reached, reached, or heard — and for everybody, how many heard it.
+    @ViewBuilder
+    private func status(_ item: WalkieItem) -> some View {
+        if let recipients = item.recipients {
+            let heard = recipients.filter { $0.heardAt != nil }.count
+            let reached = recipients.filter { $0.phones > 0 }.count
+            Text(L("Heard by %d of %d", heard, recipients.count) + (reached < recipients.count ? " · " + L("%d not reached", recipients.count - reached) : ""))
+                .font(.system(.caption2, weight: .semibold))
+                .foregroundStyle(Color.white)
+        } else if item.heardAt != nil {
+            Label(L("Heard"), systemImage: "checkmark.circle.fill")
+                .font(.system(.caption2, weight: .bold))
+                .foregroundStyle(Color.white)
+        } else if item.phones > 0 {
+            Label(L("Reached, not heard yet"), systemImage: "checkmark")
+                .font(.system(.caption2, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.85))
+        } else {
+            Label(L("Did not reach their phone"), systemImage: "exclamationmark.circle.fill")
+                .font(.system(.caption2, weight: .semibold))
+                .foregroundStyle(Color.white)
+        }
+    }
+
+    private static func length(_ seconds: Int) -> String {
+        String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    private func play(_ item: WalkieItem) async {
+        guard let url = resolvedMediaURL(item.audioUrl) else { return }
+        playingId = item.id
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("walkie-replay.m4a")
+            try data.write(to: file, options: .atomic)
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            try WalkieRadio.shared.play(file: file) { playingId = nil }
+            // Played here: heard, if it was theirs to me.
+            if !item.mine, item.heardAt == nil { await api.markWalkieHeard(item.id) }
+        } catch {
+            playingId = nil
+        }
+    }
+
+    private func load() async {
+        #if DEBUG
+        if preview != nil { return }
+        #endif
+        do {
+            items = try await api.fetchWalkieThread(with: conversation.key)
+            errorMessage = nil
+        } catch {
+            if items == nil { errorMessage = error.localizedDescription }
+        }
+    }
+}
+
+/// The button at the foot of a conversation: held, it records; let go, it
+/// sends. Too short a press is not sent — it is almost always a tap that meant
+/// something else.
+struct WalkieTalkBar: View {
+    let target: String
+    let name: String
+    var open = true
+    let onSent: () async -> Void
+
+    @EnvironmentObject var api: APIClient
+    @StateObject private var recorder = WalkieRecorder()
+    @State private var sending = false
+    @State private var note: String?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            if let note = recorder.problem ?? note {
+                Text(note)
+                    .font(.neonFootnote)
+                    .foregroundStyle(recorder.problem != nil ? Color.neonDangerStrong : Color.neonTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            let ready = !sending && open
+            ZStack {
+                Circle()
+                    .fill(recorder.recording ? AnyShapeStyle(Color.neonDanger) : AnyShapeStyle(ready ? LinearGradient.neonAccent : LinearGradient(colors: [.gray.opacity(0.4)], startPoint: .top, endPoint: .bottom)))
+                    .frame(width: 96, height: 96)
+                    .scaleEffect(recorder.recording ? 1.08 + recorder.level * 0.12 : 1)
+                    .shadow(color: (recorder.recording ? Color.neonDanger : Color.neonAccent).opacity(ready ? 0.35 : 0), radius: 14, x: 0, y: 6)
+                if sending {
+                    ProgressView().tint(.white).controlSize(.large)
+                } else {
+                    Image(systemName: recorder.recording ? "waveform" : "mic.fill")
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: recorder.level)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard ready, !recorder.recording else { return }
+                        note = nil
+                        Haptic.impact(.medium)
+                        recorder.start()
+                    }
+                    .onEnded { _ in
+                        guard recorder.recording else { return }
+                        Task { await release() }
+                    }
+            )
+            .accessibilityLabel(L("Hold to talk"))
+            Text(recorder.recording ? L("Talking to %@ — let go to send", name) : L("Hold to talk to %@", name))
+                .font(.system(.subheadline, weight: .semibold))
+                .foregroundStyle(Color.neonInk)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, NeonSpace.gutter)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+    }
+
+    private func release() async {
+        guard let result = recorder.stop() else { return }
+        WalkieRadio.shared.squelch()
+        guard result.seconds >= 0.6 else {
+            note = L("Hold the button while you speak, then let go.")
+            return
+        }
+        sending = true
+        Haptic.soft()
+        do {
+            let sent = try await api.sendWalkie(to: target, audio: result.data, seconds: result.seconds)
+            Haptic.success()
+            if let sent, !sent.notOn.isEmpty {
+                note = L("Not turned on yet: %@", sent.notOn.map { L($0) }.joined(separator: L(", ")))
+            }
+            await onSent()
+        } catch {
+            Haptic.error()
+            // The server's refusals are English sentences; the ones this
+            // screen knows are said in the app's language.
+            note = L(error.localizedDescription)
+        }
+        sending = false
     }
 }
 

@@ -8,9 +8,11 @@ const read = (...parts: string[]) => readFileSync(join(process.cwd(), ...parts),
 
 describe("the walkie-talkie", () => {
   it("wakes the phone with everything it needs to play", () => {
-    const payload = walkiePayload({ id: "w1", audioUrl: "https://x/a.m4a", seconds: 4, fromName: "Hamed" });
+    const payload = walkiePayload({ id: "w1", audioUrl: "https://x/a.m4a", seconds: 4, fromName: "Hamed", fromKey: "admin", scope: "one" });
     assert.equal(payload.activeSpeaker, "Hamed");
-    assert.deepEqual(payload.neon, { kind: "walkie", id: "w1", audioUrl: "https://x/a.m4a", seconds: 4, from: "Hamed" });
+    assert.deepEqual(payload.neon, {
+      kind: "walkie", id: "w1", audioUrl: "https://x/a.m4a", seconds: 4, from: "Hamed", fromKey: "admin", scope: "one",
+    });
   });
 
   it("reads a length as whole seconds, within the limit", () => {
@@ -54,6 +56,12 @@ describe("the walkie-talkie", () => {
     const store = read("src", "lib", "walkie-store.ts");
     assert.match(store, /deviceTokens: \{ where: \{ active: true, kind: "PTT" \} \}/);
     assert.match(store, /sendPushToTalk\(/);
+  });
+
+  // "Heard" is only ever said by the phone it was for.
+  it("is marked heard only by whoever it was for", () => {
+    const store = read("src", "lib", "walkie-store.ts");
+    assert.match(store, /where: \{ id, toKey: speakerKey\(speaker\), heardAt: null \}/);
   });
 
   it("is anybody's in the studio to use, and nobody's else", () => {
