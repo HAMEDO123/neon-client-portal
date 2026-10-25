@@ -1,7 +1,7 @@
 import { requireStaff } from "@/lib/admin-guard";
 import { guarded, guardedAction, param, RpcError, str, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 import { readWalkieSeconds, readWalkieTarget } from "@/lib/walkie";
-import { leaveWalkie, markWalkieHeard, sayOnWalkie, speakerRow, walkieAllowed, walkieLatest, walkieOpen, walkiePeople, walkieThread } from "@/lib/walkie-store";
+import { leaveWalkie, markWalkieHeard, sayOnWalkie, speakerRow, walkieAllowed, walkieLatest, walkieOpenForSpeaker, walkiePeople, walkieThread } from "@/lib/walkie-store";
 
 // The "walkie" area of the phone API: the studio's walkie-talkie
 // (lib/walkie.ts). The manager and the team alike. See lib/mobile/rpc.ts: keys
@@ -17,7 +17,7 @@ export const reads: ReadRegistry = {
     const latest = await walkieLatest(who);
     const people = await walkiePeople(who);
     return {
-      open: await walkieOpen(),
+      open: await walkieOpenForSpeaker(who),
       people: people.map((person) => ({
         ...person,
         lastAt: latest.get(person.id)?.lastAt ?? null,
@@ -39,7 +39,7 @@ export const reads: ReadRegistry = {
   "walkie/me": guarded(requireStaff, async (_params, who) => ({
     allowed: await walkieAllowed(await speakerRow(who)),
     required: who.type === "EMPLOYEE",
-    open: await walkieOpen(),
+    open: await walkieOpenForSpeaker(who),
   })),
 };
 
@@ -54,7 +54,17 @@ export const actions: ActionRegistry = {
 
     const outcome = await sayOnWalkie({ speaker: who, target, voice, seconds: readWalkieSeconds(input.form.get("seconds")) });
     if (!outcome.ok) {
-      if (outcome.reason === "closed") throw new RpcError("The walkie-talkie works from 10 AM to 7 PM.", 409);
+      // The hours no longer close it — outside them it narrows to one person
+      // talking to one person, so each refusal says which half was missing.
+      if (outcome.reason === "night-all") {
+        throw new RpcError("After 7 PM the walkie-talkie is one to one. Choose a person rather than everybody.", 409);
+      }
+      if (outcome.reason === "night-speaker") {
+        throw new RpcError("The walkie-talkie is yours from 10 AM to 7 PM.", 409);
+      }
+      if (outcome.reason === "night-listener") {
+        throw new RpcError("After 7 PM you can only reach the people the studio allows at night.", 409);
+      }
       if (outcome.reason === "not-found") throw new RpcError("There is nobody to talk to there.", 404);
       if (outcome.reason === "nobody") throw new RpcError("Nobody there has the walkie-talkie on yet.", 409);
       throw new RpcError("iPhone push isn't set up on the server, so nothing can reach a phone.", 503);

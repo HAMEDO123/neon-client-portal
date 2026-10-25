@@ -513,6 +513,20 @@ model Employee {
    * one month, on days he had worked a full one.
    */
   openHours        Boolean   @default(false)
+  /**
+   * May use the walkie-talkie outside its hours.
+   *
+   * It runs all day now rather than closing at 7 PM, but the night is not the
+   * same room as the afternoon: outside 10:00–19:00 it narrows to one person
+   * talking to one person, and both ends have to be somebody the studio allows
+   * at night. Wael and Salem work that way; everybody else finds it closed
+   * until ten in the morning.
+   *
+   * The manager is always allowed, and is not marked here — their row is kept
+   * out of the team's surfaces (accessRole MANAGER) and this would be one more
+   * place to forget.
+   */
+  walkieLate       Boolean   @default(false)
   // Whether this person may read the company WhatsApp number's conversations
   // in the portal, and answer in them as the studio.
   //

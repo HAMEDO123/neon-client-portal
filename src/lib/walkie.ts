@@ -17,7 +17,13 @@
 // button is let go: a few seconds behind, and never a half-heard sentence on a
 // bad connection. Pure: the payload the phone reads.
 
-/** When the walkie-talkie speaks, in the studio's wall clock: from 10:00 until 19:00. */
+/**
+ * The walkie-talkie's own hours, in the studio's wall clock.
+ *
+ * Not opening and closing times any more: it runs around the clock. These are
+ * the hours it is a room everybody is in — outside them it is a line between
+ * two people (`walkiePressAllowed`).
+ */
 export const WALKIE_FROM = "10:00";
 export const WALKIE_UNTIL = "19:00";
 
@@ -35,6 +41,49 @@ export function walkieHoursOpen(wallClock: string, from = WALKIE_FROM, until = W
   const start = minutesOf(from);
   const end = minutesOf(until);
   return start <= end ? now >= start && now < end : now >= start || now < end;
+}
+
+/** Somebody at one end of a press: the manager, or whether they are allowed at night. */
+export type WalkieWho = { manager: boolean; late: boolean };
+
+/**
+ * Whether a press may go out now, and why not when it may not.
+ *
+ * The hours no longer close the walkie-talkie — it runs all day. What they
+ * decide is how wide it is. Inside 10:00–19:00 anybody talks to anybody, and
+ * to everybody at once. Outside them it narrows to a line between two people:
+ * one speaker, one listener, and both ends somebody the studio allows at
+ * night. Nobody else hears it, and nobody else can start one.
+ *
+ * The manager counts as allowed at either end — they are the one person who is
+ * always on call, and marking their row would be one more place to forget.
+ *
+ * Pure, because this is the rule itself: the store does the reading and the
+ * sending, and the rule can be read here without either.
+ */
+export function walkiePressAllowed(input: {
+  /** The studio's wall clock, "HH:MM". */
+  wallClock: string;
+  speaker: WalkieWho;
+  target: WalkieTarget;
+  /** The person being spoken to, when the target is one of the team. */
+  listener?: WalkieWho;
+}): { ok: true } | { ok: false; reason: "night-all" | "night-speaker" | "night-listener" } {
+  if (walkieHoursOpen(input.wallClock)) return { ok: true };
+
+  // At night it is a line between two people, never a room.
+  if (input.target.kind === "all") return { ok: false, reason: "night-all" };
+
+  if (!(input.speaker.manager || input.speaker.late)) return { ok: false, reason: "night-speaker" };
+
+  // Talking to the manager is always one of the two ends allowed; talking to
+  // somebody on the team needs them to be allowed at night too.
+  if (input.target.kind === "person") {
+    const listener = input.listener;
+    if (!listener || !(listener.manager || listener.late)) return { ok: false, reason: "night-listener" };
+  }
+
+  return { ok: true };
 }
 
 /** The longest thing one press may say, in seconds — a walkie-talkie, not a voice note. */

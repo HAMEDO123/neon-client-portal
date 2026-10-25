@@ -5,7 +5,7 @@ import { getTimezone } from "@/lib/settings";
 import { saveFile } from "@/lib/storage";
 import { wallClockIn } from "@/lib/time";
 import { voiceFor } from "@/lib/walkie-voice";
-import { walkieHoursOpen, walkiePayload, type WalkieTarget } from "@/lib/walkie";
+import { walkieHoursOpen, walkiePayload, walkiePressAllowed, type WalkieTarget } from "@/lib/walkie";
 
 // The database and delivery side of the walkie-talkie (lib/walkie.ts has the
 // why). Deliberately not "use server": these trust their caller to have
@@ -14,10 +14,25 @@ import { walkieHoursOpen, walkiePayload, type WalkieTarget } from "@/lib/walkie"
 /** Who is talking: the manager, or somebody on the team. */
 export type WalkieSpeaker = { type: "ADMIN" } | { type: "EMPLOYEE"; id: string; name: string };
 
-/** Whether the walkie-talkie may speak now: 10:00–19:00 in the studio's clock (lib/walkie.ts). */
+/** Whether this is one of the hours the walkie-talkie is a room everybody is in. */
 export async function walkieOpen(now = new Date()) {
   const timeZone = await getTimezone();
   return walkieHoursOpen(wallClockIn(timeZone, now));
+}
+
+/**
+ * Whether it is open to THIS person right now.
+ *
+ * It runs around the clock, but outside 10:00–19:00 only the manager and the
+ * people the studio allows at night can use it — so "open" is a different
+ * answer for Wael at midnight than it is for anybody else, and the app asking
+ * should get their answer rather than the studio's.
+ */
+export async function walkieOpenForSpeaker(speaker: WalkieSpeaker, now = new Date()) {
+  if (await walkieOpen(now)) return true;
+  if (speaker.type === "ADMIN") return true;
+  const row = await prisma.employee.findUnique({ where: { id: speaker.id }, select: { walkieLate: true } });
+  return row?.walkieLate === true;
 }
 
 /** How the app names a speaker: "admin" for the manager, an employee's id otherwise. */
@@ -78,7 +93,11 @@ export async function leaveWalkie(employeeId: string, token: string | null) {
 
 export type WalkieOutcome =
   | { ok: true; batch: string; heard: string[]; notOn: string[]; phones: number }
-  | { ok: false; reason: "closed" | "not-found" | "nobody" | "no-push"; names?: string[] };
+  | {
+      ok: false;
+      reason: "night-all" | "night-speaker" | "night-listener" | "not-found" | "nobody" | "no-push";
+      names?: string[];
+    };
 
 /**
  * Says it: stores the voice once, writes a row for each person it goes to, and
@@ -93,8 +112,25 @@ export async function sayOnWalkie(input: {
   voice: File;
   seconds: number | null;
 }): Promise<WalkieOutcome> {
-  if (!(await walkieOpen())) return { ok: false, reason: "closed" };
   if (!isApnsConfigured()) return { ok: false, reason: "no-push" };
+
+  // Who is talking, as the rule reads it. The hours no longer close the
+  // walkie-talkie; outside them they narrow it to two people (lib/walkie.ts).
+  const timeZone = await getTimezone();
+  const wallClock = wallClockIn(timeZone, new Date());
+  const speakerLate =
+    input.speaker.type === "EMPLOYEE"
+      ? (await prisma.employee.findUnique({ where: { id: input.speaker.id }, select: { walkieLate: true } }))
+          ?.walkieLate === true
+      : false;
+  const speaking = { manager: input.speaker.type === "ADMIN", late: speakerLate };
+
+  // Refused before the recording is read or stored: nothing is kept for a
+  // press that was never allowed to leave the phone.
+  if (input.target.kind === "all" || input.target.kind === "manager") {
+    const early = walkiePressAllowed({ wallClock, speaker: speaking, target: input.target });
+    if (!early.ok) return { ok: false, reason: early.reason };
+  }
 
   const managerRow = await managerEmployeeId();
   const self = await speakerRow(input.speaker);
@@ -108,9 +144,21 @@ export async function sayOnWalkie(input: {
           : { id: input.target.id, accessRole: "EMPLOYEE" }),
       ...(self ? { NOT: { id: self } } : {}),
     },
-    select: { id: true, name: true, deviceTokens: { where: { active: true, kind: "PTT" } } },
+    select: { id: true, name: true, walkieLate: true, deviceTokens: { where: { active: true, kind: "PTT" } } },
   });
   if (recipients.length === 0) return { ok: false, reason: "not-found" };
+
+  // Talking to one of the team at night needs them to be allowed at night too.
+  if (input.target.kind === "person") {
+    const them = recipients[0];
+    const verdict = walkiePressAllowed({
+      wallClock,
+      speaker: speaking,
+      target: input.target,
+      listener: { manager: them.id === managerRow, late: them.walkieLate },
+    });
+    if (!verdict.ok) return { ok: false, reason: verdict.reason };
+  }
 
   const listening = recipients.filter((person) => person.deviceTokens.length > 0);
   const notOn = recipients.filter((person) => person.deviceTokens.length === 0).map((person) => (person.id === managerRow ? "The manager" : person.name));
