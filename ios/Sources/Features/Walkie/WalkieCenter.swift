@@ -45,6 +45,8 @@ final class WalkieCenter: NSObject, ObservableObject {
     private var recordingStarted: Date?
     private let pending = PendingWalkie()
     private var token: String?
+    /// The voice now playing, so a late safety stop never ends the next one.
+    private var current: UUID?
 
     private static let channelKey = "walkie_channel_uuid"
     private static let targetKey = "walkie_target"
@@ -153,6 +155,16 @@ final class WalkieCenter: NSObject, ObservableObject {
         playing = true
         // Answering is to whoever spoke last: iOS's own talk button replies to them.
         if let from = message.fromKey, !from.isEmpty { Self.target = from }
+        // Whatever happens, iOS's "somebody is talking" screen closes: a voice
+        // that could not be fetched or played must not leave the phone looking
+        // like a call that is waiting to be answered.
+        let playingNow = UUID()
+        current = playingNow
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double((message.seconds ?? 20) + 8)) { [weak self] in
+            guard let self, self.current == playingNow, self.playing else { return }
+            WalkieRadio.shared.stop()
+            self.finish()
+        }
         Task {
             do {
                 // Through the radio (WalkieRadio): static, the voice in a
@@ -161,6 +173,7 @@ final class WalkieCenter: NSObject, ObservableObject {
                 let file = FileManager.default.temporaryDirectory.appendingPathComponent("walkie-heard.m4a")
                 try data.write(to: file, options: .atomic)
                 try WalkieRadio.shared.play(file: file) { [weak self] in
+                    self?.current = nil
                     self?.finish()
                     self?.heard(message.id)
                 }
@@ -222,11 +235,12 @@ final class WalkieCenter: NSObject, ObservableObject {
         }
     }
 
+    /// Nobody is talking any more: iOS closes the audio and its "talking" screen.
     private func finish() {
         playing = false
-        guard let manager, let active = manager.activeChannelUUID else { return }
-        // Nobody is talking any more: iOS closes the audio.
-        Task { try? await manager.setActiveRemoteParticipant(nil, channelUUID: active) }
+        guard let manager else { return }
+        let channel = manager.activeChannelUUID ?? channelUUID
+        Task { try? await manager.setActiveRemoteParticipant(nil, channelUUID: channel) }
     }
 }
 
@@ -264,7 +278,7 @@ extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate {
         // "The manager" is the server's own words, said in the phone's language.
         let from = L((neon?["from"] as? String) ?? (pushPayload["activeSpeaker"] as? String) ?? "The manager")
         if let raw = neon?["audioUrl"] as? String, let url = resolvedMediaURL(raw) {
-            pending.put(PendingWalkie.Message(url: url, id: neon?["id"] as? String, fromKey: neon?["fromKey"] as? String))
+            pending.put(PendingWalkie.Message(url: url, id: neon?["id"] as? String, fromKey: neon?["fromKey"] as? String, seconds: neon?["seconds"] as? Int))
         }
         return .activeRemoteParticipant(PTParticipant(name: from, image: nil))
     }
@@ -311,7 +325,7 @@ extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate {
 /// What the last push said to play, between the push (on Apple's queue) and
 /// the audio opening (later, on another).
 final class PendingWalkie: @unchecked Sendable {
-    struct Message { let url: URL; let id: String?; let fromKey: String? }
+    struct Message { let url: URL; let id: String?; let fromKey: String?; let seconds: Int? }
     private let lock = NSLock()
     private var message: Message?
 
