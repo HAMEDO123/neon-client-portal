@@ -387,17 +387,10 @@ final class WalkieRecorder: NSObject, ObservableObject {
                 AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
             ])
             recorder.isMeteringEnabled = true
-            recorder.prepareToRecord()
+            guard recorder.record(forDuration: 60) else { throw CocoaError(.fileWriteUnknown) }
             self.recorder = recorder
+            startedAt = Date()
             recording = true
-            // The police radio's chirp first, then the microphone — so the
-            // chirp is heard here and not recorded into what is said.
-            WalkieRadio.shared.chirp()
-            DispatchQueue.main.asyncAfter(deadline: .now() + WalkieRadio.chirpSeconds) { [weak self] in
-                guard let self, self.recording, let recorder = self.recorder, !recorder.isRecording else { return }
-                recorder.record(forDuration: 60)
-                self.startedAt = Date()
-            }
             meter = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
                 Task { @MainActor in
                     guard let self, let recorder = self.recorder else { return }
@@ -413,8 +406,7 @@ final class WalkieRecorder: NSObject, ObservableObject {
     /// Stops, and hands back what was said.
     func stop() -> (data: Data, seconds: Double)? {
         guard let recorder else { return nil }
-        let seconds = recorder.currentTime > 0 ? recorder.currentTime : (startedAt.map { Date().timeIntervalSince($0) } ?? 0)
-        startedAt = nil
+        let seconds = recorder.currentTime > 0 ? recorder.currentTime : Date().timeIntervalSince(startedAt ?? Date())
         recorder.stop()
         meter?.invalidate()
         meter = nil
