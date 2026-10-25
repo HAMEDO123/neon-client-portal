@@ -35,14 +35,14 @@
 "The microphone could not start. Try again." = "المايكروفون ما اشتغل. جرّب مرة ثانية.";
 "NEON walkie-talkie" = "لاسلكي NEON";
 "When the manager or somebody on the team talks to you, you hear it straight away — even with the phone locked." = "لما المدير أو حدا من الفريق يحكي معك، بتسمعه فورًا — حتى لو الجوال مقفول.";
-"Only during working hours. Outside them, nothing is sent." = "بس خلال ساعات الدوام. برّا الدوام ما بينبعت إشي.";
+"From 10 AM to 4 AM, every day. Outside those hours, nothing is sent." = "من 10 الصبح لـ4 الفجر، كل يوم. برّا هالوقت ما بينبعت إشي.";
 "You can talk too: to the manager, to one person, or to everybody." = "وإنت كمان بتقدر تحكي: مع المدير، أو مع شخص، أو مع الكل.";
 "The studio asks everybody to have it on. You allow it once, and it stays on." = "الشركة طالبة من الكل يكون شغّال عنده. بتوافق مرة وحدة وبضل شغّال.";
 "Allow and turn it on" = "موافق، شغّله";
 "Hear the team" = "اسمع الفريق";
 "Turn it on to hear what the team says to you. Once, and it stays on." = "شغّله عشان تسمع شو بحكيلك الفريق. مرة وحدة وبضل شغّال.";
 "Turn it on" = "شغّله";
-"The walkie-talkie works during working hours only." = "اللاسلكي بيشتغل بساعات الدوام بس.";
+"The walkie-talkie works from 10 AM to 4 AM." = "اللاسلكي بيشتغل من 10 الصبح لـ4 الفجر.";
 "Choose, then hold the button and speak." = "اختار، وبعدين اضغط مطوّل على الزر واحكي.";
 "everybody" = "الكل";
 "Everybody" = "الكل";
@@ -53,3 +53,8 @@
 "No phone took it. Their phones may be off." = "ولا جوال استلمه. يمكن جوالاتهم مطفية.";
 "Heard on: %@" = "وصل لـ: %@";
 "Not turned on yet: %@" = "ما شغّلوه لسا: %@";
+"Nobody there has the walkie-talkie on yet." = "ولا حدا هناك مشغّل اللاسلكي لسا.";
+"There is nobody to talk to there." = "ما في حدا تحكي معه هناك.";
+"Choose who to talk to." = "اختار مع مين بدك تحكي.";
+"Nothing was recorded." = "ما انسجّل إشي.";
+"iPhone push isn't set up on the server, so nothing can reach a phone." = "إشعارات الآيفون مش مضبوطة على السيرفر، فولا إشي بيوصل لأي جوال.";

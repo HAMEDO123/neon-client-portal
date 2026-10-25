@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readWalkieSeconds, readWalkieTarget, walkiePayload, WALKIE_MAX_SECONDS } from "@/lib/walkie";
+import { readWalkieSeconds, readWalkieTarget, walkieHoursOpen, walkiePayload, WALKIE_MAX_SECONDS } from "@/lib/walkie";
 
 const read = (...parts: string[]) => readFileSync(join(process.cwd(), ...parts), "utf8");
 
@@ -29,8 +29,20 @@ describe("the walkie-talkie", () => {
     assert.equal(readWalkieTarget(42), null);
   });
 
-  // Only during working hours: the studio's rule, checked before anything is stored.
-  it("speaks only inside the working window", () => {
+  // 10:00 until 04:00 the next morning — across midnight, so both sides of it.
+  it("is open from ten in the morning until four the next morning", () => {
+    assert.equal(walkieHoursOpen("09:59"), false);
+    assert.equal(walkieHoursOpen("10:00"), true);
+    assert.equal(walkieHoursOpen("15:30"), true);
+    assert.equal(walkieHoursOpen("23:59"), true);
+    assert.equal(walkieHoursOpen("00:00"), true);
+    assert.equal(walkieHoursOpen("03:59"), true);
+    assert.equal(walkieHoursOpen("04:00"), false);
+    assert.equal(walkieHoursOpen("06:00"), false);
+  });
+
+  // The studio's rule, checked before anything is stored.
+  it("speaks only inside its hours", () => {
     const store = read("src", "lib", "walkie-store.ts");
     assert.match(store, /if \(!\(await walkieOpen\(\)\)\) return \{ ok: false, reason: "closed" \};/);
   });

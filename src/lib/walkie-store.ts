@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/db";
 import { managerEmployeeId } from "@/lib/manager-account";
 import { deviceOutcome, isApnsConfigured, sendPushToTalk } from "@/lib/notifications/apns";
-import { getTimezone, getWorkHours } from "@/lib/settings";
-import { isOpen, locationWindow } from "@/lib/staff-location";
+import { getTimezone } from "@/lib/settings";
 import { saveFile } from "@/lib/storage";
-import { todayKey } from "@/lib/time";
+import { wallClockIn } from "@/lib/time";
 import { voiceFor } from "@/lib/walkie-voice";
-import { walkiePayload, type WalkieTarget } from "@/lib/walkie";
+import { walkieHoursOpen, walkiePayload, type WalkieTarget } from "@/lib/walkie";
 
 // The database and delivery side of the walkie-talkie (lib/walkie.ts has the
 // why). Deliberately not "use server": these trust their caller to have
@@ -15,11 +14,10 @@ import { walkiePayload, type WalkieTarget } from "@/lib/walkie";
 /** Who is talking: the manager, or somebody on the team. */
 export type WalkieSpeaker = { type: "ADMIN" } | { type: "EMPLOYEE"; id: string; name: string };
 
-/** Whether the walkie-talkie may speak now: inside today's working window. */
+/** Whether the walkie-talkie may speak now: 10:00–04:00 in the studio's clock (lib/walkie.ts). */
 export async function walkieOpen(now = new Date()) {
   const timeZone = await getTimezone();
-  const hours = await getWorkHours();
-  return isOpen(locationWindow(hours, todayKey(timeZone), timeZone), now);
+  return walkieHoursOpen(wallClockIn(timeZone, now));
 }
 
 /** The phone's own row: the employee's, or the manager's (null when there is none). */

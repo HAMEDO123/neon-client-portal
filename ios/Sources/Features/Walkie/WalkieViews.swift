@@ -21,7 +21,7 @@ struct WalkieRequiredView: View {
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 10) {
                         point("speaker.wave.2.fill", L("When the manager or somebody on the team talks to you, you hear it straight away — even with the phone locked."))
-                        point("clock.fill", L("Only during working hours. Outside them, nothing is sent."))
+                        point("clock.fill", L("From 10 AM to 4 AM, every day. Outside those hours, nothing is sent."))
                         point("mic.fill", L("You can talk too: to the manager, to one person, or to everybody."))
                         point("checkmark.seal.fill", L("The studio asks everybody to have it on. You allow it once, and it stays on."))
                     }
@@ -170,7 +170,7 @@ struct WalkieTalkieView: View {
             NeonScroll(spacing: NeonSpace.stack, lazy: false) {
                 WalkieHearCard()
                 if !open {
-                    StatusNote(symbol: "clock.fill", tone: .info, title: L("The walkie-talkie works during working hours only."), detail: nil)
+                    StatusNote(symbol: "clock.fill", tone: .info, title: L("The walkie-talkie works from 10 AM to 4 AM."), detail: nil)
                 }
                 if let people {
                     SectionCard(L("Who to talk to"), subtitle: L("Choose, then hold the button and speak."), symbol: "person.wave.2.fill", hue: .orange) {
@@ -314,7 +314,9 @@ struct WalkieTalkieView: View {
             lastSent = sent.map(Self.said) ?? L("Sent.")
         } catch {
             Haptic.error()
-            lastSent = error.localizedDescription
+            // The server's refusals are English sentences; the ones this
+            // screen knows are said in the app's language.
+            lastSent = L(error.localizedDescription)
         }
         sending = false
     }

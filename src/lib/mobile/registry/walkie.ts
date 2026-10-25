@@ -36,7 +36,7 @@ export const actions: ActionRegistry = {
 
     const outcome = await sayOnWalkie({ speaker: who, target, voice, seconds: readWalkieSeconds(input.form.get("seconds")) });
     if (!outcome.ok) {
-      if (outcome.reason === "closed") throw new RpcError("The walkie-talkie works during working hours only.", 409);
+      if (outcome.reason === "closed") throw new RpcError("The walkie-talkie works from 10 AM to 4 AM.", 409);
       if (outcome.reason === "not-found") throw new RpcError("There is nobody to talk to there.", 404);
       if (outcome.reason === "nobody") throw new RpcError("Nobody there has the walkie-talkie on yet.", 409);
       throw new RpcError("iPhone push isn't set up on the server, so nothing can reach a phone.", 503);
