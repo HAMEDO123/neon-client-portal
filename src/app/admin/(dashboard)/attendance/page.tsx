@@ -331,7 +331,7 @@ function ClockTimes({
               </summary>
 
               <div className="overflow-x-auto border-t border-warm-line/60 px-3 pb-2">
-                <table className="w-full min-w-[40rem] text-left text-sm">
+                <table className="w-full min-w-[46rem] text-left text-sm">
                   <thead className="text-xs uppercase tracking-wider text-bark/35">
                     <tr>
                       <th className="py-2 pr-3 font-medium">Employee</th>
@@ -339,12 +339,25 @@ function ClockTimes({
                       <th className="py-2 pr-3 font-medium">Step out</th>
                       <th className="py-2 pr-3 font-medium">Step back</th>
                       <th className="py-2 pr-3 font-medium">Out</th>
+                      <th className="py-2 pr-3 font-medium">Worked</th>
                       <th className="py-2 text-right font-medium">Hours off</th>
                     </tr>
                   </thead>
                   <tbody>
                     {day.entries.map((row) => {
                       const off = Math.round(row.shortHours * 100) / 100;
+                      // What they were actually here for, less any step-out.
+                      // The only figure an open-hours day is paid on, and worth
+                      // seeing on every day: it answers "was that a full one"
+                      // without anybody adding up two times in their head.
+                      const worked =
+                        row.arrivedAt && row.departedAt
+                          ? Math.round(
+                              ((row.departedAt.getTime() - row.arrivedAt.getTime()) / 3_600_000 -
+                                row.awayHours) *
+                                100
+                            ) / 100
+                          : null;
                       // The manager types these in the studio's own clock and
                       // they are stored as "HH:MM", so they are the only times on
                       // this screen that must NOT go through formatTimeIn: there
@@ -381,6 +394,13 @@ function ClockTimes({
                               // here reads as "stayed to the end", which is the
                               // one thing the device cannot tell anybody.
                               <span className="text-amber-700">no clock-out</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums">
+                            {worked != null ? (
+                              <span className="text-bark/70">{worked}h</span>
+                            ) : (
+                              <span className="text-bark/30">—</span>
                             )}
                           </td>
                           <td

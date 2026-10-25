@@ -36,7 +36,10 @@ export async function runClockReminders(now = new Date()) {
   // manager's own row and anybody not paired are never chased — the device
   // could never see them.
   const people = await prisma.employee.findMany({
-    where: { active: true, accessRole: "EMPLOYEE", deviceUserId: { not: null } },
+    // Open hours are chased against nothing: there is no start to be late for
+    // and no end to leave early from, so a reminder at 11:00 and another at
+    // 19:00 would be the platform nagging somebody about a day they do not work.
+    where: { active: true, accessRole: "EMPLOYEE", deviceUserId: { not: null }, openHours: false },
     select: { id: true, name: true },
   });
   if (people.length === 0) return { skipped: "nobody is paired to the device" };

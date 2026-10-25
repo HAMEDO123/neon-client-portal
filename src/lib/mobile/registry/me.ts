@@ -17,7 +17,14 @@ import { submissionsForAssignedTask } from "@/lib/submissions";
 import { openFollowUpForTask } from "@/lib/follow-up-queue";
 import { answerFollowUp } from "@/lib/actions/follow-up-actions";
 import { weekDayKeys, weekStartKey, weekLabel } from "@/lib/week";
-import { createSupplyRequest, cancelSupplyRequest, submitReceipt, deleteReceipt, saveDailyReport } from "@/lib/actions/operations-actions";
+import {
+  createSupplyRequest,
+  cancelSupplyRequest,
+  submitReceipt,
+  deleteReceipt,
+  saveDailyReport,
+  addToDailyReport,
+} from "@/lib/actions/operations-actions";
 import { saveNotificationPreferences } from "@/lib/actions/employee-actions";
 import { setDeviceActive, forgetDevice } from "@/lib/actions/device-actions";
 import { setMyAssignedTaskStatus } from "@/lib/actions/my-assigned-actions";
@@ -284,6 +291,10 @@ export const actions: ActionRegistry = {
   "me/requests/receipt/submit": async (input) => heard(await submitReceipt(input.form)),
   "me/requests/receipt/delete": async (input) => deleteReceipt(str(input.args[0], "id")),
   "me/requests/report/save": async (input) => saveDailyReport(input.form),
+
+  // One line, from the Today screen, as the day happens. The same row the long
+  // box above writes — the report is written in pieces, not kept in two places.
+  "me/requests/report/add": async (input) => addToDailyReport(input.form),
 
   // Profile: notification preferences and this account's devices.
   "me/profile/preferences": async (input) => saveNotificationPreferences(input.form),
