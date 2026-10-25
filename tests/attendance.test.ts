@@ -10,6 +10,8 @@ import {
   deviceWallClock,
   earlyHours,
   clockLabel,
+  countedHours,
+  dayLengthHours,
   endOfDayMinutes,
   groupPunches,
   hoursShort,
@@ -433,5 +435,30 @@ describe("the time somebody is told their day ends", () => {
     // honest answer for somebody who started at four in the afternoon.
     assert.equal(clockLabel(24 * 60 + 3), "12:03 AM");
     assert.equal(clockLabel(25 * 60 + 30), "1:30 AM");
+  });
+});
+
+describe("a day counted for somebody paid by the hour", () => {
+  const studio: WorkHours = { ...hours, start: "11:00", end: "19:00" };
+
+  it("knows how long the studio's day is", () => {
+    assert.equal(dayLengthHours(studio), 8);
+  });
+
+  it("counts what was worked, up to a day and no further", () => {
+    assert.equal(countedHours(7.4, studio), 7.4, "a short day is what it was");
+    assert.equal(countedHours(8, studio), 8);
+    assert.equal(countedHours(9.09, studio), 8, "there is no overtime in this studio");
+    assert.equal(countedHours(14, studio), 8);
+  });
+
+  it("never counts less than nothing", () => {
+    assert.equal(countedHours(-3, studio), 0);
+  });
+
+  it("leaves a short day exactly as it happened", () => {
+    // Not rounded to something tidier: 4.16 is what Salem worked on 18 October,
+    // and a day somebody was short is theirs to see as it was.
+    assert.equal(countedHours(4.16, studio), 4.16);
   });
 });

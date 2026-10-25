@@ -198,6 +198,37 @@ export function endOfDayMinutes(
 }
 
 /**
+ * How long the studio's own day is, in hours.
+ *
+ * Deliberately the plain start-to-end rather than that weekday's — somebody on
+ * open hours has no weekday to be measured against, and the studio set the cap
+ * at eight however the day falls.
+ */
+export function dayLengthHours(hours: WorkHours): number {
+  const start = minutesOf(hours.start);
+  const end = minutesOf(hours.end);
+  if (start == null || end == null || end <= start) return 0;
+  return (end - start) / 60;
+}
+
+/**
+ * The hours a day counts for, for somebody paid by the hour.
+ *
+ * Worked time up to the length of a day, and no further. There is no overtime
+ * in this studio, so an hour past the eighth is not a credit — it is simply
+ * not counted, the same way staying past the end earns nothing in hoursShort.
+ *
+ * What is NOT done here is rounding it down to something tidier: seven hours
+ * and twenty minutes is what somebody worked, and a day they were short is
+ * theirs to see as it happened.
+ */
+export function countedHours(workedHours: number, hours: WorkHours): number {
+  const cap = dayLengthHours(hours);
+  const worked = Math.max(0, workedHours);
+  return cap > 0 ? Math.min(worked, cap) : worked;
+}
+
+/**
  * How much of the day was still owed when somebody left — the one number this
  * rule charges.
  *

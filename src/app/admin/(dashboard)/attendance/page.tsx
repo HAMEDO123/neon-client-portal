@@ -11,6 +11,8 @@ import { dateToDayKey, dayKeyToDate, formatDayIn, formatTimeIn, todayKey } from 
 import { AttendanceConsole } from "@/components/admin/attendance-console";
 import { AttendanceMonth } from "@/components/admin/attendance-month";
 import { storedBreaks } from "@/lib/attendance-breaks";
+import { countedHours } from "@/lib/attendance";
+import type { WorkHours } from "@/lib/work-hours";
 import { DeviceUsers } from "@/components/admin/device-users";
 import { SaveButton } from "@/components/admin/form-buttons";
 
@@ -71,7 +73,7 @@ export default async function AttendanceDevicePage({
   const monthRecords = await prisma.attendanceRecord.findMany({
     where: { day: { gte: dayKeyToDate(bounds.from), lte: dayKeyToDate(bounds.to) } },
     orderBy: [{ day: "asc" }],
-    include: { employee: { select: { id: true, name: true, active: true } } },
+    include: { employee: { select: { id: true, name: true, active: true, openHours: true } } },
   });
 
   const entries: MonthEntry[] = monthRecords.flatMap((row) => {
@@ -216,7 +218,7 @@ export default async function AttendanceDevicePage({
       {/* --- What it has recorded, a month at a time ---------------------- */}
       <AttendanceMonth month={month} thisMonth={thisMonth} />
 
-      <ClockTimes rows={monthRecords} timezone={timezone} monthKey={monthKey} />
+      <ClockTimes rows={monthRecords} timezone={timezone} monthKey={monthKey} hours={workHours} />
     </div>
   );
 }
@@ -235,6 +237,7 @@ function ClockTimes({
   rows,
   timezone,
   monthKey,
+  hours,
 }: {
   rows: {
     id: string;
@@ -247,10 +250,12 @@ function ClockTimes({
     shortHours: number;
     breaks: unknown;
     source: string;
-    employee: { name: string };
+    employee: { name: string; openHours: boolean };
   }[];
   timezone: string;
   monthKey: string;
+  /** The studio's day, for the cap on an hourly day (countedHours). */
+  hours: WorkHours;
 }) {
   const withTimes = [...rows].filter((row) => row.arrivedAt !== null);
 
@@ -358,6 +363,15 @@ function ClockTimes({
                                 100
                             ) / 100
                           : null;
+                      // Paid by the hour, so the day counts up to the studio's
+                      // eight and no further — there is no overtime here. The
+                      // hours actually worked are still said beside it: the
+                      // figure that is paid should never be the only one on
+                      // screen when they differ.
+                      const counts =
+                        worked != null && row.employee.openHours
+                          ? Math.round(countedHours(worked, hours) * 100) / 100
+                          : null;
                       // The manager types these in the studio's own clock and
                       // they are stored as "HH:MM", so they are the only times on
                       // this screen that must NOT go through formatTimeIn: there
@@ -397,10 +411,15 @@ function ClockTimes({
                             )}
                           </td>
                           <td className="py-2 pr-3 tabular-nums">
-                            {worked != null ? (
-                              <span className="text-bark/70">{worked}h</span>
-                            ) : (
+                            {worked == null ? (
                               <span className="text-bark/30">—</span>
+                            ) : counts != null && counts < worked ? (
+                              <>
+                                <span className="font-medium text-bark">{counts}h</span>
+                                <span className="ml-1 text-xs text-bark/40">of {worked}h</span>
+                              </>
+                            ) : (
+                              <span className="text-bark/70">{worked}h</span>
                             )}
                           </td>
                           <td
