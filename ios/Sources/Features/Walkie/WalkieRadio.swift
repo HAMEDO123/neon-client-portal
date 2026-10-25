@@ -2,8 +2,9 @@ import AVFoundation
 
 /// What makes it sound like a walkie-talkie, asked for in so many words ("like
 /// a military radio"): a burst of static as the channel opens, the voice
-/// through a radio's narrow band with a little grit, and the "roger" beep and a
-/// tail of static as it closes. Made here, from noise and a tone, rather than
+/// through a radio's narrow band with a little grit, and a tail of static as it
+/// closes. No beep: the studio wanted the hiss of the radio and nothing that
+/// sounds like a patrol car's tone. Made here, from noise and a tone, rather than
 /// shipped as files — nothing to keep in step, and every press sounds alike.
 @MainActor
 final class WalkieRadio {
@@ -57,7 +58,6 @@ final class WalkieRadio {
         player.stop()
         player.scheduleBuffer(Self.hiss(format: format, seconds: 0.22, fade: true), completionHandler: nil)
         player.scheduleFile(file, at: nil, completionHandler: nil)
-        player.scheduleBuffer(Self.roger(format: format), completionHandler: nil)
         player.scheduleBuffer(Self.hiss(format: format, seconds: 0.18, fade: true)) {
             Task { @MainActor in done() }
         }
@@ -91,24 +91,6 @@ final class WalkieRadio {
                 let progress = Float(frame) / Float(frames)
                 let envelope: Float = fade ? (1 - progress) * (1 - progress) : 1
                 data[frame] = Float.random(in: -1...1) * 0.32 * envelope
-            }
-        }
-        return buffer
-    }
-
-    /// The "roger" beep: a short, square-ish tone at the end of a transmission.
-    private static func roger(format: AVAudioFormat) -> AVAudioPCMBuffer {
-        let seconds = 0.12
-        let frames = AVAudioFrameCount(format.sampleRate * seconds)
-        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
-        buffer.frameLength = frames
-        let frequency = 1_250.0
-        for channel in 0..<Int(format.channelCount) {
-            guard let data = buffer.floatChannelData?[channel] else { continue }
-            for frame in 0..<Int(frames) {
-                let phase = sin(2 * .pi * frequency * Double(frame) / format.sampleRate)
-                let edge = min(1, Double(min(frame, Int(frames) - frame)) / 120)
-                data[frame] = Float((phase >= 0 ? 1 : -1) * 0.22 * edge)
             }
         }
         return buffer
