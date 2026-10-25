@@ -568,6 +568,7 @@ model Employee {
   notifications   Notification[]
   subscriptions   PushSubscription[]
   deviceTokens    DeviceToken[]
+  walkieMessages  WalkieMessage[]
   preference      NotificationPreference?
   chatMessages    ChatMessage[]
   chatReads       ChatRead[]
@@ -1062,6 +1063,10 @@ enum DevicePlatform {
 enum DeviceTokenKind {
   ALERT
   VOIP
+  /// The phone's Push to Talk channel token (Apple's PushToTalk framework):
+  /// there only while its owner has said yes to the manager's walkie-talkie
+  /// (lib/walkie.ts), and gone the moment they say no.
+  PTT
 }
 
 model DeviceToken {
@@ -2207,4 +2212,21 @@ model LocationDay {
 
   @@unique([employeeId, day])
   @@index([day])
+}
+
+/// One thing the manager said on the walkie-talkie to one person (lib/walkie.ts).
+/// The voice itself is a file; the row is the record that it was said, to whom,
+/// and how many of their phones Apple took it for.
+model WalkieMessage {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  fromName   String
+  audioUrl   String
+  seconds    Int?
+  /// Phones Apple accepted the push for. Zero is said to the manager, never hidden.
+  phones     Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([employeeId, createdAt])
 }

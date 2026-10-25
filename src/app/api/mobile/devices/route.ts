@@ -44,9 +44,11 @@ export async function POST(request: Request) {
   const sandbox = body?.sandbox === true;
   const deviceName = typeof body?.deviceName === "string" ? body.deviceName.trim() : null;
   const appVersion = typeof body?.appVersion === "string" ? body.appVersion.trim() : null;
-  // "voip" is the PushKit token that makes the phone ring for a call; anything
-  // else is the ordinary notification token, as every build before sent.
-  const kind = body?.kind === "voip" ? "VOIP" : "ALERT";
+  // "voip" is the PushKit token that makes the phone ring for a call; "ptt" is
+  // the walkie-talkie channel's, sent only once its owner has said yes
+  // (lib/walkie.ts); anything else is the ordinary notification token, as
+  // every build before sent.
+  const kind = body?.kind === "voip" ? "VOIP" : body?.kind === "ptt" ? "PTT" : "ALERT";
 
   if (!token || !bundleId) {
     return NextResponse.json({ error: "A token and a bundle id are required." }, { status: 400 });

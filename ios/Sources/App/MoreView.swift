@@ -39,6 +39,7 @@ struct AdminMoreView: View {
                     MoreDestinationTile(L("Cameras"), symbol: "video.fill", hue: .red) { CamerasRootView() }
                     MoreDestinationTile(L("Network & server"), symbol: "server.rack", hue: .cyan) { StatusRootView() }
                     MoreDestinationTile(L("Office shopping"), symbol: "cart.fill", hue: .green) { OfficeShoppingView() }
+                    MoreDestinationTile(L("Walkie-talkie"), symbol: "antenna.radiowaves.left.and.right", hue: .orange) { WalkieTalkieView() }
                 }
 
                 // Analytics and Settings each stood alone in a third,
@@ -93,6 +94,7 @@ struct EmployeeMoreView: View {
                     }
                     MoreDestinationTile(L("Meetings"), symbol: "calendar", hue: .cyan) { MeetingsView() }
                     MoreDestinationTile(L("My requests"), symbol: "tray.full.fill", hue: .amber) { MyRequestsRootView() }
+                    MoreDestinationTile(L("Walkie-talkie"), symbol: "antenna.radiowaves.left.and.right", hue: .orange) { WalkieTalkieView() }
                 }
 
                 if givenToCount == 3 {

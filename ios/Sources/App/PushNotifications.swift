@@ -77,6 +77,7 @@ final class PushCenter: ObservableObject {
         let token = deviceToken ?? UserDefaults.standard.string(forKey: Self.registeredKey)
         UserDefaults.standard.removeObject(forKey: Self.registeredKey)
         await VoipPush.shared.unregister(bearer: bearer)
+        await WalkieCenter.shared.signOut(bearer: bearer)
         guard let token, let bearer else { return }
         await Self.releaseDevice(token: token, bearer: bearer)
     }
@@ -112,6 +113,10 @@ final class NeonAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
         MainActor.assumeIsolated {
             CallKitCenter.shared.setUp()
             VoipPush.shared.start()
+            // The walkie-talkie: before the push that woke the app is handed
+            // over, and to restore the channel iOS kept joined. It joins
+            // nothing by itself.
+            if APIClient.shared.isLoggedIn { WalkieCenter.shared.start() }
             // Somebody on the team: share the phone's position during working
             // hours — also when iOS launched the app in the background for a
             // move or for the server's silent push.

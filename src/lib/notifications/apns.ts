@@ -185,6 +185,41 @@ export async function sendVoip(
 }
 
 /**
+ * A Push to Talk push (Apple's PushToTalk framework): wakes the phone's
+ * walkie-talkie channel, and the system opens the audio for the app to play
+ * what was said — locked, in another app, or with the app closed. Only a phone
+ * whose owner joined the channel has such a token (lib/walkie.ts).
+ *
+ * Apple's terms: the push type is `pushtotalk`, the topic the bundle id with
+ * `.voip-ptt`, priority 10, and it expires at once — a walkie-talkie heard ten
+ * minutes late is not a walkie-talkie. "TopicDisallowed" in the answer means
+ * the APNs key does not cover that topic.
+ */
+export async function sendPushToTalk(target: ApnsTarget, data: Record<string, unknown>): Promise<ApnsResult> {
+  const settings = config();
+  if (!settings) {
+    return { ok: false, statusCode: null, error: "APNs is not configured", gone: false };
+  }
+
+  const host = target.sandbox ? SANDBOX_HOST : PRODUCTION_HOST;
+  try {
+    return await request(host, target, settings, JSON.stringify({ aps: {}, ...data }), {
+      "apns-topic": `${target.bundleId}.voip-ptt`,
+      "apns-push-type": "pushtotalk",
+      "apns-priority": "10",
+      "apns-expiration": "0",
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: null,
+      error: error instanceof Error ? error.message : String(error),
+      gone: false,
+    };
+  }
+}
+
+/**
  * A silent push: no banner and no sound. It wakes the app in the background
  * for a few seconds so it can do something without being opened — asking the
  * phone for a fresh position, for the manager's map (lib/staff-location.ts).

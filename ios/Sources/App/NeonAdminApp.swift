@@ -6,6 +6,7 @@ struct NeonAdminApp: App {
     @StateObject private var api = APIClient.shared
     @StateObject private var appUpdate = AppUpdate.shared
     @StateObject private var location = LocationSharing.shared
+    @StateObject private var walkie = WalkieCenter.shared
     // Observed so the whole tree rebuilds (via .id) when the language toggles.
     @AppStorage(AppLanguage.storageKey) private var languageRaw = AppLanguage.current.rawValue
 
@@ -54,6 +55,13 @@ struct NeonAdminApp: App {
                     // The studio requires the team's location (working hours
                     // only): the same kind of cover, with the same exceptions.
                     LocationRequiredView(sharing: location)
+                        .transition(.opacity)
+                        .zIndex(1)
+                } else if api.isLoggedIn, api.side == .employee, walkie.state == .off || walkie.state == .joining {
+                    // The walkie-talkie, required as location is: allowed once,
+                    // and iOS keeps it on. The same kind of cover, with the
+                    // same exceptions — calls and notifications go on underneath.
+                    WalkieRequiredView()
                         .transition(.opacity)
                         .zIndex(1)
                 }
@@ -125,6 +133,8 @@ struct EmployeeHome: View {
         .task { await store.poll() }
         // Shares this phone's position during working hours (and only then).
         .task { LocationSharing.shared.activate() }
+        // Signed in on this launch: the walkie-talkie's channel manager too.
+        .task { WalkieCenter.shared.start() }
         // A tapped notification: its tab, and the chat list opens the
         // conversation itself.
         .onReceive(PushCenter.shared.$pendingPath) { webPath in

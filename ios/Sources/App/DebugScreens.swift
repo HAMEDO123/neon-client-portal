@@ -59,7 +59,7 @@ enum DebugScreens {
             HomeScreens.view, HomeInsightsScreens.view, ProjectsScreens.view, ProjectFilesScreens.view,
             TasksScreens.view, TeamScreens.view, OpsScreens.view, WhatsAppScreens.view, ChatScreens.view,
             ChatRoomScreens.view, MeScreens.view, CallsScreens.view, CameraScreens.view, StatusScreens.view,
-            CamerasScreens.view, LocationScreens.view,
+            CamerasScreens.view, LocationScreens.view, WalkieScreens.view,
         ]
     }
 
@@ -67,7 +67,7 @@ enum DebugScreens {
         tabs.keys.sorted() + appIds + HomeScreens.ids + HomeInsightsScreens.ids + ProjectsScreens.ids
             + ProjectFilesScreens.ids + TasksScreens.ids + TeamScreens.ids + OpsScreens.ids + WhatsAppScreens.ids
             + ChatScreens.ids + ChatRoomScreens.ids + MeScreens.ids + CallsScreens.ids + CameraScreens.ids
-            + StatusScreens.ids + CamerasScreens.ids + LocationScreens.ids
+            + StatusScreens.ids + CamerasScreens.ids + LocationScreens.ids + WalkieScreens.ids
     }
 }
 
