@@ -7,6 +7,8 @@ struct NeonAdminApp: App {
     @StateObject private var appUpdate = AppUpdate.shared
     @StateObject private var location = LocationSharing.shared
     @StateObject private var walkie = WalkieCenter.shared
+    /// The walkie-talkie, opened from the lock screen's button or neonstaff://walkie.
+    @State private var showWalkie = false
     // Observed so the whole tree rebuilds (via .id) when the language toggles.
     @AppStorage(AppLanguage.storageKey) private var languageRaw = AppLanguage.current.rawValue
 
@@ -57,14 +59,29 @@ struct NeonAdminApp: App {
                     LocationRequiredView(sharing: location)
                         .transition(.opacity)
                         .zIndex(1)
-                } else if api.isLoggedIn, api.side == .employee, walkie.state == .off || walkie.state == .joining {
-                    // The walkie-talkie, required as location is: allowed once,
-                    // and iOS keeps it on. The same kind of cover, with the
+                } else if api.isLoggedIn, walkie.state == .off || walkie.state == .joining {
+                    // The walkie-talkie, required as location is — of the
+                    // manager too, or the team sees them as not on: allowed
+                    // once, and iOS keeps it on. The same kind of cover, with the
                     // same exceptions — calls and notifications go on underneath.
                     WalkieRequiredView()
                         .transition(.opacity)
                         .zIndex(1)
                 }
+            }
+            .sheet(isPresented: $showWalkie) {
+                NavigationStack { WalkieTalkieView() }
+                    .environmentObject(api)
+                    .neonLanguage()
+            }
+            .onOpenURL { url in
+                if url.scheme == "neonstaff", url.host == "walkie", api.isLoggedIn { showWalkie = true }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: WalkieOpenRequest.notification)) { _ in
+                if api.isLoggedIn, WalkieOpenRequest.take() { showWalkie = true }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                if api.isLoggedIn, WalkieOpenRequest.take() { showWalkie = true }
             }
             // A ringing or running call sits above every screen.
             .overlay { if api.isLoggedIn { CallOverlay() } }
@@ -75,7 +92,10 @@ struct NeonAdminApp: App {
                 // A screenshot run asks nothing of the simulator: no alert on top.
                 if DebugScreens.requested != nil { return }
                 #endif
-                if api.isLoggedIn { PushCenter.shared.start() }
+                if api.isLoggedIn {
+                    PushCenter.shared.start()
+                    WalkieCenter.shared.start()
+                }
             }
             #if DEBUG
             .task { if DecodeCheck.requested, api.isLoggedIn { await DecodeCheck.run(api) } }

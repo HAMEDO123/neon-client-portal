@@ -85,7 +85,11 @@ struct WalkieHearCard: View {
                 }
             }
         default:
-            EmptyView()
+            // On, but the server could not be told: nobody can reach this
+            // phone until it is — said here, never hidden.
+            if let problem = center.problem {
+                StatusNote(symbol: "exclamationmark.triangle.fill", tone: .warning, title: problem, detail: nil)
+            }
         }
     }
 }
@@ -296,6 +300,8 @@ struct WalkieTalkieView: View {
 
     private func release() async {
         guard let result = recorder.stop(), let target else { return }
+        // The channel closing, on the speaker's own phone.
+        WalkieRadio.shared.squelch()
         guard result.seconds >= 0.6 else {
             lastSent = L("Hold the button while you speak, then let go.")
             return

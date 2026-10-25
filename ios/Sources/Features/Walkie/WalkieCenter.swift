@@ -37,7 +37,6 @@ final class WalkieCenter: NSObject, ObservableObject {
     @Published private(set) var playing = false
 
     private var manager: PTChannelManager?
-    private var player: AVAudioPlayer?
     /// iOS's own talk button is held: what is said is being recorded.
     private var transmitting = false
     private var recorder: AVAudioRecorder?
@@ -152,12 +151,12 @@ final class WalkieCenter: NSObject, ObservableObject {
         playing = true
         Task {
             do {
+                // Through the radio (WalkieRadio): static, the voice in a
+                // radio's band, then the roger beep.
                 let (data, _) = try await URLSession.shared.data(from: message.url)
-                let player = try AVAudioPlayer(data: data)
-                player.delegate = self
-                self.player = player
-                player.prepareToPlay()
-                player.play()
+                let file = FileManager.default.temporaryDirectory.appendingPathComponent("walkie-heard.m4a")
+                try data.write(to: file, options: .atomic)
+                try WalkieRadio.shared.play(file: file) { [weak self] in self?.finish() }
             } catch {
                 finish()
             }
@@ -205,7 +204,6 @@ final class WalkieCenter: NSObject, ObservableObject {
 
     private func finish() {
         playing = false
-        player = nil
         guard let manager, let active = manager.activeChannelUUID else { return }
         // Nobody is talking any more: iOS closes the audio.
         Task { try? await manager.setActiveRemoteParticipant(nil, channelUUID: active) }
@@ -214,7 +212,7 @@ final class WalkieCenter: NSObject, ObservableObject {
 
 // MARK: - Apple's side
 
-extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate, AVAudioPlayerDelegate {
+extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate {
     nonisolated func channelManager(_ channelManager: PTChannelManager, didJoinChannel channelUUID: UUID, reason: PTChannelJoinReason) {
         Task { @MainActor in self.state = .on }
     }
@@ -264,8 +262,7 @@ extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate, 
 
     nonisolated func channelManager(_ channelManager: PTChannelManager, didDeactivate audioSession: AVAudioSession) {
         Task { @MainActor in
-            self.player?.stop()
-            self.player = nil
+            WalkieRadio.shared.stop()
             self.playing = false
         }
     }
@@ -274,7 +271,7 @@ extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate, 
     /// Outside working hours the server refuses it, and says so in the app.
     nonisolated func channelManager(_ channelManager: PTChannelManager, channelUUID: UUID, didBeginTransmittingFrom source: PTChannelTransmitRequestSource) {
         Task { @MainActor in
-            self.player?.stop()
+            WalkieRadio.shared.stop()
             self.transmitting = true
         }
     }
@@ -288,10 +285,6 @@ extension WalkieCenter: PTChannelManagerDelegate, PTChannelRestorationDelegate, 
 
     nonisolated func channelDescriptor(restoredChannelUUID channelUUID: UUID) -> PTChannelDescriptor {
         PTChannelDescriptor(name: L("NEON walkie-talkie"), image: nil)
-    }
-
-    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor in self.finish() }
     }
 }
 

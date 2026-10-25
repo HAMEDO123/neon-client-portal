@@ -79,3 +79,4 @@ async function ensureProfile(identifier, bundleName, profileName) {
 
 await ensureProfile("com.neonjo.staff", "NEON", "NEON App Store");
 await ensureProfile("com.neonjo.staff.share", "NEON Share", "NEON Share App Store");
+await ensureProfile("com.neonjo.staff.controls", "NEON Controls", "NEON Controls App Store");

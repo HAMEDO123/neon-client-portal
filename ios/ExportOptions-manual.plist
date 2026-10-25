@@ -11,6 +11,7 @@
 	<dict>
 		<key>com.neonjo.staff</key><string>NEON App Store</string>
 		<key>com.neonjo.staff.share</key><string>NEON Share App Store</string>
+		<key>com.neonjo.staff.controls</key><string>NEON Controls App Store</string>
 	</dict>
 	<key>uploadSymbols</key><true/>
 </dict>

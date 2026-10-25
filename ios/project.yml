@@ -26,6 +26,9 @@ targets:
         # guide beside the code; none of it belongs in the app bundle.
         excludes:
           - "**/*.md"
+      # Opening the walkie-talkie from the lock screen: iOS runs the intent
+      # in the app (Controls/OpenWalkieIntent.swift).
+      - path: Controls/OpenWalkieIntent.swift
       # The icon as an asset catalog: App Store Connect refuses an upload
       # without one (90022 "no 120x120 icon", 90713 "no CFBundleIconName").
       - path: Resources/Assets.xcassets
@@ -38,6 +41,8 @@ targets:
       - package: WebRTC
       # The share extension ("NEON" in the share sheet), in PlugIns.
       - target: NeonShare
+      # The lock screen's walkie-talkie button (iOS 18 Controls).
+      - target: NeonControls
     # Push notifications (APNs). Xcode's automatic signing turns the
     # capability on for the App ID; an App Store export makes it "production".
     # The keychain group is the one the share extension also has: the session
@@ -65,6 +70,10 @@ targets:
         # it has seen before.
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # neonstaff://walkie opens the walkie-talkie.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.neonjo.staff
+            CFBundleURLSchemes: [neonstaff]
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ar]
         # The keychain group above, spelled out for TokenStore to name. From
@@ -186,6 +195,35 @@ targets:
         SWIFT_VERSION: "5.0"
         APPLICATION_EXTENSION_API_ONLY: YES
         # Signed as the app is (see NeonAdmin above).
+        DEVELOPMENT_TEAM: 745F9U99BC
+        CODE_SIGN_STYLE: Automatic
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"
+        "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+
+  # The walkie-talkie as a lock-screen and Control Center button (iOS 18).
+  NeonControls:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Controls
+    info:
+      path: NeonControls-Info.plist
+      properties:
+        CFBundleDisplayName: "NEON"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, ar]
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_NAME: NeonControls
+        PRODUCT_BUNDLE_IDENTIFIER: com.neonjo.staff.controls
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        APPLICATION_EXTENSION_API_ONLY: YES
         DEVELOPMENT_TEAM: 745F9U99BC
         CODE_SIGN_STYLE: Automatic
         "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"
