@@ -46,7 +46,7 @@ private struct WalkieRadioSample: View {
 
     var body: some View {
         NeonScroll(spacing: NeonSpace.stack, lazy: false) {
-            SectionCard(L("Walkie-talkie"), subtitle: "Radio sound sample", symbol: "antenna.radiowaves.left.and.right", hue: .orange) {
+            SectionCard(L("Walkie-talkie"), subtitle: "As the listener hears it", symbol: "antenna.radiowaves.left.and.right", hue: .orange) {
                 NeonButton("Play again", symbol: "play.fill", kind: .brand) { play() }
                 Text("Played \(played)×").font(.neonCaption)
             }

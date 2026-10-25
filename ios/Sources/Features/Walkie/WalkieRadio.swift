@@ -1,98 +1,76 @@
 import AVFoundation
 
-/// What makes it sound like a walkie-talkie: a short burst of static as the
-/// channel opens, the voice as it was said — no filter on it, the studio's
-/// choice after hearing one — and the walkie-talkie's "tit" with a tail of
-/// static as it closes. Made here, from noise and a tone, rather than
-/// shipped as files — nothing to keep in step, and every press sounds alike.
+/// What makes it sound like a walkie-talkie: the police radio's data burst —
+/// the "brrrt" of a Motorola radio — before and after the voice, and the voice
+/// itself as it was said, with no filter on it.
+///
+/// The studio chose it by ear on 2026-10-25, from real recordings, after
+/// hearing several made here from tones and noise and wanting none of them.
+/// It is `Resources/Sounds/walkie-burst.caf`: Freesound's "MDC1200 Echo" by
+/// mbelew (freesound.org/s/785695), released as CC0 — free to use, nothing owed.
+///
+/// The same burst sounds on the speaker's own phone as they press (before the
+/// microphone opens, so it is not recorded) and as they let go.
 @MainActor
-final class WalkieRadio {
+final class WalkieRadio: NSObject, AVAudioPlayerDelegate {
     static let shared = WalkieRadio()
 
-    private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    private var wired: AVAudioFormat?
+    private static let burstURL = Bundle.main.url(forResource: "walkie-burst", withExtension: "caf")
 
-    private init() {
-        engine.attach(player)
-    }
+    /// How long the burst lasts, with a breath after it — the recording starts then.
+    static let chirpSeconds = 0.42
 
-    private func wire(_ format: AVAudioFormat) throws {
-        if wired != format {
-            engine.stop()
-            engine.disconnectNodeOutput(player)
-            // Straight to the speaker: the voice is played as it was said.
-            engine.connect(player, to: engine.mainMixerNode, format: format)
-            wired = format
-        }
-        if !engine.isRunning {
-            engine.prepare()
-            try engine.start()
-        }
-    }
+    private var queue: [AVAudioPlayer] = []
+    private var current: AVAudioPlayer?
+    private var done: (@MainActor () -> Void)?
 
-    /// What somebody said, as a radio says it. `done` runs once it has all played.
+    /// What somebody said, between two bursts. `done` runs once it has all played.
     func play(file url: URL, done: @escaping @MainActor () -> Void) throws {
-        let file = try AVAudioFile(forReading: url)
-        let format = file.processingFormat
-        try wire(format)
-        player.stop()
-        player.scheduleBuffer(Self.hiss(format: format, seconds: 0.14, fade: true), completionHandler: nil)
-        player.scheduleFile(file, at: nil, completionHandler: nil)
-        player.scheduleBuffer(Self.roger(format: format), completionHandler: nil)
-        player.scheduleBuffer(Self.hiss(format: format, seconds: 0.14, fade: true)) {
-            Task { @MainActor in done() }
-        }
-        player.play()
+        let voice = try AVAudioPlayer(contentsOf: url)
+        stop()
+        queue = [Self.burst(), voice, Self.burst()].compactMap { $0 }
+        self.done = done
+        next()
     }
 
-    /// The click of the channel opening or closing, on the speaker's own phone.
-    func squelch() {
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: 22_050, channels: 1) else { return }
-        do {
-            try wire(format)
-            player.scheduleBuffer(Self.hiss(format: format, seconds: 0.16, fade: true), completionHandler: nil)
-            player.play()
-        } catch {}
+    /// The burst alone, on the speaker's own phone: as they press, and as they let go.
+    func chirp() {
+        guard let burst = Self.burst() else { return }
+        stop()
+        queue = [burst]
+        next()
     }
+
+    func squelch() { chirp() }
 
     func stop() {
-        player.stop()
+        current?.stop()
+        current = nil
+        queue = []
+        done = nil
     }
 
-    // MARK: - The sounds
-
-    /// White noise that falls away: the hiss of an open channel.
-    private static func hiss(format: AVAudioFormat, seconds: Double, fade: Bool) -> AVAudioPCMBuffer {
-        let frames = AVAudioFrameCount(format.sampleRate * seconds)
-        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
-        buffer.frameLength = frames
-        for channel in 0..<Int(format.channelCount) {
-            guard let data = buffer.floatChannelData?[channel] else { continue }
-            for frame in 0..<Int(frames) {
-                let progress = Float(frame) / Float(frames)
-                let envelope: Float = fade ? (1 - progress) * (1 - progress) : 1
-                data[frame] = Float.random(in: -1...1) * 0.32 * envelope
-            }
+    private func next() {
+        guard !queue.isEmpty else {
+            current = nil
+            let finished = done
+            done = nil
+            finished?()
+            return
         }
-        return buffer
+        let player = queue.removeFirst()
+        player.delegate = self
+        current = player
+        player.prepareToPlay()
+        if !player.play() { next() }
     }
 
-    /// The "roger" beep: a short, square-ish tone at the end of a transmission.
-    private static func roger(format: AVAudioFormat) -> AVAudioPCMBuffer {
-        let seconds = 0.12
-        let frames = AVAudioFrameCount(format.sampleRate * seconds)
-        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
-        buffer.frameLength = frames
-        let frequency = 1_250.0
-        for channel in 0..<Int(format.channelCount) {
-            guard let data = buffer.floatChannelData?[channel] else { continue }
-            for frame in 0..<Int(frames) {
-                let phase = sin(2 * .pi * frequency * Double(frame) / format.sampleRate)
-                let edge = min(1, Double(min(frame, Int(frames) - frame)) / 120)
-                data[frame] = Float((phase >= 0 ? 1 : -1) * 0.22 * edge)
-            }
-        }
-        return buffer
+    private static func burst() -> AVAudioPlayer? {
+        guard let url = burstURL else { return nil }
+        return try? AVAudioPlayer(contentsOf: url)
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in self.next() }
     }
 }
