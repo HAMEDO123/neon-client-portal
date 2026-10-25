@@ -23,14 +23,14 @@ export async function walkieOpen(now = new Date()) {
 /**
  * Whether it is open to THIS person right now.
  *
- * It runs around the clock, but outside 10:00–19:00 only the manager and the
- * people the studio allows at night can use it — so "open" is a different
- * answer for Wael at midnight than it is for anybody else, and the app asking
- * should get their answer rather than the studio's.
+ * It runs around the clock, but outside 10:00–19:00 only the people the studio
+ * allows at night can use it — the manager included in "everybody else". So
+ * "open" is a different answer for Wael at midnight than for anybody else, and
+ * the app asking should get their own rather than the studio's.
  */
 export async function walkieOpenForSpeaker(speaker: WalkieSpeaker, now = new Date()) {
   if (await walkieOpen(now)) return true;
-  if (speaker.type === "ADMIN") return true;
+  if (speaker.type === "ADMIN") return false;
   const row = await prisma.employee.findUnique({ where: { id: speaker.id }, select: { walkieLate: true } });
   return row?.walkieLate === true;
 }
@@ -123,7 +123,7 @@ export async function sayOnWalkie(input: {
       ? (await prisma.employee.findUnique({ where: { id: input.speaker.id }, select: { walkieLate: true } }))
           ?.walkieLate === true
       : false;
-  const speaking = { manager: input.speaker.type === "ADMIN", late: speakerLate };
+  const speaking = { late: speakerLate };
 
   // Refused before the recording is read or stored: nothing is kept for a
   // press that was never allowed to leave the phone.
@@ -155,7 +155,7 @@ export async function sayOnWalkie(input: {
       wallClock,
       speaker: speaking,
       target: input.target,
-      listener: { manager: them.id === managerRow, late: them.walkieLate },
+      listener: { late: them.walkieLate },
     });
     if (!verdict.ok) return { ok: false, reason: verdict.reason };
   }

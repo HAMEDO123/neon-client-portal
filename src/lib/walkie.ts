@@ -43,8 +43,8 @@ export function walkieHoursOpen(wallClock: string, from = WALKIE_FROM, until = W
   return start <= end ? now >= start && now < end : now >= start || now < end;
 }
 
-/** Somebody at one end of a press: the manager, or whether they are allowed at night. */
-export type WalkieWho = { manager: boolean; late: boolean };
+/** Somebody at one end of a press: whether the studio allows them at night. */
+export type WalkieWho = { late: boolean };
 
 /**
  * Whether a press may go out now, and why not when it may not.
@@ -55,8 +55,9 @@ export type WalkieWho = { manager: boolean; late: boolean };
  * one speaker, one listener, and both ends somebody the studio allows at
  * night. Nobody else hears it, and nobody else can start one.
  *
- * The manager counts as allowed at either end — they are the one person who is
- * always on call, and marking their row would be one more place to forget.
+ * The manager is not one of them. The studio asked for the night to be those
+ * two and nobody else, so it is closed to the manager as much as to anybody
+ * else: there is no press they can make and none they can be sent.
  *
  * Pure, because this is the rule itself: the store does the reading and the
  * sending, and the rule can be read here without either.
@@ -74,14 +75,12 @@ export function walkiePressAllowed(input: {
   // At night it is a line between two people, never a room.
   if (input.target.kind === "all") return { ok: false, reason: "night-all" };
 
-  if (!(input.speaker.manager || input.speaker.late)) return { ok: false, reason: "night-speaker" };
+  if (!input.speaker.late) return { ok: false, reason: "night-speaker" };
 
-  // Talking to the manager is always one of the two ends allowed; talking to
-  // somebody on the team needs them to be allowed at night too.
-  if (input.target.kind === "person") {
-    const listener = input.listener;
-    if (!listener || !(listener.manager || listener.late)) return { ok: false, reason: "night-listener" };
-  }
+  // Both ends, and the manager is not an end: at night the only line that
+  // exists is between the people the studio allows at night.
+  if (input.target.kind === "manager") return { ok: false, reason: "night-listener" };
+  if (!input.listener?.late) return { ok: false, reason: "night-listener" };
 
   return { ok: true };
 }

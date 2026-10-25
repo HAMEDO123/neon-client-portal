@@ -84,54 +84,58 @@ describe("the walkie-talkie", () => {
 });
 
 describe("the walkie-talkie at night", () => {
-  // It runs around the clock now. Inside 10:00–19:00 it is a room everybody is
-  // in; outside them it is a line between two people, and both ends have to be
-  // somebody the studio allows at night.
+  // It runs around the clock now. Inside 10:00-19:00 it is a room everybody is
+  // in; outside them it is a line between the two people the studio allows at
+  // night, and nobody else — the manager included.
   const day = "14:00";
   const night = "21:30";
-  const manager = { manager: true, late: false };
-  const late = { manager: false, late: true };
-  const ordinary = { manager: false, late: false };
+  const late = { late: true };
+  const anyoneElse = { late: false };
 
-  it("is everybody's, to anybody, inside the hours", () => {
-    assert.equal(walkiePressAllowed({ wallClock: day, speaker: ordinary, target: { kind: "all" } }).ok, true);
+  it("is open to anybody, and to everybody at once, inside the hours", () => {
+    assert.equal(walkiePressAllowed({ wallClock: day, speaker: anyoneElse, target: { kind: "all" } }).ok, true);
     assert.equal(
-      walkiePressAllowed({ wallClock: day, speaker: ordinary, target: { kind: "person", id: "x" }, listener: ordinary }).ok,
+      walkiePressAllowed({ wallClock: day, speaker: anyoneElse, target: { kind: "person", id: "x" }, listener: anyoneElse }).ok,
       true
     );
   });
 
-  it("is nobody's room at night — one person to one person, never everybody", () => {
+  it("is not a room at night: one person to one person, never everybody", () => {
     const all = walkiePressAllowed({ wallClock: night, speaker: late, target: { kind: "all" } });
     assert.equal(all.ok, false);
     assert.equal(all.ok === false && all.reason, "night-all");
-
-    // Even the manager cannot open the room at night.
-    assert.equal(walkiePressAllowed({ wallClock: night, speaker: manager, target: { kind: "all" } }).ok, false);
   });
 
-  it("lets the people allowed at night talk to each other, and to the manager", () => {
+  it("is only the two the studio allows, talking to each other", () => {
     assert.equal(
       walkiePressAllowed({ wallClock: night, speaker: late, target: { kind: "person", id: "x" }, listener: late }).ok,
       true
     );
-    assert.equal(walkiePressAllowed({ wallClock: night, speaker: late, target: { kind: "manager" } }).ok, true);
-    assert.equal(
-      walkiePressAllowed({ wallClock: night, speaker: manager, target: { kind: "person", id: "x" }, listener: late }).ok,
-      true
-    );
+  });
+
+  it("is closed to the manager at night, at both ends", () => {
+    // The studio asked for the night to be those two and nobody else.
+    const toManager = walkiePressAllowed({ wallClock: night, speaker: late, target: { kind: "manager" } });
+    assert.equal(toManager.ok === false && toManager.reason, "night-listener");
+
+    const fromManager = walkiePressAllowed({
+      wallClock: night,
+      speaker: anyoneElse,
+      target: { kind: "person", id: "x" },
+      listener: late,
+    });
+    assert.equal(fromManager.ok === false && fromManager.reason, "night-speaker");
   });
 
   it("refuses everybody else at night, at either end", () => {
-    const speaking = walkiePressAllowed({ wallClock: night, speaker: ordinary, target: { kind: "manager" } });
+    const speaking = walkiePressAllowed({ wallClock: night, speaker: anyoneElse, target: { kind: "manager" } });
     assert.equal(speaking.ok === false && speaking.reason, "night-speaker");
 
-    // Allowed at night, but the person they are reaching for is not.
     const reaching = walkiePressAllowed({
       wallClock: night,
       speaker: late,
       target: { kind: "person", id: "x" },
-      listener: ordinary,
+      listener: anyoneElse,
     });
     assert.equal(reaching.ok === false && reaching.reason, "night-listener");
   });
