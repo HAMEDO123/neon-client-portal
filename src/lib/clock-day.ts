@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { awayMinutesOf, storedBreaks, type Break } from "@/lib/attendance-breaks";
+import { countedHours } from "@/lib/attendance";
 import { endForPerson } from "@/lib/clock-reminders";
 import { dayKeyToDate, instantAt } from "@/lib/time";
 import { hoursOn, isWorkingDay, minutesOf, type WorkHours } from "@/lib/work-hours";
@@ -32,6 +33,15 @@ export type ClockDay = {
   breaks: Break[];
   /** What the day has cost so far — nothing until they have clocked out. */
   shortHours: number;
+  /**
+   * Works whatever hours they work: no start to be late for and no end to
+   * leave early from, so there is no clock-out time to show them at all.
+   */
+  openHours: boolean;
+  /** Hours actually present, less any step-out. Null until they clock out. */
+  workedHours: number | null;
+  /** What those hours count for on an hourly day: up to a day, never beyond. */
+  countsAs: number | null;
 };
 
 /** How long, said the way somebody says it out loud: "2h 55m", "40m". */
@@ -62,8 +72,18 @@ export async function myClockDay(
     awayMinutes: 0,
     breaks: [],
     shortHours: 0,
+    openHours: false,
+    workedHours: null,
+    countsAs: null,
   };
   if (!empty.working) return empty;
+
+  // One after the other, as everything else on this page reads.
+  const person = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { openHours: true },
+  });
+  const openHours = person?.openHours === true;
 
   const row = await prisma.attendanceRecord.findUnique({
     where: { employeeId_day: { employeeId, day: dayKeyToDate(dayKey) } },
@@ -73,7 +93,14 @@ export async function myClockDay(
 
   const breaks = storedBreaks(row.breaks);
   const awayMinutes = awayMinutesOf(breaks);
-  const endsAt = endForPerson(hours, dayKey, timeZone, row.arrivedAt, awayMinutes);
+  // No end for somebody on open hours: there is nothing they are owed until,
+  // and a deadline drawn from a start they do not work to is a wrong one.
+  const endsAt = openHours ? null : endForPerson(hours, dayKey, timeZone, row.arrivedAt, awayMinutes);
+
+  const workedHours =
+    row.departedAt && row.arrivedAt
+      ? Math.round(((row.departedAt.getTime() - row.arrivedAt.getTime()) / 3_600_000 - awayMinutes / 60) * 100) / 100
+      : null;
 
   // The lateness as it is actually charged — the allowance comes off first, so
   // arriving at 11:04 is not "4 minutes late" to anybody who matters.
@@ -86,13 +113,18 @@ export async function myClockDay(
 
   return {
     ...empty,
+    openHours,
     arrivedAt: row.arrivedAt,
     departedAt: row.departedAt,
     endsAt,
     moved: Boolean(endsAt && empty.usualEnd && endsAt.getTime() > empty.usualEnd.getTime()),
-    lateMinutes,
+    // Not late when there is no start to be late for.
+    lateMinutes: openHours ? 0 : lateMinutes,
     awayMinutes,
     breaks,
     shortHours: row.shortHours,
+    workedHours,
+    countsAs:
+      workedHours != null && openHours ? Math.round(countedHours(workedHours, hours) * 100) / 100 : null,
   };
 }

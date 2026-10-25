@@ -58,14 +58,36 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
         <Fact label="Clocked in" value={time(day.arrivedAt)} />
         {done ? (
           <Fact label="Clocked out" value={time(day.departedAt)} />
+        ) : day.openHours ? (
+          // Nothing to be at by: they work the hours they work.
+          <Fact label="Clock out by" value="whenever you finish" tone="text-ink/60" />
         ) : (
           <Fact label="Clock out by" value={time(day.endsAt)} tone={day.moved ? "text-cyan-700" : "text-ink"} />
         )}
+        {day.openHours && day.countsAs != null && (
+          <Fact
+            label="Counts as"
+            value={`${day.countsAs}h`}
+            tone={day.workedHours != null && day.workedHours > day.countsAs ? "text-cyan-700" : "text-ink"}
+          />
+        )}
       </div>
+
+      {/* No start to be late for, so nothing is counted against a clock they
+          do not work to — the one thing open hours means. */}
+      {day.openHours && (
+        <p className="mt-3 rounded-xl bg-paper-soft/70 px-3 py-2 text-xs leading-relaxed text-ink/65">
+          You work the hours you work: they count from the moment the fingerprint reads you, and a day
+          counts up to <span className="font-semibold text-ink">8 hours</span>.
+          {day.workedHours != null && day.countsAs != null && day.workedHours > day.countsAs && (
+            <> Today you were here {day.workedHours}h, which counts as {day.countsAs}h — there is no overtime.</>
+          )}
+        </p>
+      )}
 
       {/* Why their end is not everybody else's. Without this the time above
           reads as a mistake to the person it belongs to. */}
-      {!done && day.moved && (
+      {!done && !day.openHours && day.moved && (
         <p className="mt-3 rounded-xl bg-paper-soft/70 px-3 py-2 text-xs leading-relaxed text-ink/65">
           {day.lateMinutes > 0 && `You clocked in ${spell(day.lateMinutes)} after the start`}
           {day.lateMinutes > 0 && day.awayMinutes > 0 && ", and "}
@@ -89,13 +111,17 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
         }`}
       >
         <LogOut size={13} strokeWidth={2} />
-        {done
-          ? short > 0
-            ? `${short}h short of your day — that much comes off.`
-            : "Full day. Nothing is taken off."
-          : short > 0
-            ? `${short}h is coming off so far.`
-            : "Clock out by then and nothing is taken off."}
+        {day.openHours
+          ? done
+            ? `Clocked out. ${day.countsAs ?? 0}h counted for today.`
+            : "Clock out on the fingerprint when you leave, so the hours can be counted."
+          : done
+            ? short > 0
+              ? `${short}h short of your day — that much comes off.`
+              : "Full day. Nothing is taken off."
+            : short > 0
+              ? `${short}h is coming off so far.`
+              : "Clock out by then and nothing is taken off."}
       </p>
     </section>
   );
