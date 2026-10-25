@@ -35,14 +35,14 @@
 "The microphone could not start. Try again." = "المايكروفون ما اشتغل. جرّب مرة ثانية.";
 "NEON walkie-talkie" = "لاسلكي NEON";
 "When the manager or somebody on the team talks to you, you hear it straight away — even with the phone locked." = "لما المدير أو حدا من الفريق يحكي معك، بتسمعه فورًا — حتى لو الجوال مقفول.";
-"From 10 AM to 4 AM, every day. Outside those hours, nothing is sent." = "من 10 الصبح لـ4 الفجر، كل يوم. برّا هالوقت ما بينبعت إشي.";
+"From 10 AM to 7 PM, every day. Outside those hours, nothing is sent." = "من 10 الصبح لـ7 المسا، كل يوم. برّا هالوقت ما بينبعت إشي.";
 "You can talk too: to the manager, to one person, or to everybody." = "وإنت كمان بتقدر تحكي: مع المدير، أو مع شخص، أو مع الكل.";
 "The studio asks everybody to have it on. You allow it once, and it stays on." = "الشركة طالبة من الكل يكون شغّال عنده. بتوافق مرة وحدة وبضل شغّال.";
 "Allow and turn it on" = "موافق، شغّله";
 "Hear the team" = "اسمع الفريق";
 "Turn it on to hear what the team says to you. Once, and it stays on." = "شغّله عشان تسمع شو بحكيلك الفريق. مرة وحدة وبضل شغّال.";
 "Turn it on" = "شغّله";
-"The walkie-talkie works from 10 AM to 4 AM." = "اللاسلكي بيشتغل من 10 الصبح لـ4 الفجر.";
+"The walkie-talkie works from 10 AM to 7 PM." = "اللاسلكي بيشتغل من 10 الصبح لـ7 المسا.";
 "Choose, then hold the button and speak." = "اختار، وبعدين اضغط مطوّل على الزر واحكي.";
 "everybody" = "الكل";
 "Everybody" = "الكل";

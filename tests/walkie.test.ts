@@ -29,16 +29,17 @@ describe("the walkie-talkie", () => {
     assert.equal(readWalkieTarget(42), null);
   });
 
-  // 10:00 until 04:00 the next morning — across midnight, so both sides of it.
-  it("is open from ten in the morning until four the next morning", () => {
+  // 10:00 until 19:00, every day.
+  it("is open from ten in the morning until seven in the evening", () => {
     assert.equal(walkieHoursOpen("09:59"), false);
     assert.equal(walkieHoursOpen("10:00"), true);
     assert.equal(walkieHoursOpen("15:30"), true);
-    assert.equal(walkieHoursOpen("23:59"), true);
-    assert.equal(walkieHoursOpen("00:00"), true);
-    assert.equal(walkieHoursOpen("03:59"), true);
-    assert.equal(walkieHoursOpen("04:00"), false);
-    assert.equal(walkieHoursOpen("06:00"), false);
+    assert.equal(walkieHoursOpen("18:59"), true);
+    assert.equal(walkieHoursOpen("19:00"), false);
+    assert.equal(walkieHoursOpen("23:30"), false);
+    assert.equal(walkieHoursOpen("02:00"), false);
+    // A span across midnight still reads both sides of it.
+    assert.equal(walkieHoursOpen("02:00", "22:00", "04:00"), true);
   });
 
   // The studio's rule, checked before anything is stored.

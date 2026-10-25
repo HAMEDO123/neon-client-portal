@@ -14,7 +14,7 @@ import { walkieHoursOpen, walkiePayload, type WalkieTarget } from "@/lib/walkie"
 /** Who is talking: the manager, or somebody on the team. */
 export type WalkieSpeaker = { type: "ADMIN" } | { type: "EMPLOYEE"; id: string; name: string };
 
-/** Whether the walkie-talkie may speak now: 10:00–04:00 in the studio's clock (lib/walkie.ts). */
+/** Whether the walkie-talkie may speak now: 10:00–19:00 in the studio's clock (lib/walkie.ts). */
 export async function walkieOpen(now = new Date()) {
   const timeZone = await getTimezone();
   return walkieHoursOpen(wallClockIn(timeZone, now));

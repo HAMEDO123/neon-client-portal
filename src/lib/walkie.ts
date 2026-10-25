@@ -5,10 +5,9 @@
 // The studio made it required (2026-10-25): everybody on the team allows it
 // once, and the app covers its screens until they have. It is still their
 // phone's own yes — Apple's Push to Talk asks it of the person, never of the
-// server — and it speaks only inside its own hours, 10:00 to 04:00 the next
-// morning in the studio's clock, every day (`walkieHoursOpen`; the studio set
-// them on 2026-10-25, wider than the working day). Outside them nothing is
-// sent at all. Turning it on joins
+// server — and it speaks only inside its own hours, 10:00 to 19:00 in the
+// studio's clock, every day (`walkieHoursOpen`; the studio set them on
+// 2026-10-25). Outside them nothing is sent at all. Turning it on joins
 // Apple's Push to Talk channel on that phone, which is what hands the server a
 // PTT token (DeviceToken kind PTT); leaving it retires the token. So "can this
 // phone be talked to" is exactly "does it have a live PTT token" — one fact,
@@ -18,9 +17,9 @@
 // button is let go: a few seconds behind, and never a half-heard sentence on a
 // bad connection. Pure: the payload the phone reads.
 
-/** When the walkie-talkie speaks, in the studio's wall clock: from 10:00 until 04:00 the next morning. */
+/** When the walkie-talkie speaks, in the studio's wall clock: from 10:00 until 19:00. */
 export const WALKIE_FROM = "10:00";
-export const WALKIE_UNTIL = "04:00";
+export const WALKIE_UNTIL = "19:00";
 
 function minutesOf(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
