@@ -532,7 +532,7 @@ private struct TodayReportCard: View {
             hue: .indigo
         ) {
             VStack(alignment: .leading, spacing: NeonSpace.sm) {
-                ForEach(Array(lines.enumerated()), id: .offset) { index, written in
+                ForEach(Array(lines.enumerated()), id: \.offset) { index, written in
                     Text(written)
                         .font(.system(size: 14))
                         .foregroundStyle(Color.neonInk)
