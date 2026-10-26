@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { TASK_FILTERS, countByFilter, isLate, matchesFilter, readTaskFilter } from "../src/lib/task-filters";
+import { TASK_FILTERS, countByFilter, dueBand, isLate, matchesFilter, readTaskFilter } from "../src/lib/task-filters";
 
 // Which of somebody's tasks a list shows: in progress, sent for review, late,
 // done. "Late" is the one that decides what a person is told they are behind
@@ -168,5 +168,27 @@ describe("a task wears its priority", () => {
       css.indexOf(".employee-shell .glass.task-high") > css.indexOf(".employee-shell .glass,"),
       "the priority wash has to come after the portal's own .glass"
     );
+  });
+});
+
+describe("what comes first in a list of work", () => {
+  const today = "2026-10-26";
+
+  it("puts today above everything, late work included", () => {
+    assert.equal(dueBand(today, today), 0);
+    assert.equal(dueBand("2026-10-25", today), 1, "yesterday is late, and still under today");
+    assert.equal(dueBand("2026-10-27", today), 2);
+  });
+
+  it("leaves work with no date where it has always been: last", () => {
+    // It carries a date far in the future rather than a band of its own.
+    assert.equal(dueBand("9999-12-31", today), 2);
+    assert.ok("9999-12-31" > "2026-10-27", "and last inside that band");
+  });
+
+  it("orders a whole list today, then late, then what is to come", () => {
+    const due = ["2026-10-27", "2026-10-24", "2026-10-26", "9999-12-31", "2026-10-25"];
+    const sorted = [...due].sort((a, b) => dueBand(a, today) - dueBand(b, today) || a.localeCompare(b));
+    assert.deepEqual(sorted, ["2026-10-26", "2026-10-24", "2026-10-25", "2026-10-27", "9999-12-31"]);
   });
 });

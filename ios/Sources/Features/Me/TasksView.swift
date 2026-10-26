@@ -128,18 +128,20 @@ struct TasksView: View {
         )
     }
 
-    /// Soonest due first, then the higher priority — the website's order.
-    /// Work with no date at all sorts after everything that has one.
+    /// Today first, then what is late, then what is to come, and inside each
+    /// the soonest due and then the higher priority — the website's order
+    /// (dueBand in lib/task-filters.ts). Work with no date at all sorts after
+    /// everything that has one.
     private func boardTasks(_ mine: MyTasksResponse) -> [StaffTask] {
         mine.tasks
             .filter { filter.matches(TaskStanding(state: $0.state, late: $0.late ?? false)) }
-            .sorted { Self.before(($0.dueKey, $0.priority), ($1.dueKey, $1.priority)) }
+            .sorted { Self.before(($0.dueKey, $0.priority), ($1.dueKey, $1.priority), today: mine.todayKey) }
     }
 
     private func handedJobs(_ mine: MyTasksResponse) -> [MyAssignedJob] {
         mine.jobs
             .filter { filter.matches(TaskStanding(state: $0.state, late: $0.late ?? false)) }
-            .sorted { Self.before(($0.endKey, $0.priority), ($1.endKey, $1.priority)) }
+            .sorted { Self.before(($0.endKey, $0.priority), ($1.endKey, $1.priority), today: mine.todayKey) }
     }
 
     /// Where a job stands, by its id — for a chat's task card, whose part is
@@ -148,11 +150,29 @@ struct TasksView: View {
         Dictionary(mine.jobs.map { ($0.id, TaskStanding(state: $0.state, late: $0.late ?? false)) }, uniquingKeysWith: { first, _ in first })
     }
 
-    private static func before(_ a: (due: String?, priority: String?), _ b: (due: String?, priority: String?)) -> Bool {
+    private static func before(
+        _ a: (due: String?, priority: String?),
+        _ b: (due: String?, priority: String?),
+        today: String
+    ) -> Bool {
         let noDate = "9999-12-31"
         let (dueA, dueB) = (a.due ?? noDate, b.due ?? noDate)
+        let (bandA, bandB) = (band(dueA, today), band(dueB, today))
+        if bandA != bandB { return bandA < bandB }
         if dueA != dueB { return dueA < dueB }
         return rank(a.priority) < rank(b.priority)
+    }
+
+    /// Today, then what is late, then what is to come.
+    ///
+    /// The studio asked for today above everything, late work included: what
+    /// is overdue is already late and will still be late in an hour, while
+    /// today is the day somebody can still finish it. Work with no date
+    /// carries 9999-12-31, so it lands last inside the band still to come,
+    /// which is where it has always sorted.
+    private static func band(_ due: String, _ today: String) -> Int {
+        if due == today { return 0 }
+        return due < today ? 1 : 2
     }
 
     private static func rank(_ priority: String?) -> Int {

@@ -75,3 +75,25 @@ export function countByFilter(items: readonly Filterable[]): Record<TaskFilter, 
   }
   return counts;
 }
+
+/**
+ * Which band a piece of work falls in when it is listed.
+ *
+ *   0 — due today
+ *   1 — overdue
+ *   2 — still to come
+ *
+ * The studio asked for today above everything, late work included: what is
+ * overdue is already late and will still be late in an hour, while today is
+ * the day somebody can still finish. Sorting by date alone put yesterday's
+ * work above this morning's, so the first thing anybody saw was what they had
+ * already missed.
+ *
+ * Work with no date at all needs no band of its own: it carries a date far in
+ * the future ("9999-12-31"), which lands it in band 2 and last inside it, the
+ * same place it has always sorted.
+ */
+export function dueBand(due: string, today: string): 0 | 1 | 2 {
+  if (due === today) return 0;
+  return due < today ? 1 : 2;
+}

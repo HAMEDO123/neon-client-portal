@@ -17,7 +17,7 @@ import { assignedTasksForWeek } from "@/lib/assigned-tasks";
 import { weekDayKeys, weekLabel, weekStartKey } from "@/lib/week";
 import { prisma } from "@/lib/db";
 import { chipClass, chipCountClass } from "@/components/tasks/filter-chip";
-import { countByFilter, isLate, matchesFilter, readTaskFilter, type Filterable, type TaskFilter } from "@/lib/task-filters";
+import { countByFilter, dueBand, isLate, matchesFilter, readTaskFilter, type Filterable, type TaskFilter } from "@/lib/task-filters";
 
 // "Open" is still where the tab lands — what there is to do — and the four the
 // studio asked for sit beside it, so work under way, work with the manager and
@@ -162,7 +162,15 @@ export default async function EmployeeTasksPage({
   const counts = countByFilter(everything);
   const items = everything
     .filter((item) => matchesFilter(item, active))
-    .sort((a, b) => a.due.localeCompare(b.due) || PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority]);
+    // Today first, then what is late, then what is to come (dueBand). Sorting
+    // by date alone put yesterday above this morning, so the first thing
+    // anybody saw on opening their work was what they had already missed.
+    .sort(
+      (a, b) =>
+        dueBand(a.due, today) - dueBand(b.due, today) ||
+        a.due.localeCompare(b.due) ||
+        PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority]
+    );
 
   return (
     <div className="flex flex-col gap-4">
