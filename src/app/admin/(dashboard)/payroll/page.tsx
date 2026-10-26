@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Coins, Wallet } from "lucide-react";
+import { ChevronRight, Coins, Wallet } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { getAttendanceForPeriod, getPayrollForPeriod, getReceiptsForPeriod } from "@/lib/payroll-queries";
+import { getAllReceipts, getAttendanceForPeriod, getPayrollForPeriod } from "@/lib/payroll-queries";
 import {
   setAttendance,
   setEmployeePay,
@@ -17,7 +17,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { AttendanceDeviceCard } from "@/components/admin/attendance-device";
 import { Cutoffs } from "@/components/admin/cutoffs";
-import { PeriodSelect } from "@/components/admin/period-select";
 import { deductionsForPeriod } from "@/lib/deduction-store";
 import { CUTOFF_SETTING, cutoffOn } from "@/lib/task-cutoff";
 import { getSetting } from "@/lib/settings";
@@ -47,22 +46,16 @@ export default async function AdminPayrollPage({
   // Sequential for the same reason as the aggregates behind them.
   const rows = await getPayrollForPeriod(period);
   const attendance = await getAttendanceForPeriod(period);
-  const receipts = await getReceiptsForPeriod(period);
+  const receipts = await getAllReceipts();
   const deductions = await deductionsForPeriod(period);
 
-  // Every month the studio has records for, newest first — from the first day
-  // attendance was kept up to this one. Offered as a list rather than a walk
-  // backwards, and built from the data so it never shows months with nothing
-  // in them. One after the other, like the reads above.
-  const firstDay = await prisma.attendanceRecord.findFirst({
-    orderBy: { day: "asc" },
-    select: { day: true },
-  });
-  const firstPeriod = firstDay ? periodOf(firstDay.day.toISOString().slice(0, 10)) : thisMonth;
-  const months: string[] = [];
-  for (let at = thisMonth; at >= firstPeriod && months.length < 36; at = previousPeriod(at)) months.push(at);
-  if (!months.includes(period)) months.push(period);
-  const monthLabels = Object.fromEntries(months.map((key) => [key, periodLabel(key)]));
+  // One section per month, newest first — only the months that have any, so
+  // the list is the studio's own history rather than a calendar.
+  const receiptMonths = new Map<string, typeof receipts>();
+  for (const receipt of receipts) {
+    const key = receipt.periodMonth;
+    receiptMonths.set(key, [...(receiptMonths.get(key) ?? []), receipt]);
+  }
   const ruleOn = cutoffOn(await getSetting(CUTOFF_SETTING));
   const employees = await prisma.employee.findMany({
     where: { active: true, accessRole: "EMPLOYEE" },
@@ -439,14 +432,7 @@ export default async function AdminPayrollPage({
       />
 
       {/* --- Receipts ----------------------------------------------------- */}
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-ink/40">
-          Receipts · {periodLabel(period)}
-        </h2>
-        {/* The whole page is one month's reading, so this moves all of it —
-            salaries, attendance and deductions with the receipts. */}
-        <PeriodSelect period={period} options={months} labels={monthLabels} />
-      </div>
+      <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-ink/40">Receipts</h2>
       <p className="mt-1 text-xs text-ink/45">
         Read from the photo automatically. By itself a receipt counts up to {RECEIPT_CAP} JOD. To pay more or less
         for one, type the figure under &ldquo;Counts as&rdquo; — what you type is what is paid. Empty that box to go
@@ -454,10 +440,39 @@ export default async function AdminPayrollPage({
       </p>
 
       {receipts.length === 0 ? (
-        <EmptyState className="mt-4" icon={Coins} title="No receipts this month" />
+        <EmptyState className="mt-4" icon={Coins} title="No receipts yet" />
       ) : (
         <div className="mt-4 flex flex-col gap-2">
-          {receipts.map((receipt) => (
+          {[...receiptMonths.entries()].map(([month, monthReceipts], index) => (
+            // `details` rather than a state hook: this page is rendered on the
+            // server, and a month that opens without JavaScript is one that
+            // works before the page has finished loading. The newest is open,
+            // because it is the month somebody came here for.
+            <details
+              key={month}
+              open={index === 0}
+              className="group rounded-2xl border border-ink/10 bg-white/40 open:bg-white/60"
+            >
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-sm">
+                <ChevronRight
+                  size={14}
+                  strokeWidth={2}
+                  className="shrink-0 text-ink/30 transition-transform group-open:rotate-90"
+                />
+                <span className="font-medium text-ink">{periodLabel(month)}</span>
+                <span className="text-xs text-ink/40">
+                  {monthReceipts.length} {monthReceipts.length === 1 ? "receipt" : "receipts"}
+                </span>
+                <span className="ml-auto text-xs font-medium tabular-nums text-emerald-700">
+                  {monthReceipts
+                    .reduce((total, one) => total + (one.countedAmount ?? 0), 0)
+                    .toFixed(2)}{" "}
+                  JOD
+                </span>
+              </summary>
+
+              <div className="flex flex-col gap-2 border-t border-ink/8 p-2">
+          {monthReceipts.map((receipt) => (
             <div key={receipt.id} className="glass flex flex-wrap items-center gap-4 rounded-2xl p-3">
               <a href={receipt.imageUrl} target="_blank" rel="noreferrer" className="shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -515,6 +530,9 @@ export default async function AdminPayrollPage({
                 <SaveButton label="Save" />
               </form>
             </div>
+          ))}
+              </div>
+            </details>
           ))}
         </div>
       )}

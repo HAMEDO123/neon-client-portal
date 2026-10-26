@@ -115,6 +115,22 @@ export function getReceiptsForPeriod(period: string) {
   });
 }
 
+/**
+ * Every receipt the studio has, newest first.
+ *
+ * The payroll screen shows them a month at a time, all months on the one page,
+ * so this is not scoped to a period: `periodMonth` is already on the row — the
+ * month a receipt was sent, whatever date is printed on it — and the page
+ * groups by it.
+ */
+export function getAllReceipts() {
+  return prisma.expenseReceipt.findMany({
+    orderBy: [{ periodMonth: "desc" }, { createdAt: "desc" }],
+    include: { employee: { select: { id: true, name: true } } },
+    take: 1000,
+  });
+}
+
 /** One employee's own receipts for a month, for the employee portal. */
 export function getMyReceipts(employeeId: string, period: string) {
   return prisma.expenseReceipt.findMany({
