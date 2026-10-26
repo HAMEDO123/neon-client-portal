@@ -284,8 +284,9 @@ describe("what a sync writes", () => {
     );
 
     const ends = outcome.dayEnds.find((row) => row.dayKey === "2026-09-25");
-    // 19:00 pushed back by the 2:55 they were late: 21:55, as minutes.
-    assert.equal(ends?.endsAtMinutes, 21 * 60 + 55);
+    // 19:00 pushed back by the three hours they were counted late — 2:55,
+    // rounded up the way lateness is charged — so 22:00, as minutes.
+    assert.equal(ends?.endsAtMinutes, 22 * 60);
     assert.equal(ends?.employeeId, amal.id);
   });
 

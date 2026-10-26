@@ -165,10 +165,17 @@ export function earlyHours(hours: WorkHours, departure: string): number {
  * does not either: both push the end back by the same amount, so what is owed
  * is always the same eight hours.
  *
+ * **It moves in whole hours, because that is what is charged.** A minute past
+ * the allowance is an hour of lateness everywhere else in this file, so it has
+ * to be an hour here too: somebody who arrives at 11:06 is counted an hour
+ * late and works until 20:00, not until 19:06. The two halves of one rule
+ * disagreeing is how somebody ends up owing an hour they were never given the
+ * time to work.
+ *
  * Minutes rather than "HH:MM" because a day that began late can end after
- * midnight — arriving at 4:08 PM owes until 00:03 — and a clock face cannot
- * say that while a number can. 1443 is three minutes past midnight, on the day
- * after the one that started.
+ * midnight — arriving at 4:08 PM owes until 01:00 — and a clock face cannot
+ * say that while a number can. 1500 is one in the morning, on the day after
+ * the one that started.
  *
  * The allowance comes off before anything moves: arriving at 11:05 with five
  * minutes' grace is not late, so that day still ends at 19:00. Arriving early
@@ -187,14 +194,17 @@ export function endOfDayMinutes(
   const end = minutesOf(today.end);
   if (end == null) return 0;
 
-  const start = minutesOf(today.start);
-  const arrived = minutesOf(arrival);
-  // An arrival nobody can read moves nothing, which leaves the studio's own
-  // end standing and charges no more than the old rule did.
-  const late =
-    start != null && arrived != null ? Math.max(0, arrived - start - Math.max(0, graceMinutes)) : 0;
+  // The hours actually charged, not the minutes: lateHours is the same
+  // function payroll is measured by, allowance and rounding included. An
+  // arrival nobody can read moves nothing, which leaves the studio's own end
+  // standing and charges no more than the old rule did.
+  const late = minutesOf(arrival) != null ? lateHours(today, arrival, graceMinutes) * 60 : 0;
 
-  return end + late + Math.max(0, awayMinutes);
+  // And the step-out the same way, since it is charged in whole hours too
+  // (awayHoursOf): out for ten minutes costs an hour, so it gives back an hour.
+  const away = Math.ceil(Math.max(0, awayMinutes) / 60) * 60;
+
+  return end + late + away;
 }
 
 /**

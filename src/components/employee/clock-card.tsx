@@ -89,10 +89,16 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
           reads as a mistake to the person it belongs to. */}
       {!done && !day.openHours && day.moved && (
         <p className="mt-3 rounded-xl bg-paper-soft/70 px-3 py-2 text-xs leading-relaxed text-ink/65">
-          {day.lateMinutes > 0 && `You clocked in ${spell(day.lateMinutes)} after the start`}
-          {day.lateMinutes > 0 && day.awayMinutes > 0 && ", and "}
-          {day.awayMinutes > 0 && `${spell(day.awayMinutes)} of the day was stepped out`}
-          {" — so your eight hours end at "}
+          {day.lateHours > 0 &&
+            `You clocked in ${spell(day.lateMinutes)} after the start, counted as ${day.lateHours} ${
+              day.lateHours === 1 ? "hour" : "hours"
+            }`}
+          {day.lateHours > 0 && day.awayHours > 0 && ", and "}
+          {day.awayHours > 0 &&
+            `${spell(day.awayMinutes)} was stepped out, counted as ${day.awayHours} ${
+              day.awayHours === 1 ? "hour" : "hours"
+            }`}
+          {" — whole hours, the way they are charged — so your day ends at "}
           <span className="font-semibold text-ink">{time(day.endsAt)}</span>
           {" instead of "}
           {time(day.usualEnd)}. The day is the same length wherever it starts.

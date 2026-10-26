@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/db";
 import { awayMinutesOf, storedBreaks, type Break } from "@/lib/attendance-breaks";
-import { countedHours } from "@/lib/attendance";
+import { countedHours, lateHours as chargedLateHours } from "@/lib/attendance";
 import { endForPerson } from "@/lib/clock-reminders";
-import { dayKeyToDate, instantAt } from "@/lib/time";
+import { dayKeyToDate, instantAt, wallClockIn } from "@/lib/time";
 import { hoursOn, isWorkingDay, minutesOf, type WorkHours } from "@/lib/work-hours";
 
 // What one person's own day looks like today, for their home screen.
@@ -29,7 +29,11 @@ export type ClockDay = {
   /** True when their end is later than the studio's, which is the thing worth saying. */
   moved: boolean;
   lateMinutes: number;
+  /** The same lateness as it is charged: whole hours, rounded up. */
+  lateHours: number;
   awayMinutes: number;
+  /** The step-out as it is charged: whole hours, rounded up. */
+  awayHours: number;
   breaks: Break[];
   /** What the day has cost so far — nothing until they have clocked out. */
   shortHours: number;
@@ -69,7 +73,9 @@ export async function myClockDay(
     endsAt: null,
     moved: false,
     lateMinutes: 0,
+    lateHours: 0,
     awayMinutes: 0,
+    awayHours: 0,
     breaks: [],
     shortHours: 0,
     openHours: false,
@@ -120,7 +126,11 @@ export async function myClockDay(
     moved: Boolean(endsAt && empty.usualEnd && endsAt.getTime() > empty.usualEnd.getTime()),
     // Not late when there is no start to be late for.
     lateMinutes: openHours ? 0 : lateMinutes,
+    // The hours the end of the day actually moved by, which is what the person
+    // reading this needs: a minute past the allowance is a whole hour.
+    lateHours: openHours ? 0 : chargedLateHours(hoursOn(hours, dayKey), wallClockIn(timeZone, row.arrivedAt)),
     awayMinutes,
+    awayHours: Math.ceil(awayMinutes / 60),
     breaks,
     shortHours: row.shortHours,
     workedHours,

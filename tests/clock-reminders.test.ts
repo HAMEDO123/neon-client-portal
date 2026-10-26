@@ -98,9 +98,10 @@ test("the device is watched until the latest day ends", () => {
 
 test("a day that began late is owed later, and one nobody started is not owed at all", () => {
   const studio = { ...hours, graceMinutes: 5 };
-  // 2 PM is 2h55 late once the allowance is off, so 19:00 becomes 21:55.
-  assert.equal(endForPerson(studio, day, tz, at("14:00"))?.toISOString(), at("21:55").toISOString());
-  // Out 11:10 to 14:45 on top of arriving on time.
-  assert.equal(endForPerson(studio, day, tz, at("11:00"), 215)?.toISOString(), at("22:35").toISOString());
+  // 2 PM is counted three hours late (2h55, rounded up as it is charged),
+  // so 19:00 becomes 22:00.
+  assert.equal(endForPerson(studio, day, tz, at("14:00"))?.toISOString(), at("22:00").toISOString());
+  // Out 11:10 to 14:45 is 3h35, counted as four hours, on top of arriving on time.
+  assert.equal(endForPerson(studio, day, tz, at("11:00"), 215)?.toISOString(), at("23:00").toISOString());
   assert.equal(endForPerson(studio, day, tz, null), null, "the device never saw them");
 });
