@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { AttendanceDeviceCard } from "@/components/admin/attendance-device";
 import { Cutoffs } from "@/components/admin/cutoffs";
+import { PeriodSelect } from "@/components/admin/period-select";
 import { deductionsForPeriod } from "@/lib/deduction-store";
 import { CUTOFF_SETTING, cutoffOn } from "@/lib/task-cutoff";
 import { getSetting } from "@/lib/settings";
@@ -48,6 +49,20 @@ export default async function AdminPayrollPage({
   const attendance = await getAttendanceForPeriod(period);
   const receipts = await getReceiptsForPeriod(period);
   const deductions = await deductionsForPeriod(period);
+
+  // Every month the studio has records for, newest first — from the first day
+  // attendance was kept up to this one. Offered as a list rather than a walk
+  // backwards, and built from the data so it never shows months with nothing
+  // in them. One after the other, like the reads above.
+  const firstDay = await prisma.attendanceRecord.findFirst({
+    orderBy: { day: "asc" },
+    select: { day: true },
+  });
+  const firstPeriod = firstDay ? periodOf(firstDay.day.toISOString().slice(0, 10)) : thisMonth;
+  const months: string[] = [];
+  for (let at = thisMonth; at >= firstPeriod && months.length < 36; at = previousPeriod(at)) months.push(at);
+  if (!months.includes(period)) months.push(period);
+  const monthLabels = Object.fromEntries(months.map((key) => [key, periodLabel(key)]));
   const ruleOn = cutoffOn(await getSetting(CUTOFF_SETTING));
   const employees = await prisma.employee.findMany({
     where: { active: true, accessRole: "EMPLOYEE" },
@@ -424,9 +439,14 @@ export default async function AdminPayrollPage({
       />
 
       {/* --- Receipts ----------------------------------------------------- */}
-      <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-ink/40">
-        Receipts · {periodLabel(period)}
-      </h2>
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-medium uppercase tracking-wider text-ink/40">
+          Receipts · {periodLabel(period)}
+        </h2>
+        {/* The whole page is one month's reading, so this moves all of it —
+            salaries, attendance and deductions with the receipts. */}
+        <PeriodSelect period={period} options={months} labels={monthLabels} />
+      </div>
       <p className="mt-1 text-xs text-ink/45">
         Read from the photo automatically. By itself a receipt counts up to {RECEIPT_CAP} JOD. To pay more or less
         for one, type the figure under &ldquo;Counts as&rdquo; — what you type is what is paid. Empty that box to go
