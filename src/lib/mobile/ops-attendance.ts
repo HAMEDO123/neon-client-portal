@@ -110,6 +110,7 @@ export async function attendanceMonthFor(askedMonth: string | null): Promise<Att
             employeeId: row.employeeId,
             dayKey,
             delayHours: row.delayHours,
+            shortHours: row.shortHours,
             awayHours: row.awayHours,
             breaks: storedBreaks(row.breaks),
             // The same reading as the admin attendance page: hours left

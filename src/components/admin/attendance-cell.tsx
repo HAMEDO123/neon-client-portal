@@ -18,6 +18,8 @@ import type { Answer } from "@/lib/refusal";
 type Entry = {
   delayHours: number;
   earlyHours: number;
+  /** What the day costs — the figure payroll reads, which the hours above no longer are. */
+  shortHours: number;
   /** Out in the middle of the day and back. */
   breaks: { out: string; back: string }[];
   note: string | null;
@@ -106,7 +108,7 @@ export function AttendanceCell({
 
             <p className="mt-3 text-xs text-bark/50">
               {entry
-                ? `Now: ${entry.delayHours}h late · ${entry.earlyHours}h left early${
+                ? `Now: ${entry.shortHours > 0 ? `${entry.shortHours}h off` : "nothing off"} · ${entry.delayHours}h late · ${entry.earlyHours}h left early${
                     entry.breaks.length > 0 ? ` · out ${entry.breaks.map((item) => `${item.out}–${item.back}`).join(", ")}` : ""
                   }${entry.clockedOut ? "" : " · no clock-out"} · ${
                     entry.source === "MANUAL" ? "set by you" : entry.source === "ARRIVAL" ? "arrival set by you" : "from the device"

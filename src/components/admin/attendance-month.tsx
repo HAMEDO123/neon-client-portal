@@ -130,6 +130,7 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
                                 entry && {
                                   delayHours: entry.delayHours,
                                   earlyHours: entry.earlyHours,
+                                  shortHours: entry.shortHours,
                                   breaks: entry.breaks,
                                   note: entry.note,
                                   source: entry.source,
@@ -149,14 +150,14 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
                         deduction on the payslip — the breakdown is in the
                         title, where somebody checking a figure will look. */}
                     <td
-                      title={`${row.hoursLate}h late · ${row.hoursEarly}h left early · ${row.hoursAway}h stepped out`}
+                      title={`${row.hoursShort}h off · ${row.hoursLate}h late · ${row.hoursEarly}h left early · ${row.hoursAway}h stepped out`}
                       className={cell(
                         "px-3 py-2.5 text-right tabular-nums",
-                        row.hoursLate + row.hoursEarly + row.hoursAway > 0 ? "font-medium text-amber-700" : "text-bark/35"
+                        row.hoursShort > 0 ? "font-medium text-amber-700" : "text-bark/35"
                       )}
                     >
-                      {row.hoursLate + row.hoursEarly + row.hoursAway > 0
-                        ? `${Math.round((row.hoursLate + row.hoursEarly + row.hoursAway) * 100) / 100}h`
+                      {row.hoursShort > 0
+                        ? `${row.hoursShort}h`
                         : "—"}
                     </td>
                   </tr>
@@ -228,7 +229,10 @@ function Mark({ entry, future, worked }: { entry: MonthEntry | null; future: boo
 
   // Set by the manager, wholly or (ARRIVAL) at the start of the day.
   const typed = entry.source !== DEVICE;
-  const lost = entry.delayHours + entry.earlyHours + entry.awayHours;
+  // What the day costs, not the three facts added up: an hour late that was
+  // worked an hour later costs nothing, and showing "1" there was the grid
+  // reporting a deduction payroll does not take.
+  const lost = entry.shortHours;
 
   if (lost > 0) {
     return (
@@ -281,12 +285,14 @@ function describe(name: string, dayKey: string, entry: MonthEntry | null) {
         : "from the device";
 
   const parts: string[] = [];
+  // What it costs first, then what happened — the two are no longer the same
+  // number, and the one that decides pay is the one to lead with.
+  parts.push(entry.shortHours > 0 ? `${entry.shortHours}h off` : "nothing off");
   if (entry.delayHours > 0) parts.push(`${entry.delayHours}h late`);
   if (entry.earlyHours > 0) parts.push(`${entry.earlyHours}h left early`);
   for (const item of entry.breaks) parts.push(`out ${item.out}–${item.back}`);
   if (entry.awayHours > 0) parts.push(`${entry.awayHours}h stepped out`);
   if (!entry.clockedOut) parts.push("no clock-out recorded");
-  if (parts.length === 0) parts.push("full day");
 
   return `${name} · ${dayKey} · ${parts.join(" · ")} · ${how}${entry.note ? ` · ${entry.note}` : ""}`;
 }

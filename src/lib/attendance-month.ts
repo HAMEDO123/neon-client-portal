@@ -38,6 +38,15 @@ export type MonthEntry = {
   earlyHours: number;
   /** Hours out in the middle of the day and back (lib/attendance-breaks.ts). */
   awayHours: number;
+  /**
+   * What the day actually costs — the only one of these the hourly rate is
+   * multiplied by (AttendanceRecord.shortHours).
+   *
+   * The three above are what happened and are no longer charges in
+   * themselves: a day that began an hour late and was worked an hour later
+   * owes nothing, and adding them up here showed a deduction nobody takes.
+   */
+  shortHours: number;
   /** Those times out, "HH:MM" to "HH:MM". */
   breaks: { out: string; back: string }[];
   /** Whether a clock-out was recorded at all — a blank is not "stayed to the end". */
@@ -63,6 +72,8 @@ export type MonthRow = {
   hoursEarly: number;
   /** Hours out in the middle of days and back, across the month. */
   hoursAway: number;
+  /** What the month costs: the only figure payroll reads. */
+  hoursShort: number;
   /** Days somebody arrived and no clock-out was recorded. */
   daysWithoutClockOut: number;
 };
@@ -160,6 +171,7 @@ export function buildMonth(input: {
       hoursLate: Math.round(recorded.reduce((total, cell) => total + cell.delayHours, 0) * 100) / 100,
       hoursEarly: Math.round(recorded.reduce((total, cell) => total + cell.earlyHours, 0) * 100) / 100,
       hoursAway: Math.round(recorded.reduce((total, cell) => total + cell.awayHours, 0) * 100) / 100,
+      hoursShort: Math.round(recorded.reduce((total, cell) => total + cell.shortHours, 0) * 100) / 100,
       // Days the device saw somebody arrive and never saw them leave. Not a
       // count of anything anybody did — it is the count of days the studio
       // knows nothing about the end of, which is the number worth chasing.

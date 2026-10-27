@@ -24,13 +24,17 @@ const entry = (
   delayHours = 0,
   source = DEVICE,
   earlyHours = 0,
-  clockedOut = true
+  clockedOut = true,
+  // What the day costs. Defaults to the hours above added up, which is what a
+  // day used to be charged and keeps every older case saying what it said.
+  shortHours = delayHours + earlyHours
 ): MonthEntry => ({
   employeeId,
   dayKey,
   delayHours,
   earlyHours,
   awayHours: 0,
+  shortHours,
   breaks: [],
   clockedOut,
   source,
