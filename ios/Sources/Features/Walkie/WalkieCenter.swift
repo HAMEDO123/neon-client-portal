@@ -10,7 +10,8 @@ import SwiftUI
 /// then on, what anybody says to this phone arrives as a Push to Talk push: iOS
 /// wakes the app, opens the audio, and the app plays it, locked or not. For the
 /// team it is required: the app covers its screens until it is on
-/// (`WalkieRequiredView`). The server speaks only from 10 AM to 7 PM.
+/// (`WalkieRequiredView`). The server decides when it speaks: everybody from
+/// 10 AM to 7 PM, and at night one person to one person, for those allowed.
 ///
 /// Talking is the app's own button (`WalkieTalkieView`) — or iOS's own talk
 /// button on the lock screen and in the Dynamic Island, held without opening

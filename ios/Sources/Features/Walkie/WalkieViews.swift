@@ -21,7 +21,7 @@ struct WalkieRequiredView: View {
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 10) {
                         point("speaker.wave.2.fill", L("When the manager or somebody on the team talks to you, you hear it straight away — even with the phone locked."))
-                        point("clock.fill", L("From 10 AM to 7 PM, every day. Outside those hours, nothing is sent."))
+                        point("clock.fill", L("Everybody from 10 AM to 7 PM. At night it is one person to one person, for those the studio allows."))
                         point("mic.fill", L("You can talk too: to the manager, to one person, or to everybody."))
                         point("checkmark.seal.fill", L("The studio asks everybody to have it on. You allow it once, and it stays on."))
                     }
@@ -199,7 +199,7 @@ struct WalkieTalkieView: View {
         NeonScroll(spacing: NeonSpace.stack, lazy: false) {
             WalkieHearCard()
             if !open {
-                StatusNote(symbol: "clock.fill", tone: .info, title: L("The walkie-talkie works from 10 AM to 7 PM."), detail: nil)
+                StatusNote(symbol: "clock.fill", tone: .info, title: L("The walkie-talkie is closed for you now. It opens at 10 AM."), detail: nil)
             }
             if let people {
                 let on = people.filter(\.allowed).count
