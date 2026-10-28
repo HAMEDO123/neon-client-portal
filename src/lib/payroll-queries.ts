@@ -2,7 +2,10 @@ import { prisma } from "@/lib/db";
 import { computePayroll, periodRange, type PayrollBreakdown } from "@/lib/payroll";
 import { liveDeductions } from "@/lib/deduction-store";
 import { workedHours, type WorkedTotal } from "@/lib/attendance";
-import { getWorkHours } from "@/lib/settings";
+import { getTimezone, getWorkHours } from "@/lib/settings";
+import { buildAttendanceSheet, type AttendanceSheet } from "@/lib/attendance-sheet";
+import { hourlyRate } from "@/lib/payroll";
+import { dateToDayKey, todayKey } from "@/lib/time";
 
 // Assembling a month's payroll: for each employee, the hours they arrived
 // late, the receipts they are owed, and the resulting pay. The arithmetic
@@ -121,6 +124,66 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
         adjustmentTotal: adjusted.reduce((total, row) => total + row.amount, 0),
       }),
     };
+  });
+}
+
+/**
+ * A month's attendance written out person by person, day by day — the sheet
+ * behind /admin/payroll/sheet and its download.
+ *
+ * Reads the same rows the pay sheet totals and hands them to the same pure
+ * builder, so the day-by-day working can be checked against the month's figure
+ * and cannot quietly disagree with it.
+ */
+export async function getAttendanceSheet(period: string): Promise<AttendanceSheet> {
+  const { start, end } = periodRange(period);
+
+  const employees = await prisma.employee.findMany({
+    where: { accessRole: "EMPLOYEE" },
+    orderBy: [{ active: "desc" }, { order: "asc" }],
+    select: { id: true, name: true, role: true, salaryAmount: true, payBasis: true, openHours: true },
+  });
+
+  const records = await prisma.attendanceRecord.findMany({
+    where: { day: { gte: start, lt: end } },
+    orderBy: { day: "asc" },
+    select: {
+      employeeId: true,
+      day: true,
+      arrivedAt: true,
+      departedAt: true,
+      breaks: true,
+      delayHours: true,
+      earlyHours: true,
+      awayHours: true,
+      shortHours: true,
+      source: true,
+      note: true,
+    },
+  });
+
+  const hours = await getWorkHours();
+  const timeZone = await getTimezone();
+
+  return buildAttendanceSheet({
+    monthKey: period,
+    hours,
+    timeZone,
+    todayKey: todayKey(timeZone),
+    people: employees.map((employee) => ({
+      id: employee.id,
+      name: employee.name,
+      role: employee.role,
+      openHours: employee.openHours,
+      // What an hour of this person's time costs, so a day's shortfall can be
+      // priced on its own line rather than only in the month's total.
+      hourlyRate: hourlyRate(employee.salaryAmount ?? 0, employee.payBasis),
+    })),
+    records: records.map((record) => ({
+      ...record,
+      // The sheet works in day keys; the column is a date at UTC midnight.
+      dayKey: dateToDayKey(record.day) ?? "",
+    })),
   });
 }
 

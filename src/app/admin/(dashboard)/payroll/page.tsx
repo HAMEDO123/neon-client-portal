@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight, Coins, Wallet } from "lucide-react";
+import { ChevronRight, Coins, FileSpreadsheet, Wallet } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getAllReceipts, getAttendanceForPeriod, getPayrollForPeriod } from "@/lib/payroll-queries";
 import {
@@ -84,7 +84,16 @@ export default async function AdminPayrollPage({
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {/* The working behind every figure on this page: each person's month
+              a day at a time, printable, with the spreadsheet beside it. */}
+          <Link
+            href={`/admin/payroll/sheet?period=${period}`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-cyan-strong/25 bg-cyan-50/70 px-4 py-2 text-xs font-medium text-cyan-900 hover:bg-cyan-50"
+          >
+            <FileSpreadsheet size={14} strokeWidth={2} />
+            Month sheet
+          </Link>
           <PeriodLink period={previousPeriod(period)} label="Previous month" />
           {!isThisMonth && <PeriodLink period={thisMonth} label="This month" />}
         </div>
