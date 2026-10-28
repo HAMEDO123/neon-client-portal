@@ -225,7 +225,7 @@ struct PayrollRootView: View {
 
     private func attendanceRow(_ record: TeamAttendanceRecord) -> some View {
         HStack(spacing: 8) {
-            ListRow(record.employeeName, subtitle: record.note, meta: formattedDay(record.day), value: lateHoursText(record.delayHours))
+            ListRow(record.employeeName, subtitle: record.note, meta: formattedDay(record.day), value: hoursText(record.delayHours))
             IconButton("trash", label: L("Remove"), look: .plain, size: NeonSize.touch) {
                 Haptic.tap()
                 removingAttendance = record
@@ -325,11 +325,14 @@ struct PayrollRootView: View {
     }
 }
 
+/// A count of hours, to the precision it actually has.
+///
 /// Lateness is whole hours, rounded up at the source (`lib/attendance.ts`
-/// `Math.ceil`) — so a fractional figure here would only ever come from a
-/// manually typed record, and is shown to that same precision rather than
-/// always forcing 2 decimals onto a number that is normally a whole one.
-private func lateHoursText(_ hours: Double) -> String {
+/// `Math.ceil`), so a fractional figure there would only ever come from a
+/// manually typed record — forcing 2 decimals onto a number that is normally a
+/// whole one reads as false precision. Hours worked are genuinely fractional
+/// and print as they are.
+private func hoursText(_ hours: Double) -> String {
     L("%@ h", NeonFormat.number(hours, decimals: hours.rounded() == hours ? 0 : 2))
 }
 
@@ -369,13 +372,13 @@ private struct PayrollRow: View {
                     if let worked = row.worked, worked.days > 0 || worked.daysWithoutClockOut > 0 {
                         MetaLabel(
                             worked.daysWithoutClockOut > 0
-                                ? L("Worked %@ · %d open", lateHoursText(worked.hours), worked.daysWithoutClockOut)
-                                : L("Worked %@ · %dd", lateHoursText(worked.hours), worked.days),
+                                ? L("Worked %@ · %d open", hoursText(worked.hours), worked.daysWithoutClockOut)
+                                : L("Worked %@ · %dd", hoursText(worked.hours), worked.days),
                             symbol: "figure.walk",
-                            tint: worked.daysWithoutClockOut > 0 ? .neonWarningStrong : .neonTextTertiary
+                            tint: worked.daysWithoutClockOut > 0 ? Color.neonWarningStrong : Color.neonTextTertiary
                         )
                     }
-                    MetaLabel(L("Late %@", lateHoursText(row.breakdown.delayHours)), symbol: "hourglass")
+                    MetaLabel(L("Late %@", hoursText(row.breakdown.delayHours)), symbol: "hourglass")
                     MetaLabel(L("Cutoff −%@", NeonFormat.money(row.breakdown.cutoff, decimals: 2)), symbol: "minus.circle")
                     if row.breakdown.receiptTotal > 0 {
                         MetaLabel(L("Receipts +%@", NeonFormat.money(row.breakdown.receiptTotal, decimals: 2)), symbol: "plus.circle", tint: .neonSuccessStrong)
@@ -393,7 +396,7 @@ private struct PayrollRow: View {
                 StatusNote(
                     symbol: "banknote", tone: .warning, title: L("No salary set"),
                     detail: row.breakdown.delayHours > 0
-                        ? L("%@ late this month can't be charged until there is one.", lateHoursText(row.breakdown.delayHours))
+                        ? L("%@ late this month can't be charged until there is one.", hoursText(row.breakdown.delayHours))
                         : L("Set a salary to start paying %@.", row.employee.name)
                 )
                 NeonButton(L("Set salary"), kind: .tinted(.neonSuccessStrong), size: .small, fullWidth: false, action: {
@@ -467,7 +470,7 @@ private struct AttendanceListSheet: View {
                 ForEach(byDay, id: \.day) { group in
                     Section {
                         ForEach(group.records) { record in
-                            ListRow(record.employeeName, subtitle: record.note, value: lateHoursText(record.delayHours))
+                            ListRow(record.employeeName, subtitle: record.note, value: hoursText(record.delayHours))
                                 .neonSurface(.solid, radius: NeonRadius.md)
                                 .neonListRow()
                                 .destructiveSwipe(L("Remove"), confirm: L("Remove this delay record?")) {
