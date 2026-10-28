@@ -200,6 +200,9 @@ struct TeamPayrollTotals: Decodable {
 
 struct TeamPayrollRow: Decodable, Identifiable {
     let employee: TeamPayrollEmployeeInfo
+    /// The pay week this row is, for somebody settled weekly — nil for a
+    /// monthly salary, whose row is the whole month.
+    let week: TeamPayWeek?
     let delayDays: Int
     /// How long they were actually at work this period. Optional so a build of
     /// the app newer than the server it is talking to still reads the row.
@@ -208,7 +211,18 @@ struct TeamPayrollRow: Decodable, Identifiable {
     let receiptCount: Int
     let adjustments: [TeamAdjustment]
 
-    var id: String { employee.id }
+    /// Somebody paid weekly has a row per week, so the person's id is not one
+    /// on its own: two rows carrying the same id collapse into one in a list.
+    var id: String { week == nil ? employee.id : "\(employee.id)|\(week!.key)" }
+}
+
+/// One pay week: Tuesday to Monday, the way this studio settles weekly pay.
+struct TeamPayWeek: Decodable {
+    let key: String
+    let startKey: String
+    let endKey: String
+    /// "Tue 6 – Mon 12 Oct", written by the server so both screens read alike.
+    let label: String
 }
 
 /// Hours worked, the days capped at the studio's own eight — and the days that

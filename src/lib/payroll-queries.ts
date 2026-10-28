@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/db";
 import { computePayroll, periodRange, type PayrollBreakdown } from "@/lib/payroll";
-import { liveDeductions } from "@/lib/deduction-store";
+import { liveDeductionsBetween } from "@/lib/deduction-store";
 import { workedHours, type WorkedTotal } from "@/lib/attendance";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { buildAttendanceSheet, type AttendanceSheet } from "@/lib/attendance-sheet";
+import { monthBounds } from "@/lib/attendance-month";
 import { hourlyRate } from "@/lib/payroll";
-import { dateToDayKey, todayKey } from "@/lib/time";
+import { dateToDayKey, dayKeyIn, dayKeyToDate, todayKey } from "@/lib/time";
+import { paySlices, type PayWeek } from "@/lib/pay-week";
 
 // Assembling a month's payroll: for each employee, the hours they arrived
 // late, the receipts they are owed, and the resulting pay. The arithmetic
@@ -19,6 +21,15 @@ export type PayrollRow = {
     salaryAmount: number | null;
     payBasis: "MONTHLY" | "WEEKLY";
   };
+  /**
+   * The pay week this row is, for somebody settled weekly — null for a monthly
+   * salary, whose row is the whole month.
+   *
+   * Somebody paid by the week has a row per week rather than one for the
+   * month: their 75 JOD is a week's pay, and charging four weeks of lateness
+   * and cutoffs against it was a deduction nobody owed.
+   */
+  week: PayWeek | null;
   delayDays: number;
   /**
    * How long they were actually at work this period, the days capped at the
@@ -37,7 +48,8 @@ export type PayrollRow = {
 };
 
 export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]> {
-  const { start, end } = periodRange(period);
+  const timezone = await getTimezone();
+  const today = todayKey(timezone);
 
   const employees = await prisma.employee.findMany({
     where: { accessRole: "EMPLOYEE" },
@@ -45,86 +57,118 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
     select: { id: true, name: true, role: true, salaryAmount: true, payBasis: true },
   });
 
-  // Two grouped queries rather than one per employee, and deliberately one
-  // after the other. Running them together is a round trip faster and kills
-  // the connection on the local Postgres proxy — a 500 on the machine this is
-  // developed on costs more than the millisecond it saves.
-  const attendance = await prisma.attendanceRecord.groupBy({
-    by: ["employeeId"],
-    where: { day: { gte: start, lt: end } },
-    _sum: { delayHours: true, earlyHours: true, awayHours: true, shortHours: true },
-    _count: { _all: true },
-  });
+  // What each person's pay is settled in: the month, or a row per pay week for
+  // somebody paid weekly (lib/pay-week.ts). A weekly salary charged a whole
+  // month of deductions is the wrong sum, and it could only ever be too large.
+  const sliced = employees.map((employee) => ({
+    employee,
+    slices: paySlices(employee.payBasis, period, today),
+  }));
 
-  // The times themselves, for how long people were actually here. The grouped
-  // sums above cannot answer that one: hours worked is a per-day figure, each
-  // day capped at the studio's own, so the days are added up one at a time.
-  const times = await prisma.attendanceRecord.findMany({
-    where: { day: { gte: start, lt: end } },
-    select: { employeeId: true, arrivedAt: true, departedAt: true, awayHours: true },
+  // One span wide enough for every row, so the queries below do not multiply
+  // with the weeks: a pay week can run past the end of the month it belongs to.
+  // The month itself is always in the span, so a month with nobody on a weekly
+  // salary queries exactly what it did before.
+  const spans = [{ ...monthBounds(period) }, ...sliced.flatMap((row) => row.slices.map((slice) => ({ from: slice.fromKey, to: slice.toKey })))];
+  const fromKey = spans.map((span) => span.from).sort()[0];
+  const toKey = spans.map((span) => span.to).sort().reverse()[0];
+  // The months that span touches, for what is still filed by month.
+  const months = [...new Set([period, fromKey.slice(0, 7), toKey.slice(0, 7)])];
+
+  // Sequential, deliberately. Running them together is a round trip faster and
+  // kills the connection on the local Postgres proxy — a 500 on the machine
+  // this is developed on costs more than the millisecond it saves.
+  const records = await prisma.attendanceRecord.findMany({
+    where: { day: { gte: dayKeyToDate(fromKey), lte: dayKeyToDate(toKey) } },
     orderBy: { day: "asc" },
+    select: {
+      employeeId: true,
+      day: true,
+      arrivedAt: true,
+      departedAt: true,
+      delayHours: true,
+      earlyHours: true,
+      awayHours: true,
+      shortHours: true,
+    },
   });
 
-  const receipts = await prisma.expenseReceipt.groupBy({
-    by: ["employeeId"],
-    where: { periodMonth: period },
-    _sum: { countedAmount: true },
-    _count: { _all: true },
+  const receipts = await prisma.expenseReceipt.findMany({
+    where: { periodMonth: { in: months } },
+    select: { employeeId: true, countedAmount: true, createdAt: true, periodMonth: true },
   });
 
   const adjustments = await prisma.salaryAdjustment.findMany({
-    where: { periodKey: period },
-    select: { employeeId: true, amount: true, reason: true },
+    where: { periodKey: { in: months } },
+    select: { employeeId: true, amount: true, reason: true, periodKey: true, createdAt: true },
   });
 
-  // Cutoffs — the manager's own, and a task not handed in by nine — are money
-  // off like any other adjustment, one row each. Ones taken back are not read.
-  const deductions = await liveDeductions(period);
+  // Cutoffs — the manager's own, and a task not handed in by midnight — are
+  // money off like any other adjustment. Read by the day they are for rather
+  // than by their month, which is the same set for a month and the only way to
+  // put one in the right week. Ones taken back are not read.
+  const deductions = await liveDeductionsBetween(dayKeyToDate(fromKey), dayKeyToDate(toKey));
 
-  const adjustmentBy = new Map<string, { amount: number; reason: string }[]>();
-  for (const row of [...adjustments, ...deductions]) {
-    const list = adjustmentBy.get(row.employeeId) ?? [];
-    list.push({ amount: row.amount, reason: row.reason });
-    adjustmentBy.set(row.employeeId, list);
-  }
-
-  const delayBy = new Map(attendance.map((row) => [row.employeeId, row]));
-  const receiptBy = new Map(receipts.map((row) => [row.employeeId, row]));
-
-  const timesBy = new Map<string, typeof times>();
-  for (const row of times) timesBy.set(row.employeeId, [...(timesBy.get(row.employeeId) ?? []), row]);
-
-  // The studio's day, for the cap on each one of them.
+  // The studio's day, for the cap on each day's hours.
   const hours = await getWorkHours();
 
-  return employees.map((employee) => {
-    const delay = delayBy.get(employee.id);
-    const receipt = receiptBy.get(employee.id);
-    const adjusted = adjustmentBy.get(employee.id) ?? [];
+  const rows: PayrollRow[] = [];
 
-    return {
-      employee,
-      delayDays: delay?._count._all ?? 0,
-      worked: workedHours(timesBy.get(employee.id) ?? [], hours),
-      receiptCount: receipt?._count._all ?? 0,
-      adjustments: adjusted,
-      breakdown: computePayroll({
-        salaryAmount: employee.salaryAmount,
-        payBasis: employee.payBasis,
-        delayHours: delay?._sum.delayHours ?? 0,
-        // Leaving early costs the same hourly rate as arriving late. A day
-        // nobody clocked out of carries zero here, not a guess.
-        earlyHours: delay?._sum.earlyHours ?? 0,
-        // Out in the middle of a day and back. A fact about the day now rather
-        // than a charge of its own: it pushed the end of that person's day back.
-        awayHours: delay?._sum.awayHours ?? 0,
-        // The one that is actually multiplied by the rate.
-        shortHours: delay?._sum.shortHours ?? 0,
-        receiptTotal: receipt?._sum.countedAmount ?? 0,
-        adjustmentTotal: adjusted.reduce((total, row) => total + row.amount, 0),
-      }),
-    };
-  });
+  for (const { employee, slices } of sliced) {
+    for (const slice of slices) {
+      const within = (dayKey: string | null) => dayKey != null && dayKey >= slice.fromKey && dayKey <= slice.toKey;
+      const days = records.filter((record) => record.employeeId === employee.id && within(dateToDayKey(record.day)));
+
+      // A receipt belongs to the week it was sent in, and a month's row reads
+      // the month it was filed under: `periodMonth` is set when it arrives and
+      // never moves, so for a month these two are the same answer.
+      const theirs = receipts.filter((receipt) => receipt.employeeId === employee.id);
+      const paid = slice.week
+        ? theirs.filter((receipt) => within(dayKeyIn(timezone, receipt.createdAt)))
+        : theirs.filter((receipt) => receipt.periodMonth === period);
+
+      // An adjustment carries no day of its own — only the month it is for —
+      // so a week takes the ones the manager entered during it. The reason
+      // names the days it was for, which is what anybody checking it reads.
+      const theirAdjustments = adjustments.filter((row) => row.employeeId === employee.id);
+      const adjusted = [
+        ...(slice.week
+          ? theirAdjustments.filter((row) => within(dayKeyIn(timezone, row.createdAt)))
+          : theirAdjustments.filter((row) => row.periodKey === period)),
+        ...deductions.filter((row) => row.employeeId === employee.id && within(dateToDayKey(row.day))),
+      ].map((row) => ({ amount: row.amount, reason: row.reason }));
+
+      rows.push({
+        employee,
+        week: slice.week,
+        delayDays: days.length,
+        worked: workedHours(days, hours),
+        receiptCount: paid.length,
+        adjustments: adjusted,
+        breakdown: computePayroll({
+          salaryAmount: employee.salaryAmount,
+          payBasis: employee.payBasis,
+          delayHours: sum(days, (day) => day.delayHours),
+          // Leaving early costs the same hourly rate as arriving late. A day
+          // nobody clocked out of carries zero here, not a guess.
+          earlyHours: sum(days, (day) => day.earlyHours),
+          // Out in the middle of a day and back. A fact about the day now rather
+          // than a charge of its own: it pushed the end of that person's day back.
+          awayHours: sum(days, (day) => day.awayHours),
+          // The one that is actually multiplied by the rate.
+          shortHours: sum(days, (day) => day.shortHours),
+          receiptTotal: sum(paid, (receipt) => receipt.countedAmount ?? 0),
+          adjustmentTotal: sum(adjusted, (row) => row.amount),
+        }),
+      });
+    }
+  }
+
+  return rows;
+}
+
+function sum<T>(items: T[], of: (item: T) => number): number {
+  return items.reduce((total, item) => total + of(item), 0);
 }
 
 /**

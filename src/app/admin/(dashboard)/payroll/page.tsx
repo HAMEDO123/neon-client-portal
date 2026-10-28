@@ -38,6 +38,7 @@ export default async function AdminPayrollPage({
   const thisMonth = periodOf(todayKey(timezone));
 
   const period = /^\d{4}-\d{2}$/.test(requested ?? "") ? requested! : thisMonth;
+  const today = todayKey(timezone);
 
   // A month still being lived in is read differently from a closed one: what
   // has been cut so far is a running total, not a payslip. The wording says
@@ -63,6 +64,12 @@ export default async function AdminPayrollPage({
     orderBy: { order: "asc" },
     select: { id: true, name: true, deviceUserId: true },
   });
+
+  // Somebody paid by the week has a row per week, so the team is the people in
+  // the rows rather than the rows themselves.
+  const team = new Set(rows.map((row) => row.employee.id)).size;
+  // One form per person under Salaries, not one per week.
+  const people = rows.filter((row, index) => rows.findIndex((other) => other.employee.id === row.employee.id) === index);
 
   const totals = rows.reduce(
     (sum, row) => ({
@@ -100,7 +107,7 @@ export default async function AdminPayrollPage({
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label="Team" value={String(rows.length)} />
+        <Stat label="Team" value={String(team)} />
         <Stat
           label={isThisMonth ? "Deducted so far" : "Total deducted"}
           value={`${totals.cut.toFixed(2)} JOD`}
@@ -111,6 +118,12 @@ export default async function AdminPayrollPage({
 
       {/* --- The pay sheet ------------------------------------------------ */}
       <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-ink/40">Pay sheet</h2>
+      {rows.some((row) => row.week) && (
+        <p className="mt-1 text-xs text-ink/45">
+          Paid by the week means a row per pay week — Tuesday to Monday — each with its own hours, cutoffs and
+          receipts. A week that has not begun is not listed.
+        </p>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState className="mt-4" icon={Wallet} title="No employees yet" description="Add the team first." />
@@ -118,12 +131,17 @@ export default async function AdminPayrollPage({
         <>
           {/* On a phone, a card per person: the table needs nine columns. */}
           <ul className="mt-4 flex flex-col gap-3 sm:hidden">
-            {rows.map(({ employee, breakdown, delayDays, worked, receiptCount, adjustments }) => (
-              <li key={employee.id} className="glass rounded-2xl p-4">
+            {rows.map(({ employee, breakdown, delayDays, worked, week, receiptCount, adjustments }) => (
+              <li key={`${employee.id}|${week?.key ?? period}`} className="glass rounded-2xl p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium text-ink">{employee.name}</p>
-                    {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
+                    {/* Paid weekly: the row is a week, and says which one. */}
+                    {week ? (
+                      <p className="text-xs text-ink/55">{week.label}</p>
+                    ) : (
+                      employee.role && <p className="text-xs text-ink/45">{employee.role}</p>
+                    )}
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-[11px] text-ink/45">Final pay</p>
@@ -195,11 +213,23 @@ export default async function AdminPayrollPage({
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ employee, breakdown, delayDays, worked, receiptCount, adjustments }) => (
-                  <tr key={employee.id} className="border-t border-ink/6">
+                {rows.map(({ employee, breakdown, delayDays, worked, week, receiptCount, adjustments }) => (
+                  <tr key={`${employee.id}|${week?.key ?? period}`} className="border-t border-ink/6">
                     <td className="px-4 py-3">
                       <p className="font-medium text-ink">{employee.name}</p>
-                      {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
+                      {week ? (
+                        <p className="text-xs text-ink/55">
+                          {week.label}
+                          {/* The one that changes on Tuesday. */}
+                          {week.startKey <= today && today <= week.endKey && (
+                            <span className="ml-1.5 rounded-full bg-cyan-50 px-1.5 py-0.5 text-[10px] font-medium text-cyan-800">
+                              This week
+                            </span>
+                          )}
+                        </p>
+                      ) : (
+                        employee.role && <p className="text-xs text-ink/45">{employee.role}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {employee.salaryAmount == null ? (
@@ -262,7 +292,7 @@ export default async function AdminPayrollPage({
       {/* --- Setting pay -------------------------------------------------- */}
       <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-ink/40">Salaries</h2>
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {rows.map(({ employee }) => (
+        {people.map(({ employee }) => (
           <form
             key={employee.id}
             action={setEmployeePay.bind(null, employee.id)}

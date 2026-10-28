@@ -350,7 +350,10 @@ private struct PayrollRow: View {
             Button(action: onEdit) {
                 ListRow(
                     row.employee.name,
-                    subtitle: row.employee.role,
+                    // Paid weekly: the row is one week, and has to say which —
+                    // four rows reading only "Salem" are four rows nobody can
+                    // tell apart.
+                    subtitle: row.week?.label ?? row.employee.role,
                     leading: .avatar(url: facePhotoURL(row.employee.photoUrl), name: row.employee.name),
                     value: hasSalary ? NeonFormat.money(row.breakdown.finalPay, decimals: 2) : nil,
                     badge: hasSalary ? (isWeekly ? L("Weekly") : nil) : L("No salary set"),
