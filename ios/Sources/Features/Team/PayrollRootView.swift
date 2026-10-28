@@ -361,6 +361,20 @@ private struct PayrollRow: View {
                 FlowRow {
                     MetaLabel(L("%@ · %@", NeonFormat.money(row.breakdown.salary, decimals: 2), isWeekly ? L("Weekly") : L("Monthly")), symbol: "banknote")
                     MetaLabel(L("%@/h", NeonFormat.money(row.breakdown.hourlyRate, decimals: 2)), symbol: "clock")
+                    // How long they were actually here, beside what was taken
+                    // off: a monthly salary is docked for the hours a day fell
+                    // short, so "how much was cut" never answered "how much did
+                    // they work". A day nobody clocked out of is missing from
+                    // the total, and says so rather than reading as a short one.
+                    if let worked = row.worked, worked.days > 0 || worked.daysWithoutClockOut > 0 {
+                        MetaLabel(
+                            worked.daysWithoutClockOut > 0
+                                ? L("Worked %@ · %d open", lateHoursText(worked.hours), worked.daysWithoutClockOut)
+                                : L("Worked %@ · %dd", lateHoursText(worked.hours), worked.days),
+                            symbol: "figure.walk",
+                            tint: worked.daysWithoutClockOut > 0 ? .neonWarningStrong : .neonTextTertiary
+                        )
+                    }
                     MetaLabel(L("Late %@", lateHoursText(row.breakdown.delayHours)), symbol: "hourglass")
                     MetaLabel(L("Cutoff −%@", NeonFormat.money(row.breakdown.cutoff, decimals: 2)), symbol: "minus.circle")
                     if row.breakdown.receiptTotal > 0 {

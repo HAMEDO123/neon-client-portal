@@ -11,6 +11,7 @@ import {
   setDeviceUserId,
 } from "@/lib/actions/operations-actions";
 import { getTimezone } from "@/lib/settings";
+import type { WorkedTotal } from "@/lib/attendance";
 import { todayKey } from "@/lib/time";
 import { isManagersFigure, periodLabel, periodOf, previousPeriod, RECEIPT_CAP } from "@/lib/payroll";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -108,7 +109,7 @@ export default async function AdminPayrollPage({
         <>
           {/* On a phone, a card per person: the table needs nine columns. */}
           <ul className="mt-4 flex flex-col gap-3 sm:hidden">
-            {rows.map(({ employee, breakdown, delayDays, receiptCount, adjustments }) => (
+            {rows.map(({ employee, breakdown, delayDays, worked, receiptCount, adjustments }) => (
               <li key={employee.id} className="glass rounded-2xl p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -130,6 +131,9 @@ export default async function AdminPayrollPage({
                     )}
                   </Line>
                   <Line label="Per hour">{breakdown.hourlyRate.toFixed(3)}</Line>
+                  <Line label="Worked">
+                    <WorkedHours worked={worked} />
+                  </Line>
                   <Line label="Late">
                     {breakdown.delayHours.toFixed(2)} h{delayDays > 0 && ` (${delayDays}d)`}
                   </Line>
@@ -171,6 +175,7 @@ export default async function AdminPayrollPage({
                   <th className="px-4 py-3">Employee</th>
                   <th className="px-4 py-3">Salary</th>
                   <th className="px-4 py-3">Per hour</th>
+                  <th className="px-4 py-3">Worked</th>
                   <th className="px-4 py-3">Late</th>
                   <th className="px-4 py-3">Left early</th>
                   <th className="px-4 py-3">Cutoff</th>
@@ -181,7 +186,7 @@ export default async function AdminPayrollPage({
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ employee, breakdown, delayDays, receiptCount, adjustments }) => (
+                {rows.map(({ employee, breakdown, delayDays, worked, receiptCount, adjustments }) => (
                   <tr key={employee.id} className="border-t border-ink/6">
                     <td className="px-4 py-3">
                       <p className="font-medium text-ink">{employee.name}</p>
@@ -200,6 +205,9 @@ export default async function AdminPayrollPage({
                       )}
                     </td>
                     <td className="px-4 py-3 text-ink/60">{breakdown.hourlyRate.toFixed(3)}</td>
+                    <td className="px-4 py-3 text-ink/70">
+                      <WorkedHours worked={worked} />
+                    </td>
                     <td className="px-4 py-3 text-ink/60">
                       {breakdown.delayHours.toFixed(2)} h
                       {delayDays > 0 && <span className="ml-1 text-xs text-ink/35">({delayDays}d)</span>}
@@ -537,6 +545,36 @@ export default async function AdminPayrollPage({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * How long somebody was actually at work this month.
+ *
+ * Three facts, and the two quiet ones matter as much as the figure: the days it
+ * was added up from, and the days it could not be — an arrival with no
+ * clock-out is an unknown, and a total silently missing one of those reads as
+ * somebody who worked less than they did.
+ */
+function WorkedHours({ worked }: { worked: WorkedTotal }) {
+  if (worked.days === 0 && worked.daysWithoutClockOut === 0) return <span className="text-ink/30">—</span>;
+
+  return (
+    <span>
+      <span className="tabular-nums">{worked.hours.toFixed(2)} h</span>
+      {worked.days > 0 && <span className="ml-1 text-xs text-ink/35">({worked.days}d)</span>}
+      {/* There is no overtime, so hours past the eighth of a day are not paid.
+          Said rather than dropped: the hours somebody gave the studio should
+          not disappear off the only screen that counts them. */}
+      {worked.onSite > worked.hours && (
+        <span className="ml-1 text-xs text-ink/35">+{(worked.onSite - worked.hours).toFixed(2)} over</span>
+      )}
+      {worked.daysWithoutClockOut > 0 && (
+        <span className="ml-1 text-xs text-amber-700" title="Arrived, no clock-out — those days are not in this total.">
+          {worked.daysWithoutClockOut}d open
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { computePayroll, periodRange, type PayrollBreakdown } from "@/lib/payroll";
 import { liveDeductions } from "@/lib/deduction-store";
+import { workedHours, type WorkedTotal } from "@/lib/attendance";
+import { getWorkHours } from "@/lib/settings";
 
 // Assembling a month's payroll: for each employee, the hours they arrived
 // late, the receipts they are owed, and the resulting pay. The arithmetic
@@ -15,6 +17,16 @@ export type PayrollRow = {
     payBasis: "MONTHLY" | "WEEKLY";
   };
   delayDays: number;
+  /**
+   * How long they were actually at work this period, the days capped at the
+   * studio's own eight.
+   *
+   * Not what the pay is worked out from — a monthly salary is docked for the
+   * hours a day fell short, not paid per hour — and on the screen beside it for
+   * exactly that reason: "how much was taken off" and "how much did they work"
+   * are different questions, and the second one had no answer anywhere.
+   */
+  worked: WorkedTotal;
   breakdown: PayrollBreakdown;
   receiptCount: number;
   /** Why money was taken off beyond lateness, in the employee's own words on the payslip. */
@@ -39,6 +51,15 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
     where: { day: { gte: start, lt: end } },
     _sum: { delayHours: true, earlyHours: true, awayHours: true, shortHours: true },
     _count: { _all: true },
+  });
+
+  // The times themselves, for how long people were actually here. The grouped
+  // sums above cannot answer that one: hours worked is a per-day figure, each
+  // day capped at the studio's own, so the days are added up one at a time.
+  const times = await prisma.attendanceRecord.findMany({
+    where: { day: { gte: start, lt: end } },
+    select: { employeeId: true, arrivedAt: true, departedAt: true, awayHours: true },
+    orderBy: { day: "asc" },
   });
 
   const receipts = await prisma.expenseReceipt.groupBy({
@@ -67,6 +88,12 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
   const delayBy = new Map(attendance.map((row) => [row.employeeId, row]));
   const receiptBy = new Map(receipts.map((row) => [row.employeeId, row]));
 
+  const timesBy = new Map<string, typeof times>();
+  for (const row of times) timesBy.set(row.employeeId, [...(timesBy.get(row.employeeId) ?? []), row]);
+
+  // The studio's day, for the cap on each one of them.
+  const hours = await getWorkHours();
+
   return employees.map((employee) => {
     const delay = delayBy.get(employee.id);
     const receipt = receiptBy.get(employee.id);
@@ -75,6 +102,7 @@ export async function getPayrollForPeriod(period: string): Promise<PayrollRow[]>
     return {
       employee,
       delayDays: delay?._count._all ?? 0,
+      worked: workedHours(timesBy.get(employee.id) ?? [], hours),
       receiptCount: receipt?._count._all ?? 0,
       adjustments: adjusted,
       breakdown: computePayroll({

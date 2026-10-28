@@ -201,11 +201,26 @@ struct TeamPayrollTotals: Decodable {
 struct TeamPayrollRow: Decodable, Identifiable {
     let employee: TeamPayrollEmployeeInfo
     let delayDays: Int
+    /// How long they were actually at work this period. Optional so a build of
+    /// the app newer than the server it is talking to still reads the row.
+    let worked: TeamPayrollWorked?
     let breakdown: TeamPayrollBreakdown
     let receiptCount: Int
     let adjustments: [TeamAdjustment]
 
     var id: String { employee.id }
+}
+
+/// Hours worked, the days capped at the studio's own eight — and the days that
+/// could not be counted, because an arrival with no clock-out is an unknown
+/// rather than a short day.
+struct TeamPayrollWorked: Decodable {
+    let hours: Double
+    /// Hours on site. Above `hours` when somebody stayed past the eighth; there
+    /// is no overtime, so the difference is not paid.
+    let onSite: Double
+    let days: Int
+    let daysWithoutClockOut: Int
 }
 
 struct TeamPayrollEmployeeInfo: Decodable, Identifiable {
