@@ -3,7 +3,7 @@ import { ChevronLeft, Download } from "lucide-react";
 import { getAttendanceSheet } from "@/lib/payroll-queries";
 import { getTimezone } from "@/lib/settings";
 import { todayKey } from "@/lib/time";
-import { periodLabel, periodOf, previousPeriod } from "@/lib/payroll";
+import { periodLabel, periodOf, periodRangeLabel, previousPeriod } from "@/lib/payroll";
 import type { SheetDay, SheetPersonMonth } from "@/lib/attendance-sheet";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Wallet } from "lucide-react";
@@ -44,8 +44,8 @@ export default async function PayrollSheetPage({
           </Link>
           <h1 className="mt-1 text-2xl font-semibold text-ink">Month sheet</h1>
           <p className="mt-1 text-sm text-ink/50">
-            {periodLabel(period)} · every day, the times, and how each deduction was worked out. Print it or open
-            the spreadsheet.
+            {periodLabel(period)} <span className="text-ink/40">({periodRangeLabel(period)})</span> · every day,
+            the times, and how each deduction was worked out. Print it or open the spreadsheet.
           </p>
         </div>
 
@@ -64,7 +64,7 @@ export default async function PayrollSheetPage({
 
       {/* On paper the heading above is gone, so the month says itself. */}
       <h1 className="hidden text-lg font-semibold text-ink print:block">
-        Attendance · {periodLabel(period)}
+        Attendance · {periodLabel(period)} ({periodRangeLabel(period)})
       </h1>
 
       {worked.length === 0 ? (

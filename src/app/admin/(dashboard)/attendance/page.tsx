@@ -5,6 +5,7 @@ import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
 import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
 import { buildMonth, monthBounds, monthKeyFor, type MonthEntry } from "@/lib/attendance-month";
+import { periodOf } from "@/lib/pay-period";
 import { setDeviceUserId } from "@/lib/actions/operations-actions";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { dateToDayKey, dayKeyToDate, formatDayIn, formatTimeIn, todayKey } from "@/lib/time";
@@ -65,7 +66,9 @@ export default async function AttendanceDevicePage({
   // turned into the UTC midnights the `@db.Date` column actually stores, so the
   // query never depends on the server's own offset — the same conversion the
   // sync writes with.
-  const thisMonth = todayKey(timezone).slice(0, 7);
+  // The pay period we are in, not the calendar month: on the 3rd the studio is
+  // still working the period that began on the 5th before (lib/pay-period.ts).
+  const thisMonth = periodOf(todayKey(timezone));
   const monthKey = monthKeyFor(askedMonth, todayKey(timezone));
   const bounds = monthBounds(monthKey);
   const workHours = await getWorkHours();

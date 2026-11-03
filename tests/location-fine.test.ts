@@ -301,16 +301,26 @@ describe("the month", () => {
   });
 
   it("groups days by the payroll month they belong to — two months, two rows", () => {
-    const months = finesByMonth([charged("2026-10-01"), charged("2026-09-30"), charged("2026-09-28", true), charged("2026-10-04")]);
-    assert.deepEqual([...months.entries()], [
-      ["2026-09", ["2026-09-30"]],
-      ["2026-10", ["2026-10-01", "2026-10-04"]],
+    // A payroll month runs the 5th to the 4th (lib/pay-period.ts), so the
+    // dates straddle a 5th rather than a 1st: 1 and 4 October are September's
+    // pay, and only the 5th starts October's. Under the calendar boundary this
+    // read as two rows too — with the days in the wrong ones.
+    const months = finesByMonth([
+      charged("2026-10-01"),
+      charged("2026-09-30"),
+      charged("2026-09-28", true),
+      charged("2026-10-04"),
+      charged("2026-10-05"),
     ]);
-    assert.deepEqual(monthAdjustment(months.get("2026-09")!), {
+    assert.deepEqual([...months.entries()], [
+      ["2026-09", ["2026-09-30", "2026-10-01", "2026-10-04"]],
+      ["2026-10", ["2026-10-05"]],
+    ]);
+    assert.deepEqual(monthAdjustment(months.get("2026-10")!), {
       amount: 1,
-      reason: "No location reached NEON from the phone during working hours on 30 Sep — 1 JOD a day.",
+      reason: "No location reached NEON from the phone during working hours on 5 Oct — 1 JOD a day.",
     });
-    assert.equal(monthAdjustment(months.get("2026-10")!)?.amount, 2);
+    assert.equal(monthAdjustment(months.get("2026-09")!)?.amount, 3);
   });
 
   it("has no row at all once nothing in it is charged", () => {

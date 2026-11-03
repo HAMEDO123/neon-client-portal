@@ -61,27 +61,51 @@ describe("which month is being looked at", () => {
   });
 });
 
-describe("the days of a month", () => {
-  it("runs from the first to the last", () => {
+describe("the days of a month, which is the 5th to the 4th", () => {
+  // The studio settles 5th-to-4th and always did (lib/pay-period.ts). The
+  // platform read a calendar month until 2026-11-03, and the two only looked
+  // alike until the pay sheet was opened on the 3rd of a month and showed four
+  // days of work under a month that had barely started.
+  it("runs from the 5th to the 4th of the next month", () => {
     const days = monthDayKeys("2026-09");
-    assert.equal(days.length, 30);
-    assert.equal(days[0], "2026-09-01");
-    assert.equal(days[29], "2026-09-30");
+    assert.equal(days.length, 30, "5 Sep to 4 Oct");
+    assert.equal(days[0], "2026-09-05");
+    assert.equal(days.at(-1), "2026-10-04");
   });
 
   it("gets February right, leap year and not", () => {
+    // The length is the gap between two 5ths, so February's own length is what
+    // makes these differ — 5 Feb to 4 Mar is 28 days in 2026 and 29 in 2028.
     assert.equal(monthDayKeys("2026-02").length, 28);
     assert.equal(monthDayKeys("2028-02").length, 29);
-    assert.equal(monthDayKeys("2028-02").at(-1), "2028-02-29");
+    assert.equal(monthDayKeys("2028-02").at(-1), "2028-03-04");
+  });
+
+  it("crosses a year boundary without a special case", () => {
+    const december = monthDayKeys("2026-12");
+    assert.equal(december[0], "2026-12-05");
+    assert.equal(december.at(-1), "2027-01-04");
   });
 
   it("pads single digits, so every day is a key", () => {
-    assert.equal(monthDayKeys("2026-01")[0], "2026-01-01");
-    assert.equal(monthDayKeys("2026-01")[8], "2026-01-09");
+    assert.equal(monthDayKeys("2026-01")[0], "2026-01-05");
+    assert.equal(monthDayKeys("2026-01")[4], "2026-01-09");
+  });
+
+  it("gives every day exactly one month, with no day in two", () => {
+    // The property that matters for money: a day counted twice is a day paid
+    // twice, and a day in neither is a day nobody is paid for.
+    const january = new Set(monthDayKeys("2025-12"));
+    const february = monthDayKeys("2026-01");
+
+    assert.ok(january.has("2026-01-04"), "4 January belongs to December");
+    assert.ok(!january.has("2026-01-05"), "5 January does not");
+    assert.equal(february[0], "2026-01-05");
+    assert.equal(february.filter((day) => january.has(day)).length, 0);
   });
 
   it("names the first and last day for a query", () => {
-    assert.deepEqual(monthBounds("2026-02"), { from: "2026-02-01", to: "2026-02-28" });
+    assert.deepEqual(monthBounds("2026-02"), { from: "2026-02-05", to: "2026-03-04" });
   });
 });
 
@@ -120,12 +144,15 @@ describe("the month grid", () => {
     });
 
     const salem = month.rows[0];
+    // The month runs 5 Sep to 4 Oct (lib/pay-period.ts), so the 5th is column
+    // 0 and the 17th is column 12.
     assert.equal(month.days.length, 30);
     assert.equal(salem.cells.length, 30, "a cell for every day, so nothing can shift a column");
-    assert.equal(salem.cells[16]?.dayKey, "2026-09-17");
-    assert.equal(salem.cells[16]?.delayHours, 1.5);
-    assert.equal(salem.cells[18]?.dayKey, "2026-09-19");
-    assert.equal(salem.cells[17], null, "the 18th has no record");
+    assert.equal(month.days[0].dayKey, "2026-09-05");
+    assert.equal(salem.cells[12]?.dayKey, "2026-09-17");
+    assert.equal(salem.cells[12]?.delayHours, 1.5);
+    assert.equal(salem.cells[14]?.dayKey, "2026-09-19");
+    assert.equal(salem.cells[13], null, "the 18th has no record");
   });
 
   it("marks the days the studio works from the settings, not from a weekend", () => {
@@ -200,11 +227,32 @@ describe("the month grid", () => {
       hours: STUDIO,
       todayKey: TODAY,
       people,
-      entries: [entry("e1", "2026-08-31", 4), entry("e1", "2026-10-01", 4)],
+      // Both are outside 5 Sep – 4 Oct: the 31st of August belongs to August's
+      // period, and 5 October to October's. The 1st of October does *not* —
+      // it is inside September's period now, which is the whole point of the
+      // boundary and would be missed by a test that only used the old dates.
+      entries: [entry("e1", "2026-08-31", 4), entry("e1", "2026-10-05", 4)],
     });
 
     assert.equal(month.rows[0].daysRecorded, 0);
     assert.equal(month.rows[0].hoursLate, 0, "August's lateness is not September's");
+  });
+
+  it("counts the first days of the next calendar month, because they are this period", () => {
+    // The other half of the boundary, and the half that would have gone
+    // unnoticed: 1 October is September's pay. A test that only checked what
+    // falls outside would pass with the period a week too short.
+    const month = buildMonth({
+      monthKey: "2026-09",
+      hours: STUDIO,
+      todayKey: "2026-10-04",
+      people,
+      entries: [entry("e1", "2026-10-01", 2), entry("e1", "2026-10-04", 1)],
+    });
+
+    assert.equal(month.rows[0].daysRecorded, 2);
+    assert.equal(month.rows[0].hoursLate, 3);
+    assert.equal(month.days.at(-1)?.dayKey, "2026-10-04");
   });
 
   it("keeps what put the figure there, so a typed day can be told apart", () => {
@@ -216,8 +264,8 @@ describe("the month grid", () => {
       entries: [entry("e1", "2026-09-17", 0, MANUAL), entry("e2", "2026-09-17", 6.9, DEVICE)],
     });
 
-    assert.equal(month.rows[0].cells[16]?.source, MANUAL);
-    assert.equal(month.rows[1].cells[16]?.source, DEVICE);
+    assert.equal(month.rows[0].cells[12]?.source, MANUAL);
+    assert.equal(month.rows[1].cells[12]?.source, DEVICE);
   });
 
   it("keeps people in the order it was given them", () => {

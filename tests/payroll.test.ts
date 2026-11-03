@@ -38,9 +38,15 @@ describe("the month a receipt counts in", () => {
   // Both screens list this month's receipts and say each is "added to this
   // month's pay". Filed under the date printed on it instead, a receipt from
   // the 30th sent on the 6th vanished from the list it had just been sent from.
-  it("is the month it was sent", () => {
+  it("is the pay period it was sent in, which runs the 5th to the 4th", () => {
     assert.equal(receiptPeriod("2026-10-06"), "2026-10");
-    assert.equal(receiptPeriod("2026-01-01"), "2026-01");
+    // Sent on the 1st, so it belongs to the period that began on 5 December —
+    // the one the studio is still settling. Filed under January it would wait
+    // a month to be paid, which is the mistake the 5th-to-4th boundary exists
+    // to stop (lib/pay-period.ts).
+    assert.equal(receiptPeriod("2026-01-01"), "2025-12");
+    assert.equal(receiptPeriod("2026-01-04"), "2025-12");
+    assert.equal(receiptPeriod("2026-01-05"), "2026-01");
   });
 
   it("is not moved by the date the reading finds on the receipt", () => {

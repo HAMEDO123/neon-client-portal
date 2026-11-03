@@ -1,4 +1,5 @@
 import { periodOf, periodRange, previousPeriod } from "@/lib/payroll";
+import { periodFirstDayKey } from "@/lib/pay-period";
 import { countStates, percentDone } from "@/lib/progress";
 import { dateToDayKey, shiftDayKey } from "@/lib/time";
 import { weekStartKey } from "@/lib/week";
@@ -39,11 +40,14 @@ export function periodWindow(period: PeoplePeriod, anchorKey: string): PeriodWin
     return { from, to: shiftDayKey(from, 6), previous: shiftDayKey(from, -7), next: shiftDayKey(from, 7) };
   }
 
+  // A payroll period runs the 5th to the 4th (lib/pay-period.ts), so the first
+  // day of the one before is its own 5th — never a hardcoded `-01`, which is
+  // how a "previous month" link lands four days inside the wrong period.
   const month = periodOf(anchorKey);
   const { start, end } = periodRange(month);
   const from = dateToDayKey(start)!;
   const next = dateToDayKey(end)!;
-  return { from, to: shiftDayKey(next, -1), previous: `${previousPeriod(month)}-01`, next };
+  return { from, to: shiftDayKey(next, -1), previous: periodFirstDayKey(previousPeriod(month)), next };
 }
 
 /**

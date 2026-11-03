@@ -5,6 +5,7 @@ import { currentDeviceAddress } from "@/lib/attendance-locate";
 import { mappedByDeviceUser } from "@/lib/attendance-store";
 import { MAX_DRIFT_SECONDS } from "@/lib/attendance-sync";
 import { buildMonth, monthBounds, monthKeyFor, type Month, type MonthEntry } from "@/lib/attendance-month";
+import { periodOf } from "@/lib/pay-period";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { dateToDayKey, dayKeyToDate, todayKey } from "@/lib/time";
 import { facesFor, type Faces } from "@/lib/faces";
@@ -85,7 +86,9 @@ export type AttendanceMonthResponse = Month & {
 
 export async function attendanceMonthFor(askedMonth: string | null): Promise<AttendanceMonthResponse> {
   const timezone = await getTimezone();
-  const thisMonth = todayKey(timezone).slice(0, 7);
+  // The pay period we are in, not the calendar month: on the 3rd the studio is
+  // still working the period that began on the 5th before (lib/pay-period.ts).
+  const thisMonth = periodOf(todayKey(timezone));
   const monthKey = monthKeyFor(askedMonth, todayKey(timezone));
   const bounds = monthBounds(monthKey);
   const workHours = await getWorkHours();

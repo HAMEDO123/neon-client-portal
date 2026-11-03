@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ARRIVAL, DEVICE, MANUAL } from "@/lib/attendance";
 import { monthLabel, shiftMonth, type Month, type MonthEntry } from "@/lib/attendance-month";
+import { periodRangeLabel } from "@/lib/pay-period";
 import { AttendanceCell } from "@/components/admin/attendance-cell";
 
 // The month, as a sheet: people down the side, every day across the top.
@@ -29,6 +30,9 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
         <div>
           <h2 className="text-sm font-medium uppercase tracking-wider text-bark/40">The month</h2>
           <p className="mt-1 font-display text-lg font-semibold text-bark">{monthLabel(month.monthKey)}</p>
+          {/* The dates, always. "October" on its own is what let a 5th-to-4th
+              period read as a calendar one (lib/pay-period.ts). */}
+          <p className="text-xs text-bark/45">{periodRangeLabel(month.monthKey)}</p>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -189,9 +193,10 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
           <p className="mt-1.5 text-[11px] text-bark/35">
             An empty day means nothing was recorded — not that somebody was away. A day the device did not read,
             or one nobody has synced, looks exactly the same here. {recorded} {recorded === 1 ? "day is" : "days are"}{" "}
-            recorded this month. A hollow dot is a day somebody arrived and no clock-out was read: nothing is
-            deducted for it, because the device cannot tell a forgotten scan from an early finish. Click any day to
-            change its hours or remove it.
+            recorded this month. A hollow dot is a day somebody arrived and no clock-out was read: one hour is
+            charged for the forgotten scan, and nothing is measured against the end of the day — the device cannot
+            tell a forgotten scan from an early finish, so the hour is a flat price rather than a guess. Click any
+            day to change its hours or remove it.
           </p>
         </>
       )}

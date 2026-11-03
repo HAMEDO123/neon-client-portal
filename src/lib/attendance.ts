@@ -79,6 +79,25 @@ export type DayAttendance = {
  */
 export const DEFAULT_GRACE_MINUTES = 0;
 
+/**
+ * What a forgotten scan costs, in hours.
+ *
+ * The studio's rule, given on 2026-11-03: "اللي بنسى يبصم هو داخل وبنسى ويبصم
+ * وهو طالع خصم ساعه على الداخل وساعه على الطالع" — an hour for a missing
+ * clock-in, an hour for a missing clock-out.
+ *
+ * Until now a day nobody clocked out of cost **nothing**: the device cannot
+ * tell a forgotten scan from an early finish, so the platform refused to
+ * invent a departure, and that refusal was right. The charge is not an invented
+ * departure. It is the flat price of a day the studio cannot account for,
+ * which is a different thing and is the studio's to set. Nineteen days were
+ * sitting at zero hours on that reasoning when the rule was given.
+ *
+ * Capped at one hour each way by its nature: it is a fixed price, not a
+ * measurement, so no arithmetic can make it grow.
+ */
+export const MISSING_PUNCH_HOURS = 1;
+
 /** The most a single day can count for, matching what the manager's form allows. */
 const MAX_DELAY_HOURS = 24;
 
@@ -321,8 +340,10 @@ export function workedHours(days: WorkedDay[], hours: WorkHours): WorkedTotal {
  * past the end earns nothing — a negative here would pay overtime through
  * payroll's multiplication.
  *
- * No clock-out costs nothing. The device cannot tell a forgotten scan from an
- * early finish, and it must not invent one.
+ * No clock-out measures nothing. The device cannot tell a forgotten scan from
+ * an early finish, so this invents neither — it returns 0 and the caller
+ * decides. `dayCharge` charges such a day a flat MISSING_PUNCH_HOURS instead,
+ * which is a price rather than a measurement.
  */
 export function hoursShort(endMinutes: number, departureMinutes: number | null | undefined): number {
   if (departureMinutes == null || !Number.isFinite(departureMinutes)) return 0;
@@ -351,6 +372,11 @@ export function minutesInDay(time: string, startedAt: string): number | null {
 /**
  * What a day costs, in hours — the one number payroll multiplies by the rate.
  *
+ * A day with one scan missing costs a flat `MISSING_PUNCH_HOURS`: the studio's
+ * rule from 2026-11-03. It is not a measurement of anything, so it does not
+ * stack with the shortfall — a day with no clock-out is charged the hour and
+ * nothing else.
+ *
  * Used by every path that writes a day, so the device, a corrected row and a
  * manager's own edit cannot drift into charging differently for the same
  * afternoon.
@@ -376,18 +402,33 @@ export function dayCharge(input: {
 
   if (!arrivedAt) {
     const typed = input.typed;
-    const shortHours = typed
-      ? Math.max(0, typed.delayHours) + Math.max(0, typed.earlyHours) + Math.max(0, typed.awayHours)
-      : 0;
-    // Nothing to tell anybody: without an arrival there is no end to work out.
-    return { shortHours, endsAtMinutes: null };
+    if (typed) {
+      // A day the manager wrote by hand: their figure is the whole record of
+      // it, and a scan they never mentioned is not missing.
+      const shortHours =
+        Math.max(0, typed.delayHours) + Math.max(0, typed.earlyHours) + Math.max(0, typed.awayHours);
+      return { shortHours, endsAtMinutes: null };
+    }
+
+    // A departure with no arrival: somebody who scanned on the way out and not
+    // on the way in. There is no end to work out without an arrival, so the
+    // missing scan is the whole of the charge.
+    return { shortHours: departedAt ? MISSING_PUNCH_HOURS : 0, endsAtMinutes: null };
   }
 
   const arrival = wallClockIn(timeZone, arrivedAt);
   const endsAtMinutes = endOfDayMinutes(hours, dayKey, arrival, input.awayMinutes ?? 0);
-  // No clock-out costs nothing: the device cannot tell a forgotten scan from an
-  // early finish, and this must not invent one.
-  const left = departedAt ? minutesInDay(wallClockIn(timeZone, departedAt), arrival) : null;
+
+  if (!departedAt) {
+    // No clock-out. This still does not invent a departure — `hoursShort` is
+    // not asked, and nothing is measured against an end nobody reached. The
+    // studio charges a flat hour for the day it cannot account for
+    // (MISSING_PUNCH_HOURS), and that is the whole of it: charging the
+    // shortfall as well would price the same unknown twice, once as a guess.
+    return { shortHours: MISSING_PUNCH_HOURS, endsAtMinutes };
+  }
+
+  const left = minutesInDay(wallClockIn(timeZone, departedAt), arrival);
   return { shortHours: hoursShort(endsAtMinutes, left), endsAtMinutes };
 }
 
@@ -492,8 +533,9 @@ export function attendanceFromPunches(
       departedLocal: departedAt ? formatTimeIn(timeZone, departedAt) ?? wallClockIn(timeZone, departedAt) : null,
       punches: sorted.length,
       delayHours: lateHours(hours, wallClockIn(timeZone, arrivedAt), graceMinutes),
-      // Nothing is deducted for a day nobody clocked out of: the device cannot
-      // tell a forgotten scan from an early finish, and it must not invent one.
+      // Zero where nobody clocked out, because this is "how much of the day
+      // was left unworked" and there is no departure to measure. The day is
+      // not free: `dayCharge` prices a missing scan at MISSING_PUNCH_HOURS.
       earlyHours: departedAt ? earlyHours(hoursOn(hours, dayKey), wallClockIn(timeZone, departedAt)) : 0,
     });
   }

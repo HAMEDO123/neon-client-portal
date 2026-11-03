@@ -110,15 +110,23 @@ describe("the period being counted", () => {
     });
   });
 
-  it("is the payroll month", () => {
+  it("is the payroll period, which runs the 5th to the 4th", () => {
     assert.deepEqual(periodWindow("month", "2026-09-29"), {
-      from: "2026-09-01",
-      to: "2026-09-30",
-      previous: "2026-08-01",
-      next: "2026-10-01",
+      from: "2026-09-05",
+      to: "2026-10-04",
+      previous: "2026-08-05",
+      next: "2026-10-05",
     });
-    assert.equal(periodWindow("month", "2026-02-10").to, "2026-02-28");
-    assert.equal(periodWindow("month", "2026-01-05").previous, "2025-12-01");
+    assert.equal(periodWindow("month", "2026-02-10").to, "2026-03-04");
+    // The 4th is still last period, so stepping back from it must not land in
+    // the period it is already in.
+    assert.deepEqual(periodWindow("month", "2026-01-04"), {
+      from: "2025-12-05",
+      to: "2026-01-04",
+      previous: "2025-11-05",
+      next: "2026-01-05",
+    });
+    assert.equal(periodWindow("month", "2026-01-05").previous, "2025-12-05");
   });
 });
 

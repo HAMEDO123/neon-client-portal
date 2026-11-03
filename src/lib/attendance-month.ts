@@ -1,4 +1,5 @@
 import { isWorkingDay, weekdayOf, type WorkHours } from "@/lib/work-hours";
+import { periodDayKeys, periodOf } from "@/lib/pay-period";
 
 // A month of attendance as a grid: people down the side, every day across the top.
 //
@@ -88,19 +89,23 @@ export type Month = { monthKey: string; days: MonthDay[]; rows: MonthRow[] };
  * typo should show the obvious thing, not an empty grid from the year 0.
  */
 export function monthKeyFor(value: string | undefined | null, todayKey: string): string {
-  return typeof value === "string" && MONTH.test(value) ? value : todayKey.slice(0, 7);
+  // periodOf, not slice(0, 7): on the 3rd of a month the period being worked
+  // is the one that began on the 5th of the month before (lib/pay-period.ts).
+  return typeof value === "string" && MONTH.test(value) ? value : periodOf(todayKey);
 }
 
-/** Every day of a month, as day keys. */
+/**
+ * Every day of a month, as day keys — and a "month" here is the studio's pay
+ * period, **the 5th to the 4th** (lib/pay-period.ts).
+ *
+ * This is the definition the attendance grid, the month sheet and the pay
+ * weeks all read, so moving the boundary moved all of them together. The
+ *  in the name is still true of the key — a period is named after the
+ * month it starts in — but not of the dates:  is 5 October to 4
+ * November, and the grid shows exactly those days.
+ */
 export function monthDayKeys(monthKey: string): string[] {
-  const [year, month] = monthKey.split("-").map(Number);
-  // Day 0 of the next month is the last day of this one, which gets February
-  // right — and leap years with it — without a table of lengths or a rule.
-  const length = new Date(Date.UTC(year, month, 0)).getUTCDate();
-
-  const keys: string[] = [];
-  for (let day = 1; day <= length; day++) keys.push(`${monthKey}-${String(day).padStart(2, "0")}`);
-  return keys;
+  return periodDayKeys(monthKey);
 }
 
 /** The month before or after this one, over a year boundary as readily as inside it. */

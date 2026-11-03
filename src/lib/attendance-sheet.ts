@@ -1,6 +1,13 @@
 import { formatTimeIn, wallClockIn } from "@/lib/time";
 import { hoursOn, isWorkingDay, weekdayOf, type WorkHours } from "@/lib/work-hours";
-import { clockLabel, endOfDayMinutes, hoursShort, lateHours, minutesInDay, workedHours } from "@/lib/attendance";
+import {
+  chargedHours,
+  clockLabel,
+  endOfDayMinutes,
+  lateHours,
+  MISSING_PUNCH_HOURS,
+  workedHours,
+} from "@/lib/attendance";
 import { awayMinutesOf, storedBreaks } from "@/lib/attendance-breaks";
 import { monthDayKeys } from "@/lib/attendance-month";
 import { round } from "@/lib/payroll";
@@ -245,9 +252,23 @@ function describeDay(input: {
   // They agree on every ordinary day; where they do not — a row written before
   // a rule changed, or hours edited since — the sentence says both rather than
   // explaining a deduction that is not the one on the payslip.
-  const departure = record.departedAt ? minutesInDay(wallClockIn(timeZone, record.departedAt), arrival) : null;
   // Nothing to compare for an hourly day: there is no end it fell short of.
-  const recomputed = person.openHours ? record.shortHours : hoursShort(owedMinutes, departure);
+  //
+  // For everybody else this is `dayCharge` itself rather than `hoursShort`,
+  // and that matters now that a forgotten scan has a flat price: `hoursShort`
+  // measures the shortfall and knows nothing about the hour
+  // (MISSING_PUNCH_HOURS), so it would read 0 against a row charged 1 and put
+  // "Charged as 1 h off, not 0 h" on every day somebody forgot to scan.
+  const recomputed = person.openHours
+    ? record.shortHours
+    : chargedHours({
+        hours,
+        timeZone,
+        dayKey,
+        arrivedAt: record.arrivedAt,
+        departedAt: record.departedAt,
+        awayMinutes: awayMinutesOf(steps),
+      });
 
   return {
     ...common,
@@ -301,7 +322,9 @@ function explain(input: {
   // Paid for the hours, so there is no end to owe: the day is what was worked,
   // up to the studio's eight and no further.
   if (person.openHours) {
-    if (worked == null) return `In ${arrived}. No clock-out recorded, so the day counts nothing.${stepped}${charged}`;
+    if (worked == null) {
+      return `In ${arrived}. No clock-out recorded, so the day counts nothing and a forgotten scan is ${hours2(MISSING_PUNCH_HOURS)} h off.${stepped}${charged}`;
+    }
     const capped = onSite != null && onSite > worked ? ` (here ${hours2(onSite)} h — there is no overtime)` : "";
     return `Paid by the hour: in ${arrived}, out ${left}, ${worked} h${capped}.${stepped}${charged}`;
   }
@@ -310,7 +333,9 @@ function explain(input: {
     late > 0 ? `${hours2(late)} h late, so the day owed until ${owedUntil}` : `the day owed until ${owedUntil}`;
 
   if (worked == null) {
-    return `In ${arrived}, ${owed}. No clock-out recorded, so nothing is charged.${stepped}${charged}`;
+    // The studio's flat price for a day it cannot account for, not a guess at
+    // when they left (lib/attendance.ts, MISSING_PUNCH_HOURS).
+    return `In ${arrived}, ${owed}. No clock-out recorded — ${hours2(MISSING_PUNCH_HOURS)} h off for the forgotten scan, and nothing measured against the end.${stepped}${charged}`;
   }
 
   const outcome =

@@ -13,7 +13,7 @@ import {
 import { getTimezone } from "@/lib/settings";
 import type { WorkedTotal } from "@/lib/attendance";
 import { todayKey } from "@/lib/time";
-import { isManagersFigure, periodLabel, periodOf, previousPeriod, RECEIPT_CAP } from "@/lib/payroll";
+import { isManagersFigure, periodLabel, periodOf, periodRangeLabel, previousPeriod, RECEIPT_CAP } from "@/lib/payroll";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { AttendanceDeviceCard } from "@/components/admin/attendance-device";
@@ -86,8 +86,8 @@ export default async function AdminPayrollPage({
         <div>
           <h1 className="text-2xl font-semibold text-ink">Payroll</h1>
           <p className="mt-1 text-sm text-ink/50">
-            {periodLabel(period)} · salary ÷ working days ÷ 8 gives the hourly rate, times the hours late is the
-            cutoff, plus receipts.
+            {periodLabel(period)} <span className="text-ink/40">({periodRangeLabel(period)})</span> · salary ÷
+            working days ÷ 8 gives the hourly rate, times the hours late is the cutoff, plus receipts.
           </p>
         </div>
 
@@ -609,7 +609,7 @@ function WorkedHours({ worked }: { worked: WorkedTotal }) {
         <span className="ml-1 text-xs text-ink/35">+{(worked.onSite - worked.hours).toFixed(2)} over</span>
       )}
       {worked.daysWithoutClockOut > 0 && (
-        <span className="ml-1 text-xs text-amber-700" title="Arrived, no clock-out — those days are not in this total.">
+        <span className="ml-1 text-xs text-amber-700" title="Arrived, no clock-out — the hours worked are unknown, so those days are not in this total. Each is charged one hour for the forgotten scan.">
           {worked.daysWithoutClockOut}d open
         </span>
       )}

@@ -13,11 +13,14 @@ import { DEFAULT_WORK_HOURS, type WorkHours } from "../src/lib/work-hours";
 const TZ = "Asia/Amman";
 const hours: WorkHours = DEFAULT_WORK_HOURS;
 
-// October 2026: the 1st is a Thursday, the 2nd a Friday (closed), the 3rd a
-// Saturday (worked, and it ends an hour early).
-const MONTH = "2026-10";
-const THURSDAY = "2026-10-01";
-const FRIDAY = "2026-10-02";
+// A month here is the studio's pay period, **the 5th to the 4th**
+// (lib/pay-period.ts), so these are the first three days of February's — and
+// February was chosen because its 5th is a Thursday, which keeps the weekday
+// each assertion below depends on. The 5th is a Thursday, the 6th a Friday
+// (closed), the 7th a Saturday (worked, and it ends an hour early).
+const MONTH = "2026-02";
+const THURSDAY = "2026-02-05";
+const FRIDAY = "2026-02-06";
 
 const salaried: SheetPerson = {
   id: "e1",
@@ -47,16 +50,16 @@ const record = (over: Partial<SheetRecord> & { dayKey: string }): SheetRecord =>
 
 const at = (dayKey: string, utcTime: string) => new Date(`${dayKey}T${utcTime}:00.000Z`);
 
-const build = (people: SheetPerson[], records: SheetRecord[], todayKey = "2026-10-03") =>
+const build = (people: SheetPerson[], records: SheetRecord[], todayKey = "2026-02-07") =>
   buildAttendanceSheet({ monthKey: MONTH, hours, timeZone: TZ, todayKey, people, records });
 
 describe("a month sheet", () => {
   it("writes a line for every day up to today and none for the days after", () => {
     const sheet = build([salaried], []);
-    assert.equal(sheet.people[0].days.length, 3, "the 1st, 2nd and 3rd — not the whole month");
+    assert.equal(sheet.people[0].days.length, 3, "the 5th, 6th and 7th — not the whole period");
     assert.deepEqual(
       sheet.people[0].days.map((day) => day.dayKey),
-      [THURSDAY, FRIDAY, "2026-10-03"]
+      [THURSDAY, FRIDAY, "2026-02-07"]
     );
   });
 
@@ -123,16 +126,24 @@ describe("a month sheet", () => {
     assert.match(day.reason, /left 7:54 PM, 3 h short/);
   });
 
-  it("charges nothing for a day nobody clocked out of, and says so", () => {
+  it("charges the forgotten-scan hour for a day nobody clocked out of, and says so", () => {
+    // The studio's rule from 2026-11-03: a missing scan is an hour, each way.
+    // The hours worked stay unknown — the day is not treated as short, and
+    // nothing is measured against an end nobody reached.
     const sheet = build(
       [salaried],
-      [record({ dayKey: THURSDAY, arrivedAt: at(THURSDAY, "08:02"), delayHours: 0, shortHours: 0 })]
+      [record({ dayKey: THURSDAY, arrivedAt: at(THURSDAY, "08:02"), delayHours: 0, shortHours: 1 })]
     );
 
     const day = sheet.people[0].days[0];
     assert.equal(day.worked, null, "an unknown, not a short day");
-    assert.equal(day.hoursOff, 0);
-    assert.match(day.reason, /No clock-out recorded, so nothing is charged/);
+    assert.equal(day.hoursOff, 1);
+    assert.match(day.reason, /1 h off for the forgotten scan/);
+    assert.doesNotMatch(
+      day.reason,
+      /Charged as/,
+      "the sheet recomputes with the same rule as the charge, so the two must agree"
+    );
     assert.equal(sheet.people[0].totals.daysWithoutClockOut, 1);
     assert.equal(sheet.people[0].totals.daysComplete, 0);
   });
@@ -226,9 +237,9 @@ describe("a month sheet", () => {
       [
         record({ dayKey: THURSDAY, arrivedAt: at(THURSDAY, "08:00"), departedAt: at(THURSDAY, "16:00") }),
         record({
-          dayKey: "2026-10-03",
-          arrivedAt: at("2026-10-03", "10:00"),
-          departedAt: at("2026-10-03", "15:00"),
+          dayKey: "2026-02-07",
+          arrivedAt: at("2026-02-07", "10:00"),
+          departedAt: at("2026-02-07", "15:00"),
           delayHours: 2,
           shortHours: 2,
         }),
@@ -268,7 +279,7 @@ describe("the sheet as a spreadsheet", () => {
   it("carries the day's working and its totals", () => {
     const csv = attendanceSheetCsv(sheet());
     assert.match(csv, /Employee,Role,Date,Day,Status,In,Step out,Step back,Out,Worked \(h\)/);
-    assert.match(csv, /Sally,Designer,2026-10-01,Thu,Worked,11:52 AM/);
+    assert.match(csv, /Sally,Designer,2026-02-05,Thu,Worked,11:52 AM/);
     assert.match(csv, /Days without clock-out/, "the totals table follows the days");
   });
 

@@ -1,4 +1,5 @@
 import type { PayBasis } from "@/generated/prisma/enums";
+import { nextPeriod, periodFirstDayKey, periodOf, priorPeriod } from "@/lib/pay-period";
 
 // Payroll arithmetic, kept pure so it can be tested exactly and so the rules
 // live in one readable place rather than being spread across a page.
@@ -209,10 +210,15 @@ export function round(value: number) {
   return Math.round(value * 1000) / 1000;
 }
 
-/** The payroll month a date belongs to, as YYYY-MM. */
-export function periodOf(dayKey: string) {
-  return dayKey.slice(0, 7);
-}
+/**
+ * The payroll period a date belongs to, as YYYY-MM.
+ *
+ * Re-exported from lib/pay-period.ts rather than defined here: the studio
+ * settles 5th-to-4th, and the boundary has to be the same answer for the pay
+ * sheet, the attendance grid and the receipts. See that file for why it moved.
+ */
+export { periodRangeLabel, PERIOD_START_DAY } from "@/lib/pay-period";
+export { periodOf };
 
 /**
  * The pay month a receipt counts in: **the month it was sent**, whatever date
@@ -237,13 +243,17 @@ export function receiptPeriod(sentDayKey: string) {
   return periodOf(sentDayKey);
 }
 
-/** The previous month relative to a YYYY-MM period. */
+/** The period before this one. Still the previous month's name. */
 export function previousPeriod(period: string) {
-  const [year, month] = period.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 2, 1));
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  return priorPeriod(period);
 }
 
+/**
+ * "October 2026" — the month a period is named after.
+ *
+ * The period runs 5 October to 4 November, which this does not say; where
+ * there is room for it,  says it beside this.
+ */
 export function periodLabel(period: string) {
   const [year, month] = period.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(
@@ -251,11 +261,13 @@ export function periodLabel(period: string) {
   );
 }
 
-/** The first and last instant of a YYYY-MM period, as calendar dates. */
+/**
+ * The first and last instant of a period: the 5th of its month, to the 5th of
+ * the next (exclusive), so a half-open comparison covers it exactly.
+ */
 export function periodRange(period: string) {
-  const [year, month] = period.split("-").map(Number);
   return {
-    start: new Date(Date.UTC(year, month - 1, 1)),
-    end: new Date(Date.UTC(year, month, 1)),
+    start: new Date(`${periodFirstDayKey(period)}T00:00:00.000Z`),
+    end: new Date(`${periodFirstDayKey(nextPeriod(period))}T00:00:00.000Z`),
   };
 }

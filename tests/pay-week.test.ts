@@ -35,16 +35,28 @@ describe("the pay week", () => {
   });
 
   it("gives a month its weeks, by the Tuesday each begins on", () => {
+    // October's period is 5 Oct – 4 Nov (lib/pay-period.ts), so it holds five
+    // Tuesdays: the 6th, 13th, 20th, 27th and 3 November.
     const weeks = payWeeksInMonth(MONTH);
     assert.deepEqual(
       weeks.map((week) => week.startKey),
-      ["2026-10-06", "2026-10-13", "2026-10-20", "2026-10-27"]
+      ["2026-10-06", "2026-10-13", "2026-10-20", "2026-10-27", "2026-11-03"]
     );
-    // The last one runs past the end of the month, uncut: a week is what
+    // The last one runs past the end of the period, uncut: a week is what
     // somebody is paid for, and half a week's deductions against a whole
     // week's salary is the same mistake in miniature.
-    assert.equal(weeks[3].endKey, "2026-11-02");
-    assert.deepEqual(payWeekSpan(weeks), { fromKey: "2026-10-06", toKey: "2026-11-02" });
+    assert.equal(weeks[4].endKey, "2026-11-09");
+    assert.deepEqual(payWeekSpan(weeks), { fromKey: "2026-10-06", toKey: "2026-11-09" });
+  });
+
+  it("never gives one week to two periods", () => {
+    // The invariant the boundary could have broken: a week belongs to the
+    // period its Tuesday falls in, and a week paid twice is a week paid twice.
+    const october = payWeeksInMonth("2026-10").map((week) => week.startKey);
+    const november = payWeeksInMonth("2026-11").map((week) => week.startKey);
+
+    assert.deepEqual(october.filter((start) => november.includes(start)), []);
+    assert.deepEqual(november, ["2026-11-10", "2026-11-17", "2026-11-24", "2026-12-01"]);
   });
 
   it("knows which days are in a week", () => {
@@ -57,10 +69,10 @@ describe("the pay week", () => {
 });
 
 describe("what a period is paid in", () => {
-  it("leaves a monthly salary as the month it always was", () => {
+  it("gives a monthly salary one stretch: the whole period, 5th to 4th", () => {
     const slices = paySlices("MONTHLY", MONTH, "2026-10-28");
     assert.equal(slices.length, 1);
-    assert.deepEqual(slices[0], { fromKey: "2026-10-01", toKey: "2026-10-31", week: null });
+    assert.deepEqual(slices[0], { fromKey: "2026-10-05", toKey: "2026-11-04", week: null });
   });
 
   it("gives a weekly salary a row for each week that has begun", () => {
