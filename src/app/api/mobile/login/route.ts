@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
-import { createEmployeeSessionToken, createSessionToken } from "@/lib/auth";
+import { createAdminSessionToken, createEmployeeSessionToken } from "@/lib/auth";
+import { checkAdminPassword, UNLOCK_MINUTES } from "@/lib/admin-password";
 
 // Signing in from a phone app.
 //
@@ -45,14 +46,21 @@ export async function POST(request: Request) {
   }
 
   // --- The manager ------------------------------------------------------
-  const hash = process.env.ADMIN_PASSWORD_HASH;
-  if (!hash) {
+  // The database's password, with the environment variable behind it
+  // (lib/admin-password.ts) — the same one the website checks, so changing it
+  // changes it for the app at the same moment.
+  if (!(await checkAdminPassword(password))) {
     return NextResponse.json({ error: "Invalid password." }, { status: 401 });
   }
 
-  if (!(await bcrypt.compare(password, hash))) {
-    return NextResponse.json({ error: "Invalid password." }, { status: 401 });
-  }
-
-  return NextResponse.json({ token: createSessionToken(), side: "ADMIN", name: "Manager" });
+  // The token arrives able to edit for an hour, and is still a session for a
+  // week after that. Once the hour is up the app can read everything and
+  // change nothing until the manager signs in again — which is the studio's
+  // rule, not a quirk of the phone.
+  return NextResponse.json({
+    token: await createAdminSessionToken(),
+    side: "ADMIN",
+    name: "Manager",
+    editableForMinutes: UNLOCK_MINUTES,
+  });
 }

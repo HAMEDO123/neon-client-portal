@@ -41,12 +41,14 @@ function bearer(request: Request): string | null {
  * is the answer. Somebody on the team is refused with 403 — signed in, just not
  * to this — and no token at all is a 401, which the app answers by signing out.
  *
- * A signature check only, deliberately: the manager's token never needs the
- * database, so a picture is never held up by it, and an employee's token is
- * refused whatever the database would say about them.
+ * A signature check only, deliberately: the manager's token is never looked up
+ * in a table of sessions, and an employee's token is refused whatever the
+ * database would say about them. It is async because verifying the manager's
+ * token reads the password's fingerprint (lib/admin-password.ts), which is
+ * memoised — so a picture is still not held up by a query.
  */
-export function camerasGate(request: Request): Response | null {
-  if (requireMobileAuth(request)) return null;
+export async function camerasGate(request: Request): Promise<Response | null> {
+  if (await requireMobileAuth(request)) return null;
   if (verifyEmployeeSessionToken(bearer(request))) return json({ error: CAMERA_ERRORS.managerOnly }, 403);
   return json({ error: "Unauthorized." }, 401);
 }

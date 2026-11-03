@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdmin, requireAdminRead } from "@/lib/admin-guard";
 import {
   createEmployeeAccount,
   resetEmployeePassword,
@@ -41,14 +41,14 @@ import { createRoutine, deleteRoutine, setRoutineActive } from "@/lib/actions/ro
 
 // The "team" area of the phone API: employees, payroll, and the map of where
 // the team is. See lib/mobile/rpc.ts: keys are "team/<name>"; every read is
-// guarded(requireAdmin, …), matching the website's admin-only employees and
+// guarded(requireAdminRead, …), matching the website's admin-only employees and
 // payroll pages; every action calls the website's own server action, so its
 // guard, rules and notifications are the website's own — except the map's,
 // which have no website counterpart and are guardedAction(requireAdmin, …).
 
 export const reads: ReadRegistry = {
   // Mirrors src/app/admin/(dashboard)/employees/page.tsx.
-  "team/employees": guarded(requireAdmin, async () => {
+  "team/employees": guarded(requireAdminRead, async () => {
     const employees = await prisma.employee.findMany({
       orderBy: [{ active: "desc" }, { order: "asc" }],
       include: {
@@ -86,7 +86,7 @@ export const reads: ReadRegistry = {
   }),
 
   // Mirrors src/app/admin/(dashboard)/employees/[id]/page.tsx.
-  "team/employee": guarded(requireAdmin, async (params) => {
+  "team/employee": guarded(requireAdminRead, async (params) => {
     const id = param(params, "id");
     const employee = await prisma.employee.findUnique({
       where: { id },
@@ -172,13 +172,13 @@ export const reads: ReadRegistry = {
   //     people: [{ id, name, photoUrl, role, state, latitude, longitude, accuracy,
   //     fixedAt, precise, permission, atOffice, metresFromOffice, arrivedAt, departedAt,
   //     sharedToday, finedThisMonth: ["YYYY-MM-DD", …] }] }
-  "team/locations": guarded(requireAdmin, async () => teamLocations()),
+  "team/locations": guarded(requireAdminRead, async () => teamLocations()),
 
   // Routine tasks (lib/routine-store.ts, components/admin/routines.tsx): the
   // standing instructions, on first, with whose each one is and their face.
   // → { routines: [{ id, title, note, acceptance, priority, active, createdAt,
   //     employee: { id, name, color, photoUrl, active } }] }
-  "team/routines": guarded(requireAdmin, async () => {
+  "team/routines": guarded(requireAdminRead, async () => {
     const rows = await listRoutines();
     const faces = await facesFor(rows.map((row) => row.employee.id));
     return {
@@ -200,7 +200,7 @@ export const reads: ReadRegistry = {
   // record — and the nightly rule: whether it is on, when it charges, and what.
   // → { period, periodLabel, rule: { on, at, warnAt, hoursPerTask },
   //     cutoffs: [{ id, employeeId, employeeName, day, kind, hours, amount, reason, cancelledAt, createdAt }] }
-  "team/cutoffs": guarded(requireAdmin, async (params) => {
+  "team/cutoffs": guarded(requireAdminRead, async (params) => {
     const timezone = await getTimezone();
     const requested = optParam(params, "period");
     const period = requested && /^\d{4}-\d{2}$/.test(requested) ? requested : periodOf(todayKey(timezone));
@@ -226,7 +226,7 @@ export const reads: ReadRegistry = {
   }),
 
   // Mirrors src/app/admin/(dashboard)/payroll/page.tsx.
-  "team/payroll": guarded(requireAdmin, async (params) => {
+  "team/payroll": guarded(requireAdminRead, async (params) => {
     const timezone = await getTimezone();
     const thisMonth = periodOf(todayKey(timezone));
     const requested = optParam(params, "period");

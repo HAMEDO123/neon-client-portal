@@ -12,6 +12,7 @@ import { CallProvider } from "@/components/calls/call-provider";
 import { fillsWindow } from "@/lib/full-window";
 import type { AdminBadges } from "@/lib/admin-badges";
 import { cn } from "@/lib/utils";
+import { EditLock } from "@/components/admin/edit-lock";
 
 // The sidebar layout only works at desktop widths — on a phone (the iOS
 // sideload wrapper, or just Safari) a fixed 256px sidebar eats most of the
@@ -42,11 +43,18 @@ export function AdminShell({
   children,
   badges,
   version,
+  unlockedUntil,
 }: {
   children: ReactNode;
   badges?: AdminBadges;
   /** The build this page was drawn by, so a deploy can ask for a reload. */
   version?: string;
+  /**
+   * When this session's hour of editing runs out (lib/admin-password.ts). The
+   * server refuses an edit past it regardless; this is what asks for the
+   * password before the manager runs into that.
+   */
+  unlockedUntil?: number;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -81,6 +89,8 @@ export function AdminShell({
       <SoundCues side="ADMIN" />
       {/* Sizes the frame to what is visible, so the keyboard never covers a message box. */}
       <AppViewport />
+      {/* The hour, and the password that renews it. */}
+      {unlockedUntil !== undefined && <EditLock unlockedUntil={unlockedUntil} />}
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-rail-line bg-rail lg:block">
         <AdminNav badges={badges} />
       </aside>

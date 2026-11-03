@@ -157,7 +157,13 @@ deploy/go2rtc/        the camera relay's settings (neon.yaml) and the owner's se
 
 ### Sign-in and sessions
 - There are two cookie sessions, `admin_session` and `employee_session`. Both are stateless, HMAC-SHA256 over `SESSION_SECRET`, and last 7 days (`src/lib/auth.ts`, `session-cookie.ts`). There is no middleware: layouts and actions check sessions themselves.
-- **Admin:** one shared password, checked with bcrypt against `ADMIN_PASSWORD_HASH` (`lib/actions/auth-actions.ts`). The gate is `src/app/admin/(dashboard)/layout.tsx`.
+- **Admin:** one shared password, checked with bcrypt against the `AppSetting` `admin_password_hash`, falling back to `ADMIN_PASSWORD_HASH` (`lib/admin-password.ts`, `lib/actions/auth-actions.ts`). The gate is `src/app/admin/(dashboard)/layout.tsx`. The manager changes it on **Settings → Admin password**; the environment variable stays as the fallback so an empty settings table is never a lockout.
+- **The admin session also carries an hour of editing** (the studio asked for it on 2026-11-03, because the platform runs on a PC in the studio that is not only the manager's):
+  - The admin token is `expiresAt.unlockedUntil.epoch.signature` — a week for reading, an hour for changing anything, and a fingerprint of the password it was issued under. All three are inside the signed payload, so none can be moved by whoever holds the token.
+  - `requireAdmin()` refuses a locked session with the message `Locked`; `requireAdminRead()` is the same check without the hour, and is what a manager-only **page** and a manager-only **read** in the phone registry use. An action that writes must use `requireAdmin` — `tests/edit-lock.test.ts` sweeps `lib/actions` for anything reaching for the reading guard.
+  - Saying the password again re-issues the session (`lib/actions/admin-lock-actions.ts`); `EditLock` in the admin shell asks for it before an edit fails, and offers "browse without editing". "Lock editing now" on the settings page closes the hour without signing out.
+  - **Changing the admin password ends every other admin session at once**, web and iOS, because the epoch changes and old tokens stop verifying. The browser that changed it is re-issued immediately.
+  - The phone API answers a locked edit with **423** and a sentence naming the remedy, never 401 (which signs the app out) or 403.
 - **Employee:** email and password on `Employee`. Login requires `active` and `accessRole === "EMPLOYEE"` (`employee-auth-actions.ts`).
   - `lib/employee-session.ts` (`requireEmployee`) re-reads the database on every request, so a disabled employee is out on their next click.
   - The employee id always comes from the session, never from an argument.
@@ -852,7 +858,7 @@ The manager watches the studio's Tapo cameras live in the app, from anywhere, an
 |---|---|
 | `DATABASE_URL` | PostgreSQL. Locally, the `postgres://` address that `prisma dev` prints |
 | `SESSION_SECRET` | Signs the admin and employee cookies and the iOS token |
-| `ADMIN_PASSWORD_HASH` | bcrypt hash of the single admin password |
+| `ADMIN_PASSWORD_HASH` | bcrypt hash of the single admin password — the **fallback** only; the `AppSetting` `admin_password_hash` wins once the manager sets their own |
 | `R2_ACCOUNT_ID` `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` `R2_BUCKET_NAME` `R2_PUBLIC_URL` | Cloudflare R2 uploads (all five, or none) |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob uploads, used when R2 isn't configured |
 | `VAPID_PUBLIC_KEY` `VAPID_PRIVATE_KEY` `VAPID_SUBJECT` | Web push. Optional: generated and stored if absent |

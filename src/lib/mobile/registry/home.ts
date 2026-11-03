@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdmin, requireAdminRead } from "@/lib/admin-guard";
 import { clearAdminAlerts } from "@/lib/actions/admin-alert-actions";
 import { applyPerformanceDeductions } from "@/lib/actions/analytics-actions";
 import { approveSubmission, rejectSubmission } from "@/lib/actions/submission-actions";
@@ -34,35 +34,35 @@ import {
 export const reads: ReadRegistry = {
   // The dashboard's figures, the sidebar's waiting counts, and every project
   // (src/app/admin/(dashboard)/page.tsx).
-  "home/overview": guarded(requireAdmin, async () => homeOverview()),
+  "home/overview": guarded(requireAdminRead, async () => homeOverview()),
 
   // The dashboard's "The day" section: the team's day board for today.
-  "home/day": guarded(requireAdmin, async () => homeDay()),
+  "home/day": guarded(requireAdminRead, async () => homeDay()),
 
   // The dashboard's "Right now" strip: what each active employee is on and
   // what is next. Not on the website — an app-only read, still guarded like
   // the rest of the dashboard because it is the same admin-only figures.
-  "home/now": guarded(requireAdmin, async () => homeNow()),
+  "home/now": guarded(requireAdminRead, async () => homeNow()),
 
   // The Home tab's figures over time — the trend and bars under the counts,
   // the "This month" card, the manager's name for the greeting and who is
   // waiting on a review. App-only, and only what timestamps really record
   // (lib/mobile/home-pulse.ts); guarded like the dashboard it sits on.
-  "home/pulse": guarded(requireAdmin, async () => homePulse()),
+  "home/pulse": guarded(requireAdminRead, async () => homePulse()),
 
   // The Home tab's "Today's Tasks": board cells scheduled or due today, jobs
   // running today and meetings starting today (lib/mobile/home-today.ts).
-  "home/today": guarded(requireAdmin, async () => homeToday()),
+  "home/today": guarded(requireAdminRead, async () => homeToday()),
 
   // Activity (src/app/admin/(dashboard)/alerts/page.tsx).
-  "home/alerts": guarded(requireAdmin, async () => homeAlerts()),
+  "home/alerts": guarded(requireAdminRead, async () => homeAlerts()),
 
   // Reviews (src/app/admin/(dashboard)/reviews/page.tsx).
-  "home/reviews": guarded(requireAdmin, async () => homeReviews()),
+  "home/reviews": guarded(requireAdminRead, async () => homeReviews()),
 
   // Analytics (src/app/admin/(dashboard)/analytics/page.tsx), ?period=YYYY-MM&day=YYYY-MM-DD
   // exactly as the page's own search params.
-  "home/analytics": guarded(requireAdmin, async (params) =>
+  "home/analytics": guarded(requireAdminRead, async (params) =>
     homeAnalytics(optParam(params, "period"), optParam(params, "day"))
   ),
 };

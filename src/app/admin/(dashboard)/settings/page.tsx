@@ -29,6 +29,8 @@ import { TaskTypeLibrary } from "@/components/admin/task-type-library";
 import { AutomationRules } from "@/components/admin/automation-rules";
 import { automationOn, runRules } from "@/lib/notifications/automation-events";
 import { prisma } from "@/lib/db";
+import { AdminPasswordCard } from "@/components/admin/admin-password-card";
+import { adminPasswordIsOwn, MIN_ADMIN_PASSWORD, UNLOCK_MINUTES } from "@/lib/admin-password";
 import { Badge } from "@/components/ui/badge";
 
 // Integrations and the settings the platform reads at runtime, in one place
@@ -57,6 +59,9 @@ export default async function AdminSettingsPage({
   // way a sign-in walks out of the building.
   const shop = await shopSessionState();
   const workHours = await getWorkHours();
+  // Whether the manager has set their own password yet, or the platform is
+  // still on the one it was deployed with (lib/admin-password.ts).
+  const ownPassword = await adminPasswordIsOwn();
   const transport = activeTransport();
   const cloud = getCloudCredentials();
   const worker = getWorkerConfig();
@@ -445,6 +450,13 @@ WHATSAPP_LINE_ID      "main" for the company line (default)`}
           </div>
         )}
       </section>
+
+      {/* --- The manager's own password ------------------------------------ */}
+      <AdminPasswordCard
+        usingOwnPassword={ownPassword}
+        minLength={MIN_ADMIN_PASSWORD}
+        unlockMinutes={UNLOCK_MINUTES}
+      />
 
       {/* --- Timezone ----------------------------------------------------- */}
       <section className="glass rounded-2xl p-6">

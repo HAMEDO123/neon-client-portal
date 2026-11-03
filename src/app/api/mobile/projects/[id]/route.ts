@@ -25,7 +25,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  if (!requireMobileAuth(request)) {
+  if (!(await requireMobileAuth(request))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -135,7 +135,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  if (!requireMobileAuth(request)) {
+  if (!(await requireMobileAuth(request))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

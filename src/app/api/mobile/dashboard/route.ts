@@ -3,7 +3,7 @@ import { requireMobileAuth } from "@/lib/mobile-auth";
 import { getDashboardStats, getProjects } from "@/lib/queries";
 
 export async function GET(request: Request) {
-  if (!requireMobileAuth(request)) {
+  if (!(await requireMobileAuth(request))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

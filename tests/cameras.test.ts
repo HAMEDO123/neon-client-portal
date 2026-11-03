@@ -45,7 +45,7 @@ import {
   relayStreams,
   removeStream,
 } from "../src/lib/mobile/cameras-relay";
-import { createEmployeeSessionToken, createSessionToken } from "../src/lib/auth";
+import { createAdminSessionToken, createEmployeeSessionToken } from "../src/lib/auth";
 
 // The studio's cameras on the manager's phone (lib/cameras.ts,
 // lib/mobile/cameras-*.ts, src/app/api/mobile/cameras/…, registry/cameras.ts).
@@ -316,19 +316,19 @@ describe("who may watch", () => {
   const asking = (token?: string) =>
     new Request("http://localhost/api/mobile/cameras/c/frame", token ? { headers: { authorization: `Bearer ${token}` } } : undefined);
 
-  it("lets the manager through", () => {
-    assert.equal(camerasGate(asking(createSessionToken())), null);
+  it("lets the manager through", async () => {
+    assert.equal(await camerasGate(asking(await createAdminSessionToken())), null);
   });
 
   it("refuses somebody on the team with 403, which does not sign them out", async () => {
-    const answer = camerasGate(asking(createEmployeeSessionToken("emp-1")));
+    const answer = await camerasGate(asking(createEmployeeSessionToken("emp-1")));
     assert.equal(answer?.status, 403);
     assert.deepEqual(await answer?.json(), { error: CAMERA_ERRORS.managerOnly });
   });
 
-  it("refuses no token, or a made-up one, with 401", () => {
-    assert.equal(camerasGate(asking())?.status, 401);
-    assert.equal(camerasGate(asking("1999999999999.deadbeef"))?.status, 401);
+  it("refuses no token, or a made-up one, with 401", async () => {
+    assert.equal((await camerasGate(asking()))?.status, 401);
+    assert.equal((await camerasGate(asking("1999999999999.deadbeef")))?.status, 401);
   });
 });
 
@@ -503,7 +503,7 @@ describe("the routes and the registry", () => {
   it("check the manager before anything else on both picture routes", () => {
     for (const source of [route("frame"), route("live")]) {
       const body = source.slice(source.indexOf("export async function GET"));
-      assert.match(body, /^export async function GET\([^)]*\)[^{]*\{\s*const refused = camerasGate\(request\);\s*if \(refused\) return refused;/);
+      assert.match(body, /^export async function GET\([^)]*\)[^{]*\{\s*const refused = await camerasGate\(request\);\s*if \(refused\) return refused;/);
     }
   });
 
@@ -525,7 +525,14 @@ describe("the routes and the registry", () => {
 
   it("keeps every camera read and action the manager's", () => {
     const source = read("src", "lib", "mobile", "registry", "cameras.ts");
-    const entries = [...source.matchAll(/^ {2}"(cameras\/[^"]+)":\s*(\w+)\(requireAdmin,/gm)].map((match) => match[1]);
+    // requireAdmin or requireAdminRead: the lock on editing split the
+    // manager's guard in two (lib/admin-guard.ts), and a read is behind the
+    // reading half so a locked session can still see the cameras. Both are
+    // "the manager alone", which is what this test is about — and requireStaff
+    // is still refused outright below.
+    const entries = [...source.matchAll(/^ {2}"(cameras\/[^"]+)":\s*(\w+)\(requireAdmin(?:Read)?,/gm)].map(
+      (match) => match[1]
+    );
     assert.deepEqual(entries.sort(), [
       "cameras/delete",
       "cameras/goto",

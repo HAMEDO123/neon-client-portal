@@ -1,5 +1,5 @@
 import { getSessionEmployee } from "@/lib/employee-session";
-import { hasAdminSession } from "@/lib/session-token";
+import { adminSession, hasAdminSession } from "@/lib/session-token";
 
 // One definition of "is this the manager".
 //
@@ -19,7 +19,47 @@ import { hasAdminSession } from "@/lib/session-token";
 // value either way — so every action behind these guards serves the app too,
 // through /api/mobile/do, without a second copy of any of them.
 
+/**
+ * What is thrown when the session is the manager's but its editing hour has
+ * run out. A word of its own, because "sign in again" and "say the password
+ * again" are different answers and the screens have to tell them apart.
+ */
+export const LOCKED = "Locked";
+
+/**
+ * The manager, allowed to change something.
+ *
+ * Two questions, not one, since the studio asked for the second (2026-11-03):
+ * is this the manager, and is this session still inside its hour? The platform
+ * runs on a PC in the studio that is not only the manager's, and a session left
+ * open on it was, until this, the whole of the credential. Now an edit needs
+ * the password to have been said within the hour — see lib/admin-password.ts.
+ *
+ * **It is this function rather than a new one at sixty call sites**, so an
+ * admin action cannot be written tomorrow that quietly misses the lock: there
+ * is nothing to remember. The reading half is `requireAdminRead` below, and it
+ * is the narrow one.
+ */
 export async function requireAdmin(): Promise<void> {
+  const session = await adminSession();
+  if (!session) throw new Error("Unauthorized");
+  if (!session.unlocked) throw new Error(LOCKED);
+}
+
+/**
+ * The manager, looking rather than changing.
+ *
+ * A locked session still reads: the manager's screens, the phone app's lists,
+ * the payroll figures. Locking the platform was asked for to stop somebody at
+ * that desk *editing*, and a lock that blanked every page as well would mean
+ * the password half a dozen times an hour for nothing — which is how a lock
+ * ends up switched off.
+ *
+ * So this is the guard for a page and for a read entry in the app's registry,
+ * and `requireAdmin` is the guard for everything that writes. Reaching for
+ * this one in an action is the mistake it is here to make visible.
+ */
+export async function requireAdminRead(): Promise<void> {
   if (!(await hasAdminSession())) {
     throw new Error("Unauthorized");
   }

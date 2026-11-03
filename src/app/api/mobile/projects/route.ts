@@ -10,7 +10,7 @@ function optionalString(value: unknown): string | null {
 
 // Employee creates a project from the app — same fields as the web admin form.
 export async function POST(request: Request) {
-  if (!requireMobileAuth(request)) {
+  if (!(await requireMobileAuth(request))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

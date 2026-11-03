@@ -1,4 +1,4 @@
-import { verifyEmployeeSessionToken, verifySessionToken } from "@/lib/auth";
+import { verifyAdminSession, verifyEmployeeSessionToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import type { ChatViewer } from "@/lib/chat-conversations";
 
@@ -24,8 +24,8 @@ function bearer(request: Request): string | null {
  * The manager, and only the manager. Kept as it was for the existing admin app
  * and the routes it already calls.
  */
-export function requireMobileAuth(request: Request): boolean {
-  return verifySessionToken(bearer(request));
+export async function requireMobileAuth(request: Request): Promise<boolean> {
+  return (await verifyAdminSession(bearer(request))) !== null;
 }
 
 /**
@@ -40,7 +40,7 @@ export async function mobileViewer(request: Request): Promise<ChatViewer | null>
   const token = bearer(request);
   if (!token) return null;
 
-  if (verifySessionToken(token)) return { type: "ADMIN", id: null, name: "Manager" };
+  if (await verifyAdminSession(token)) return { type: "ADMIN", id: null, name: "Manager" };
 
   const employeeId = verifyEmployeeSessionToken(token);
   if (!employeeId) return null;

@@ -1,4 +1,4 @@
-import { requireAdmin, requireWhatsAppAccess } from "@/lib/admin-guard";
+import { requireAdminRead, requireWhatsAppAccess } from "@/lib/admin-guard";
 import {
   readLinkStatus,
   sendTestWhatsApp,
@@ -56,11 +56,11 @@ export const reads: ReadRegistry = {
   "whatsapp/summary": guarded(requireWhatsAppAccess, async () => inboxSummary()),
 
   // The manager's line settings: transport, whether it answers, the linked number.
-  "whatsapp/line": guarded(requireAdmin, async () => readLineSettings()),
+  "whatsapp/line": guarded(requireAdminRead, async () => readLineSettings()),
 
   // The linking panel's poll while a code is on screen — the website's own
   // readLinkStatus, which carries requireAdmin itself as well.
-  "whatsapp/link-status": guarded(requireAdmin, async () => readLinkStatus()),
+  "whatsapp/link-status": guarded(requireAdminRead, async () => readLinkStatus()),
 };
 
 export const actions: ActionRegistry = {

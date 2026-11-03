@@ -22,6 +22,8 @@
 // session at all; which session may read what is the entry's to say, exactly
 // as it is the page's on the website.
 
+import { LOCKED } from "@/lib/admin-guard";
+
 export class RpcError extends Error {
   constructor(
     message: string,
@@ -51,7 +53,7 @@ export type ReadRegistry = Record<string, ReadEntry>;
  * The guard's answer is handed on, so a read that depends on who is asking
  * (an employee's own requests) takes it from the guard, never from a param.
  *
- *   "team/employees": guarded(requireAdmin, async () => listEmployees()),
+ *   "team/employees": guarded(requireAdminRead, async () => listEmployees()),
  *   "me/requests":    guarded(requireEmployee, async (_params, me) => requestsFor(me.id)),
  */
 export function guarded<Who>(
@@ -186,6 +188,12 @@ export function answerError(error: unknown, signedIn = false): Response {
   // which the app answers by signing the person out.
   if (error instanceof Error && error.message === "Unauthorized") {
     return signedIn ? json({ error: "That is not available to you." }, 403) : json({ error: "Unauthorized." }, 401);
+  }
+  // The manager, past the hour their password bought (lib/admin-guard.ts).
+  // 423 rather than 403, and a sentence that names the remedy: the app must ask
+  // for the password again, not sign anybody out and not say "not yours".
+  if (error instanceof Error && error.message === LOCKED) {
+    return json({ error: "Editing is locked. Sign in again with your password to make changes." }, 423);
   }
 
   // Prisma's "no row to update/delete" is somebody acting on something gone.

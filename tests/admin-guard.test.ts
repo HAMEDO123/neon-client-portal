@@ -248,9 +248,15 @@ describe("one definition of each check, not twenty-five", () => {
   it("keeps the raw session primitives to the two files that issue sessions", () => {
     // Reading the cookie directly anywhere else is a guard being written a
     // second time, whatever it is called.
+    //
+    // There are three now. admin-lock-actions.ts re-issues the manager's
+    // session rather than reading it to decide anything: the hour of editing
+    // lives inside the signed token (lib/auth.ts), so saying the password
+    // again, locking early, and changing the password all mean writing a new
+    // one. It asks  who this is, like everything else.
     const touching = files.filter((file) => read(file).includes("SESSION_COOKIE_NAME")).sort();
 
-    assert.deepEqual(touching, ["auth-actions.ts", "employee-auth-actions.ts"]);
+    assert.deepEqual(touching, ["admin-lock-actions.ts", "auth-actions.ts", "employee-auth-actions.ts"]);
   });
 
   it("lets the studio-wide guard nowhere near the manager's own tools", () => {
