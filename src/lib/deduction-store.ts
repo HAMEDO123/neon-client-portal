@@ -30,6 +30,22 @@ export function liveDeductions(period: string) {
 }
 
 /**
+ * What counts towards pay over a stretch of days, by the day each cutoff is
+ * for rather than by the month it was filed under.
+ *
+ * The same set as `liveDeductions` for a whole month — `periodKey` is the
+ * month of `day` — and the only way to put a cutoff in the right **week**, for
+ * the people this studio settles with weekly (lib/pay-week.ts). Both ends are
+ * inclusive, because both are calendar days somebody worked.
+ */
+export function liveDeductionsBetween(from: Date, to: Date) {
+  return prisma.deduction.findMany({
+    where: { day: { gte: from, lte: to }, cancelledAt: null },
+    select: { employeeId: true, day: true, amount: true, reason: true },
+  });
+}
+
+/**
  * The manager's own cutoff. Hours are priced at the person's rate now and the
  * money is fixed on the row, so what they were told is what comes off.
  */

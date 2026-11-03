@@ -184,6 +184,16 @@ const AR: Record<string, string> = {
   "WhatsApp": "واتساب",
   "Reviewing our project “{name}” from NEON — take a look: {url}": "نراجع مشروعنا «{name}» من NEON — ألقِ نظرة: {url}",
 
+  // The image viewer
+  "Full screen": "ملء الشاشة",
+  "Tap anywhere to leave full screen": "اضغط في أي مكان للخروج من ملء الشاشة",
+  "Zoom in": "تكبير",
+  "Zoom out": "تصغير",
+  "Download image": "تنزيل الصورة",
+  "Close": "إغلاق",
+  "Previous image": "الصورة السابقة",
+  "Next image": "الصورة التالية",
+
   // Presentation slides
   "The Concept": "الفكرة",
   "Materials & Finishes": "المواد والتشطيبات",

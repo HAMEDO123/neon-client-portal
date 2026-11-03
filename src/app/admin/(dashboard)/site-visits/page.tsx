@@ -1,6 +1,6 @@
 import { MapPinned } from "lucide-react";
 import { PersonAvatar } from "@/components/chat/person-avatar";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdminRead } from "@/lib/admin-guard";
 import { allSiteVisits, projectsForVisits, siteVisitKeepers } from "@/lib/site-visit-queries";
 import { getTimezone } from "@/lib/settings";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function SiteVisitsPage() {
-  await requireAdmin();
+  await requireAdminRead();
 
   const timezone = await getTimezone();
   const visits = await allSiteVisits();

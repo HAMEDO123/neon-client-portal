@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdmin, requireAdminRead } from "@/lib/admin-guard";
 import {
   cameraControls,
   deleteCamera,
@@ -31,10 +31,10 @@ function cameraFields(form: FormData): Record<string, string | null> {
 
 export const reads: ReadRegistry = {
   // { cameras: CameraView[], why: string | null, relay: "running" | "down" }
-  "cameras/list": guarded(requireAdmin, async () => listCameras()),
+  "cameras/list": guarded(requireAdminRead, async () => listCameras()),
 
   // ?id= → { canMove, presets: [{ token, name }], why }
-  "cameras/presets": guarded(requireAdmin, async (params) => cameraControls(param(params, "id"))),
+  "cameras/presets": guarded(requireAdminRead, async (params) => cameraControls(param(params, "id"))),
 };
 
 export const actions: ActionRegistry = {

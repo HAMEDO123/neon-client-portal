@@ -2,8 +2,9 @@ import { cookies, headers } from "next/headers";
 import {
   EMPLOYEE_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
+  verifyAdminSession,
   verifyEmployeeSessionToken,
-  verifySessionToken,
+  type AdminSession,
 } from "@/lib/auth";
 
 // Where a session comes from.
@@ -27,11 +28,33 @@ async function bearerToken(): Promise<string | null> {
   return header.startsWith("Bearer ") ? header.slice(7) : null;
 }
 
-/** Whether this request is the manager's — by cookie, or by the app's bearer token. */
-export async function hasAdminSession(): Promise<boolean> {
+/**
+ * This request's admin session, if it has one: whether it is the manager, and
+ * whether it is still inside its hour of editing (see lib/admin-password.ts).
+ *
+ * The cookie is tried first and the bearer token second, and whichever answers
+ * is the one whose unlock window counts. One browser or one phone holds one
+ * admin session, so there is nothing to merge.
+ */
+export async function adminSession(): Promise<AdminSession | null> {
   const store = await cookies();
-  if (verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value)) return true;
-  return verifySessionToken(await bearerToken());
+  return (
+    (await verifyAdminSession(store.get(SESSION_COOKIE_NAME)?.value)) ??
+    (await verifyAdminSession(await bearerToken()))
+  );
+}
+
+/**
+ * Whether this request is the manager's — by cookie, or by the app's bearer
+ * token.
+ *
+ * Deliberately says nothing about the editing hour: this is "may this person
+ * see the manager's side", which a locked session still may. Anything that
+ * *changes* something goes through `requireAdmin`, which asks `adminSession`
+ * for the rest of the answer.
+ */
+export async function hasAdminSession(): Promise<boolean> {
+  return (await adminSession()) !== null;
 }
 
 /**

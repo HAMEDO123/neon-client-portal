@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const refused = camerasGate(request);
+  const refused = await camerasGate(request);
   if (refused) return refused;
 
   const id = cameraIdParam((await context.params).id);

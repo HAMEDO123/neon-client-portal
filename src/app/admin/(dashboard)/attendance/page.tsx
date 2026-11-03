@@ -88,6 +88,7 @@ export default async function AttendanceDevicePage({
             delayHours: row.delayHours,
             earlyHours: row.earlyHours,
             awayHours: row.awayHours,
+            shortHours: row.shortHours,
             breaks: storedBreaks(row.breaks),
             // A departure the device actually recorded, not an assumption
             // about a day that has none.

@@ -511,7 +511,9 @@ describe("the wiring the screen depends on", () => {
 
   it("is the manager's alone", () => {
     const ops = readFileSync(join(root, "src", "lib", "mobile", "registry", "ops.ts"), "utf8");
-    assert.match(ops, /"ops\/status": guarded\(requireAdmin, /);
+    // requireAdminRead, not requireAdmin: still the manager alone, and still
+    // readable once the editing hour is up (lib/admin-guard.ts).
+    assert.match(ops, /"ops\/status": guarded\(requireAdminRead, /);
   });
 
   it("stamps every run of the cron endpoint", () => {

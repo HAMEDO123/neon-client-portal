@@ -7,7 +7,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  if (!requireMobileAuth(request)) {
+  if (!(await requireMobileAuth(request))) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

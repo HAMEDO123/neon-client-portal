@@ -1,4 +1,4 @@
-import { requireAdmin, requireTaskAssigner } from "@/lib/admin-guard";
+import { requireAdmin, requireAdminRead, requireTaskAssigner } from "@/lib/admin-guard";
 import {
   guarded,
   guardedAction,
@@ -63,13 +63,13 @@ const BOARD_STATES = ["TODO", "DONE", "TOMORROW"] as const;
 const JOB_STATES = ["TODO", "IN_PROGRESS", "DONE"] as const;
 
 export const reads: ReadRegistry = {
-  "tasks/board": guarded(requireAdmin, async () => mobileTaskBoard()),
-  "tasks/week": guarded(requireAdmin, async (params) => mobileWeekBoard(optParam(params, "week"))),
-  "tasks/process": guarded(requireAdmin, async () => mobileProcess()),
+  "tasks/board": guarded(requireAdminRead, async () => mobileTaskBoard()),
+  "tasks/week": guarded(requireAdminRead, async (params) => mobileWeekBoard(optParam(params, "week"))),
+  "tasks/process": guarded(requireAdminRead, async () => mobileProcess()),
   // Each person's share of the work they were given this week or month that
   // is done — the Team segment. Behind requireAdmin, like /admin/tasks and
   // /admin/analytics, whose figures it counts by.
-  "tasks/people": guarded(requireAdmin, async (params) =>
+  "tasks/people": guarded(requireAdminRead, async (params) =>
     mobileTaskPeople(oneOf(optParam(params, "period") ?? "week", PEOPLE_PERIODS, "period"), optParam(params, "day"))
   ),
 };

@@ -188,6 +188,9 @@
 "%@/h" = "%@/س";
 "%@ h" = "%@ س";
 "Cutoff −%@" = "الاستقطاع −%@";
+/* Hours actually worked, beside what was cut (PayrollRootView.swift) */
+"Worked %@ · %dd" = "عمل %1$@ · %2$d يوم";
+"Worked %@ · %d open" = "عمل %1$@ · %2$d بلا خروج";
 "Adjustments −%@" = "تعديلات −%@";
 "Receipts +%@" = "إيصالات +%@";
 "Performance" = "الأداء";

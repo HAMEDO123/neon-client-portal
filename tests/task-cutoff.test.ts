@@ -140,8 +140,14 @@ describe("who may take money off", () => {
   });
 
   it("reaches pay through the same total as every other adjustment, unless taken back", () => {
-    assert.match(read("src", "lib", "payroll-queries.ts"), /for \(const row of \[\.\.\.adjustments, \.\.\.deductions\]\)/);
-    assert.match(read("src", "lib", "deduction-store.ts"), /where: \{ periodKey: period, cancelledAt: null \}/);
+    const queries = read("src", "lib", "payroll-queries.ts");
+    // Cutoffs join the manager's own adjustments in one list, and that list is
+    // what the rate-free total is taken from.
+    assert.match(queries, /\.\.\.deductions\.filter\(\(row\) => row\.employeeId === employee\.id && within\(dateToDayKey\(row\.day\)\)\)/);
+    assert.match(queries, /adjustmentTotal: sum\(adjusted, \(row\) => row\.amount\)/);
+    // Read by the day each is for, which is the same set for a month and the
+    // only way to put one in the right week. Taken-back ones stay out.
+    assert.match(read("src", "lib", "deduction-store.ts"), /where: \{ day: \{ gte: from, lte: to \}, cancelledAt: null \}/);
   });
 
   // An evening the server could not warn is one it could not take the work in.

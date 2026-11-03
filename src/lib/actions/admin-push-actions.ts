@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdminRead } from "@/lib/admin-guard";
 import { managerEmployeeId } from "@/lib/manager-account";
 
 // Push for the manager's own phone.
@@ -10,7 +10,7 @@ import { managerEmployeeId } from "@/lib/manager-account";
 // A deliberate mirror of savePushSubscription in employee-actions.ts rather
 // than a new mechanism: the same table, the same upsert on endpoint, the same
 // reset of active and failureCount. What differs is only who is asking —
-// requireAdmin instead of requireEmployee — because the manager cannot sign in
+// requireAdminRead instead of requireEmployee — because the manager cannot sign in
 // to the employee portal at all (employee-auth rejects any non-EMPLOYEE), and
 // so could never reach the action that registers a device.
 //
@@ -18,6 +18,11 @@ import { managerEmployeeId } from "@/lib/manager-account";
 // same row the attendance device is paired to. That row is what makes them
 // addressable by dispatchNotification; without it there is nowhere to put this.
 
+// These three are read-level on purpose (requireAdminRead, not requireAdmin):
+// they are this browser's own notification subscription, not the studio's data,
+// and the first of them runs by itself when the dashboard opens. Behind the
+// edit lock they would ask the manager for the password to turn a bell on.
+//
 export type AdminPushResult = { ok: true } | { ok: false; error: string };
 
 export async function saveAdminPushSubscription(input: {
@@ -26,7 +31,7 @@ export async function saveAdminPushSubscription(input: {
   auth: string;
   userAgent?: string;
 }): Promise<AdminPushResult> {
-  await requireAdmin();
+  await requireAdminRead();
 
   if (!input?.endpoint || !input.p256dh || !input.auth) {
     return { ok: false, error: "The browser returned an incomplete subscription." };
@@ -76,7 +81,7 @@ export async function saveAdminPushSubscription(input: {
 
 /** Gives up this phone, so nothing further arrives on it. */
 export async function removeAdminPushSubscription(endpoint: string): Promise<AdminPushResult> {
-  await requireAdmin();
+  await requireAdminRead();
   if (!endpoint) return { ok: false, error: "No device given." };
 
   const employeeId = await managerEmployeeId();
@@ -92,7 +97,7 @@ export async function removeAdminPushSubscription(endpoint: string): Promise<Adm
 
 /** The manager's own registered phones, for the screen that manages them. */
 export async function managerDevices() {
-  await requireAdmin();
+  await requireAdminRead();
 
   const employeeId = await managerEmployeeId();
   if (!employeeId) return [];

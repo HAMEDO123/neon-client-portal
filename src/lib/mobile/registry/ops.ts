@@ -1,4 +1,4 @@
-import { requireAdmin, requireSiteVisitor } from "@/lib/admin-guard";
+import { requireAdminRead, requireSiteVisitor } from "@/lib/admin-guard";
 import { prisma } from "@/lib/db";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, todayKey } from "@/lib/time";
@@ -39,13 +39,13 @@ import type { SupplyRequestStatus } from "@/generated/prisma/enums";
 
 export const reads: ReadRegistry = {
   // Mirrors admin/(dashboard)/attendance's device panel and pairing list.
-  "ops/attendanceOverview": guarded(requireAdmin, async () => attendanceOverview()),
+  "ops/attendanceOverview": guarded(requireAdminRead, async () => attendanceOverview()),
 
   // Mirrors the same page's month grid, ?month=YYYY-MM.
-  "ops/attendanceMonth": guarded(requireAdmin, async (params) => attendanceMonthFor(optParam(params, "month"))),
+  "ops/attendanceMonth": guarded(requireAdminRead, async (params) => attendanceMonthFor(optParam(params, "month"))),
 
   // Mirrors admin/(dashboard)/requests: today's reports and supply requests.
-  "ops/requests": guarded(requireAdmin, async () => {
+  "ops/requests": guarded(requireAdminRead, async () => {
     const requests = await prisma.supplyRequest.findMany({
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
       take: 200,
@@ -77,7 +77,7 @@ export const reads: ReadRegistry = {
   }),
 
   // Mirrors admin/(dashboard)/site-visits: every visit, for the manager.
-  "ops/siteVisits": guarded(requireAdmin, async () => allSiteVisits()),
+  "ops/siteVisits": guarded(requireAdminRead, async () => allSiteVisits()),
 
   // The signed-in team member's own diary — the same rule the Tasks tab's
   // site-visits view follows: canLogSiteVisits, and never the manager (who
@@ -91,11 +91,11 @@ export const reads: ReadRegistry = {
   // Mirrors admin/(dashboard)/settings, minus the delivery process (the tasks
   // area's ProcessSettingsView owns process sections, stage periods and what
   // each kind of work needs).
-  "ops/settings": guarded(requireAdmin, async () => opsSettings()),
+  "ops/settings": guarded(requireAdminRead, async () => opsSettings()),
 
   // The rules preview: runs today's rules and writes nothing (?preview=rules
   // on the website). A read, not an action, for exactly that reason.
-  "ops/automationPreview": guarded(requireAdmin, async () => opsAutomationPreview()),
+  "ops/automationPreview": guarded(requireAdminRead, async () => opsAutomationPreview()),
 
   // The manager's network and server status: the site, its database, the PC,
   // the scheduled jobs, the backups, WhatsApp, push, and the way in and out
@@ -105,7 +105,7 @@ export const reads: ReadRegistry = {
   // page mirrors it, so the guard is the one the settings page is behind.
   // `{ checkedAt, server: [row], network: [row] }`, a row being
   // `{ id, title, state: "up" | "degraded" | "down" | "unknown", detail, value? }`.
-  "ops/status": guarded(requireAdmin, async () => gatherStatus()),
+  "ops/status": guarded(requireAdminRead, async () => gatherStatus()),
 };
 
 export const actions: ActionRegistry = {

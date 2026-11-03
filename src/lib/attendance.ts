@@ -238,6 +238,75 @@ export function countedHours(workedHours: number, hours: WorkHours): number {
   return cap > 0 ? Math.min(worked, cap) : worked;
 }
 
+/** One day as a total of hours reads it: when they came, when they left, time out. */
+export type WorkedDay = {
+  arrivedAt: Date | null;
+  departedAt: Date | null;
+  /** Hours out in the middle of the day and back — time on site that was not worked. */
+  awayHours?: number;
+};
+
+/** A stretch of days added up, with what the total cannot know said beside it. */
+export type WorkedTotal = {
+  /** The hours that count: each day capped at the studio's own day, added up. */
+  hours: number;
+  /** Hours actually on site. The same as `hours` unless somebody stayed past the eighth. */
+  onSite: number;
+  /** Days both times are known for — the only days either figure can include. */
+  days: number;
+  /**
+   * Days somebody arrived and no clock-out was recorded.
+   *
+   * Carried rather than guessed at: those days are missing from the total, and
+   * a total that is quietly short reads as somebody who worked less.
+   */
+  daysWithoutClockOut: number;
+};
+
+/**
+ * How long somebody was actually at work over a stretch of days.
+ *
+ * Each day capped at the studio's own, because there is no overtime here — the
+ * same cap `countedHours` puts on one day, applied day by day rather than to
+ * the sum, so a nine-hour Monday cannot pay for a seven-hour Tuesday.
+ *
+ * A day with no arrival is not counted at all: a figure the manager typed by
+ * hand has no times to measure, and reading it as zero hours worked would say
+ * somebody was absent on a day the studio knows nothing about.
+ */
+export function workedHours(days: WorkedDay[], hours: WorkHours): WorkedTotal {
+  let counted = 0;
+  let onSite = 0;
+  let complete = 0;
+  let open = 0;
+
+  for (const day of days) {
+    if (!day.arrivedAt) continue;
+    if (!day.departedAt) {
+      open++;
+      continue;
+    }
+
+    const span = (day.departedAt.getTime() - day.arrivedAt.getTime()) / 3_600_000;
+    // Time out in the middle comes off before the cap, not after: it is time
+    // on the premises that was not worked.
+    const worked = Math.max(0, span - Math.max(0, day.awayHours ?? 0));
+    onSite += worked;
+    counted += countedHours(worked, hours);
+    complete++;
+  }
+
+  // Rounded once at the end, like the month grid's own totals: adding fractions
+  // of an hour in binary and printing the result is how 7.000000000000001 ends
+  // up on a screen beside somebody's pay.
+  return {
+    hours: Math.round(counted * 100) / 100,
+    onSite: Math.round(onSite * 100) / 100,
+    days: complete,
+    daysWithoutClockOut: open,
+  };
+}
+
 /**
  * How much of the day was still owed when somebody left — the one number this
  * rule charges.

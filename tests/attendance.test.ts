@@ -18,6 +18,7 @@ import {
   minutesInDay,
   lateHours,
   mayDeviceWrite,
+  workedHours,
   type Punch,
 } from "../src/lib/attendance";
 import { DEFAULT_WORK_HOURS, type WorkHours } from "../src/lib/work-hours";
@@ -466,5 +467,65 @@ describe("a day counted for somebody paid by the hour", () => {
     // Not rounded to something tidier: 4.16 is what Salem worked on 18 October,
     // and a day somebody was short is theirs to see as it was.
     assert.equal(countedHours(4.16, studio), 4.16);
+  });
+});
+
+describe("a stretch of days added up", () => {
+  const studio: WorkHours = { ...hours, start: "11:00", end: "19:00" };
+
+  /** A day on the clock in Amman, as the instants the device stores. */
+  const day = (dayKey: string, inAt: string, outAt: string | null, awayHours = 0) => ({
+    arrivedAt: new Date(`${dayKey}T${inAt}:00.000Z`),
+    departedAt: outAt ? new Date(`${dayKey}T${outAt}:00.000Z`) : null,
+    awayHours,
+  });
+
+  it("adds up the hours somebody was here", () => {
+    const total = workedHours([day("2026-10-20", "08:00", "16:00"), day("2026-10-21", "08:00", "15:00")], studio);
+    assert.equal(total.hours, 15);
+    assert.equal(total.onSite, 15);
+    assert.equal(total.days, 2);
+  });
+
+  it("caps each day on its own, so a long Monday cannot pay for a short Tuesday", () => {
+    // Nine hours then seven is sixteen on site and fifteen counted — there is
+    // no overtime here, and capping the sum instead would have paid the ninth
+    // hour back on Tuesday.
+    const total = workedHours([day("2026-10-20", "08:00", "17:00"), day("2026-10-21", "08:00", "15:00")], studio);
+    assert.equal(total.onSite, 16);
+    assert.equal(total.hours, 15);
+  });
+
+  it("takes a step-out off the day", () => {
+    const total = workedHours([day("2026-10-20", "08:00", "16:00", 1)], studio);
+    assert.equal(total.hours, 7);
+  });
+
+  it("counts a day with no clock-out as unknown rather than as nothing", () => {
+    const total = workedHours([day("2026-10-20", "08:00", "16:00"), day("2026-10-21", "08:00", null)], studio);
+    assert.equal(total.hours, 8, "only the day both ends are known for");
+    assert.equal(total.days, 1);
+    assert.equal(total.daysWithoutClockOut, 1, "and the other one is said, not buried");
+  });
+
+  it("leaves a day the manager typed out of it entirely", () => {
+    // A figure typed by hand has no times to measure. Reading it as zero hours
+    // worked would say somebody was absent on a day nobody knows the shape of.
+    const total = workedHours([{ arrivedAt: null, departedAt: null, awayHours: 2 }], studio);
+    assert.deepEqual(total, { hours: 0, onSite: 0, days: 0, daysWithoutClockOut: 0 });
+  });
+
+  it("rounds once, at the end", () => {
+    // 0.12 + 0.33 in binary floating point is 0.44999999999999996, and a
+    // figure like that printed beside somebody's pay is a figure nobody trusts.
+    const total = workedHours(
+      [day("2026-10-20", "08:00", "08:07"), day("2026-10-21", "08:00", "08:20")],
+      studio
+    );
+    assert.equal(total.hours, 0.45);
+  });
+
+  it("says nothing happened for no days at all", () => {
+    assert.deepEqual(workedHours([], studio), { hours: 0, onSite: 0, days: 0, daysWithoutClockOut: 0 });
   });
 });

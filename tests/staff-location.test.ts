@@ -468,7 +468,10 @@ describe("the wiring the map depends on", () => {
     assert.match(me, /"me\/location\/permission": guardedAction\(requireEmployee, /);
 
     const team = read("src", "lib", "mobile", "registry", "team.ts");
-    assert.match(team, /"team\/locations": guarded\(requireAdmin, /);
+    // The read is behind the reading half of the manager's guard, so the map
+    // still draws for a session past its editing hour; the two actions on it
+    // are not (lib/admin-guard.ts).
+    assert.match(team, /"team\/locations": guarded\(requireAdminRead, /);
     assert.match(team, /"team\/locations\/refresh": guardedAction\(requireAdmin, /);
     assert.match(team, /"team\/locations\/office": guardedAction\(requireAdmin, /);
   });
