@@ -5,8 +5,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const TABS = [
+// `portal` is which portals a tab belongs to. All but one are both.
+const TABS: { key: string; label: string; only?: "/employee" }[] = [
   { key: "", label: "Overview" },
+  // The team's own steps on this project — where a step of the delivery
+  // process is now read, since the studio asked for them out of the task list
+  // (2026-11-03; see the page's own note). The manager has the whole matrix at
+  // /admin/tasks, which is the same work for everybody at once, so this tab is
+  // the team's alone rather than a narrower copy of a screen they already have.
+  { key: "steps", label: "Steps", only: "/employee" },
   { key: "gallery", label: "Gallery" },
   { key: "drawings", label: "Drawings" },
   { key: "boq", label: "BOQ" },
@@ -77,7 +84,7 @@ export function ProjectTabs({
       ref={rail}
       className={cn("scrollbar-touch-none flex gap-1 overflow-x-auto border-b border-ink/8", className)}
     >
-      {TABS.map((tab) => {
+      {TABS.filter((tab) => !tab.only || tab.only === portal).map((tab) => {
         const href = tab.key ? `${base}/${tab.key}` : base;
         const active = pathname === href;
         return (

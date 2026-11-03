@@ -1,12 +1,9 @@
 import Link from "next/link";
 import { ListChecks } from "lucide-react";
 import { requireEmployee } from "@/lib/employee-session";
-import { allTasks, type EmployeeTask } from "@/lib/employee-tasks";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyIn, shiftDayKey } from "@/lib/time";
-import { TaskCard } from "@/components/employee/task-card";
 import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
-import { planForTasks } from "@/lib/stage-deadlines";
 import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
@@ -55,13 +52,12 @@ const EMPTY: Record<TaskFilter, { title: string; description: string }> = {
 
 // Everything on one list, soonest due first, whatever kind of work it is — a
 // step on a project and a job from the manager compete for the same hours.
-type ListItem = Filterable &
-  ({ kind: "board"; task: EmployeeTask; due: string } | { kind: "assigned"; task: AssignedTaskView; due: string });
+// One kind now: a job somebody was handed by name. A project's own steps are
+// listed on the project (see the note in the page body), so there is nothing
+// for the `kind` discriminator to tell apart any more.
+type ListItem = Filterable & { kind: "assigned"; task: AssignedTaskView; due: string };
 
 const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 } as const;
-
-// Work with no date at all sorts after everything that has one.
-const NO_DATE = "9999-12-31";
 
 export default async function EmployeeTasksPage({
   searchParams,
@@ -130,34 +126,24 @@ export default async function EmployeeTasksPage({
   const active = readTaskFilter(filter);
   const today = dayKeyIn(timezone, new Date());
 
-  // Everything, read once and narrowed here: each button says how many it
-  // holds, and a count needs the tasks the list is not showing.
-  const tasks = await allTasks(employee.id);
-  const plan = await planForTasks(tasks);
+  // **A project's own steps are not in this list.** The studio asked for that
+  // on 2026-11-03: "ما يبينش عندهم كتاسك" — a step of the delivery process is
+  // the project's work, and it is read on the project, so it is a tab there
+  // (`/employee/projects/[id]/steps`) rather than a card mixed in with the
+  // jobs somebody was handed by name.
+  //
+  // The steps themselves did not go anywhere: the same cards, the same detail
+  // page at `/employee/tasks/[id]`, the same actions and the same
+  // notifications. Only where they are listed changed.
   const assigned = await myAssignedTasks(employee.id, { includeDone: true });
 
-  const everything: ListItem[] = [
-    ...tasks.map((task) => {
-      const deadline = plan.get(task.id)?.dueBy ?? null;
-      const due = deadline ?? task.dueAt ?? task.scheduledFor;
-      return {
-        kind: "board" as const,
-        task,
-        due: due ? dayKeyIn(timezone, due) : NO_DATE,
-        state: task.state,
-        // Late by the deadline the card counts down to, and by nothing else:
-        // the filter must list exactly the cards that say "late".
-        late: isLate(task.state, deadline ? dayKeyIn(timezone, deadline) : null, today),
-      };
-    }),
-    ...assigned.map((task) => ({
-      kind: "assigned" as const,
-      task,
-      due: task.endKey,
-      state: task.state,
-      late: isLate(task.state, task.endKey, today),
-    })),
-  ];
+  const everything: ListItem[] = assigned.map((task) => ({
+    kind: "assigned" as const,
+    task,
+    due: task.endKey,
+    state: task.state,
+    late: isLate(task.state, task.endKey, today),
+  }));
 
   const counts = countByFilter(everything);
   const items = everything
@@ -209,19 +195,9 @@ export default async function EmployeeTasksPage({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {items.map((item) =>
-            item.kind === "board" ? (
-              <TaskCard
-                key={item.task.id}
-                task={item.task}
-                timezone={timezone}
-                dueBy={plan.get(item.task.id)?.dueBy}
-                startsAt={plan.get(item.task.id)?.startsAt}
-              />
-            ) : (
-              <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
-            )
-          )}
+          {items.map((item) => (
+            <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
+          ))}
         </div>
       )}
     </div>

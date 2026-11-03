@@ -111,12 +111,26 @@ describe("one reading of a task's standing, on every screen", () => {
     }
   });
 
-  // The card counts down to the stage's deadline. Late by anything else — the
-  // day it was merely planned for — and the filter lists cards that do not say late.
-  it("calls a board task late by the deadline its card counts down to", () => {
+  // A project's own steps are not in the task list any more.
+  //
+  // The studio asked for that on 2026-11-03 — "ما يبينش عندهم كتاسك" — and a
+  // step is read on the project instead, at
+  // /employee/projects/[id]/steps. This pins both halves, because the way it
+  // would come undone is somebody re-adding `allTasks` to the task list to
+  // "fix" an empty screen, and nothing else would notice: it typechecks, it
+  // lints, it builds, and every card still works.
+  //
+  // The lateness rule those cards were filtered by is still checked, in the
+  // phone's copy below — the phone is still handed both lists.
+  it("keeps a project's steps out of the task list and on the project", () => {
     const page = read("src", "app", "employee", "(portal)", "tasks", "page.tsx");
-    assert.match(page, /const deadline = plan\.get\(task\.id\)\?\.dueBy \?\? null;/);
-    assert.match(page, /late: isLate\(task\.state, deadline \? dayKeyIn\(timezone, deadline\) : null, today\)/);
+    assert.doesNotMatch(page, /allTasks\(/, "the task list must not read the project board");
+    assert.doesNotMatch(page, /kind === "board"/);
+
+    const steps = read("src", "app", "employee", "(portal)", "projects", "[id]", "steps", "page.tsx");
+    assert.match(steps, /allTasks\(employee\.id, undefined, id\)/, "scoped to this person and this project");
+    assert.match(steps, /planForTasks\(steps\)/, "the cards still count down to the stage's deadline");
+    assert.match(steps, /<TaskCard/, "the same card, not a second one to keep in step");
   });
 });
 

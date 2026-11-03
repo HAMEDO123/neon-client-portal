@@ -130,12 +130,25 @@ export async function countTasksForDay(
 }
 
 /** Everything assigned to this employee, newest work first. */
-export async function allTasks(employeeId: string, filter?: "open" | "completed") {
+export async function allTasks(
+  employeeId: string,
+  filter?: "open" | "completed",
+  /**
+   * One project's steps only.
+   *
+   * The studio asked on 2026-11-03 that a project's own steps stop appearing
+   * in somebody's task list — "ما يبينش عندهم كتاسك" — and live on the
+   * project instead, which is where that work is looked at anyway. This is
+   * what the project's Steps tab reads.
+   */
+  projectId?: string
+) {
   return prisma.projectTaskEntry.findMany({
     where: {
       AND: [
         await ownedBy(employeeId),
         filter === "completed" ? { state: "DONE" } : filter === "open" ? { NOT: { state: "DONE" } } : {},
+        projectId ? { projectId } : {},
       ],
     },
     select: taskSelect,
