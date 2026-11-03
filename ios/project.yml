@@ -26,9 +26,6 @@ targets:
         # guide beside the code; none of it belongs in the app bundle.
         excludes:
           - "**/*.md"
-      # Opening the walkie-talkie from the lock screen: iOS runs the intent
-      # in the app (Controls/OpenWalkieIntent.swift).
-      - path: Controls/OpenWalkieIntent.swift
       # The icon as an asset catalog: App Store Connect refuses an upload
       # without one (90022 "no 120x120 icon", 90713 "no CFBundleIconName").
       - path: Resources/Assets.xcassets
@@ -41,8 +38,6 @@ targets:
       - package: WebRTC
       # The share extension ("NEON" in the share sheet), in PlugIns.
       - target: NeonShare
-      # The lock screen's walkie-talkie button (iOS 18 Controls).
-      - target: NeonControls
     # Push notifications (APNs). Xcode's automatic signing turns the
     # capability on for the App ID; an App Store export makes it "production".
     # The keychain group is the one the share extension also has: the session
@@ -53,10 +48,6 @@ targets:
       path: NeonAdmin.entitlements
       properties:
         aps-environment: development
-        # The manager's walkie-talkie (Features/Walkie): Apple's Push to Talk.
-        # The capability must also be ticked on the App ID at
-        # developer.apple.com, and the App Store profiles made again after.
-        com.apple.developer.push-to-talk: true
         keychain-access-groups:
           - $(AppIdentifierPrefix)com.neonjo.staff.shared
     info:
@@ -70,10 +61,6 @@ targets:
         # it has seen before.
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        # neonstaff://walkie opens the walkie-talkie.
-        CFBundleURLTypes:
-          - CFBundleURLName: com.neonjo.staff
-            CFBundleURLSchemes: [neonstaff]
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, ar]
         # The keychain group above, spelled out for TokenStore to name. From
@@ -104,12 +91,12 @@ targets:
         # the day by a silent push (remote-notification). Nothing else runs
         # in the background. PushKit and CallKit are system frameworks,
         # linked by their imports.
-        UIBackgroundModes: [audio, voip, location, remote-notification, push-to-talk]
+        UIBackgroundModes: [audio, voip, location, remote-notification]
         # The team map (Features/Location): asked of somebody on the team
         # only, from the card on their Today page that says what is shared.
         NSLocationWhenInUseUsageDescription: "During working hours, NEON shares where you are with the studio's manager on the team map. Nothing is shared outside working hours, or after you clock out."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Allow Always so NEON keeps sharing your location during working hours while the app is closed. Nothing is shared outside working hours, or after you clock out."
-        NSMicrophoneUsageDescription: "NEON uses the microphone for calls with the studio, voice messages, the walkie-talkie, and saying tasks."
+        NSMicrophoneUsageDescription: "NEON uses the microphone for calls with the studio, voice messages, and saying tasks."
         # Saying the tasks (Features/Tasks/TaskDictation.swift): Apple's own
         # speech recognition turns what the manager says into text in a box,
         # which is only ever read and corrected before anything is sent.
@@ -195,35 +182,6 @@ targets:
         SWIFT_VERSION: "5.0"
         APPLICATION_EXTENSION_API_ONLY: YES
         # Signed as the app is (see NeonAdmin above).
-        DEVELOPMENT_TEAM: 745F9U99BC
-        CODE_SIGN_STYLE: Automatic
-        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"
-        "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
-
-  # The walkie-talkie as a lock-screen and Control Center button (iOS 18).
-  NeonControls:
-    type: app-extension
-    platform: iOS
-    deploymentTarget: "18.0"
-    sources:
-      - path: Controls
-    info:
-      path: NeonControls-Info.plist
-      properties:
-        CFBundleDisplayName: "NEON"
-        CFBundleShortVersionString: "$(MARKETING_VERSION)"
-        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
-        CFBundleDevelopmentRegion: en
-        CFBundleLocalizations: [en, ar]
-        NSExtension:
-          NSExtensionPointIdentifier: com.apple.widgetkit-extension
-    settings:
-      base:
-        PRODUCT_NAME: NeonControls
-        PRODUCT_BUNDLE_IDENTIFIER: com.neonjo.staff.controls
-        TARGETED_DEVICE_FAMILY: "1"
-        SWIFT_VERSION: "5.0"
-        APPLICATION_EXTENSION_API_ONLY: YES
         DEVELOPMENT_TEAM: 745F9U99BC
         CODE_SIGN_STYLE: Automatic
         "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"
