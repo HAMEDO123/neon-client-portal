@@ -126,11 +126,6 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
     // they are part of what the day costs rather than a charge of their own.
     const awayMinutes = awayMinutesOf(storedBreaks(existing?.breaks));
 
-    // Somebody on open hours has no start to be late for and no end to leave
-    // early from, so the day records the times and costs nothing. Charging
-    // them against the studio's clock took 19 hours off one month from
-    // somebody who had worked full days, at four in the afternoon.
-    const open = person.openHours === true;
     /**
      * What the day costs once written, and when it ends — nothing to say
      * without a working day to measure against.
@@ -139,7 +134,6 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
      * has the arrival, the step-outs and the studio's day in one hand.
      */
     const charge = (arrivedAt: Date | null, departedAt: Date | null) => {
-      if (open) return { shortHours: 0 };
       if (!context) return {};
       const { shortHours, endsAtMinutes } = dayCharge({
         ...context,
@@ -164,7 +158,7 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
         where: { id: existing.id },
         data: {
           departedAt: left.departedAt,
-          earlyHours: open ? 0 : left.earlyHours,
+          earlyHours: left.earlyHours,
           ...charge(existing.arrivedAt, left.departedAt),
           note: `${head} · device: ${left.departedLocal ? `left ${left.departedLocal}` : "no clock-out yet"}`.slice(0, 300),
         },
@@ -219,19 +213,19 @@ export async function applyAttendance(days: DayAttendance[], context?: WorkConte
       create: {
         employeeId: person.id,
         day: date,
-        delayHours: open ? 0 : day.delayHours,
+        delayHours: day.delayHours,
         arrivedAt: day.arrivedAt,
         departedAt: day.departedAt,
-        earlyHours: open ? 0 : day.earlyHours,
+        earlyHours: day.earlyHours,
         ...charge(day.arrivedAt, day.departedAt),
         source: DEVICE,
         note: noteFor(day),
       },
       update: {
-        delayHours: open ? 0 : day.delayHours,
+        delayHours: day.delayHours,
         arrivedAt: day.arrivedAt,
         departedAt: day.departedAt,
-        earlyHours: open ? 0 : day.earlyHours,
+        earlyHours: day.earlyHours,
         ...charge(day.arrivedAt, day.departedAt),
         source: DEVICE,
         note: noteFor(day),

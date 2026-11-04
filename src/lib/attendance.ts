@@ -388,6 +388,11 @@ export function minutesInDay(time: string, startedAt: string): number | null {
  * A day with no times keeps the older meaning — whatever the manager typed —
  * because there is nothing to measure against and their figure is the whole
  * record of it.
+ *
+ * **One rule for everybody, including open hours.** The studio said so on
+ * 2026-11-04: "نفس الاشي لكل الموظفين". There is deliberately no flag here for
+ * whose day it is — an exemption that lived in this function is how somebody's
+ * day came to cost nothing at all whatever they worked.
  */
 export function dayCharge(input: {
   hours: WorkHours;

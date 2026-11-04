@@ -33,6 +33,19 @@ export type ClockPerson = {
    * about theirs — somebody the device has not seen has no day of their own yet.
    */
   endsAt?: Date | null;
+  /**
+   * Works whatever hours they work (`Employee.openHours`): **never chased to
+   * clock in**, always chased to clock out.
+   *
+   * There is no hour they are due at, so a reminder at 11:00 would be the
+   * platform nagging somebody about a start they do not keep. The other end is
+   * not like that at all — once the device has seen them arrive, their day
+   * ends eight hours later like everybody else's, and since 2026-11-04 a
+   * forgotten clock-out costs them the same hour it costs anybody. Chasing
+   * them for it is what keeps that charge honest: this studio does not charge
+   * for an evening it said nothing on.
+   */
+  openHours?: boolean;
 };
 
 /**
@@ -126,6 +139,9 @@ export function dueClockReminders(input: {
 
     // Clocking in: from the start, until the device sees them or the hour is up.
     if (!person.arrivedAt) {
+      // Nobody on open hours is due at an hour, so there is no arrival to
+      // chase and no missed one to report to the manager.
+      if (person.openHours) continue;
       if (t >= windows.start.getTime() && t < windows.inUntil.getTime()) {
         if (repeatDue("in")) due.push({ employeeId: person.id, kind: "in" });
       } else if (t >= windows.inUntil.getTime() && t < windows.end.getTime() && last("in") && !last("in-missed")) {

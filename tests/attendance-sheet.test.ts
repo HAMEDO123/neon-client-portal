@@ -148,8 +148,14 @@ describe("a month sheet", () => {
     assert.equal(sheet.people[0].totals.daysComplete, 0);
   });
 
-  it("measures somebody paid by the hour against nothing but the hours", () => {
-    // No end to owe: the day is what was worked, up to the studio's eight.
+  it("holds somebody paid by the hour to the same end as everybody else", () => {
+    // The studio put the whole team on one rule on 2026-11-04: "نفس الاشي لكل
+    // الموظفين". An hourly day used to print no end and no lateness and cost
+    // nothing whatever was worked — which is how four of Salem's days, one of
+    // them 4.2 hours, came to cost him nothing at all.
+    //
+    // What stays true of open hours is the pay basis, not an exemption: the
+    // hours are still what their pay is reckoned in, and still capped at a day.
     const sheet = build(
       [hourly],
       [
@@ -163,14 +169,52 @@ describe("a month sheet", () => {
     );
 
     const day = sheet.people[0].days[0];
-    assert.equal(day.worked, 8);
+    assert.equal(day.worked, 8, "ten hours on site still count as the studio's eight");
     assert.equal(day.onSite, 10);
-    assert.match(day.reason, /Paid by the hour/);
+    assert.match(day.reason, /Paid by the hour/, "the pay basis is still said");
     assert.match(day.reason, /there is no overtime/);
-    // No end to owe and no lateness: they are paid for the hours, so printing
-    // either would hold them to a rule the studio does not apply to them.
-    assert.equal(day.owedUntil, "");
-    assert.equal(day.lateHours, 0);
+
+    // The end is printed now, and it is the one the charge is measured against.
+    // Hiding it was right while the day was uncharged and is exactly what would
+    // leave somebody unable to see the rule their money now turns on.
+    assert.equal(day.owedUntil, "7:00 PM");
+    assert.equal(day.lateHours, 0, "in at 11:00 on the dot is not late for anybody");
+  });
+
+  it("charges an hourly day that fell short, and says so in the same words", () => {
+    // Salem's 18 October: in at 5:04 PM, out at 9:14 PM — 4.2 hours. Under the
+    // old rule this row was charged 0. The money that was already settled is
+    // not moved (`shortHours` is what the payslip followed), so the sheet says
+    // both figures rather than quietly printing one the rule would not produce.
+    const sheet = build(
+      [hourly],
+      [
+        record({
+          employeeId: "e2",
+          dayKey: THURSDAY,
+          arrivedAt: at(THURSDAY, "14:04"),
+          departedAt: at(THURSDAY, "18:14"),
+          shortHours: 0,
+        }),
+      ]
+    );
+
+    const day = sheet.people[0].days[0];
+    assert.equal(day.worked, 4.17);
+
+    // **The whole-hour end is what the studio asked for**, and this is the
+    // sentence that shows its teeth: an afternoon arrival owes until 2:00 AM
+    // (`DEFAULT_WORK_HOURS` has no allowance, so 5:04 PM is a flat 7 hours
+    // late), and leaving at 9:14 PM is 5 hours short of that end — not the 3.83
+    // the bare hours were short of eight. Arriving part-way into an hour costs
+    // the rest of it, here and everywhere else in this file.
+    assert.equal(day.owedUntil, "2:00 AM");
+    assert.match(day.reason, /5 h short/, "measured against the end, not against the bare hours");
+    assert.match(
+      day.reason,
+      /Charged as 0 h off, not 5 h/,
+      "a settled row keeps its figure, and the sentence admits the difference"
+    );
   });
 
   it("takes a step-out off the day and pushes the end back by it", () => {

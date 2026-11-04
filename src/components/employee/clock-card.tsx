@@ -58,10 +58,10 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
         <Fact label="Clocked in" value={time(day.arrivedAt)} />
         {done ? (
           <Fact label="Clocked out" value={time(day.departedAt)} />
-        ) : day.openHours ? (
-          // Nothing to be at by: they work the hours they work.
-          <Fact label="Clock out by" value="whenever you finish" tone="text-ink/60" />
         ) : (
+          // Everybody has an hour to be gone by, open hours included: this said
+          // "whenever you finish" while such a day was charged nothing, and
+          // since 2026-11-04 it is charged like everybody else's.
           <Fact label="Clock out by" value={time(day.endsAt)} tone={day.moved ? "text-cyan-700" : "text-ink"} />
         )}
         {day.openHours && day.countsAs != null && (
@@ -73,12 +73,13 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
         )}
       </div>
 
-      {/* No start to be late for, so nothing is counted against a clock they
-          do not work to — the one thing open hours means. */}
+      {/* What open hours still means: no hour to arrive at, and pay reckoned
+          in hours worked. It no longer means the day is uncharged. */}
       {day.openHours && (
         <p className="mt-3 rounded-xl bg-paper-soft/70 px-3 py-2 text-xs leading-relaxed text-ink/65">
-          You work the hours you work: they count from the moment the fingerprint reads you, and a day
-          counts up to <span className="font-semibold text-ink">8 hours</span>.
+          You start when you start — nothing is counted against you for the hour you arrive. The day is
+          still <span className="font-semibold text-ink">8 hours</span> from then, like everybody
+          else&apos;s.
           {day.workedHours != null && day.countsAs != null && day.workedHours > day.countsAs && (
             <> Today you were here {day.workedHours}h, which counts as {day.countsAs}h — there is no overtime.</>
           )}
@@ -87,7 +88,7 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
 
       {/* Why their end is not everybody else's. Without this the time above
           reads as a mistake to the person it belongs to. */}
-      {!done && !day.openHours && day.moved && (
+      {!done && day.moved && (
         <p className="mt-3 rounded-xl bg-paper-soft/70 px-3 py-2 text-xs leading-relaxed text-ink/65">
           {day.lateHours > 0 &&
             `You clocked in ${spell(day.lateMinutes)} after the start, counted as ${day.lateHours} ${
@@ -117,17 +118,15 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
         }`}
       >
         <LogOut size={13} strokeWidth={2} />
-        {day.openHours
-          ? done
-            ? `Clocked out. ${day.countsAs ?? 0}h counted for today.`
-            : "Clock out on the fingerprint when you leave, so the hours can be counted."
-          : done
-            ? short > 0
-              ? `${short}h short of your day — that much comes off.`
-              : "Full day. Nothing is taken off."
-            : short > 0
-              ? `${short}h is coming off so far.`
-              : "Clock out by then and nothing is taken off."}
+        {/* One sentence for everybody. An hourly day used to get its own, which
+            never mentioned a shortfall because there was never one to mention. */}
+        {done
+          ? short > 0
+            ? `${short}h short of your day — that much comes off.`
+            : "Full day. Nothing is taken off."
+          : short > 0
+            ? `${short}h is coming off so far.`
+            : "Clock out by then and nothing is taken off."}
       </p>
     </section>
   );

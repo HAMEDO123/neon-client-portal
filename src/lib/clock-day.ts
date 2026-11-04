@@ -99,9 +99,11 @@ export async function myClockDay(
 
   const breaks = storedBreaks(row.breaks);
   const awayMinutes = awayMinutesOf(breaks);
-  // No end for somebody on open hours: there is nothing they are owed until,
-  // and a deadline drawn from a start they do not work to is a wrong one.
-  const endsAt = openHours ? null : endForPerson(hours, dayKey, timeZone, row.arrivedAt, awayMinutes);
+  // Everybody has an end they are owed until, open hours included — the studio
+  // put them all on one rule on 2026-11-04. This showed none for an hourly day
+  // while such a day was charged nothing; hiding it now would leave the one
+  // person whose day is charged against it unable to see what it is.
+  const endsAt = endForPerson(hours, dayKey, timeZone, row.arrivedAt, awayMinutes);
 
   const workedHours =
     row.departedAt && row.arrivedAt
@@ -124,11 +126,10 @@ export async function myClockDay(
     departedAt: row.departedAt,
     endsAt,
     moved: Boolean(endsAt && empty.usualEnd && endsAt.getTime() > empty.usualEnd.getTime()),
-    // Not late when there is no start to be late for.
-    lateMinutes: openHours ? 0 : lateMinutes,
+    lateMinutes,
     // The hours the end of the day actually moved by, which is what the person
     // reading this needs: a minute past the allowance is a whole hour.
-    lateHours: openHours ? 0 : chargedLateHours(hoursOn(hours, dayKey), wallClockIn(timeZone, row.arrivedAt)),
+    lateHours: chargedLateHours(hoursOn(hours, dayKey), wallClockIn(timeZone, row.arrivedAt)),
     awayMinutes,
     awayHours: Math.ceil(awayMinutes / 60),
     breaks,

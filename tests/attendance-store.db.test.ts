@@ -195,13 +195,23 @@ describe("what a sync writes", () => {
     assert.equal(row.note, "Device · arrived 11:30 AM · stepped out · device: left 7:00 PM");
   });
 
-  it("charges nothing to somebody who works open hours", async (t) => {
+  it("charges somebody on open hours nothing for a full day, however late it started", async (t) => {
     if (!reachable) return t.skip("no database");
 
-    // No start to be late for and no end to leave early from: the day records
-    // the times and costs nothing. Arriving at 4 PM and working till midnight
-    // is a full day for somebody on open hours, and the studio's clock has
-    // nothing to say about it.
+    // **One rule for everybody since 2026-11-04** ("نفس الاشي لكل الموظفين"),
+    // and this is the case that has to keep coming out at nothing: arriving at
+    // 4 PM and working through till midnight is a full day's work, and it must
+    // cost nothing at all.
+    //
+    // It is not exempt any more — it is simply not short. The lateness pushes
+    // the end back by the same hours it charges, so eight hours from 4 PM ends
+    // at midnight and midnight is when they left. Before this the row was
+    // exempted outright and cost nothing *whatever* was worked, which is how a
+    // 4.2-hour day of Salem's came to be free.
+    //
+    // The old version of this test asserted `delayHours` was 0 for them. It is
+    // recorded now, because it is the thing the end moved by: a row claiming
+    // nobody was late beside a day owed until midnight cannot explain itself.
     const open = await person("Open", `${PREFIX}903`, true, true);
     const context = { hours: { ...DEFAULT_WORK_HOURS, graceMinutes: 5 }, timeZone: "Asia/Amman" };
     const dayKey = "2026-09-28";
@@ -223,9 +233,13 @@ describe("what a sync writes", () => {
     const row = await prisma.attendanceRecord.findUniqueOrThrow({
       where: { employeeId_day: { employeeId: open.id, day: dayKeyToDate(dayKey) } },
     });
-    assert.equal(row.delayHours, 0, "six hours late by the clock, and not late at all");
-    assert.equal(row.earlyHours, 0);
-    assert.equal(row.shortHours, 0, "nothing is charged");
+    assert.equal(row.delayHours, 6, "the lateness is recorded, because the end moved by it");
+    assert.equal(row.earlyHours, 2);
+    assert.equal(
+      row.shortHours,
+      0,
+      "eight hours from 4 PM ends at midnight, and midnight is when they left — nothing off"
+    );
     // The times are still the record of the day — they are what it is paid on.
     assert.equal(row.arrivedAt?.toISOString(), "2026-09-28T13:00:00.000Z");
     assert.equal(row.departedAt?.toISOString(), "2026-09-28T21:00:00.000Z");

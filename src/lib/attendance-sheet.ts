@@ -221,19 +221,18 @@ function describeDay(input: {
   const arrival = wallClockIn(timeZone, record.arrivedAt);
   const owedMinutes = endOfDayMinutes(hours, dayKey, arrival, awayMinutesOf(steps));
 
-  // Somebody paid by the hour has no end to owe and cannot be late: they are
-  // paid for the hours they work, so the studio's own day is not a thing their
-  // day is measured against. Printing an end and a lateness for them would be
-  // inventing a rule they are not held to — and `applyAttendance` zeroes both
-  // on their rows for exactly that reason.
-  const owedUntil = person.openHours ? "" : clockLabel(owedMinutes);
+  // Everybody has an end to be gone by, open hours included, since the studio
+  // put them all on one rule on 2026-11-04. This used to print nothing for an
+  // hourly day — correct while such a day was charged nothing, and the thing
+  // that would now hide the very end the charge is measured against.
+  const owedUntil = clockLabel(owedMinutes);
 
   // Lateness read off the arrival rather than taken from the column, because
   // this sheet's whole job is to show the working: `delayHours` is a figure
   // written when the row was last touched, and a row whose column says "0 h
   // late" beside an arrival of 1:04 PM would make the sentence nonsense. The
   // same function payroll is measured by, on that day's own hours.
-  const late = person.openHours ? 0 : lateHours(hoursOn(hours, dayKey), arrival);
+  const late = lateHours(hoursOn(hours, dayKey), arrival);
   // Empty rather than null for a clock-out that never came: these are cells on
   // a sheet, and "—" is the screen's business, not this builder's.
   const arrived = formatTimeIn(timeZone, record.arrivedAt) ?? "";
@@ -252,23 +251,27 @@ function describeDay(input: {
   // They agree on every ordinary day; where they do not — a row written before
   // a rule changed, or hours edited since — the sentence says both rather than
   // explaining a deduction that is not the one on the payslip.
-  // Nothing to compare for an hourly day: there is no end it fell short of.
   //
-  // For everybody else this is `dayCharge` itself rather than `hoursShort`,
-  // and that matters now that a forgotten scan has a flat price: `hoursShort`
-  // measures the shortfall and knows nothing about the hour
-  // (MISSING_PUNCH_HOURS), so it would read 0 against a row charged 1 and put
-  // "Charged as 1 h off, not 0 h" on every day somebody forgot to scan.
-  const recomputed = person.openHours
-    ? record.shortHours
-    : chargedHours({
-        hours,
-        timeZone,
-        dayKey,
-        arrivedAt: record.arrivedAt,
-        departedAt: record.departedAt,
-        awayMinutes: awayMinutesOf(steps),
-      });
+  // This is `dayCharge` itself rather than `hoursShort`, and that matters now
+  // that a forgotten scan has a flat price: `hoursShort` measures the shortfall
+  // and knows nothing about the hour (MISSING_PUNCH_HOURS), so it would read 0
+  // against a row charged 1 and put "Charged as 1 h off, not 0 h" on every day
+  // somebody forgot to scan.
+  //
+  // **An open-hours day is recomputed here too**, where it used to be taken
+  // from the column unexamined. That is the point of doing it at all: those
+  // rows were charged nothing under the old rule, and this is the clause that
+  // says so out loud — "Charged as 0 h off, not 1 h" — instead of quietly
+  // printing a figure today's rule would not produce. The money on the payslip
+  // is still the figure on the row; nothing already settled moves.
+  const recomputed = chargedHours({
+    hours,
+    timeZone,
+    dayKey,
+    arrivedAt: record.arrivedAt,
+    departedAt: record.departedAt,
+    awayMinutes: awayMinutesOf(steps),
+  });
 
   return {
     ...common,
@@ -319,15 +322,15 @@ function explain(input: {
       ? ""
       : ` Charged as ${hours2(record.shortHours)} h off, not ${hours2(recomputed)} h.`;
 
-  // Paid for the hours, so there is no end to owe: the day is what was worked,
-  // up to the studio's eight and no further.
-  if (person.openHours) {
-    if (worked == null) {
-      return `In ${arrived}. No clock-out recorded, so the day counts nothing and a forgotten scan is ${hours2(MISSING_PUNCH_HOURS)} h off.${stepped}${charged}`;
-    }
-    const capped = onSite != null && onSite > worked ? ` (here ${hours2(onSite)} h — there is no overtime)` : "";
-    return `Paid by the hour: in ${arrived}, out ${left}, ${worked} h${capped}.${stepped}${charged}`;
-  }
+  // Paid by the hour, and now held to the same end as everybody else — so the
+  // hours worked are said as well as the end owed, rather than instead of it.
+  // The hours are the thing their pay is reckoned in; the end is the thing the
+  // deduction is measured against, and a sentence that gave only one of them
+  // could not explain the other.
+  const byTheHour =
+    person.openHours && worked != null
+      ? ` Paid by the hour: ${worked} h${onSite != null && onSite > worked ? ` (here ${hours2(onSite)} h — there is no overtime)` : ""}.`
+      : "";
 
   const owed =
     late > 0 ? `${hours2(late)} h late, so the day owed until ${owedUntil}` : `the day owed until ${owedUntil}`;
@@ -341,7 +344,7 @@ function explain(input: {
   const outcome =
     recomputed > 0 ? `left ${left}, ${hours2(recomputed)} h short` : `left ${left} — the day was worked, nothing off`;
 
-  return `In ${arrived}, ${owed}; ${outcome}.${stepped}${charged}`;
+  return `In ${arrived}, ${owed}; ${outcome}.${byTheHour}${stepped}${charged}`;
 }
 
 const COLUMNS = [

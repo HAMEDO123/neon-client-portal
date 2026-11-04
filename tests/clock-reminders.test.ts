@@ -105,3 +105,44 @@ test("a day that began late is owed later, and one nobody started is not owed at
   assert.equal(endForPerson(studio, day, tz, at("11:00"), 215)?.toISOString(), at("23:00").toISOString());
   assert.equal(endForPerson(studio, day, tz, null), null, "the device never saw them");
 });
+
+test("open hours: never chased to clock in, always chased to clock out", () => {
+  // The studio put the whole team on one charging rule on 2026-11-04, and a
+  // forgotten clock-out now costs somebody on open hours the same flat hour it
+  // costs anybody (lib/attendance.ts, MISSING_PUNCH_HOURS). They had been left
+  // out of this query altogether — so the one person never reminded to scan out
+  // was also the one who had forgotten four times. This studio does not charge
+  // for an evening it said nothing on, so the out side now reaches them.
+  //
+  // The IN side still must not. There is no hour they are due at: chasing an
+  // arrival at 11:00 would be nagging somebody about a start they do not keep,
+  // and telling the manager they "missed" it would be worse than nagging.
+  const notYet = [{ id: "s", arrivedAt: null, departedAt: null, openHours: true }];
+  assert.deepEqual(due("11:00", notYet), [], "no arrival to be late for");
+  assert.deepEqual(due("12:30", notYet), [], "and no missed arrival to report either");
+
+  // Arrived at 4 PM, so their day ends at midnight — their own end, not the
+  // studio's 7 PM, which is the whole reason this can be done honestly now.
+  // Midnight is the NEXT day's: an open-hours day running past it is ordinary
+  // here, and `at()` would place it before the arrival it belongs to.
+  const midnight = new Date("2026-10-05T00:00:00+03:00");
+  const after = (time: string) => new Date(`2026-10-05T${time}:00+03:00`);
+  const mine = { id: "s", arrivedAt: at("16:00"), departedAt: null, endsAt: midnight, openHours: true };
+  const dueAt = (now: Date) =>
+    dueClockReminders({ now, windows, people: [mine], sent: nobody }).map((d) => `${d.employeeId}:${d.kind}`);
+
+  assert.deepEqual(due("19:30", [mine]), [], "the studio's own end is not theirs");
+  assert.deepEqual(dueAt(at("23:50")), ["s:out-soon"], "warned ten minutes before their own end");
+  assert.deepEqual(dueAt(after("00:05")), ["s:out"], "then chased from it");
+
+  // And left alone the moment the device sees them go.
+  assert.deepEqual(
+    dueClockReminders({
+      now: after("00:05"),
+      windows,
+      people: [{ ...mine, departedAt: after("00:02") }],
+      sent: nobody,
+    }),
+    []
+  );
+});

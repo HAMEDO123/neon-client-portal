@@ -36,11 +36,14 @@ export async function runClockReminders(now = new Date()) {
   // manager's own row and anybody not paired are never chased — the device
   // could never see them.
   const people = await prisma.employee.findMany({
-    // Open hours are chased against nothing: there is no start to be late for
-    // and no end to leave early from, so a reminder at 11:00 and another at
-    // 19:00 would be the platform nagging somebody about a day they do not work.
-    where: { active: true, accessRole: "EMPLOYEE", deviceUserId: { not: null }, openHours: false },
-    select: { id: true, name: true },
+    // Open hours are included, and only the IN side is skipped for them
+    // (`ClockPerson.openHours`). They were left out of this query altogether
+    // until 2026-11-04, which was right while their day was charged nothing:
+    // now that a forgotten clock-out costs them the same hour it costs
+    // everybody, the one person never reminded to scan out was also the one
+    // who had forgotten four times.
+    where: { active: true, accessRole: "EMPLOYEE", deviceUserId: { not: null } },
+    select: { id: true, name: true, openHours: true },
   });
   if (people.length === 0) return { skipped: "nobody is paired to the device" };
 
@@ -94,6 +97,7 @@ export async function runClockReminders(now = new Date()) {
         arrivedAt: row?.arrivedAt ?? null,
         departedAt: row?.departedAt ?? null,
         endsAt: endsFor(row?.arrivedAt ?? null, row?.breaks),
+        openHours: p.openHours,
       };
     }),
     sent,
