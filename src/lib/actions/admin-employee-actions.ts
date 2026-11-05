@@ -147,16 +147,33 @@ export async function updateEmployeeAccount(id: string, formData: FormData) {
   refresh();
 }
 
+/**
+ * Retires every way a phone can be reached for somebody being disabled.
+ *
+ * Both channels, because there are two: PushSubscription is the browser's, and
+ * DeviceToken is the iOS app's. Only the first was retired here until
+ * 2026-11-05, so a disabled account kept its APNS tokens — and the APNS sender
+ * (notifications/engine.ts) selects on `deviceToken.active` and never looks at
+ * whose account it is, so Amro's iPhone had a live token on the morning he was
+ * switched off. The app is now the main channel, which made the half that was
+ * missing the half that matters.
+ */
+async function retireDevices(id: string) {
+  await prisma.pushSubscription.updateMany({ where: { employeeId: id }, data: { active: false } });
+  await prisma.deviceToken.updateMany({ where: { employeeId: id }, data: { active: false } });
+}
+
 export async function setEmployeeActive(id: string, active: boolean) {
   await requireAdmin();
   await prisma.employee.update({ where: { id }, data: { active } });
 
-  if (!active) {
-    // Sessions are checked against `active` on every request, so disabling is
-    // immediate. Retiring the devices as well stops a disabled account's phone
-    // from buzzing with anything already queued.
-    await prisma.pushSubscription.updateMany({ where: { employeeId: id }, data: { active: false } });
-  }
+  // Sessions are checked against `active` on every request, so disabling is
+  // immediate. Retiring the devices as well stops a disabled account's phone
+  // from buzzing with anything already queued. Re-enabling leaves them retired
+  // on purpose: a token comes back the moment the person opens the app, and
+  // reviving one that has sat dead for weeks only spends a push on a device
+  // that may be long gone.
+  if (!active) await retireDevices(id);
 
   refresh();
 }
@@ -187,7 +204,7 @@ export async function revokeEmployeeAccount(id: string) {
     where: { id },
     data: { email: null, passwordHash: null, active: false },
   });
-  await prisma.pushSubscription.updateMany({ where: { employeeId: id }, data: { active: false } });
+  await retireDevices(id);
   refresh();
 }
 
