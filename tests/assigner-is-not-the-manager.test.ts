@@ -71,3 +71,39 @@ describe("ticking one off from the week view", () => {
     assert.doesNotMatch(body, /actor: "manager"/, "nothing here claims the manager did it");
   });
 });
+
+// The other half of the same rule, in the owner's words on 2026-11-09: she
+// "keeps receiving tasks from the manager but can assign tasks on employees".
+// Being refused her own DONE is worth nothing while she can delete the job
+// instead — and the Assign view lists the whole team, herself included, so
+// every one of these was one tap away on a job the manager handed her.
+describe("an assigner's own job", () => {
+  const ownJobGuarded = ["updateAssignedTask", "deleteAssignedTask", "moveAssignedTask"];
+
+  for (const name of ownJobGuarded) {
+    it(`is not ${name.replace("AssignedTask", "")}d by them — that stays the manager's`, () => {
+      const body = bodyOf(name);
+      assert.match(body, /const staff = await requireTaskAssigner\(\)/, "the guard's identity is kept");
+      assert.match(body, /await refuseOwnJob\(staff, id\)/, "and checked before anything is written");
+    });
+  }
+
+  it("is refused before the row is touched, not after", () => {
+    const body = bodyOf("deleteAssignedTask");
+    const guard = body.indexOf("refuseOwnJob");
+    const write = body.indexOf("assignedTask.delete");
+    assert.ok(guard >= 0 && write > guard, "deleting is the one path here that leaves no record");
+  });
+
+  it("lets the manager through, because the manager is not an employee", () => {
+    const helper = action.slice(action.indexOf("async function refuseOwnJob("));
+    const body = helper.slice(0, helper.indexOf("\n}"));
+    assert.match(body, /if \(staff\.type !== "EMPLOYEE"\) return/);
+    assert.match(body, /task\?\.employeeId === staff\.id/);
+  });
+
+  it("still leaves them free to hand new work to themselves", () => {
+    // Adding to your own plate is not the thing being prevented.
+    assert.doesNotMatch(bodyOf("createAssignedTask"), /refuseOwnJob/);
+  });
+});

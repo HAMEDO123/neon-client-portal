@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireTaskAssigner } from "@/lib/admin-guard";
+import { requireTaskAssigner, type Staff } from "@/lib/admin-guard";
 import { dayKeyToDate, todayKey } from "@/lib/time";
 import { getTimezone } from "@/lib/settings";
 import { draftTasksFromWords, type DictationResult } from "@/lib/ai/task-dictation";
@@ -29,6 +29,32 @@ import type { TaskPriority } from "@/generated/prisma/enums";
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Refuses an assigner the manager's edits on a job that is their own.
+ *
+ * The studio's rule, in the owner's words on 2026-11-09: she "keeps receiving
+ * tasks from the manager but can assign tasks on employees". So somebody with
+ * `canAssignTasks` is two things at once — the manager over the team's jobs,
+ * and an ordinary employee over their own — and an employee may do exactly two
+ * things to a job they were given: start it, and hand it in with proof
+ * (`actions/my-assigned-actions.ts`). Deleting it, giving it away or moving it
+ * to another day are the manager's, the same as for anybody else on the team.
+ *
+ * It matters most for deleting, which is the one destructive path here and
+ * leaves no record at all: without this, a job the manager handed down could
+ * not be marked done by the person who got it, but could be made to vanish by
+ * them. The Assign view shows the whole team including themselves, so all of
+ * this was one tap away.
+ */
+async function refuseOwnJob(staff: Staff, id: string) {
+  if (staff.type !== "EMPLOYEE") return;
+
+  const task = await prisma.assignedTask.findUnique({ where: { id }, select: { employeeId: true } });
+  if (task?.employeeId === staff.id) {
+    throw new Error("That is your own job — the manager changes it, the same as anybody else's.");
+  }
+}
 
 /** Where a notification about a job lands: the job itself, not the dashboard. */
 const jobUrl = (id: string) => `/employee/assigned/${id}`;
@@ -127,7 +153,8 @@ export async function createAssignedTask(formData: FormData) {
 }
 
 export async function updateAssignedTask(id: string, formData: FormData) {
-  await requireTaskAssigner();
+  const staff = await requireTaskAssigner();
+  await refuseOwnJob(staff, id);
   // A site visit's job follows the visit — see lib/site-visit-task-store.ts.
   await refuseVisitTask(id);
   const input = readForm(formData);
@@ -175,7 +202,8 @@ export async function updateAssignedTask(id: string, formData: FormData) {
 }
 
 export async function deleteAssignedTask(id: string) {
-  await requireTaskAssigner();
+  const staff = await requireTaskAssigner();
+  await refuseOwnJob(staff, id);
   await refuseVisitTask(id);
   await prisma.assignedTask.delete({ where: { id } }).catch(() => {});
   refresh();
@@ -189,7 +217,8 @@ export async function deleteAssignedTask(id: string) {
  * how long it takes. Duration is changed by editing it.
  */
 export async function moveAssignedTask(id: string, input: { days: number; employeeId?: string }) {
-  await requireTaskAssigner();
+  const staff = await requireTaskAssigner();
+  await refuseOwnJob(staff, id);
   await refuseVisitTask(id);
 
   const task = await prisma.assignedTask.findUnique({
