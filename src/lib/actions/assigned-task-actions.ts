@@ -237,19 +237,45 @@ export async function moveAssignedTask(id: string, input: { days: number; employ
   refresh();
 }
 
-/** The manager ticking one off from the week view. */
+/**
+ * Ticking one off from the week view — the manager, or an assigner.
+ *
+ * Two things here follow from `canAssignTasks` belonging to somebody other
+ * than the manager, which it first did on 2026-11-09 (Sally):
+ *
+ *   1. **Whoever it was is written down.** The guard has always said who, and
+ *      this threw it away and logged every move as the manager. With one
+ *      assigner that was true; with two it is a record that cannot answer the
+ *      question it exists for. `TaskStateChange.actorEmployeeId` was already
+ *      there and already null.
+ *   2. **Nobody approves their own work.** `DONE` *is* approval — see
+ *      `describeMove`, which calls it exactly that, and `needsApproval`. An
+ *      assigner acts as the manager over the team's jobs and as an employee
+ *      over their own, so their own still goes to the manager, refused by
+ *      `canMove` in its own words. This never came up while the manager was
+ *      the only assigner: a manager has no jobs to approve, because work is
+ *      only ever handed to an `accessRole: "EMPLOYEE"` row.
+ */
 export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGRESS" | "DONE") {
-  await requireTaskAssigner();
+  const staff = await requireTaskAssigner();
   // Approving a visit is done on the visit, where the client's answer is.
   await refuseVisitTask(id);
 
-  const before = await prisma.assignedTask.findUnique({ where: { id }, select: { state: true } });
+  const before = await prisma.assignedTask.findUnique({
+    where: { id },
+    select: { state: true, employeeId: true },
+  });
 
   // The week board had no runtime check at all: any state could be written from
   // any state. It asks the same rules as everything else now.
   if (before && before.state === state) return;
+
+  const actorEmployeeId = staff.type === "EMPLOYEE" ? staff.id : null;
+  const own = before != null && actorEmployeeId != null && before.employeeId === actorEmployeeId;
+  const actor = own ? "employee" : "manager";
+
   if (before) {
-    const move = canMove(before.state, state, "manager");
+    const move = canMove(before.state, state, actor);
     if (!move.ok) throw new Error(move.reason);
   }
 
@@ -259,7 +285,7 @@ export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGR
   });
 
   if (before) {
-    await recordStateChange({ assignedTaskId: id, from: before.state, to: state, actor: "manager" });
+    await recordStateChange({ assignedTaskId: id, from: before.state, to: state, actor, actorEmployeeId });
   }
 
   refresh();
