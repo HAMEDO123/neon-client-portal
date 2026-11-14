@@ -86,6 +86,21 @@ services:
       app:
         condition: service_healthy
 
+  website:
+    # neonjo.com — the studio's own website (deploy/website/nginx.conf). The
+    # root domain was NEXORA's until 2026-11-10; NEXORA moved to nexorajo.space
+    # and its old /platform paths are forwarded there. A holding page for now.
+    image: nginx:1.27-alpine
+    container_name: neon-website
+    restart: unless-stopped
+    profiles: ["public"]
+    volumes:
+      - ./deploy/website/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/website/site:/usr/share/nginx/html:ro
+    ports:
+      # This PC only, for checking it. The public way in is the tunnel.
+      - "127.0.0.1:3012:80"
+
   neon-cameras:
     # The CCTV relay: the studio's Tapo cameras for the manager's phone
     # (deploy/go2rtc/README.md). The site tells it about each camera added in

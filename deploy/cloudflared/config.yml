@@ -7,5 +7,10 @@ credentials-file: /etc/cloudflared/credentials.json
 ingress:
   - hostname: clients.neonjo.com
     service: http://app:3000
+  # The studio's website (deploy/website). Was NEXORA's until 2026-11-10.
+  - hostname: neonjo.com
+    service: http://website:80
+  - hostname: www.neonjo.com
+    service: http://website:80
   # Anything else that reaches this tunnel is refused rather than served.
   - service: http_status:404
