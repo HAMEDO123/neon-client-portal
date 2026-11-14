@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Camera, CheckCircle2, FileText, ImageUp, Loader2, X } from "lucide-react";
 import { submitTaskCompletion } from "@/lib/actions/submission-actions";
 import { submitAssignedTaskCompletion } from "@/lib/actions/my-assigned-actions";
@@ -48,6 +48,36 @@ export function CompletionForm({
   // camera straight away, without it you get the photo library.
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Ctrl+V. On a computer the proof is usually a screenshot already on the
+  // clipboard, and saving it to a file only to pick that file again was two
+  // steps of nothing. Listened for on the whole page, not just the form, so it
+  // works without clicking anywhere first.
+  useEffect(() => {
+    if (state === "DONE" || pending) return;
+
+    function onPaste(event: ClipboardEvent) {
+      const data = event.clipboardData;
+      const pasted = data?.files?.[0];
+      if (!pasted || !isProofFile(pasted)) return;
+
+      // Typing somewhere else on the page — the question box below — is that
+      // box's paste, not proof for this task.
+      const target = event.target instanceof Element ? event.target : null;
+      const field = target?.closest("textarea, input, [contenteditable='true']");
+      if (field && !formRef.current?.contains(field)) return;
+      // In the note itself, text wins: copying cells from Excel puts both the
+      // text and a picture of them on the clipboard.
+      if (field && data?.getData("text/plain")) return;
+
+      event.preventDefault();
+      pick(pasted);
+    }
+
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  });
 
   if (state === "DONE") {
     return (
@@ -60,6 +90,8 @@ export function CompletionForm({
 
   function pick(chosen: File | undefined) {
     if (!chosen) return;
+    // Pasting again replaces what was there, with no X pressed in between.
+    if (preview) URL.revokeObjectURL(preview);
     setError(null);
     setFile(chosen);
     // Only a picture gets an object URL. Pointing an <img> at a PDF draws a
@@ -97,7 +129,7 @@ export function CompletionForm({
   }
 
   return (
-    <form action={send} className="glass rounded-2xl p-4">
+    <form ref={formRef} action={send} className="glass rounded-2xl p-4">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">
         {state === "SUBMITTED" ? "Send something else" : "Finished? Send the proof"}
       </h2>
@@ -157,6 +189,11 @@ export function CompletionForm({
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Picker icon={Camera} label="Take photo" onClick={() => cameraRef.current?.click()} />
           <Picker icon={ImageUp} label="Choose file" onClick={() => libraryRef.current?.click()} />
+          {/* Only where there is a keyboard and a mouse: a phone has no Ctrl+V. */}
+          <p className="col-span-2 hidden text-center text-xs text-ink/40 pointer-fine:block">
+            Or paste a screenshot with <kbd className="rounded border border-ink/15 bg-white/70 px-1 font-sans">Ctrl</kbd>+
+            <kbd className="rounded border border-ink/15 bg-white/70 px-1 font-sans">V</kbd>
+          </p>
         </div>
       )}
 
@@ -182,6 +219,16 @@ export function CompletionForm({
       </button>
     </form>
   );
+}
+
+/**
+ * Whether something pasted is a kind of proof the pickers would have offered —
+ * the same list as `PROOF_ACCEPT`, so pasting is never a way round it.
+ */
+function isProofFile(file: File): boolean {
+  if (isPictureFile(file)) return true;
+  const extension = file.name.toLowerCase().match(/\.[a-z0-9]+$/)?.[0];
+  return extension != null && PROOF_ACCEPT.split(",").includes(extension);
 }
 
 function Picker({
