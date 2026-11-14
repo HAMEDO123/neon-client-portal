@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { dateToDayKey, dayKeyToDate } from "@/lib/time";
+import { dateToDayKey, dayKeyToDate, instantAt } from "@/lib/time";
 import { weekDayKeys } from "@/lib/week";
 
 // Work the manager hands out directly, outside any project.
@@ -93,6 +93,33 @@ export async function assignedTasksForWeek(anchorDayKey: string) {
     where: {
       startDay: { lte: dayKeyToDate(keys[keys.length - 1]) },
       endDay: { gte: dayKeyToDate(keys[0]) },
+    },
+    orderBy: [{ startDay: "asc" }, { createdAt: "asc" }],
+    select: view,
+  });
+
+  return rows.map(toView);
+}
+
+/**
+ * What an assigner handed out, for their own read-only view of it today.
+ *
+ * Two kinds of "today", both of which the owner meant by "what she assigned
+ * today": every job of theirs that runs today, whenever it was given, and
+ * every job they gave today, whatever day it is for — tomorrow's job, handed
+ * out this morning, is part of what she did this morning.
+ *
+ * Only `assignedById`, which is written from 2026-11-14: nothing from before is
+ * attributed to anybody, rather than guessed at.
+ */
+export async function assignedByToday(assignerId: string, todayKey: string, timeZone: string) {
+  const day = dayKeyToDate(todayKey);
+  const since = instantAt(todayKey, "00:00", timeZone) ?? day;
+
+  const rows = await prisma.assignedTask.findMany({
+    where: {
+      assignedById: assignerId,
+      OR: [{ startDay: { lte: day }, endDay: { gte: day } }, { createdAt: { gte: since } }],
     },
     orderBy: [{ startDay: "asc" }, { createdAt: "asc" }],
     select: view,

@@ -1,77 +1,60 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import Link from "next/link";
-import { CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus } from "lucide-react";
+import { useState } from "react";
+import { CalendarDays, Plus } from "lucide-react";
 import { TaskDialog } from "@/components/admin/week-board";
 import { TaskBriefing } from "@/components/tasks/task-briefing";
-import { deleteAssignedTask, setAssignedTaskState } from "@/lib/actions/assigned-task-actions";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { StateBadge } from "@/components/ui/state-badge";
 import { PRIORITY_ROW } from "@/components/tasks/priority";
-import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
-import { countByFilter, isLate, matchesFilter, type TaskFilter } from "@/lib/task-filters";
+import { STATE_LABEL } from "@/lib/task-board";
+import { isLate } from "@/lib/task-filters";
 import { cn } from "@/lib/utils";
 
-// Handing work out, without the board.
+// Handing work out, for an employee the manager trusted with it.
 //
-// The manager's Tasks page is two wide tables — a project-by-step matrix and a
-// seven-day grid — and both are read on a desk. This is the same job on a
-// phone: one button, and the form asking who it is for and what it is. The
-// tables are not shrunk down here, they are simply not part of this screen.
+// Two halves. The top is giving work: one button for the manager's own form,
+// and the box that turns a spoken briefing into a list. The bottom is watching
+// it: what this person handed out today, under the name of whoever got it.
 //
-// The form itself is the manager's own dialog, imported rather than rebuilt.
-// It is the one place "counts as done when" gets typed, and a job without it
-// comes back from the review queue saying there was nothing to check it
-// against — so a second copy of this form is a second place for that field to
-// go missing from.
+// Watching only. The studio's rule (2026-11-14): an assigner sees what they
+// assigned "but still can't accept or reject, just see". So the rows here are
+// not buttons — there is no dialog to open on one, no done tick, no delete —
+// and the server refuses all of those to an assigner in any case
+// (`refuseAssigner`, actions/assigned-task-actions.ts). The manager's Tasks
+// page is where a job is changed, accepted or sent back.
+//
+// The form is the manager's own dialog, imported rather than rebuilt: it is
+// the one place "counts as done when" gets typed, and a second copy of it is a
+// second place for that field to go missing from.
 
 type Member = { id: string; name: string; color: string; role: string | null };
-
-// The manager's week has the same five (components/admin/week-board.tsx).
-const FILTERS: { key: TaskFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "progress", label: "In progress" },
-  { key: "review", label: "Sent for review" },
-  { key: "late", label: "Late" },
-  { key: "done", label: "Done" },
-];
 
 export function AssignWork({
   team,
   tasks,
   todayKey,
-  weekLabel,
-  previousWeek,
-  nextWeek,
-  thisWeek,
-  isThisWeek,
 }: {
   team: Member[];
+  /** What this person handed out that runs today, or that they gave today. */
   tasks: AssignedTaskView[];
   todayKey: string;
-  weekLabel: string;
-  previousWeek: string;
-  nextWeek: string;
-  thisWeek: string;
-  isThisWeek: boolean;
 }) {
-  // null = closed. { task: null } = writing a new one.
-  const [dialog, setDialog] = useState<{ task: AssignedTaskView | null } | null>(null);
-  const [pending, start] = useTransition();
-  const [filter, setFilter] = useState<TaskFilter>("all");
+  const [writing, setWriting] = useState(false);
 
-  const byPerson = new Map(team.map((member) => [member.id, member]));
-
-  const standing = (task: AssignedTaskView) => ({ state: task.state, late: isLate(task.state, task.endKey, todayKey) });
-  const counts = countByFilter(tasks.map(standing));
-  const listed = tasks.filter((task) => matchesFilter(standing(task), filter));
+  // In the team's own order, and only the people who got something.
+  const groups = team
+    .map((member) => ({ member, jobs: tasks.filter((task) => task.employeeId === member.id) }))
+    .filter((group) => group.jobs.length > 0);
+  // Somebody switched off since keeps their jobs on the list, under no colour.
+  const known = new Set(team.map((member) => member.id));
+  const others = tasks.filter((task) => !known.has(task.employeeId));
 
   return (
-    <div className={cn("flex flex-col gap-4", pending && "opacity-95")}>
+    <div className="flex flex-col gap-4">
       <button
         type="button"
-        onClick={() => setDialog({ task: null })}
+        onClick={() => setWriting(true)}
         className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-ink text-sm font-semibold text-bg transition-opacity active:opacity-90"
       >
         <Plus size={18} strokeWidth={2.5} />
@@ -79,110 +62,109 @@ export function AssignWork({
       </button>
 
       {/* The same box the manager has: several people's work said in one go,
-          checked as a list, then handed out. It has no wide table in it, so it
-          belongs on a phone as much as on a desk. */}
+          checked as a list, then handed out. */}
       <TaskBriefing team={team} todayKey={todayKey} />
 
-      <div className="flex items-center gap-2">
-        <h2 className="mr-auto text-sm font-semibold text-ink">{weekLabel}</h2>
-        <WeekStep href={previousWeek} label="Previous week">
-          <ChevronLeft size={15} strokeWidth={2} />
-        </WeekStep>
-        {!isThisWeek && (
-          <Link
-            href={thisWeek}
-            className="rounded-lg border border-ink/12 bg-white/70 px-2.5 py-1.5 text-xs font-medium text-ink/60"
-          >
-            This week
-          </Link>
-        )}
-        <WeekStep href={nextWeek} label="Next week">
-          <ChevronRight size={15} strokeWidth={2} />
-        </WeekStep>
+      <div>
+        <h2 className="text-sm font-semibold text-ink">Assigned by you today</h2>
+        <p className="mt-0.5 text-xs text-ink/45">
+          Where each one stands. The manager reviews the work and marks it done.
+        </p>
       </div>
 
-      {tasks.length > 0 && <TaskFilterBar options={FILTERS} active={filter} counts={counts} onPick={setFilter} />}
-
-      {listed.length === 0 ? (
+      {tasks.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-ink/12 px-4 py-10 text-center text-sm text-ink/40">
-          {tasks.length === 0 ? "Nothing handed out this week yet." : "Nothing like that this week."}
+          Nothing handed out by you today yet.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {listed.map((task) => {
-            const person = byPerson.get(task.employeeId);
-            return (
-              <li key={task.id}>
-                <button
-                  type="button"
-                  onClick={() => setDialog({ task })}
-                  className={cn(
-                    "flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition-colors",
-                    // The whole row wears its priority, until the job is done.
-                    PRIORITY_ROW[task.state === "DONE" ? "MEDIUM" : task.priority]
-                  )}
-                >
-                  <StateBadge state={task.state} />
-                  <span className="min-w-0 flex-1">
-                    <span dir="auto" className="block text-sm font-medium text-ink">
-                      {task.title}
-                    </span>
-                    <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/45">
-                      <span className="inline-flex items-center gap-1">
-                        <ClipboardList size={12} strokeWidth={1.75} />
-                        {person?.name ?? "Somebody"}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <CalendarDays size={12} strokeWidth={1.75} />
-                        {spanLabel(task, todayKey)}
-                      </span>
-                      {/* The field that decides whether the photo they send
-                          can be checked at all. Said on the card, because the
-                          moment to fix it is before the work starts. */}
-                      {!task.acceptance && <span className="text-amber-700">No “done when”</span>}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="flex flex-col gap-4">
+          {groups.map(({ member, jobs }) => (
+            <Person key={member.id} name={member.name} color={member.color} jobs={jobs} todayKey={todayKey} />
+          ))}
+          {others.length > 0 && <Person name="No longer on the team" color={null} jobs={others} todayKey={todayKey} />}
+        </div>
       )}
 
-      {dialog && (
+      {writing && (
         <TaskDialog
           team={team}
-          task={dialog.task}
-          initial={dialog.task ? null : { employeeId: team[0]?.id ?? "", dayKey: todayKey }}
-          onClose={() => setDialog(null)}
-          onDelete={(id) => {
-            setDialog(null);
-            start(async () => {
-              await deleteAssignedTask(id);
-            });
-          }}
-          onToggleDone={(task) => {
-            setDialog(null);
-            start(async () => {
-              await setAssignedTaskState(task.id, task.state === "DONE" ? "TODO" : "DONE");
-            });
-          }}
+          task={null}
+          initial={{ employeeId: team[0]?.id ?? "", dayKey: todayKey }}
+          onClose={() => setWriting(false)}
+          // Only shown on an existing job, which this screen never opens.
+          onDelete={() => {}}
+          onToggleDone={() => {}}
         />
       )}
     </div>
   );
 }
 
-function WeekStep({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
+function Person({
+  name,
+  color,
+  jobs,
+  todayKey,
+}: {
+  name: string;
+  color: string | null;
+  jobs: AssignedTaskView[];
+  todayKey: string;
+}) {
+  const done = jobs.filter((job) => job.state === "DONE").length;
+
   return (
-    <Link
-      href={href}
-      aria-label={label}
-      className="rounded-lg border border-ink/12 bg-white/70 p-1.5 text-ink/60"
-      scroll={false}
-    >
-      {children}
-    </Link>
+    <section className="glass rounded-2xl p-3">
+      <header className="mb-2 flex items-center gap-2 px-1">
+        <span
+          aria-hidden
+          className="h-2.5 w-2.5 shrink-0 rounded-full bg-ink/20"
+          style={color ? { backgroundColor: color } : undefined}
+        />
+        <h3 dir="auto" className="mr-auto text-sm font-semibold text-ink">
+          {name}
+        </h3>
+        <span className="text-xs tabular-nums text-ink/45">
+          {done}/{jobs.length} done
+        </span>
+      </header>
+
+      <ul className="flex flex-col gap-1.5">
+        {jobs.map((job) => {
+          const late = isLate(job.state, job.endKey, todayKey);
+          return (
+            <li
+              key={job.id}
+              className={cn(
+                "flex items-start gap-3 rounded-xl border p-2.5",
+                PRIORITY_ROW[job.state === "DONE" ? "MEDIUM" : job.priority]
+              )}
+            >
+              <StateBadge state={job.state} />
+              <span className="min-w-0 flex-1">
+                <span dir="auto" className="block text-sm font-medium text-ink">
+                  {job.title}
+                </span>
+                <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/50">
+                  <span className={cn(job.state === "SUBMITTED" && "font-medium text-purple-strong")}>
+                    {STATE_LABEL[job.state]}
+                  </span>
+                  {late && <span className="font-medium text-pink-strong">Late</span>}
+                  {/* Only when it is not simply today's: tomorrow's job given
+                      this morning should say so. */}
+                  {(job.startKey !== todayKey || job.endKey !== todayKey) && (
+                    <span className="inline-flex items-center gap-1">
+                      <CalendarDays size={12} strokeWidth={1.75} />
+                      {spanLabel(job, todayKey)}
+                    </span>
+                  )}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

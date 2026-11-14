@@ -626,6 +626,7 @@ model Employee {
   // Work waiting on this person to unstick it.
   blockedEntries  ProjectTaskEntry[]         @relation("EntryBlockedBy")
   blockedJobs     AssignedTask[]             @relation("JobBlockedBy")
+  assignedJobs    AssignedTask[]             @relation("JobAssignedBy")
   siteVisits      SiteVisit[]
   clockReminders  ClockReminder[]
   // Where their phone last said it was, during working hours only.
@@ -1846,6 +1847,14 @@ model AssignedTask {
   blockedById   String?
   blockedBy     Employee? @relation("JobBlockedBy", fields: [blockedById], references: [id], onDelete: SetNull)
 
+  // Who handed it out, when that was not the manager: an employee trusted with
+  // `canAssignTasks`. Null is the manager — and every job from before
+  // 2026-11-14, when this started being written, because nobody knew then.
+  // It is what lets an assigner see what *they* handed out today, and nothing
+  // else of the team's.
+  assignedById String?
+  assignedBy   Employee? @relation("JobAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
   lastUpdateNote String?   @db.Text
   lastUpdateAt   DateTime?
   nextStep       String?
@@ -1887,6 +1896,7 @@ model AssignedTask {
   @@index([employeeId, startDay])
   @@index([startDay, endDay])
   @@index([chatTaskId])
+  @@index([assignedById, createdAt])
 }
 
 // A task the manager hands out from a conversation, shown there as a card.

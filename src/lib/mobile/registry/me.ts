@@ -12,7 +12,7 @@ import { getMyReceipts } from "@/lib/payroll-queries";
 import { periodOf, periodLabel, RECEIPT_CAP } from "@/lib/payroll";
 import { getPreferences } from "@/lib/notifications/engine";
 import { deviceLabel } from "@/lib/devices";
-import { myAssignedTasks, myAssignedTask, assignedTasksForWeek } from "@/lib/assigned-tasks";
+import { myAssignedTasks, myAssignedTask, assignedTasksForWeek, assignedByToday } from "@/lib/assigned-tasks";
 import { submissionsForAssignedTask } from "@/lib/submissions";
 import { openFollowUpForTask } from "@/lib/follow-up-queue";
 import { answerFollowUp } from "@/lib/actions/follow-up-actions";
@@ -247,19 +247,38 @@ export const reads: ReadRegistry = {
   //   not cancelled) }
   "me/location": guarded(requireEmployee, async (_params, me) => locationPlanFor(me.id)),
 
-  // That week's jobs, whoever they are for — the same week `assignedTasksForWeek`
-  // hands the web's Assign view, ?week=YYYY-MM-DD (a Sunday; any day in the
+  // The jobs on the Assign screen, ?week=YYYY-MM-DD (a Sunday; any day in the
   // week works, lib/week.ts resolves it).
-  "me/assign/week": guarded(requireTaskAssigner, async (params) => {
+  //
+  // The manager gets that week's jobs, whoever they are for. An employee with
+  // `canAssignTasks` gets only what *they* handed out — what runs today plus
+  // what they gave today (`assignedByToday`) — whatever week is asked for, and
+  // `readOnly: true`: the studio's rule since 2026-11-14 is that they see it
+  // and do not change, accept or send back anything (the actions refuse it in
+  // words). Same shape either way, so an app build from before still decodes.
+  "me/assign/week": guarded(requireTaskAssigner, async (params, staff) => {
     const timezone = await getTimezone();
+    const today = todayKey(timezone);
+
+    if (staff.type === "EMPLOYEE") {
+      return {
+        weekStart: weekStartKey(today),
+        weekLabel: "Assigned by you today",
+        todayKey: today,
+        readOnly: true,
+        tasks: await assignedByToday(staff.id, today, timezone),
+      };
+    }
+
     const requested = optParam(params, "week");
-    const anchor = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : todayKey(timezone);
+    const anchor = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today;
     const keys = weekDayKeys(anchor);
 
     return {
       weekStart: weekStartKey(anchor),
       weekLabel: weekLabel(keys),
-      todayKey: todayKey(timezone),
+      todayKey: today,
+      readOnly: false,
       tasks: await assignedTasksForWeek(anchor),
     };
   }),

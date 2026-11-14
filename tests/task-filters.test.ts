@@ -97,11 +97,10 @@ describe("the filters", () => {
 // Every one of these typechecks, builds and looks right with the rule quietly
 // written a second time — which is how a button comes to say 3 over a list of 2.
 describe("one reading of a task's standing, on every screen", () => {
-  it("is what the team's list, the manager's week and the Assign view all use", () => {
+  it("is what the team's list and the manager's week both use", () => {
     for (const file of [
       ["src", "app", "employee", "(portal)", "tasks", "page.tsx"],
       ["src", "components", "admin", "week-board.tsx"],
-      ["src", "components", "tasks", "assign-work.tsx"],
     ]) {
       const source = read(...file);
       assert.match(source, /from "@\/lib\/task-filters"/, file.join("/"));
@@ -109,6 +108,15 @@ describe("one reading of a task's standing, on every screen", () => {
       assert.match(source, /matchesFilter\(/, file.join("/"));
       assert.match(source, /isLate\(/, file.join("/"));
     }
+  });
+
+  // The Assign view lost its filter buttons on 2026-11-14, when it became one
+  // day's short list of what the assigner handed out. "Late" on it is still
+  // the shared reading, not a second one.
+  it("is what the Assign view calls late", () => {
+    const source = read("src", "components", "tasks", "assign-work.tsx");
+    assert.match(source, /import \{ isLate \} from "@\/lib\/task-filters"/);
+    assert.match(source, /isLate\(/);
   });
 
   // A project's own steps are not in the task list any more.

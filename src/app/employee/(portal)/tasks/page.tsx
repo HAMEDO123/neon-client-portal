@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ListChecks } from "lucide-react";
 import { requireEmployee } from "@/lib/employee-session";
 import { getTimezone } from "@/lib/settings";
-import { dayKeyIn, shiftDayKey } from "@/lib/time";
+import { dayKeyIn } from "@/lib/time";
 import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
 import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,8 +10,7 @@ import { cn } from "@/lib/utils";
 import { AssignWork } from "@/components/tasks/assign-work";
 import { SiteVisits } from "@/components/tasks/site-visits";
 import { projectsForVisits, siteVisitsFor } from "@/lib/site-visit-queries";
-import { assignedTasksForWeek } from "@/lib/assigned-tasks";
-import { weekDayKeys, weekLabel, weekStartKey } from "@/lib/week";
+import { assignedByToday } from "@/lib/assigned-tasks";
 import { prisma } from "@/lib/db";
 import { chipClass, chipCountClass } from "@/components/tasks/filter-chip";
 import { countByFilter, dueBand, isLate, matchesFilter, readTaskFilter, type Filterable, type TaskFilter } from "@/lib/task-filters";
@@ -62,11 +61,11 @@ const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 } as const;
 export default async function EmployeeTasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; view?: string; week?: string }>;
+  searchParams: Promise<{ filter?: string; view?: string }>;
 }) {
   const employee = await requireEmployee();
   const timezone = await getTimezone();
-  const { filter, view, week } = await searchParams;
+  const { filter, view } = await searchParams;
 
   // Whoever the manager has trusted to hand work out gets a second view of
   // this tab. Not the manager's two tables — those are a project-by-step
@@ -93,32 +92,23 @@ export default async function EmployeeTasksPage({
   }
 
   if (assigning) {
-    const anchor = /^\d{4}-\d{2}-\d{2}$/.test(week ?? "") ? week! : dayKeyIn(timezone, new Date());
-    const keys = weekDayKeys(anchor);
-    const start = weekStartKey(anchor);
+    const today = dayKeyIn(timezone, new Date());
 
+    // Only what this person handed out, today — not the team's week. The
+    // studio's rule (2026-11-14): they "see what she assigned … just see".
     const [team, tasks] = await Promise.all([
       prisma.employee.findMany({
         where: { active: true, accessRole: "EMPLOYEE" },
         orderBy: [{ order: "asc" }, { name: "asc" }],
         select: { id: true, name: true, color: true, role: true, photoUrl: true },
       }),
-      assignedTasksForWeek(anchor),
+      assignedByToday(employee.id, today, timezone),
     ]);
 
     return (
       <div className="flex flex-col gap-4">
         <ViewSwitch view="studio" canAssign canVisit={employee.canLogSiteVisits} />
-        <AssignWork
-          team={team}
-          tasks={tasks}
-          todayKey={dayKeyIn(timezone, new Date())}
-          weekLabel={weekLabel(keys)}
-          previousWeek={`/employee/tasks?view=studio&week=${shiftDayKey(start, -7)}`}
-          nextWeek={`/employee/tasks?view=studio&week=${shiftDayKey(start, 7)}`}
-          thisWeek="/employee/tasks?view=studio"
-          isThisWeek={start === weekStartKey(dayKeyIn(timezone, new Date()))}
-        />
+        <AssignWork team={team} tasks={tasks} todayKey={today} />
       </div>
     );
   }

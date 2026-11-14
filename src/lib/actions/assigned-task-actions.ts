@@ -31,30 +31,28 @@ const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Refuses an assigner the manager's edits on a job that is their own.
+ * Refuses an assigner everything after the handing out.
  *
- * The studio's rule, in the owner's words on 2026-11-09: she "keeps receiving
- * tasks from the manager but can assign tasks on employees". So somebody with
- * `canAssignTasks` is two things at once — the manager over the team's jobs,
- * and an ordinary employee over their own — and an employee may do exactly two
- * things to a job they were given: start it, and hand it in with proof
- * (`actions/my-assigned-actions.ts`). Deleting it, giving it away or moving it
- * to another day are the manager's, the same as for anybody else on the team.
+ * The studio's rule, in the owner's words: an assigner "keeps receiving tasks
+ * from the manager but can assign tasks on employees" (2026-11-09), and sees
+ * what they handed out today "but still can't accept or reject, just see"
+ * (2026-11-14). So somebody with `canAssignTasks` gives work and watches it;
+ * changing it, moving it, deleting it and deciding it is finished stay the
+ * manager's — on everybody's jobs, their own included.
  *
- * It matters most for deleting, which is the one destructive path here and
- * leaves no record at all: without this, a job the manager handed down could
- * not be marked done by the person who got it, but could be made to vanish by
- * them. The Assign view shows the whole team including themselves, so all of
- * this was one tap away.
+ * The first version of this (2026-11-09) only refused them their *own* job and
+ * let them run everybody else's board as the manager would. Deleting mattered
+ * most then and still does: it is the one destructive path here and leaves no
+ * record at all.
  */
-async function refuseOwnJob(staff: Staff, id: string) {
-  if (staff.type !== "EMPLOYEE") return;
-
-  const task = await prisma.assignedTask.findUnique({ where: { id }, select: { employeeId: true } });
-  if (task?.employeeId === staff.id) {
-    throw new Error("That is your own job — the manager changes it, the same as anybody else's.");
+function refuseAssigner(staff: Staff, what: string) {
+  if (staff.type === "EMPLOYEE") {
+    throw new Error(`${what} is the manager's — you can hand work out and see it, not change it.`);
   }
 }
+
+/** The employee who handed a job out, or null for the manager. */
+const assignedByOf = (staff: Staff) => (staff.type === "EMPLOYEE" ? staff.id : null);
 
 /** Where a notification about a job lands: the job itself, not the dashboard. */
 const jobUrl = (id: string) => `/employee/assigned/${id}`;
@@ -109,7 +107,7 @@ function readForm(formData: FormData) {
 }
 
 export async function createAssignedTask(formData: FormData) {
-  await requireTaskAssigner();
+  const staff = await requireTaskAssigner();
   const input = readForm(formData);
 
   const employee = await prisma.employee.findFirst({
@@ -130,6 +128,7 @@ export async function createAssignedTask(formData: FormData) {
       startDay: input.startDay,
       endDay: input.endDay,
       priority: input.priority,
+      assignedById: assignedByOf(staff),
     },
   });
 
@@ -154,7 +153,7 @@ export async function createAssignedTask(formData: FormData) {
 
 export async function updateAssignedTask(id: string, formData: FormData) {
   const staff = await requireTaskAssigner();
-  await refuseOwnJob(staff, id);
+  refuseAssigner(staff, "Editing a job");
   // A site visit's job follows the visit — see lib/site-visit-task-store.ts.
   await refuseVisitTask(id);
   const input = readForm(formData);
@@ -203,7 +202,7 @@ export async function updateAssignedTask(id: string, formData: FormData) {
 
 export async function deleteAssignedTask(id: string) {
   const staff = await requireTaskAssigner();
-  await refuseOwnJob(staff, id);
+  refuseAssigner(staff, "Deleting a job");
   await refuseVisitTask(id);
   await prisma.assignedTask.delete({ where: { id } }).catch(() => {});
   refresh();
@@ -218,7 +217,7 @@ export async function deleteAssignedTask(id: string) {
  */
 export async function moveAssignedTask(id: string, input: { days: number; employeeId?: string }) {
   const staff = await requireTaskAssigner();
-  await refuseOwnJob(staff, id);
+  refuseAssigner(staff, "Moving a job");
   await refuseVisitTask(id);
 
   const task = await prisma.assignedTask.findUnique({
@@ -267,44 +266,29 @@ export async function moveAssignedTask(id: string, input: { days: number; employ
 }
 
 /**
- * Ticking one off from the week view — the manager, or an assigner.
+ * Ticking one off from the week view. The manager's alone.
  *
- * Two things here follow from `canAssignTasks` belonging to somebody other
- * than the manager, which it first did on 2026-11-09 (Sally):
- *
- *   1. **Whoever it was is written down.** The guard has always said who, and
- *      this threw it away and logged every move as the manager. With one
- *      assigner that was true; with two it is a record that cannot answer the
- *      question it exists for. `TaskStateChange.actorEmployeeId` was already
- *      there and already null.
- *   2. **Nobody approves their own work.** `DONE` *is* approval — see
- *      `describeMove`, which calls it exactly that, and `needsApproval`. An
- *      assigner acts as the manager over the team's jobs and as an employee
- *      over their own, so their own still goes to the manager, refused by
- *      `canMove` in its own words. This never came up while the manager was
- *      the only assigner: a manager has no jobs to approve, because work is
- *      only ever handed to an `accessRole: "EMPLOYEE"` row.
+ * `DONE` *is* approval — `describeMove` calls it exactly that, and
+ * `needsApproval` — and the studio's rule is that an assigner neither accepts
+ * nor sends back (see `refuseAssigner`). From 2026-11-09 to 2026-11-14 an
+ * assigner could tick off everybody's jobs but their own; that is what this
+ * closes. Still behind `requireTaskAssigner` rather than `requireAdmin` so the
+ * refusal says why in words, instead of a bare "Unauthorized".
  */
 export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGRESS" | "DONE") {
   const staff = await requireTaskAssigner();
+  refuseAssigner(staff, "Accepting or sending back work");
   // Approving a visit is done on the visit, where the client's answer is.
   await refuseVisitTask(id);
 
-  const before = await prisma.assignedTask.findUnique({
-    where: { id },
-    select: { state: true, employeeId: true },
-  });
+  const before = await prisma.assignedTask.findUnique({ where: { id }, select: { state: true } });
 
   // The week board had no runtime check at all: any state could be written from
   // any state. It asks the same rules as everything else now.
   if (before && before.state === state) return;
 
-  const actorEmployeeId = staff.type === "EMPLOYEE" ? staff.id : null;
-  const own = before != null && actorEmployeeId != null && before.employeeId === actorEmployeeId;
-  const actor = own ? "employee" : "manager";
-
   if (before) {
-    const move = canMove(before.state, state, actor);
+    const move = canMove(before.state, state, "manager");
     if (!move.ok) throw new Error(move.reason);
   }
 
@@ -314,7 +298,7 @@ export async function setAssignedTaskState(id: string, state: "TODO" | "IN_PROGR
   });
 
   if (before) {
-    await recordStateChange({ assignedTaskId: id, from: before.state, to: state, actor, actorEmployeeId });
+    await recordStateChange({ assignedTaskId: id, from: before.state, to: state, actor: "manager", actorEmployeeId: null });
   }
 
   refresh();
@@ -348,7 +332,7 @@ export type AssignDraftsResult =
  * typed by hand would be.
  */
 export async function assignDraftedTasks(drafts: unknown): Promise<AssignDraftsResult> {
-  await requireTaskAssigner();
+  const staff = await requireTaskAssigner();
 
   const sent = Array.isArray(drafts) ? drafts.slice(0, MAX_DRAFTS) : [];
   if (sent.length === 0) return { ok: false, error: "There is nothing to assign." };
@@ -377,6 +361,7 @@ export async function assignDraftedTasks(drafts: unknown): Promise<AssignDraftsR
         startDay: dayKeyToDate(draft.startKey),
         endDay: dayKeyToDate(draft.endKey),
         priority: draft.priority,
+        assignedById: assignedByOf(staff),
       },
       select: { id: true },
     });
