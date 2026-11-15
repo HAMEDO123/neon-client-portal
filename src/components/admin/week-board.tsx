@@ -474,8 +474,9 @@ export function TaskDialog({
   task: AssignedTaskView | null;
   initial: { employeeId: string; dayKey: string } | null;
   onClose: () => void;
-  onDelete: (id: string) => void;
-  onToggleDone: (task: AssignedTaskView) => void;
+  /** Left out by a screen that may edit a job but not delete or finish it — an assigner's. */
+  onDelete?: (id: string) => void;
+  onToggleDone?: (task: AssignedTaskView) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -617,7 +618,7 @@ export function TaskDialog({
         {error && <p className="mt-2 text-xs font-medium text-pink-strong">{error}</p>}
 
         <div className="mt-4 flex items-center gap-2">
-          {task && (
+          {task && onDelete && onToggleDone && (
             <>
               <button
                 type="button"
