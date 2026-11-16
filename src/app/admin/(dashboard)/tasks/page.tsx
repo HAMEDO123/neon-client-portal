@@ -14,6 +14,7 @@ import { Routines } from "@/components/admin/routines";
 import { listRoutines } from "@/lib/routine-store";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
+import { MonthExport } from "@/components/admin/month-export";
 
 // Two tables, because the studio runs on two kinds of work.
 //
@@ -79,13 +80,17 @@ export default async function TasksPage({
           </p>
         </div>
 
-        <Link
-          href="/admin/projects/new"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple to-purple-strong px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-        >
-          <Plus size={16} strokeWidth={2.5} />
-          New project
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Everything approved in a month, each person's in order. */}
+          <MonthExport href="/admin/tasks/done.csv" label="Export tasks done" month={today.slice(0, 7)} />
+          <Link
+            href="/admin/projects/new"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple to-purple-strong px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            New project
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

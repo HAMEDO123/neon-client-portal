@@ -11,6 +11,7 @@ import {
 import { awayMinutesOf, storedBreaks } from "@/lib/attendance-breaks";
 import { monthDayKeys } from "@/lib/attendance-month";
 import { round } from "@/lib/payroll";
+import { csvFile, csvRow } from "@/lib/csv";
 
 // One person's month, a day at a time: when they came, when they left, how
 // long that was, the end their own day owed after a late start, and what the
@@ -394,12 +395,12 @@ const STATUS: Record<SheetStatus, string> = {
  * endings.
  */
 export function attendanceSheetCsv(sheet: AttendanceSheet): string {
-  const lines: string[] = [row(COLUMNS)];
+  const lines: string[] = [csvRow(COLUMNS)];
 
   for (const person of sheet.people) {
     for (const day of person.days) {
       lines.push(
-        row([
+        csvRow([
           person.person.name,
           person.person.role ?? "",
           day.dayKey,
@@ -422,10 +423,10 @@ export function attendanceSheetCsv(sheet: AttendanceSheet): string {
     }
   }
 
-  lines.push("", row(TOTAL_COLUMNS));
+  lines.push("", csvRow(TOTAL_COLUMNS));
   for (const { person, totals } of sheet.people) {
     lines.push(
-      row([
+      csvRow([
         person.name,
         totals.daysRecorded,
         totals.daysComplete,
@@ -438,25 +439,5 @@ export function attendanceSheetCsv(sheet: AttendanceSheet): string {
     );
   }
 
-  // The mark goes on the front of the file, not of a line.
-  return `﻿${lines.join("\r\n")}\r\n`;
-}
-
-function row(cells: (string | number)[]): string {
-  return cells.map(cell).join(",");
-}
-
-/**
- * One cell, quoted when it has to be.
- *
- * A leading `=`, `+` or `@` is defused with an apostrophe, which Excel eats
- * when it opens the file: notes are typed by people, and a spreadsheet that
- * runs what it was handed is a spreadsheet that can be made to do anything by
- * anybody who can write a note.
- */
-function cell(value: string | number): string {
-  if (typeof value === "number") return String(value);
-
-  const text = /^[=+@]/.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(text) ? `"${text.split('"').join('""')}"` : text;
+  return csvFile(lines);
 }

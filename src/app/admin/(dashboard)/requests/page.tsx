@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/format";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, formatTimeIn, todayKey } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { MonthExport } from "@/components/admin/month-export";
 
 const TONE = {
   PENDING: "warning",
@@ -55,10 +56,14 @@ export default async function AdminRequestsPage() {
       </p>
 
       {/* --- Today's reports ------------------------------------------------ */}
-      <h2 className="mt-8 inline-flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-ink/40">
-        <NotebookPen size={14} strokeWidth={2} />
-        Today&apos;s reports ({reports.length} of {team.length})
-      </h2>
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="inline-flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-ink/40">
+          <NotebookPen size={14} strokeWidth={2} />
+          Today&apos;s reports ({reports.length} of {team.length})
+        </h2>
+        {/* A whole month of them, each person day by day. */}
+        <MonthExport href="/admin/requests/reports.csv" label="Export month's reports" month={today.slice(0, 7)} />
+      </div>
 
       {team.length === 0 ? (
         <EmptyState className="mt-4" icon={NotebookPen} title="No team yet" description="Reports appear here once there is somebody to write them." />
