@@ -9,6 +9,7 @@ import { getTimezone } from "@/lib/settings";
 import { dayKeyToDate, formatTimeIn, todayKey } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { MonthExport } from "@/components/admin/month-export";
+import { periodOf } from "@/lib/pay-period";
 
 const TONE = {
   PENDING: "warning",
@@ -62,7 +63,7 @@ export default async function AdminRequestsPage() {
           Today&apos;s reports ({reports.length} of {team.length})
         </h2>
         {/* A whole month of them, each person day by day. */}
-        <MonthExport href="/admin/requests/reports.csv" label="Export month's reports" month={today.slice(0, 7)} />
+        <MonthExport href="/admin/requests/reports.csv" label="Export month's reports" month={periodOf(today)} />
       </div>
 
       {team.length === 0 ? (

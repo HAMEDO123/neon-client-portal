@@ -20,16 +20,27 @@ const read = (...path: string[]) => readFileSync(join(process.cwd(), ...path), "
 const lines = (csv: string) => csv.replace(/^﻿/, "").split("\r\n");
 
 describe("the month", () => {
-  it("is a calendar month, read from the address or this one", () => {
+  it("is the studio's period, read from the address or the one today is in", () => {
     assert.equal(readMonth("2026-10", "2026-11-16"), "2026-10");
     assert.equal(readMonth(null, "2026-11-16"), "2026-11");
+    // The 1st to the 4th are still last month's period.
+    assert.equal(readMonth(null, "2026-12-03"), "2026-11");
     assert.equal(readMonth("2026-13", "2026-11-16"), "2026-11");
     assert.equal(readMonth("nonsense", "2026-11-16"), "2026-11");
   });
 
-  it("runs 1st to 1st, across the turn of the year", () => {
-    assert.deepEqual(monthBounds("2026-11"), { first: "2026-11-01", next: "2026-12-01" });
-    assert.deepEqual(monthBounds("2026-12"), { first: "2026-12-01", next: "2027-01-01" });
+  // "the same period from 5th to 4th is each month" — the owner, 2026-11-16.
+  it("runs the 5th to the 5th, across the turn of the year", () => {
+    assert.deepEqual(monthBounds("2026-11"), { first: "2026-11-05", next: "2026-12-05" });
+    assert.deepEqual(monthBounds("2026-12"), { first: "2026-12-05", next: "2027-01-05" });
+  });
+
+  it("asks payroll where a month starts rather than knowing it", () => {
+    const source = read("src", "lib", "monthly-export.ts");
+    assert.match(source, /from "@\/lib\/pay-period"/);
+    for (const page of ["requests", "tasks"]) {
+      assert.match(read("src", "app", "admin", "(dashboard)", page, "page.tsx"), /month=\{periodOf\(today\)\}/, page);
+    }
   });
 
   it("names a day the same on any machine", () => {

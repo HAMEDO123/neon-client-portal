@@ -1,13 +1,17 @@
 import { prisma } from "@/lib/db";
 import { csvFile, csvRow } from "@/lib/csv";
 import { dateToDayKey, dayKeyIn, dayKeyToDate, formatTimeIn, instantAt } from "@/lib/time";
+import { nextPeriod, periodFirstDayKey, periodOf } from "@/lib/pay-period";
 
 // The month on paper, for the manager: what each person wrote about their days,
 // and what work they finished. Two files, asked for apart (2026-11-16).
 //
-// A calendar month, 1st to last — not the payroll period (5th to 4th). These
-// are an account of the work, not of pay, and "November's reports" means the
-// days of November.
+// The studio's month: the 5th to the 4th, the same period as payroll
+// (lib/pay-period.ts) — "November" is 5 November to 4 December. The first cut
+// (2026-11-16) used the calendar month; the owner corrected it the same day:
+// "the same period from 5th to 4th is each month". Read from pay-period
+// rather than written again here, so the files and the pay sheet cannot
+// disagree about where a month begins.
 //
 // The builders are pure and take plain rows, so what goes in a column is
 // pinned by tests; the loaders below them are the only part that reads the
@@ -15,16 +19,17 @@ import { dateToDayKey, dayKeyIn, dayKeyToDate, formatTimeIn, instantAt } from "@
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
-/** `2026-11` from the query string, or this month when it is missing or wrong. */
+/**
+ * `2026-11` from the query string, or the period today is in when it is
+ * missing or wrong — on the 3rd, that is last month's, still running.
+ */
 export function readMonth(raw: string | null | undefined, todayKey: string): string {
-  return raw && MONTH.test(raw) ? raw : todayKey.slice(0, 7);
+  return raw && MONTH.test(raw) ? raw : periodOf(todayKey);
 }
 
-/** The first day of the month and of the one after it, as day keys. */
+/** The period's first day, and the first day of the one after it, as day keys. */
 export function monthBounds(month: string): { first: string; next: string } {
-  const [year, number] = month.split("-").map(Number);
-  const next = number === 12 ? `${year + 1}-01` : `${year}-${String(number + 1).padStart(2, "0")}`;
-  return { first: `${month}-01`, next: `${next}-01` };
+  return { first: periodFirstDayKey(month), next: periodFirstDayKey(nextPeriod(month)) };
 }
 
 /** "Sun" for a day key — read at noon UTC so no machine's clock moves the day. */
