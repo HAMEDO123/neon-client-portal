@@ -34,7 +34,8 @@ export default async function EmployeeProjectLayout({
   if (!project) notFound();
 
   return (
-    <div>
+    // `wide-page`: the whole frame on a desktop (globals.css).
+    <div className="wide-page">
       <Link
         href="/employee/projects"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-ink/45 hover:text-ink"

@@ -29,7 +29,8 @@ export default async function EmployeeProjectsPage() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    // `wide-page`: the whole frame on a desktop (globals.css).
+    <div className="wide-page flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-ink">Projects</h1>

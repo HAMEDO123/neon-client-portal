@@ -41,6 +41,10 @@ describe("choosing photos for a PDF", () => {
     const admin = read("src", "app", "admin", "(dashboard)", "projects", "[id]", "gallery.pdf", "route.ts");
     assert.match(admin, /if \(!\(await hasAdminSession\(\)\)\) return new NextResponse\("Not found", \{ status: 404 \}\)/);
     assert.match(admin, /buildGalleryPdf\(project, pickedImages\(project\.spaces, picked\)/);
+    // The team works a project as the manager does, from their own portal.
+    const team = read("src", "app", "employee", "(portal)", "projects", "[id]", "gallery.pdf", "route.ts");
+    assert.match(team, /if \(!\(await getSessionEmployee\(\)\)\) return new NextResponse\("Not found", \{ status: 404 \}\)/);
+    assert.match(read("src", "app", "employee", "(portal)", "projects", "[id]", "gallery", "page.tsx"), /<GalleryPdfPicker/);
     const client = read("src", "app", "p", "[token]", "gallery.pdf", "route.ts");
     assert.match(client, /project\.publishState !== "PUBLISHED" \|\| !project\.allowDownloads/);
     assert.match(client, /buildGalleryPdf\(project, project\.spaces\)/);

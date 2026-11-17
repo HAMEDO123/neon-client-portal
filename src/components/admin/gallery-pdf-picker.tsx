@@ -12,11 +12,12 @@ import { Check, FileDown, Loader2, X } from "lucide-react";
 type Space = { id: string; name: string; images: { id: string; imageUrl: string; caption: string | null }[] };
 
 export function GalleryPdfPicker({
-  projectId,
+  pdfPath,
   spaces,
   watermarkDefault,
 }: {
-  projectId: string;
+  /** The route that makes the PDF: the manager's or the team's, each checking its own session. */
+  pdfPath: string;
   spaces: Space[];
   watermarkDefault: boolean;
 }) {
@@ -58,7 +59,7 @@ export function GalleryPdfPicker({
       // keeps that order anyway.
       const ids = allIds.filter((id) => picked.has(id)).join(",");
       const response = await fetch(
-        `/admin/projects/${projectId}/gallery.pdf?ids=${ids}&watermark=${watermark ? "1" : "0"}`
+        `${pdfPath}?ids=${ids}&watermark=${watermark ? "1" : "0"}`
       );
       if (!response.ok) throw new Error((await response.text()) || "The PDF couldn't be made.");
 

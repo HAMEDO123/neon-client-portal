@@ -318,6 +318,16 @@ body:has(.employee-shell) {
   min-height: 0;
 }
 
+/* A project, from the team's side, is the manager's own screen — galleries,
+   drawings, the BOQ — and the portal's reading width left it a narrow column
+   down the middle of a desktop ("ضيقة كثير", 2026-11-17). On a large screen
+   it takes the whole frame; on a phone nothing changes. */
+@media (min-width: 1024px) {
+  .employee-main:has(> .wide-page) {
+    max-width: none;
+  }
+}
+
 /* Typing is a full-screen activity, and five destinations are not worth the
    room mid-word. */
 body[data-keyboard="open"] .employee-tabbar {

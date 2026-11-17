@@ -9,6 +9,7 @@ import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HotspotEditor } from "@/components/admin/hotspot-editor";
 import { ProjectPhotoUpload } from "@/components/employee/project-photo-upload";
+import { GalleryPdfPicker } from "@/components/admin/gallery-pdf-picker";
 
 // The gallery, and the one tab that is not simply the manager's screen.
 //
@@ -32,6 +33,16 @@ export default async function EmployeeProjectGalleryPage({ params }: { params: P
 
   return (
     <div className="flex flex-col gap-8">
+      <GalleryPdfPicker
+        pdfPath={`/employee/projects/${project.id}/gallery.pdf`}
+        watermarkDefault={project.watermarkEnabled}
+        spaces={project.spaces.map((space) => ({
+          id: space.id,
+          name: space.name,
+          images: space.images.map((img) => ({ id: img.id, imageUrl: img.imageUrl, caption: img.caption })),
+        }))}
+      />
+
       <form action={createSpace.bind(null, project.id)} className="glass flex items-end gap-3 rounded-2xl p-5">
         <TextInput label="Add a room" name="name" placeholder="Living Room" defaultValue="" className="flex-1" />
         <SaveButton label="Add" />
@@ -59,7 +70,7 @@ export default async function EmployeeProjectGalleryPage({ params }: { params: P
           </div>
 
           {space.images.length > 0 && (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               {space.images.map((img) => (
                 <div key={img.id} className="group relative overflow-hidden rounded-xl border border-ink/8">
                   <div className="relative aspect-[4/3]">

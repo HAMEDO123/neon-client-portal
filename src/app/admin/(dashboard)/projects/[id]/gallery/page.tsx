@@ -18,7 +18,7 @@ export default async function GalleryAdminPage({ params }: { params: Promise<{ i
   return (
     <div className="flex flex-col gap-8">
       <GalleryPdfPicker
-        projectId={project.id}
+        pdfPath={`/admin/projects/${project.id}/gallery.pdf`}
         watermarkDefault={project.watermarkEnabled}
         spaces={project.spaces.map((space) => ({
           id: space.id,
