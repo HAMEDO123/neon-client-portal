@@ -1,4 +1,5 @@
-import { Clock, Fingerprint, LogOut } from "lucide-react";
+import { Clock, Fingerprint, LogOut, MapPin } from "lucide-react";
+import { AppClockButton } from "@/components/employee/app-clock-button";
 import { spell, type ClockDay } from "@/lib/clock-day";
 import { formatTimeIn } from "@/lib/time";
 
@@ -19,7 +20,29 @@ function Fact({ label, value, tone }: { label: string; value: string; tone?: str
   );
 }
 
-export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }) {
+/**
+ * Clocking in from the app (lib/app-clock.ts), for somebody the manager has
+ * turned it on for: today's punches from here, each with where it was made.
+ * Null for everybody else, who see the card exactly as before.
+ */
+export type AppClock = { punches: { time: string; link: string }[] } | null;
+
+function AppPunches({ app }: { app: NonNullable<AppClock> }) {
+  if (app.punches.length === 0) return null;
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink/55">
+      <MapPin size={12} strokeWidth={2} />
+      From the app today:
+      {app.punches.map((punch, index) => (
+        <a key={index} href={punch.link} target="_blank" rel="noreferrer" className="font-medium text-cyan-700 underline">
+          {punch.time}
+        </a>
+      ))}
+    </p>
+  );
+}
+
+export function ClockCard({ day, timezone, app = null }: { day: ClockDay; timezone: string; app?: AppClock }) {
   // Nothing on a day the studio is closed: an empty card every Friday teaches
   // people to scroll past the one that matters on Sunday.
   if (!day.working) return null;
@@ -37,9 +60,16 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
           Not clocked in yet
         </h2>
         <p className="mt-1.5 text-sm text-ink/55">
-          The day starts at {time(day.startsAt)}. Clock in on the fingerprint and your hours start from
-          the moment it reads you.
+          {app
+            ? `The day starts at ${time(day.startsAt)}. Clock in on the fingerprint, or here — your location is recorded with it.`
+            : `The day starts at ${time(day.startsAt)}. Clock in on the fingerprint and your hours start from the moment it reads you.`}
         </p>
+        {app && (
+          <>
+            <AppClockButton label="Clock in here" />
+            <AppPunches app={app} />
+          </>
+        )}
       </section>
     );
   }
@@ -128,6 +158,15 @@ export function ClockCard({ day, timezone }: { day: ClockDay; timezone: string }
             ? `${short}h is coming off so far.`
             : "Clock out by then and nothing is taken off."}
       </p>
+
+      {/* The last read of the day is the clock-out, wherever it is made — so
+          the button stays after one, for somebody who carries on working. */}
+      {app && (
+        <>
+          <AppClockButton label={done ? "Clock out again here" : "Clock out here"} />
+          <AppPunches app={app} />
+        </>
+      )}
     </section>
   );
 }

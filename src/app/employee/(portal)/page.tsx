@@ -24,6 +24,7 @@ import { NowNextCard } from "@/components/employee/now-next-card";
 import { ClockCard } from "@/components/employee/clock-card";
 import { ReportLines } from "@/components/employee/report-lines";
 import { myClockDay } from "@/lib/clock-day";
+import { myAppClock } from "@/lib/app-clock-store";
 import { linesOf, reportForDay } from "@/lib/daily-report";
 
 function greeting(hour: number) {
@@ -90,6 +91,8 @@ export default async function EmployeeDashboard({
   // Their own day: when the device saw them in, and when they have to be gone
   // by. One after the other, like everything else on this page.
   const clockDay = await myClockDay(employee.id, todayDay, hours, timezone);
+  // Clocking in from the app, for whoever the manager turned it on for.
+  const appClock = await myAppClock(employee.id, todayDay, timezone);
 
   // What they have written down so far today, so the card shows it back.
   const report = await reportForDay(employee.id, todayDay);
@@ -143,7 +146,7 @@ export default async function EmployeeDashboard({
 
       {/* First, because the end of the day is no longer the same for everybody
           and this is the only place the person it belongs to can read it. */}
-      <ClockCard day={clockDay} timezone={timezone} />
+      <ClockCard day={clockDay} timezone={timezone} app={appClock} />
 
       <WarningsCard warnings={warnings} timezone={timezone} />
 

@@ -4,7 +4,10 @@ import { currentDeviceAddress, relocateDevice, rememberDevice } from "@/lib/atte
 import { applyAttendance, type SyncOutcome } from "@/lib/attendance-store";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { getSetting, getTimezone, getWorkHours, setSetting } from "@/lib/settings";
-import { dayKeyIn } from "@/lib/time";
+import { dayKeyIn, dayKeyToDate, instantAt } from "@/lib/time";
+import { appPunchKey, recordedPunches } from "@/lib/app-clock";
+import { appPunchesSince } from "@/lib/app-clock-store";
+import { prisma } from "@/lib/db";
 import { hoursOn, minutesOf, type WorkHours } from "@/lib/work-hours";
 
 // One pass of "ask the machine what it saw, and write it down".
@@ -158,12 +161,16 @@ async function readAndWrite(
       };
     }
 
-    const punches = await readPunches(at, timeZone);
+    const devicePunches = await readPunches(at, timeZone);
     // Read one after the other, like the other multi-query paths here.
     const hours = await getWorkHours();
+    const since = cutoffFor(options.since, dayKeyIn(timeZone, now));
+    // Clock-ins made from the app (lib/app-clock.ts) are reads like the
+    // device's, filed under the same number, so the two make one day.
+    const sinceAt = instantAt(since, "00:00", timeZone);
+    const punches = [...devicePunches, ...(sinceAt ? await appPunchesSince(sinceAt) : [])];
 
     const all = attendanceFromPunches(punches, hours, timeZone);
-    const since = cutoffFor(options.since, dayKeyIn(timeZone, now));
     const days = all.filter((day) => day.dayKey >= since);
     const outcome = await applyAttendance(days, { hours, timeZone });
     await tellWhenTheirDayEnds(outcome, hours);
@@ -185,6 +192,47 @@ async function readAndWrite(
       report: { ran: false, reason: "unreachable", error: sayDeviceError(error) },
     };
   }
+}
+
+/**
+ * Writes somebody's day from a punch they just made in the app, without
+ * waiting for the device.
+ *
+ * The device is on the studio's network and the person pressing the button
+ * is on a site: their clock-in must land now whether the machine answers or
+ * not, and reading its whole log — fifty thousand reads — is not something to
+ * keep somebody waiting on. So the day is worked out from their app punches
+ * and the reads the row already holds (`recordedPunches`), through the same
+ * arithmetic a sync uses; the next full sync works it out again from
+ * everything, device included, and writes over it as it would its own.
+ *
+ * A sync already talking to the device is waited for first, so it cannot
+ * write the day back without this punch a moment after.
+ */
+export async function writeAppDay(employeeId: string, now: Date = new Date()): Promise<void> {
+  if (running) await running.catch(() => undefined);
+
+  const timeZone = await getTimezone();
+  const hours = await getWorkHours();
+  const dayKey = dayKeyIn(timeZone, now);
+  const start = instantAt(dayKey, "00:00", timeZone);
+  if (!start) return;
+
+  const person = await prisma.employee.findUnique({ where: { id: employeeId }, select: { deviceUserId: true } });
+  if (!person) return;
+  const key = person.deviceUserId ?? appPunchKey(employeeId);
+
+  const mine = (await appPunchesSince(start)).filter((punch) => punch.deviceUserId === key);
+  const row = await prisma.attendanceRecord.findUnique({
+    where: { employeeId_day: { employeeId, day: dayKeyToDate(dayKey) } },
+    select: { source: true, arrivedAt: true, departedAt: true },
+  });
+  const punches = [...recordedPunches(row, key), ...mine];
+
+  const days = attendanceFromPunches(punches, hours, timeZone).filter((day) => day.dayKey === dayKey);
+  if (days.length === 0) return;
+  const outcome = await applyAttendance(days, { hours, timeZone });
+  await tellWhenTheirDayEnds(outcome, hours);
 }
 
 /**

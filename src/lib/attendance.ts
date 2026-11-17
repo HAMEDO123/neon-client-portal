@@ -18,6 +18,8 @@ export type Punch = {
   /** The device's own user number — never an employee id; they are mapped. */
   deviceUserId: string;
   at: Date;
+  /** Made from the app rather than on the device (lib/app-clock.ts). Counted the same. */
+  fromApp?: boolean;
 };
 
 /** What one person's one day came to. */
@@ -64,6 +66,8 @@ export type DayAttendance = {
   delayHours: number;
   /** Hours of the day left unworked at the end. Zero when nobody clocked out. */
   earlyHours: number;
+  /** How many of the reads were made from the app, so the note can say so. */
+  appReads?: number;
 };
 
 /**
@@ -542,6 +546,7 @@ export function attendanceFromPunches(
       // was left unworked" and there is no departure to measure. The day is
       // not free: `dayCharge` prices a missing scan at MISSING_PUNCH_HOURS.
       earlyHours: departedAt ? earlyHours(hoursOn(hours, dayKey), wallClockIn(timeZone, departedAt)) : 0,
+      appReads: sorted.filter((punch) => punch.fromApp).length,
     });
   }
 

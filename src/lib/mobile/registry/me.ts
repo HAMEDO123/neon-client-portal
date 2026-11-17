@@ -2,7 +2,7 @@ import { requireEmployee } from "@/lib/employee-session";
 import { requireTaskAssigner } from "@/lib/admin-guard";
 import { prisma } from "@/lib/db";
 import { getTimezone } from "@/lib/settings";
-import { todayKey, dayKeyToDate, dayKeyIn } from "@/lib/time";
+import { todayKey, dayKeyToDate, dayKeyIn, formatTimeIn } from "@/lib/time";
 import { allTasks } from "@/lib/employee-tasks";
 import { planForTasks } from "@/lib/stage-deadlines";
 import { isLate } from "@/lib/task-filters";
@@ -37,6 +37,9 @@ import {
 } from "@/lib/actions/assigned-task-actions";
 import { guarded, guardedAction, heard, param, optParam, str, oneOf, bool, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 import { locationPlanFor, reportLocation, setLocationPermission } from "@/lib/mobile/location-service";
+import { readClockFix } from "@/lib/app-clock";
+import { myAppClock, recordAppPunch } from "@/lib/app-clock-store";
+import { writeAppDay } from "@/lib/attendance-sync";
 import { PERMISSIONS } from "@/lib/staff-location";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { shoppingDedupeKey, shoppingLabel, shoppingMessage } from "@/lib/office-shopping";
@@ -247,6 +250,16 @@ export const reads: ReadRegistry = {
   //   not cancelled) }
   "me/location": guarded(requireEmployee, async (_params, me) => locationPlanFor(me.id)),
 
+  // Clocking in from the app (lib/app-clock.ts): `allowed` is whether the
+  // manager has turned it on for this person, and `punches` today's from the
+  // app, each { time, link } with a map link to where it was made. An app
+  // build shows a "Clock in here" button only when `allowed`.
+  "me/clock": guarded(requireEmployee, async (_params, me) => {
+    const timezone = await getTimezone();
+    const app = await myAppClock(me.id, todayKey(timezone), timezone);
+    return { allowed: app !== null, punches: app?.punches ?? [] };
+  }),
+
   // The jobs on the Assign screen, ?week=YYYY-MM-DD (a Sunday; any day in the
   // week works, lib/week.ts resolves it).
   //
@@ -358,6 +371,19 @@ export const actions: ActionRegistry = {
   // so the phone stops the moment `sharing` is false — `fine`, `sharedToday`
   // and `finedThisMonth` included, read after this position was counted.
   "me/location/report": guardedAction(requireEmployee, async ({ args }, me) => reportLocation(me.id, args)),
+
+  // A clock-in or clock-out made from the app, where the phone is: args
+  // [latitude, longitude, accuracy (metres), fixedAt (ISO, with its zone)],
+  // from a position taken when the button was pressed — at most two minutes
+  // old. The time recorded is the server's. Refused in words for anybody it is
+  // not on for, or without a real, fresh position. → { ok: true, time }
+  "me/clock": guardedAction(requireEmployee, async ({ args }, me) => {
+    const now = new Date();
+    const fix = readClockFix({ latitude: args[0], longitude: args[1], accuracy: args[2], fixedAt: args[3] }, now);
+    const punch = await recordAppPunch(me.id, fix, now);
+    if (!punch.repeated) await writeAppDay(me.id, now);
+    return { ok: true, time: formatTimeIn(await getTimezone(), punch.at) ?? "" };
+  }),
 
   // The phone's location permission as iOS reports it: args [permission,
   // precise], permission always | when-in-use | denied | restricted |

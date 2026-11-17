@@ -535,6 +535,14 @@ model Employee {
    * be those two and nobody else.
    */
   walkieLate       Boolean   @default(false)
+  /**
+   * May clock in and out from the app, wherever they are, and every such
+   * punch keeps the place it was made (`AppPunch`). Asked for Wael on
+   * 2026-11-17, who works on sites far from the fingerprint device. The punch
+   * counts exactly as a read on the device does — same day, same lateness,
+   * same clock-out — and the device still works for them too.
+   */
+  appClockIn       Boolean   @default(false)
   // Whether this person may read the company WhatsApp number's conversations
   // in the portal, and answer in them as the studio.
   //
@@ -633,6 +641,8 @@ model Employee {
   staffLocation   StaffLocation?
   // Whether their phone shared its position on each working day — never where.
   locationDays    LocationDay[]
+  // Clock-ins and clock-outs made from the app, each with where it was made.
+  appPunches      AppPunch[]
 }
 
 // A formal warning from the manager, with the reason the employee is shown at
@@ -2289,4 +2299,22 @@ model WalkieMessage {
   @@index([employeeId, createdAt])
   @@index([fromKey, createdAt])
   @@index([toKey, createdAt])
+}
+
+/// A clock-in or clock-out made from the app (`Employee.appClockIn`), and the
+/// place the phone said it was made. Read by the attendance sync beside the
+/// fingerprint device's own log, so it counts exactly as a read there does
+/// (lib/app-clock.ts). The time is the server's, never the phone's.
+model AppPunch {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  at         DateTime @default(now())
+  latitude   Float
+  longitude  Float
+  accuracy   Float? // metres, as the phone reported it
+  createdAt  DateTime @default(now())
+
+  @@index([employeeId, at])
+  @@index([at])
 }

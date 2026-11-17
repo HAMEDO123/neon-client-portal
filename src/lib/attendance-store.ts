@@ -8,6 +8,7 @@ import {
   type DayAttendance,
 } from "@/lib/attendance";
 import { awayMinutesOf, storedBreaks } from "@/lib/attendance-breaks";
+import { appPunchKey } from "@/lib/app-clock";
 import { dayKeyToDate } from "@/lib/time";
 import type { WorkHours } from "@/lib/work-hours";
 
@@ -41,6 +42,22 @@ export async function mappedByDeviceUser() {
   });
 
   return new Map(rows.map((row) => [row.deviceUserId as string, row]));
+}
+
+/**
+ * Who a sync can write for: everybody paired on the device, and whoever clocks
+ * in from the app without a number there — their punches are filed under
+ * `appPunchKey` (lib/app-clock.ts). Kept apart from `mappedByDeviceUser`, which
+ * the device's screens list as the people paired with it.
+ */
+async function mappedForSync() {
+  const people = await mappedByDeviceUser();
+  const appOnly = await prisma.employee.findMany({
+    where: { appClockIn: true, deviceUserId: null },
+    select: { id: true, name: true, active: true, deviceUserId: true, openHours: true },
+  });
+  for (const row of appOnly) people.set(appPunchKey(row.id), row);
+  return people;
 }
 
 export type SyncOutcome = {
@@ -92,7 +109,7 @@ export type SyncOutcome = {
  * a background job that nobody is waiting on.
  */
 export async function applyAttendance(days: DayAttendance[], context?: WorkContext): Promise<SyncOutcome> {
-  const people = await mappedByDeviceUser();
+  const people = await mappedForSync();
 
   const outcome: SyncOutcome = {
     created: 0,
@@ -256,7 +273,10 @@ function noteFor(day: DayAttendance) {
   // manager cannot work out from the numbers — nothing was deducted, and the
   // reason is that nobody knows, not that the day was complete.
   const left = day.departedLocal ? `left ${day.departedLocal}` : "no clock-out";
-  return `Device · arrived ${day.arrivedLocal} · ${left} · ${day.punches} ${day.punches === 1 ? "read" : "reads"}`;
+  // Reads made from the app count the same; the note says how many, so a
+  // manager looking at the day knows to check where they were made.
+  const app = day.appReads ? ` (${day.appReads} from the app)` : "";
+  return `Device · arrived ${day.arrivedLocal} · ${left} · ${day.punches} ${day.punches === 1 ? "read" : "reads"}${app}`;
 }
 
 /** The newest day the device has already accounted for, so a sync can ask for less. */

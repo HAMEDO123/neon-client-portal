@@ -8,7 +8,7 @@ import { buildMonth, monthBounds, monthKeyFor, type MonthEntry } from "@/lib/att
 import { periodOf } from "@/lib/pay-period";
 import { setDeviceUserId } from "@/lib/actions/operations-actions";
 import { getTimezone, getWorkHours } from "@/lib/settings";
-import { dateToDayKey, dayKeyToDate, formatDayIn, formatTimeIn, todayKey } from "@/lib/time";
+import { dateToDayKey, dayKeyToDate, formatDayIn, formatTimeIn, instantAt, shiftDayKey, todayKey } from "@/lib/time";
 import { AttendanceConsole } from "@/components/admin/attendance-console";
 import { AttendanceMonth } from "@/components/admin/attendance-month";
 import { storedBreaks } from "@/lib/attendance-breaks";
@@ -16,6 +16,10 @@ import { countedHours } from "@/lib/attendance";
 import type { WorkHours } from "@/lib/work-hours";
 import { DeviceUsers } from "@/components/admin/device-users";
 import { SaveButton } from "@/components/admin/form-buttons";
+import { appPunchesBetween } from "@/lib/app-clock-store";
+import { mapLink } from "@/lib/app-clock";
+import { officeLocation } from "@/lib/mobile/location-service";
+import { metresBetween } from "@/lib/staff-location";
 
 // The fingerprint machine's own screen: is it there, is its clock right, who is
 // enrolled on it, who those people are here, and what it has recorded lately.
@@ -116,6 +120,12 @@ export default async function AttendanceDevicePage({
   ];
 
   const month = buildMonth({ monthKey, hours: workHours, todayKey: todayKey(timezone), people, entries });
+
+  // Clock-ins made from the app this month, each with where (lib/app-clock.ts).
+  const appFrom = instantAt(bounds.from, "00:00", timezone);
+  const appTo = instantAt(shiftDayKey(bounds.to, 1), "00:00", timezone);
+  const appPunches = appFrom && appTo ? await appPunchesBetween(appFrom, appTo) : [];
+  const office = appPunches.length > 0 ? await officeLocation() : null;
 
   const driftBad = clock ? Math.abs(clock.driftSeconds) > MAX_DRIFT_SECONDS : false;
 
@@ -223,7 +233,75 @@ export default async function AttendanceDevicePage({
       <AttendanceMonth month={month} thisMonth={thisMonth} />
 
       <ClockTimes rows={monthRecords} timezone={timezone} monthKey={monthKey} hours={workHours} />
+
+      <AppPunchList punches={appPunches} timezone={timezone} office={office} />
     </div>
+  );
+}
+
+/**
+ * Every clock-in and clock-out made from the app this month, and where.
+ *
+ * They count exactly as reads on the device do — the grid above already has
+ * them — so this is only the part the device cannot say: the place. Shown as a
+ * link to a map and as a distance from the office, because "where was he" is
+ * the one question somebody clocking in from a site raises.
+ */
+function AppPunchList({
+  punches,
+  timezone,
+  office,
+}: {
+  punches: Awaited<ReturnType<typeof appPunchesBetween>>;
+  timezone: string;
+  office: { latitude: number; longitude: number } | null;
+}) {
+  if (punches.length === 0) return null;
+
+  const away = (punch: { latitude: number; longitude: number }) => {
+    if (!office) return null;
+    const metres = metresBetween(punch, office);
+    return metres < 1000 ? `${Math.round(metres)} m from the office` : `${(metres / 1000).toFixed(1)} km from the office`;
+  };
+
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-lg font-semibold text-bark">Clocked from the app</h2>
+      <p className="mt-1 text-sm text-bark/50">
+        Each one counts like a fingerprint read and is already in the month above. Tap a time to see where it was made.
+      </p>
+      <div className="mt-3 overflow-x-auto rounded-2xl border border-warm-line bg-white">
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase tracking-wider text-bark/40">
+            <tr>
+              <th className="px-4 py-2 font-medium">Who</th>
+              <th className="px-4 py-2 font-medium">Day</th>
+              <th className="px-4 py-2 font-medium">Time</th>
+              <th className="px-4 py-2 font-medium">Where</th>
+            </tr>
+          </thead>
+          <tbody>
+            {punches.map((punch) => (
+              <tr key={punch.id} className="border-t border-warm-line">
+                <td className="px-4 py-2 text-bark">{punch.employee.name}</td>
+                <td className="px-4 py-2 text-bark/70">{formatDayIn(timezone, punch.at)}</td>
+                <td className="px-4 py-2 tabular-nums text-bark">{formatTimeIn(timezone, punch.at)}</td>
+                <td className="px-4 py-2">
+                  <a href={mapLink(punch)} target="_blank" rel="noreferrer" className="font-medium text-cyan-700 underline">
+                    Open map
+                  </a>
+                  <span className="ml-2 text-xs text-bark/50">
+                    {[away(punch), punch.accuracy != null ? `±${Math.round(punch.accuracy)} m` : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

@@ -43,8 +43,10 @@ export async function runClockReminders(now = new Date()) {
     // everybody, the one person never reminded to scan out was also the one
     // who had forgotten four times.
     where: { active: true, accessRole: "EMPLOYEE", deviceUserId: { not: null } },
-    select: { id: true, name: true, openHours: true },
+    select: { id: true, name: true, openHours: true, appClockIn: true },
   });
+  // Whoever may clock in from the app is told they can (lib/app-clock.ts).
+  const fromApp = new Set(people.filter((p) => p.appClockIn).map((p) => p.id));
   if (people.length === 0) return { skipped: "nobody is paired to the device" };
 
   const day = dayKeyToDate(dayKey);
@@ -153,6 +155,10 @@ export async function runClockReminders(now = new Date()) {
                 ? `It's ${nowText} and you haven't clocked out yet. Clock out on the fingerprint.`
                 : `Your day ended at ${myEndText}. Clock out on the fingerprint.`,
             };
+
+    if (fromApp.has(item.employeeId)) {
+      copy.message = copy.message.replaceAll("on the fingerprint", "on the fingerprint or from the app");
+    }
 
     if (existing?.notificationId) {
       await repeatPush(existing.notificationId, copy).catch(() => undefined);
