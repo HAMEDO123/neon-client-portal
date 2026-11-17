@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Images } from "lucide-react";
 import { HotspotEditor } from "@/components/admin/hotspot-editor";
 import { ImageUploadForm } from "@/components/admin/image-upload-form";
+import { GalleryPdfPicker } from "@/components/admin/gallery-pdf-picker";
 
 export default async function GalleryAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,6 +17,16 @@ export default async function GalleryAdminPage({ params }: { params: Promise<{ i
 
   return (
     <div className="flex flex-col gap-8">
+      <GalleryPdfPicker
+        projectId={project.id}
+        watermarkDefault={project.watermarkEnabled}
+        spaces={project.spaces.map((space) => ({
+          id: space.id,
+          name: space.name,
+          images: space.images.map((img) => ({ id: img.id, imageUrl: img.imageUrl, caption: img.caption })),
+        }))}
+      />
+
       <form action={createSpace.bind(null, project.id)} className="glass flex items-end gap-3 rounded-2xl p-5">
         <TextInput label="Add a space" name="name" placeholder="Living Room" defaultValue="" className="flex-1" />
         <SaveButton label="Add Space" />
