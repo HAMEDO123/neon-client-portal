@@ -82,8 +82,8 @@ export default async function TasksPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Everything approved in a month, each person's in order. */}
-          <MonthExport href="/admin/tasks/done.csv" label="Export tasks done" month={periodOf(today)} />
+          {/* Everything due in a month — done or not — with what was asked and what came back. */}
+          <MonthExport href="/admin/tasks/tasks.csv" label="Export month's tasks" month={periodOf(today)} />
           <Link
             href="/admin/projects/new"
             className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple to-purple-strong px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"

@@ -4,7 +4,8 @@ import { getTimezone } from "@/lib/settings";
 import { todayKey } from "@/lib/time";
 import { loadMonthReports, readMonth, reportsCsv } from "@/lib/monthly-export";
 
-// A month of daily reports as a spreadsheet: each person, day by day.
+// A month of daily reports as a spreadsheet: each person, every working day,
+// the report or "Not written".
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,9 @@ export async function GET(request: NextRequest) {
   if (!(await hasAdminSession())) return new NextResponse("Not found", { status: 404 });
 
   const timezone = await getTimezone();
-  const month = readMonth(request.nextUrl.searchParams.get("month"), todayKey(timezone));
-  const csv = reportsCsv(await loadMonthReports(month, timezone));
+  const today = todayKey(timezone);
+  const month = readMonth(request.nextUrl.searchParams.get("month"), today);
+  const csv = reportsCsv(await loadMonthReports(month, timezone, today));
 
   return new NextResponse(csv, {
     headers: {

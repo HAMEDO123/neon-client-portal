@@ -62,7 +62,7 @@ export default async function AdminRequestsPage() {
           <NotebookPen size={14} strokeWidth={2} />
           Today&apos;s reports ({reports.length} of {team.length})
         </h2>
-        {/* A whole month of them, each person day by day. */}
+        {/* A whole month of them: each person's working days, written or not. */}
         <MonthExport href="/admin/requests/reports.csv" label="Export month's reports" month={periodOf(today)} />
       </div>
 
