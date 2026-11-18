@@ -7,14 +7,11 @@ import { periodLabel, periodOf, RECEIPT_CAP } from "@/lib/payroll";
 import { SupplyRequestForm, SupplyRequestList } from "@/components/employee/supply-requests";
 import { ReceiptUploader, ReceiptList } from "@/components/employee/receipts";
 import { DailyReport } from "@/components/employee/daily-report";
+import { cn } from "@/lib/utils";
 
 // One tab for the two things an employee asks the office for: something to be
 // bought, and money back for something they already paid for.
-export default async function EmployeeRequestsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string }>;
-}) {
+export default async function EmployeeRequestsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const employee = await requireEmployee();
   const { tab } = await searchParams;
   const timezone = await getTimezone();
@@ -44,8 +41,15 @@ export default async function EmployeeRequestsPage({
 
   const counted = receipts.reduce((sum, receipt) => sum + (receipt.countedAmount ?? 0), 0);
 
+  // The new UI (2026-11-18): on a desk the three sit side by side — supplies,
+  // receipts and today's report — so nothing is behind a tab; on a phone the
+  // buttons choose one. Each is rendered once and only hidden, so a form being
+  // filled in is never a second copy of itself.
+  const active = showReport ? "report" : showReceipts ? "receipts" : "supplies";
+  const column = (key: string) => cn("flex min-w-0 flex-col gap-4", active === key ? "flex" : "hidden lg:flex");
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="wide-page flex flex-col gap-5">
       <div>
         <h1 className="text-xl font-semibold text-ink">Requests</h1>
         <p className="mt-1 text-sm text-ink/50">
@@ -53,38 +57,40 @@ export default async function EmployeeRequestsPage({
         </p>
       </div>
 
-      <div className="flex gap-2">
-        <Tab href="/employee/requests" active={!showReceipts && !showReport} label="Supplies" />
-        <Tab href="/employee/requests?tab=receipts" active={showReceipts} label="Receipts" />
+      <div className="flex gap-2 lg:hidden">
+        <Tab href="/employee/requests" active={active === "supplies"} label="Supplies" />
+        <Tab href="/employee/requests?tab=receipts" active={active === "receipts"} label="Receipts" />
         {/* A plain apostrophe: this is a string attribute, not JSX text, so an
             HTML entity here would reach the screen as the entity itself. */}
-        <Tab href="/employee/requests?tab=report" active={showReport} label="Today's report" />
+        <Tab href="/employee/requests?tab=report" active={active === "report"} label="Today's report" />
       </div>
 
-      {showReport ? (
-        <DailyReport today={report?.text ?? ""} savedAt={report?.updatedAt ?? null} />
-      ) : showReceipts ? (
-        <>
-          <div className="glass rounded-2xl p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-ink/40">
-              {periodLabel(period)}
-            </p>
-            <p className="mt-1 text-2xl font-semibold text-ink">{counted.toFixed(2)} JOD</p>
-            <p className="mt-1 text-xs text-ink/50">
-              {receipts.length} receipt{receipts.length === 1 ? "" : "s"} · each one counts up to{" "}
-              {RECEIPT_CAP} JOD unless the manager sets another figure, added to this month&apos;s pay
-            </p>
-          </div>
-
-          <ReceiptUploader />
-          <ReceiptList receipts={receipts} />
-        </>
-      ) : (
-        <>
+      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
+        <section aria-label="Supplies" className={column("supplies")}>
+          <h2 className="hidden text-2xl text-ink lg:block">Supplies</h2>
           <SupplyRequestForm />
           <SupplyRequestList requests={requests} />
-        </>
-      )}
+        </section>
+
+        <section aria-label="Receipts" className={column("receipts")}>
+          <h2 className="hidden text-2xl text-ink lg:block">Receipts</h2>
+          <div className="rounded-2xl bg-clay-soft p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-ink/50">{periodLabel(period)}</p>
+            <p className="mt-1 font-display text-3xl text-ink">{counted.toFixed(2)} JOD</p>
+            <p className="mt-1 text-xs text-ink/55">
+              {receipts.length} receipt{receipts.length === 1 ? "" : "s"} · each one counts up to {RECEIPT_CAP} JOD
+              unless the manager sets another figure, added to this month&apos;s pay
+            </p>
+          </div>
+          <ReceiptUploader />
+          <ReceiptList receipts={receipts} />
+        </section>
+
+        <section aria-label="Today's report" className={column("report")}>
+          <h2 className="hidden text-2xl text-ink lg:block">Today&apos;s report</h2>
+          <DailyReport today={report?.text ?? ""} savedAt={report?.updatedAt ?? null} />
+        </section>
+      </div>
     </div>
   );
 }

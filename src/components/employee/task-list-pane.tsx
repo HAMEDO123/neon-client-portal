@@ -10,9 +10,12 @@ import { cn } from "@/lib/utils";
 
 type Row = { task: AssignedTaskView; late: boolean };
 
+// Today first, always — asked for the day this shipped ("خلي التاسكات تاعون
+// اليوم دايما اول اشي"): a long late list above them pushed today's work off
+// the screen. Same order as the phone's cards (`dueBand`).
 const GROUPS = [
-  { key: "late", label: "Late" },
   { key: "today", label: "Today" },
+  { key: "late", label: "Late" },
   { key: "coming", label: "Coming up" },
   { key: "review", label: "Waiting for review" },
   { key: "done", label: "Done" },

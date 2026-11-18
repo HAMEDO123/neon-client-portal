@@ -31,55 +31,60 @@ export default async function EmployeeProfilePage() {
 
   const receiving = devices.filter((device) => device.active).length;
 
+  // The new UI (2026-11-18): who you are across the top, then what reaches
+  // you and on which devices side by side on a desk; one column on a phone.
   return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">{employee.name}</h1>
-        <p className="mt-1 text-sm text-ink/50">{employee.role ?? "Employee"}</p>
-      </div>
-
-      <div className="glass rounded-2xl p-4">
-        <PhotoPicker
-          name={employee.name}
-          photo={employee.photoUrl}
-          color={employee.color}
-          action={setMyPhoto}
-          hint="Your picture in chat, on task cards and in calls."
-        />
-      </div>
-
-      <div className="glass flex flex-col gap-3 rounded-2xl p-4">
-        {employee.email && <Line icon={Mail} value={employee.email} />}
-        {employee.phone && <Line icon={Phone} value={employee.phone} />}
-        {employee.employeeCode && <Line icon={IdCard} value={`ID ${employee.employeeCode}`} />}
-        <Line
-          icon={Smartphone}
-          value={`${receiving} device${receiving === 1 ? "" : "s"} receiving push`}
-        />
-      </div>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/40">Notifications</h2>
-        <PushToggle publicKey={await getPublicKey()} configured={await isPushConfigured()} />
-        <SoundToggle />
-        <DeviceList
-          devices={devices.map((device) => ({
-            id: device.id,
-            endpoint: device.endpoint,
-            label: deviceLabel(device.userAgent),
-            active: device.active,
-            lastUsedAt: device.lastUsedAt
-              ? `${formatDayIn(timezone, device.lastUsedAt)} ${formatTimeIn(timezone, device.lastUsedAt)}`
-              : null,
-            addedAt: formatDayIn(timezone, device.createdAt) ?? "",
-          }))}
-        />
-        <PreferencesForm preferences={preferences} />
+    <div className="wide-page flex flex-col gap-6">
+      <section aria-label="You" className="glass flex flex-col gap-5 rounded-2xl p-5 lg:flex-row lg:items-center">
+        <div className="min-w-0 lg:flex-1">
+          <h1 className="text-xl font-semibold text-ink">{employee.name}</h1>
+          <p className="mt-1 text-sm text-ink/50">{employee.role ?? "Employee"}</p>
+          <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-x-6">
+            {employee.email && <Line icon={Mail} value={employee.email} />}
+            {employee.phone && <Line icon={Phone} value={employee.phone} />}
+            {employee.employeeCode && <Line icon={IdCard} value={`ID ${employee.employeeCode}`} />}
+            <Line icon={Smartphone} value={`${receiving} device${receiving === 1 ? "" : "s"} receiving push`} />
+          </div>
+        </div>
+        <div className="lg:w-80">
+          <PhotoPicker
+            name={employee.name}
+            photo={employee.photoUrl}
+            color={employee.color}
+            action={setMyPhoto}
+            hint="Your picture in chat, on task cards and in calls."
+          />
+        </div>
       </section>
 
-      <p className="text-center text-[11px] text-ink/35">Times shown in {timezone.replace("_", " ")}</p>
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <section className="flex flex-col gap-3">
+          <h2 className="text-2xl text-ink">Notifications</h2>
+          <PushToggle publicKey={await getPublicKey()} configured={await isPushConfigured()} />
+          <SoundToggle />
+          <PreferencesForm preferences={preferences} />
+        </section>
 
-      <SignOutButton />
+        <section className="flex flex-col gap-3">
+          <h2 className="text-2xl text-ink">Devices</h2>
+          <DeviceList
+            devices={devices.map((device) => ({
+              id: device.id,
+              endpoint: device.endpoint,
+              label: deviceLabel(device.userAgent),
+              active: device.active,
+              lastUsedAt: device.lastUsedAt
+                ? `${formatDayIn(timezone, device.lastUsedAt)} ${formatTimeIn(timezone, device.lastUsedAt)}`
+                : null,
+              addedAt: formatDayIn(timezone, device.createdAt) ?? "",
+            }))}
+          />
+          <p className="text-[11px] text-ink/40">Times shown in {timezone.replace("_", " ")}</p>
+          <div className="mt-2">
+            <SignOutButton />
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

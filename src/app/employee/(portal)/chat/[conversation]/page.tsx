@@ -1,6 +1,13 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { channelFor, listMessages, parseConversation, recordChatRead, requireChatViewer } from "@/lib/chat";
+import {
+  channelFor,
+  conversationsFor,
+  listMessages,
+  parseConversation,
+  recordChatRead,
+  requireChatViewer,
+} from "@/lib/chat";
 import { facesFor, keysInMessages } from "@/lib/faces";
 import { isGroupConversation, otherPeer } from "@/lib/chat-conversations";
 import { groupMemberNames } from "@/lib/chat-group-store";
@@ -8,6 +15,10 @@ import { memberLine } from "@/lib/group-members";
 import { avatarUrl } from "@/lib/avatar";
 import { getTimezone } from "@/lib/settings";
 import { ChatRoom } from "@/components/chat/chat-room";
+import { ConversationPanel } from "@/components/chat/studio/conversation-panel";
+import { getSessionEmployee } from "@/lib/employee-session";
+import { inboxSummary } from "@/lib/notifications/whatsapp-events";
+import { whatsAppChatBase } from "@/lib/whatsapp-watch";
 
 // One conversation, full screen: the team's group, the private chat with the
 // manager, or a private chat with a colleague. Somebody else's private chat
@@ -70,6 +81,12 @@ export default async function EmployeeConversationPage({
 
   await recordChatRead(viewer, channel.id);
 
+  // The list beside the conversation on a desk, as the manager's chat has it
+  // (the new UI, 2026-11-18). One query; the phone never draws it.
+  const conversations = await conversationsFor(viewer);
+  const me = await getSessionEmployee();
+  const clients = me?.canReadWhatsApp ? await inboxSummary() : null;
+
   // The team, or a group the manager made: both are drawn as a group.
   const group = isGroupConversation(conversation);
   const withName = conversation.kind === "peer" ? (colleague?.name ?? channel.name) : "the manager";
@@ -78,43 +95,57 @@ export default async function EmployeeConversationPage({
     // Its own screen, WhatsApp-style: the conversation's header replaces the
     // portal's (.chat-screen in globals.css), and the messages scroll inside
     // the frame so the text box sits on the keyboard.
-    <div className="chat-screen fills-frame flex flex-col overflow-hidden">
-      <ChatRoom
-        initialMessages={messages}
-        faces={faces}
-        viewerType="EMPLOYEE"
-        viewerId={viewer.id}
-        viewerName={viewer.name}
-        canDeleteAny={false}
-        projects={projects}
-        conversation={slug}
-        showNames={group}
-        timeZone={timezone}
-        initialNow={new Date().getTime()}
-        focusTaskId={typeof focus === "string" ? focus : null}
-        header={
-          group
-            ? {
-                name: channel.name,
-                subtitle: memberLine(["Manager", ...team.map((member) => member.name)], viewer.name),
-                backHref: "/employee/chat",
-              }
-            : conversation.kind === "peer"
+    <div className="chat-screen fills-frame wide-page flex overflow-hidden lg:gap-4 lg:p-5">
+      <aside className="hidden w-[18rem] shrink-0 overflow-hidden rounded-3xl border border-warm-line bg-card shadow-[0_18px_40px_-30px_rgba(44,39,34,0.5)] lg:flex xl:w-[19rem]">
+        <ConversationPanel
+          items={conversations}
+          basePath="/employee/chat"
+          activeSlug={slug}
+          timeZone={timezone}
+          initialNow={new Date().getTime()}
+          tasksHref="/employee/chat?view=tasks"
+          whatsapp={clients ? { basePath: whatsAppChatBase("employee"), rows: clients.rows } : null}
+        />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-card lg:rounded-3xl lg:border lg:border-warm-line lg:shadow-[0_18px_40px_-30px_rgba(44,39,34,0.5)]">
+        <ChatRoom
+          initialMessages={messages}
+          faces={faces}
+          viewerType="EMPLOYEE"
+          viewerId={viewer.id}
+          viewerName={viewer.name}
+          canDeleteAny={false}
+          projects={projects}
+          conversation={slug}
+          showNames={group}
+          timeZone={timezone}
+          initialNow={new Date().getTime()}
+          focusTaskId={typeof focus === "string" ? focus : null}
+          header={
+            group
               ? {
-                  name: withName,
-                  subtitle: `Private · only you and ${withName}`,
-                  avatar: colleague?.photoUrl ?? avatarUrl(withName, colleague?.color),
+                  name: channel.name,
+                  subtitle: memberLine(["Manager", ...team.map((member) => member.name)], viewer.name),
                   backHref: "/employee/chat",
                 }
-              : {
-                  name: "Manager",
-                  subtitle: "Private · only you and the manager",
-                  avatar: faces.admin ?? avatarUrl("Manager", "ink"),
-                  backHref: "/employee/chat",
-                }
-        }
-        emptyText={group ? undefined : `No messages yet. Only you and ${withName} can see this chat.`}
-      />
+              : conversation.kind === "peer"
+                ? {
+                    name: withName,
+                    subtitle: `Private · only you and ${withName}`,
+                    avatar: colleague?.photoUrl ?? avatarUrl(withName, colleague?.color),
+                    backHref: "/employee/chat",
+                  }
+                : {
+                    name: "Manager",
+                    subtitle: "Private · only you and the manager",
+                    avatar: faces.admin ?? avatarUrl("Manager", "ink"),
+                    backHref: "/employee/chat",
+                  }
+          }
+          emptyText={group ? undefined : `No messages yet. Only you and ${withName} can see this chat.`}
+        />
+      </div>
     </div>
   );
 }
