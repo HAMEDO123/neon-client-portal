@@ -27,7 +27,7 @@ export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 function InvalidLink({ reason }: { reason: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6">
+    <main className="client-page flex min-h-screen items-center justify-center bg-background px-6">
       <div className="glass-strong flex max-w-sm flex-col items-center rounded-3xl px-10 py-14 text-center">
         <Lock size={20} className="text-ink/30" />
         <h1 className="mt-4 text-lg font-semibold text-ink">Link Unavailable</h1>
@@ -94,7 +94,7 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
 
   return (
     <LanguageProvider>
-    <main className="bg-background">
+    <main className="client-page bg-background">
       <LanguageToggle />
       <WelcomeOverlay projectName={project.name} />
       <StickyNav items={navItems} projectName={project.name} />

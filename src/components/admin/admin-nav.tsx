@@ -186,7 +186,7 @@ function Item({
       className={cn(
         "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
         active
-          ? "bg-clay text-white shadow-[0_10px_20px_-14px_rgba(0,0,0,0.9)]"
+          ? "bg-clay text-white shadow-[0_10px_20px_-14px_rgba(141,108,74,0.8)]"
           : "text-rail-dim hover:bg-rail-soft hover:text-rail-ink"
       )}
     >

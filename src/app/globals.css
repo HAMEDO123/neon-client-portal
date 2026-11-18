@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f7f6fb;
-  --bg-soft: #eef0fa;
-  --ink: #15131f;
-  --foreground: #15131f;
+  /* The Studio palette, everywhere (2026-11-18): warm paper and warm ink. */
+  --bg: #f6f2ec;
+  --bg-soft: #efe6d9;
+  --ink: #2c2722;
+  --foreground: #2c2722;
   --cyan: #06b6d4;
   --cyan-strong: #0e7490;
   --purple: #8b5cf6;
@@ -13,7 +14,7 @@
   --pink-strong: #be185d;
   --orange: #f59e0b;
   --orange-strong: #b45309;
-  --line: rgba(21, 19, 31, 0.09);
+  --line: rgba(44, 39, 34, 0.09);
   --glass: rgba(255, 255, 255, 0.55);
 }
 
@@ -36,11 +37,13 @@
      tokens rather than inverted greys, because text on it needs contrast
      decided once and kept — the clay pill marking where you are is the only
      colour that crosses from the light side. */
-  --rail: #1c1917;
-  --rail-soft: #272220;
-  --rail-line: rgba(245, 242, 238, 0.09);
-  --rail-ink: #f5f2ee;
-  --rail-dim: rgba(245, 242, 238, 0.55);
+  /* Light since the Studio look (2026-11-18): paper, ink, and the clay pill
+     marking where you are. The admin's and the portal's menus both read these. */
+  --rail: #efe9e0;
+  --rail-soft: #ffffff;
+  --rail-line: rgba(44, 39, 34, 0.09);
+  --rail-ink: #2c2722;
+  --rail-dim: #6b6259;
 }
 
 @theme inline {
@@ -90,17 +93,26 @@ html {
 body {
   background: var(--bg);
   color: var(--foreground);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans), var(--font-arabic), ui-sans-serif, system-ui, sans-serif;
   overflow-x: hidden;
 }
 
-h1, h2, h3, h4 {
-  font-family: var(--font-display), var(--font-sans), sans-serif;
-  letter-spacing: -0.02em;
+/* Titles and section headings in the serif at a regular weight — the serif is
+   what carries the look, and a bold serif shouts. Smaller headings stay in the
+   sans, where a serif at 14px reads as a mistake; so do small uppercase labels
+   that use a heading for structure. Arabic falls through to its own face. */
+h1, h2 {
+  font-family: var(--font-display), var(--font-arabic), Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+h3, h4, h2.uppercase {
+  font-family: var(--font-sans), var(--font-arabic), sans-serif;
+  letter-spacing: 0;
 }
 
 ::selection {
-  background: var(--cyan);
+  background: var(--clay);
   color: #fff;
 }
 
@@ -112,24 +124,22 @@ h1, h2, h3, h4 {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan), var(--purple));
+  background: rgba(44, 39, 34, 0.18);
   border-radius: 8px;
 }
 
+/* Cards: solid white on paper, a hairline and a breath of shadow — no frosted
+   glass (the Studio look). The names stay, so every card changed at once. */
 .glass {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.45));
-  border: 1px solid rgba(21, 19, 31, 0.08);
-  box-shadow: 0 10px 30px -12px rgba(21, 19, 31, 0.12);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  background: #ffffff;
+  border: 1px solid rgba(44, 39, 34, 0.09);
+  box-shadow: 0 1px 2px rgba(44, 39, 34, 0.05), 0 8px 24px -18px rgba(44, 39, 34, 0.25);
 }
 
 .glass-strong {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.65));
-  border: 1px solid rgba(21, 19, 31, 0.1);
-  box-shadow: 0 16px 40px -14px rgba(21, 19, 31, 0.16);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  background: #ffffff;
+  border: 1px solid rgba(44, 39, 34, 0.1);
+  box-shadow: 0 1px 2px rgba(44, 39, 34, 0.06), 0 16px 40px -20px rgba(44, 39, 34, 0.3);
 }
 
 .glass-dark {
@@ -141,7 +151,8 @@ h1, h2, h3, h4 {
 }
 
 .text-gradient-neon {
-  background: linear-gradient(100deg, var(--cyan-strong) 0%, var(--purple) 35%, var(--pink) 65%, var(--cyan-strong) 100%);
+  /* Warm now: bark into clay and back, the studio's own colours. */
+  background: linear-gradient(100deg, var(--bark) 0%, var(--clay-deep) 35%, var(--clay) 65%, var(--bark) 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
@@ -155,14 +166,11 @@ h1, h2, h3, h4 {
   }
 }
 
-.glow-cyan {
-  box-shadow: 0 0 24px rgba(6, 182, 212, 0.28), 0 0 64px rgba(6, 182, 212, 0.12);
-}
-.glow-purple {
-  box-shadow: 0 0 24px rgba(139, 92, 246, 0.28), 0 0 64px rgba(139, 92, 246, 0.12);
-}
+/* Neon glows became soft warm shadows with the Studio look. */
+.glow-cyan,
+.glow-purple,
 .glow-pink {
-  box-shadow: 0 0 24px rgba(236, 72, 153, 0.28), 0 0 64px rgba(236, 72, 153, 0.12);
+  box-shadow: 0 12px 32px -16px rgba(141, 108, 74, 0.45);
 }
 
 .border-glow {
@@ -174,7 +182,7 @@ h1, h2, h3, h4 {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(140deg, rgba(6, 182, 212, 0.55), rgba(139, 92, 246, 0.45), rgba(236, 72, 153, 0.4), transparent 65%);
+  background: linear-gradient(140deg, rgba(169, 133, 95, 0.6), rgba(141, 108, 74, 0.35), transparent 65%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -188,8 +196,8 @@ h1, h2, h3, h4 {
 
 .grid-overlay {
   background-image:
-    linear-gradient(rgba(21, 19, 31, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(21, 19, 31, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(44, 39, 34, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44, 39, 34, 0.035) 1px, transparent 1px);
   background-size: 64px 64px;
 }
 
@@ -260,13 +268,8 @@ body:has(.employee-signin) {
 /* Cards here sit on paper rather than lavender, so the translucent white they
    were is warmed to match. Scoped to the portal: .glass is shared with the
    client's pages, which keep the original. */
-.employee-shell .glass,
-.employee-signin .glass,
-.employee-signin .glass-strong {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.92), rgba(253, 250, 245, 0.68));
-  border: 1px solid var(--warm-line);
-  box-shadow: 0 10px 30px -14px rgba(44, 39, 34, 0.18);
-}
+/* (Cards were warmed here for the portal alone; since the Studio look the
+   global .glass is the warm one, for every surface.) */
 
 /* A task card washed in its priority's colour (components/tasks/priority.ts).
    The studio asked for the whole card, not only the word: a high priority is
@@ -295,39 +298,6 @@ body:has(.employee-signin) {
    Arabic. Redefining the two font tokens on the frame is what reaches every
    `font-display` / `font-sans` and every heading inside it at once.
    ------------------------------------------------------------------------- */
-.employee-shell,
-.employee-signin {
-  --font-display: var(--font-studio-serif), Georgia, serif;
-  --font-sans: var(--font-studio-sans), var(--font-studio-arabic), ui-sans-serif, system-ui, sans-serif;
-  font-family: var(--font-sans);
-
-  /* The side menu goes light: paper, ink, the clay pill where you are. Its
-     component reads these tokens, so the admin's dark rail keeps its own. */
-  --rail: #efe9e0;
-  --rail-soft: #ffffff;
-  --rail-line: rgba(44, 39, 34, 0.09);
-  --rail-ink: #2c2722;
-  --rail-dim: #6b6259;
-}
-
-/* Page titles and section headings in the serif, regular weight — the serif is
-   what carries the look, and a bold serif at this size shouts. Smaller headings
-   stay in Inter, where a serif at 14px reads as a mistake; so do the small
-   uppercase labels that use h2 for structure. */
-.employee-shell h1,
-.employee-shell h2,
-.employee-signin h1 {
-  font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-.employee-shell h2.uppercase,
-.employee-shell h3,
-.employee-shell h4 {
-  font-family: var(--font-sans);
-  letter-spacing: 0;
-}
-
 /* The page's own title, wherever a page writes it: larger than the old
    text-xl, because in this look the title is the one big thing on the page. */
 .employee-main h1 {
@@ -338,28 +308,6 @@ body:has(.employee-signin) {
   .employee-main h1 {
     font-size: 2.4rem;
   }
-}
-
-/* Cards are solid white on paper with a hairline and a breath of shadow — no
-   frosted glass. Same specificity as the portal's .glass above and later, so
-   it wins; the priority washes (.task-high, .task-low) are more specific and
-   still win over it. */
-.employee-shell .glass,
-.employee-signin .glass,
-.employee-signin .glass-strong {
-  background: #ffffff;
-  border: 1px solid var(--warm-line);
-  box-shadow: 0 1px 2px rgba(44, 39, 34, 0.05), 0 8px 24px -18px rgba(44, 39, 34, 0.25);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.employee-shell ::selection {
-  background: var(--clay);
-  color: #fff;
-}
-.employee-shell ::-webkit-scrollbar-thumb {
-  background: rgba(44, 39, 34, 0.18);
 }
 
 /* The mark, in the studio's own colours instead of the cyan-purple-pink
@@ -695,3 +643,19 @@ body:has(.admin-shell) {
    without scrolling sideways. */
 /* The board's column headings used to be written sideways to save width. They
    are written along the row now, in a column wide enough to read them. */
+
+/* The client's page in the Studio palette. On this page cyan, purple and pink
+   were decoration — the hero's wash, the journey line, hovers, the pricing
+   bars — not meaning, so they are redefined here into the studio's own
+   colours: clay, deep clay, sage and terracotta. (In the portal and the admin
+   the same names mean priority, deadlines and unread, and are left alone.) */
+.client-page {
+  --cyan: #a9855f;
+  --cyan-strong: #7a5b3d;
+  --purple: #7d8a6a;
+  --purple-strong: #56633f;
+  --pink: #b5654f;
+  --pink-strong: #8a3e2b;
+  --orange: #c99a4b;
+  --orange-strong: #8a6420;
+}

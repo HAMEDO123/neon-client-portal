@@ -312,7 +312,7 @@ export function CallProvider({ side, children }: { side: ChatSide; children: Rea
             {!session && notice && (
               <div
                 role="status"
-                className="neon-rise fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[70] mx-auto flex max-w-sm items-start gap-3 rounded-2xl bg-[#15131f] px-4 py-3 text-sm text-white shadow-2xl"
+                className="neon-rise fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[70] mx-auto flex max-w-sm items-start gap-3 rounded-2xl bg-[#1c1917] px-4 py-3 text-sm text-white shadow-2xl"
               >
                 <p className="flex-1">{notice}</p>
                 <button

@@ -294,7 +294,7 @@ export function CallScreen({
 
         {panel && (
           <aside
-            className="neon-rise fixed inset-0 z-10 flex flex-col bg-[#15131f] pt-[env(safe-area-inset-top)] sm:static sm:z-auto sm:mb-3 sm:w-80 sm:rounded-2xl sm:pt-0"
+            className="neon-rise fixed inset-0 z-10 flex flex-col bg-[#1c1917] pt-[env(safe-area-inset-top)] sm:static sm:z-auto sm:mb-3 sm:w-80 sm:rounded-2xl sm:pt-0"
             aria-label={panel === "people" ? "People in the call" : "Chat"}
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
@@ -947,7 +947,7 @@ function PictureInPicture({
       ref={ref}
       role="region"
       aria-label={`Call, minimised. ${status}`}
-      className="fixed left-0 top-0 z-[65] w-40 overflow-hidden rounded-2xl bg-[#15131f] text-white opacity-0 shadow-2xl ring-1 ring-white/10 sm:w-60"
+      className="fixed left-0 top-0 z-[65] w-40 overflow-hidden rounded-2xl bg-[#1c1917] text-white opacity-0 shadow-2xl ring-1 ring-white/10 sm:w-60"
     >
       <div
         className="relative aspect-[3/4] cursor-grab touch-none select-none active:cursor-grabbing sm:aspect-video"

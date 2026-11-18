@@ -1,37 +1,27 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Geist, Bricolage_Grotesque, Fraunces, Inter, Noto_Kufi_Arabic } from "next/font/google";
+import { Fraunces, Inter, Noto_Kufi_Arabic } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const displayFont = Bricolage_Grotesque({
+// The Studio type, for every surface — the team's portal, the admin and the
+// client's page (chosen 2026-11-18): a serif for headings, Inter for reading,
+// and an Arabic face drawn to sit beside them, because names, rooms and reports
+// here are Arabic as often as not and the system's fallback beside Inter looked
+// like a different app. The variable names are the ones every component
+// already reads (`font-display`, `font-sans`), so nothing else had to change.
+const displayFont = Fraunces({
   variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-});
-
-// The studio's type, worn by the team's portal (globals.css, `.employee-shell`):
-// a serif for headings, Inter for reading, and an Arabic face drawn to sit
-// beside them — names, rooms and reports here are Arabic as often as not, and
-// the system's fallback Arabic beside Inter looked like a different app.
-// Loaded as variables only, so nothing outside the portal changes.
-const studioSerif = Fraunces({
-  variable: "--font-studio-serif",
   subsets: ["latin"],
   axes: ["opsz"],
 });
 
-const studioSans = Inter({
-  variable: "--font-studio-sans",
+const sansFont = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const studioArabic = Noto_Kufi_Arabic({
-  variable: "--font-studio-arabic",
+const arabicFont = Noto_Kufi_Arabic({
+  variable: "--font-arabic",
   subsets: ["arabic"],
   weight: ["400", "500", "600", "700"],
 });
@@ -49,7 +39,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f7f6fb",
+  themeColor: "#f6f2ec",
   colorScheme: "light",
   width: "device-width",
   initialScale: 1,
@@ -57,7 +47,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${displayFont.variable} ${studioSerif.variable} ${studioSans.variable} ${studioArabic.variable} h-full antialiased`}>
+    <html lang="en" className={`${displayFont.variable} ${sansFont.variable} ${arabicFont.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-background">{children}</body>
     </html>
   );

@@ -230,7 +230,7 @@ export function PreJoin({
         event.preventDefault();
         if (!joining) onCancel();
       }}
-      className="call-sheet m-auto w-[min(28rem,calc(100vw-1.5rem))] max-w-none overflow-hidden rounded-3xl border-0 bg-[#15131f] p-0 text-white shadow-2xl backdrop:bg-black/60"
+      className="call-sheet m-auto w-[min(28rem,calc(100vw-1.5rem))] max-w-none overflow-hidden rounded-3xl border-0 bg-[#1c1917] p-0 text-white shadow-2xl backdrop:bg-black/60"
     >
       <div className="flex max-h-[92dvh] flex-col overflow-y-auto">
         <header className="flex items-center justify-between px-5 pb-2 pt-4">
@@ -395,7 +395,7 @@ export function PreJoin({
             type="button"
             onClick={() => void confirm()}
             disabled={joining || loading || problem === "unavailable"}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-emerald-500 text-sm font-semibold transition-[transform,background-color] hover:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#15131f]"
+            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-emerald-500 text-sm font-semibold transition-[transform,background-color] hover:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#1c1917]"
           >
             {joining ? <Loader2 size={17} className="animate-spin" aria-hidden /> : <Phone size={17} aria-hidden />}
             {joining ? "Connecting…" : request.mode === "start" ? "Start call" : "Join"}

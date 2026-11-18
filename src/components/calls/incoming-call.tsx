@@ -41,7 +41,7 @@ export function IncomingCall({
       onKeyDown={(event) => {
         if (event.key === "Escape") onDecline();
       }}
-      className="call-drop fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[80] mx-auto max-w-sm rounded-3xl bg-[#15131f]/95 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-xl"
+      className="call-drop fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[80] mx-auto max-w-sm rounded-3xl bg-[#1c1917]/95 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-xl"
     >
       <div className="flex items-center gap-3">
         <span className="relative flex shrink-0">
@@ -73,7 +73,7 @@ export function IncomingCall({
           type="button"
           onClick={onDecline}
           disabled={answering}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-red-500 text-sm font-semibold transition-[transform,background-color] hover:bg-red-600 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#15131f]"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-red-500 text-sm font-semibold transition-[transform,background-color] hover:bg-red-600 active:scale-[0.97] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#1c1917]"
         >
           <PhoneOff size={18} aria-hidden />
           Decline
@@ -95,7 +95,7 @@ export function IncomingCall({
           autoFocus
           onClick={() => onAccept(video)}
           disabled={answering}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-emerald-500 text-sm font-semibold transition-[transform,background-color] hover:bg-emerald-600 active:scale-[0.97] disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#15131f]"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-emerald-500 text-sm font-semibold transition-[transform,background-color] hover:bg-emerald-600 active:scale-[0.97] disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#1c1917]"
         >
           {answering ? (
             <Loader2 size={18} className="animate-spin" aria-hidden />
