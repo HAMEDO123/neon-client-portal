@@ -4,6 +4,8 @@ import { requireEmployee } from "@/lib/employee-session";
 import { getTimezone } from "@/lib/settings";
 import { dayKeyIn } from "@/lib/time";
 import { AssignedTaskCard } from "@/components/employee/assigned-task-card";
+import { AssignedTaskDetail } from "@/components/employee/assigned-task-detail";
+import { TaskListPane } from "@/components/employee/task-list-pane";
 import { myAssignedTasks, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
@@ -13,7 +15,15 @@ import { projectsForVisits, siteVisitsFor } from "@/lib/site-visit-queries";
 import { assignedByToday } from "@/lib/assigned-tasks";
 import { prisma } from "@/lib/db";
 import { chipClass, chipCountClass } from "@/components/tasks/filter-chip";
-import { countByFilter, dueBand, isLate, matchesFilter, readTaskFilter, type Filterable, type TaskFilter } from "@/lib/task-filters";
+import {
+  countByFilter,
+  dueBand,
+  isLate,
+  matchesFilter,
+  readTaskFilter,
+  type Filterable,
+  type TaskFilter,
+} from "@/lib/task-filters";
 
 // "Open" is still where the tab lands — what there is to do — and the four the
 // studio asked for sit beside it, so work under way, work with the manager and
@@ -61,11 +71,11 @@ const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 } as const;
 export default async function EmployeeTasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; view?: string }>;
+  searchParams: Promise<{ filter?: string; view?: string; open?: string }>;
 }) {
   const employee = await requireEmployee();
   const timezone = await getTimezone();
-  const { filter, view } = await searchParams;
+  const { filter, view, open } = await searchParams;
 
   // Whoever the manager has trusted to hand work out gets a second view of
   // this tab. Not the manager's two tables — those are a project-by-step
@@ -148,14 +158,15 @@ export default async function EmployeeTasksPage({
         PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority]
     );
 
+  // On a desk the list and the open job sit side by side (the new UI,
+  // 2026-11-18): the job asked for with ?open=, else the first in the list.
+  const openId = items.some((item) => item.task.id === open) ? (open as string) : (items[0]?.task.id ?? null);
+  const openDetail = openId ? await AssignedTaskDetail({ employeeId: employee.id, id: openId, panel: true }) : null;
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="wide-page flex flex-col gap-4">
       {employee.canAssignTasks || employee.canLogSiteVisits ? (
-        <ViewSwitch
-          view="mine"
-          canAssign={employee.canAssignTasks}
-          canVisit={employee.canLogSiteVisits}
-        />
+        <ViewSwitch view="mine" canAssign={employee.canAssignTasks} canVisit={employee.canLogSiteVisits} />
       ) : (
         <h1 className="text-xl font-semibold text-ink">My Tasks</h1>
       )}
@@ -184,13 +195,25 @@ export default async function EmployeeTasksPage({
           description={EMPTY[active].description}
         />
       ) : (
-        // Two to a row on a desk (the Studio look): one long column of cards
-        // left half the screen empty and the list twice as long as it is.
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {items.map((item) => (
-            <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
-          ))}
-        </div>
+        <>
+          {/* A phone: the cards, each opening a page of its own. */}
+          <div className="grid grid-cols-1 gap-3 lg:hidden">
+            {items.map((item) => (
+              <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
+            ))}
+          </div>
+
+          {/* A desk: the list, and the open job beside it. */}
+          <div className="hidden gap-6 lg:grid lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
+            <TaskListPane
+              rows={items.map((item) => ({ task: item.task, late: item.late }))}
+              todayKey={today}
+              openId={openId}
+              hrefFor={(id) => `/employee/tasks?filter=${active}&open=${id}`}
+            />
+            <div className="min-w-0">{openDetail}</div>
+          </div>
+        </>
       )}
     </div>
   );

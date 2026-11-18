@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 import { myDay } from "@/lib/now-next-queries";
 import { NowNextCard } from "@/components/employee/now-next-card";
 import { ClockCard } from "@/components/employee/clock-card";
+import { DayTimeline } from "@/components/employee/day-timeline";
+import { FocusCard, pickFocus } from "@/components/employee/focus-card";
 import { ReportLines } from "@/components/employee/report-lines";
 import { myClockDay } from "@/lib/clock-day";
 import { myAppClock } from "@/lib/app-clock-store";
@@ -47,11 +49,7 @@ function byPriority(a: DayItem, b: DayItem) {
   return PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority];
 }
 
-export default async function EmployeeDashboard({
-  searchParams,
-}: {
-  searchParams: Promise<{ day?: string }>;
-}) {
+export default async function EmployeeDashboard({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const employee = await requireEmployee();
   const timezone = await getTimezone();
   const { day } = await searchParams;
@@ -131,8 +129,17 @@ export default async function EmployeeDashboard({
       <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
     );
 
+  // The job to be on now, from their own list (components/employee/focus-card.tsx).
+  const focusTask = pickFocus(assigned, todayDay);
+  // A published plan still shows its own card; without one it would only say
+  // "nothing planned", and the timeline says the day better.
+  const hasPlan = nowNext.now !== null || nowNext.next !== null;
+
+  // The new UI (2026-11-18): the day as a timeline in the wide column, with
+  // the clock, what to do now and the report beside it on a desk; on a phone
+  // the side column comes first, then the day and the lists.
   return (
-    <div className="flex flex-col gap-6">
+    <div className="wide-page flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold text-ink">
           {greeting(hourIn(timezone))}, {firstName} 👋
@@ -144,58 +151,71 @@ export default async function EmployeeDashboard({
         </p>
       </div>
 
-      {/* First, because the end of the day is no longer the same for everybody
-          and this is the only place the person it belongs to can read it. */}
-      <ClockCard day={clockDay} timezone={timezone} app={appClock} />
-
       <WarningsCard warnings={warnings} timezone={timezone} />
 
-      {/* What they are on right now, above everything else: the question the
-          page exists to answer, before any summary of it. */}
-      <NowNextCard state={nowNext} hours={hours} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-start">
+        <div className="flex flex-col gap-6 lg:order-2">
+          {/* First on a phone, because the end of the day is no longer the same
+              for everybody and this is the only place its owner can read it. */}
+          <ClockCard day={clockDay} timezone={timezone} app={appClock} />
 
-      {/* Written where the work is, a line at a time. The report used to live
-          on another page and be remembered at the end of the day, which is the
-          one moment the morning has already gone. */}
-      <ReportLines lines={linesOf(report.text)} />
+          <FocusCard task={focusTask} todayKey={todayDay} openCount={openToday} />
 
-      <TodaySummary counts={todayCounts} />
+          {hasPlan && <NowNextCard state={nowNext} hours={hours} />}
 
-      <SalesCard projects={sales.projects} target={sales.target} period={period} timezone={timezone} />
+          {/* Written where the work is, a line at a time. */}
+          <ReportLines lines={linesOf(report.text)} />
 
-      <PushPrompt publicKey={pushKey} />
+          <TodaySummary counts={todayCounts} />
 
-      <section id="today" className={cn(focus === "tomorrow" && "order-2")}>
-        <SectionHeading icon={Sun} label="Today" count={todayItems.length} tone="text-ink" />
-        {todayItems.length === 0 ? (
-          <EmptyState
-            className="mt-3 py-10"
-            icon={CheckCircle2}
-            title="No tasks for today"
-            description="Anything scheduled for today will show up here."
+          <SalesCard projects={sales.projects} target={sales.target} period={period} timezone={timezone} />
+
+          <PushPrompt publicKey={pushKey} />
+        </div>
+
+        <div className="flex flex-col gap-6 lg:order-1">
+          <DayTimeline
+            employeeId={employee.id}
+            dayKey={todayDay}
+            timezone={timezone}
+            arrivedAt={clockDay.arrivedAt}
+            endsAt={clockDay.endsAt}
+            reportLines={linesOf(report.text)}
           />
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">{todayItems.map(card)}</div>
-        )}
-      </section>
 
-      <section id="tomorrow" className={cn(focus === "tomorrow" && "order-1")}>
-        <SectionHeading icon={CalendarClock} label="Tomorrow" count={tomorrowItems.length} tone="text-amber-700" />
-        {tomorrowItems.length === 0 ? (
-          <p className="mt-3 rounded-2xl border border-dashed border-ink/12 bg-ink/[0.02] px-4 py-6 text-center text-sm text-ink/45">
-            Nothing scheduled for tomorrow yet.
-          </p>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">{tomorrowItems.map(card)}</div>
-        )}
-      </section>
+          <section id="today" className={cn(focus === "tomorrow" && "order-2")}>
+            <SectionHeading icon={Sun} label="Today" count={todayItems.length} tone="text-ink" />
+            {todayItems.length === 0 ? (
+              <EmptyState
+                className="mt-3 py-10"
+                icon={CheckCircle2}
+                title="No tasks for today"
+                description="Anything scheduled for today will show up here."
+              />
+            ) : (
+              <div className="mt-3 flex flex-col gap-3">{todayItems.map(card)}</div>
+            )}
+          </section>
 
-      <Link
-        href="/employee/tasks"
-        className="order-3 rounded-2xl border border-ink/10 bg-white/60 px-4 py-3 text-center text-sm font-medium text-ink/70 transition-colors hover:bg-white"
-      >
-        View all my tasks
-      </Link>
+          <section id="tomorrow" className={cn(focus === "tomorrow" && "order-1")}>
+            <SectionHeading icon={CalendarClock} label="Tomorrow" count={tomorrowItems.length} tone="text-amber-700" />
+            {tomorrowItems.length === 0 ? (
+              <p className="mt-3 rounded-2xl border border-dashed border-ink/12 bg-ink/[0.02] px-4 py-6 text-center text-sm text-ink/45">
+                Nothing scheduled for tomorrow yet.
+              </p>
+            ) : (
+              <div className="mt-3 flex flex-col gap-3">{tomorrowItems.map(card)}</div>
+            )}
+          </section>
+
+          <Link
+            href="/employee/tasks"
+            className="order-3 rounded-2xl border border-ink/10 bg-white/60 px-4 py-3 text-center text-sm font-medium text-ink/70 transition-colors hover:bg-white"
+          >
+            View all my tasks
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

@@ -101,43 +101,11 @@ export default async function TasksPage({
         <Stat icon={Clock} tone="amber" label="Due tomorrow" value={dueTomorrow} />
       </div>
 
-      {/* Above the two boards on purpose: this is how a day is handed out, and
-          the boards are where it is then read. */}
-      {board.team.length > 0 && <TaskBriefing team={board.team} todayKey={today} />}
+      {/* The planner first (the new UI, 2026-11-18): who is doing what, day by
+          day, is the question this page is opened for — the project table and
+          the routines are read after it.
 
-      {board.rows.length === 0 ? (
-        <EmptyState
-          icon={FolderKanban}
-          title="No active projects yet"
-          description="Every project becomes a row on this board — create one to get started."
-        />
-      ) : (
-        <section className="rounded-2xl border border-ink/8 bg-white/70 p-4 sm:p-5">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-ink">Project overview</h2>
-            <p className="mt-0.5 text-sm text-ink/50">Track progress across all projects and design stages.</p>
-          </div>
-
-          <TaskBoard board={board} todayKey={today} tomorrowKey={tomorrow} />
-        </section>
-      )}
-
-      {/* What comes round every working day, above the week it lands on. */}
-      {board.team.length > 0 && (
-        <Routines
-          team={board.team.map((member) => ({ id: member.id, name: member.name }))}
-          routines={routines.map((routine) => ({
-            id: routine.id,
-            title: routine.title,
-            acceptance: routine.acceptance,
-            priority: routine.priority,
-            active: routine.active,
-            employee: routine.employee,
-          }))}
-        />
-      )}
-
-      {/* Three quarters to the week, a quarter to what is coming: the seven
+          Three quarters to the week, a quarter to what is coming: the seven
           day columns have a width they cannot go under, and at two thirds
           Saturday fell off the end. */}
       <div className="grid gap-6 lg:grid-cols-4">
@@ -182,6 +150,43 @@ export default async function TasksPage({
           )}
         </section>
       </div>
+
+      {/* Above the two boards on purpose: this is how a day is handed out, and
+          the boards are where it is then read. */}
+      {board.team.length > 0 && <TaskBriefing team={board.team} todayKey={today} />}
+
+      {board.rows.length === 0 ? (
+        <EmptyState
+          icon={FolderKanban}
+          title="No active projects yet"
+          description="Every project becomes a row on this board — create one to get started."
+        />
+      ) : (
+        <section className="rounded-2xl border border-ink/8 bg-white/70 p-4 sm:p-5">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-ink">Project overview</h2>
+            <p className="mt-0.5 text-sm text-ink/50">Track progress across all projects and design stages.</p>
+          </div>
+
+          <TaskBoard board={board} todayKey={today} tomorrowKey={tomorrow} />
+        </section>
+      )}
+
+      {/* What comes round every working day, above the week it lands on. */}
+      {board.team.length > 0 && (
+        <Routines
+          team={board.team.map((member) => ({ id: member.id, name: member.name }))}
+          routines={routines.map((routine) => ({
+            id: routine.id,
+            title: routine.title,
+            acceptance: routine.acceptance,
+            priority: routine.priority,
+            active: routine.active,
+            employee: routine.employee,
+          }))}
+        />
+      )}
+
     </div>
   );
 }

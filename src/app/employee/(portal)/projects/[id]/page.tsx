@@ -7,6 +7,7 @@ import { SaveButton } from "@/components/admin/form-buttons";
 import { PROJECT_STAGES, PIPELINE_STATUSES } from "@/lib/constants";
 import { sellers } from "@/lib/sales-queries";
 import { UploadForm } from "@/components/admin/upload-form";
+import { ProjectGlance } from "@/components/admin/project-glance";
 
 // A project's details, from the team's side.
 //
@@ -36,6 +37,8 @@ export default async function EmployeeProjectOverviewPage({ params }: { params: 
 
   return (
     <div className="flex flex-col gap-8">
+      <ProjectGlance projectId={project.id} portal="/employee" />
+
       <section>
         <h2 className="text-lg font-semibold text-ink">Project Details</h2>
         <UploadForm

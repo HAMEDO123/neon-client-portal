@@ -6,6 +6,7 @@ import { SaveButton, DeleteButton } from "@/components/admin/form-buttons";
 import { PROJECT_STAGES, PIPELINE_STATUSES } from "@/lib/constants";
 import { sellers } from "@/lib/sales-queries";
 import { UploadForm } from "@/components/admin/upload-form";
+import { ProjectGlance } from "@/components/admin/project-glance";
 
 function toDateInput(date: Date | null) {
   if (!date) return "";
@@ -20,6 +21,8 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
 
   return (
     <div className="flex flex-col gap-8">
+      <ProjectGlance projectId={project.id} portal="/admin" />
+
       <section>
         <h2 className="text-lg font-semibold text-ink">Project Details</h2>
         <UploadForm

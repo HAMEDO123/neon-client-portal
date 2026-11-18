@@ -661,3 +661,9 @@ body:has(.admin-shell) {
   --orange: #c99a4b;
   --orange-strong: #8a6420;
 }
+
+/* A project's name, written over its render (components/admin/project-hero.tsx). */
+.project-hero-title {
+  font-size: clamp(1.6rem, 1.1rem + 1.6vw, 2.5rem);
+  line-height: 1.15;
+}

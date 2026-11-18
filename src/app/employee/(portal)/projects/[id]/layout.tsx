@@ -9,7 +9,7 @@ import { LinkActions } from "@/components/admin/link-actions";
 import { ensureAccessCode } from "@/lib/client-access";
 import { isWhatsAppAvailable } from "@/lib/whatsapp";
 import { PublishControls } from "@/components/admin/publish-controls";
-import { Badge } from "@/components/ui/badge";
+import { ProjectHero } from "@/components/admin/project-hero";
 
 // A project, from the team's side — the manager's own screen, in their portal.
 //
@@ -44,14 +44,13 @@ export default async function EmployeeProjectLayout({
         Projects
       </Link>
 
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold text-ink">{project.name}</h1>
-            <Badge tone={project.publishState === "PUBLISHED" ? "success" : "warning"}>{project.publishState}</Badge>
-          </div>
-          <p className="mt-1 text-sm text-ink/50">{project.clientName}</p>
-        </div>
+      {/* The project as the studio recognises it: its render, its name, where
+          it is along the stages (the new UI, 2026-11-18). */}
+      <div className="mt-3">
+        <ProjectHero project={project} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
         <PublishControls projectId={project.id} publishState={project.publishState} />
       </div>
 
