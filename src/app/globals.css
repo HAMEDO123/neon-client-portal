@@ -128,18 +128,48 @@ h3, h4, h2.uppercase {
   border-radius: 8px;
 }
 
-/* Cards: solid white on paper, a hairline and a breath of shadow — no frosted
-   glass (the Studio look). The names stay, so every card changed at once. */
-.glass {
-  background: #ffffff;
-  border: 1px solid rgba(44, 39, 34, 0.09);
-  box-shadow: 0 1px 2px rgba(44, 39, 34, 0.05), 0 8px 24px -18px rgba(44, 39, 34, 0.25);
+/* Cards: glossy (asked for on 2026-11-18, "something with glossy cards") —
+   a white sheen that fades down the card, a bright top edge like light on
+   glass, a soft blur of what is behind, and a deeper shadow to lift it. The
+   solid white cards of the first Studio pass lasted a day. The names stay, so
+   every card changed at once; the plain `bg-card` panels on the two portals
+   are given the same finish below, or half the screen would be matte. */
+.glass,
+.employee-main .bg-card.rounded-2xl,
+.admin-shell main .bg-card.rounded-2xl {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.74) 45%, rgba(255, 255, 255, 0.58) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(44, 39, 34, 0.04),
+    0 1px 2px rgba(44, 39, 34, 0.05),
+    0 14px 34px -18px rgba(44, 39, 34, 0.32);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
 }
 
 .glass-strong {
-  background: #ffffff;
-  border: 1px solid rgba(44, 39, 34, 0.1);
-  box-shadow: 0 1px 2px rgba(44, 39, 34, 0.06), 0 16px 40px -20px rgba(44, 39, 34, 0.3);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.86) 50%, rgba(255, 255, 255, 0.72) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 1px 2px rgba(44, 39, 34, 0.06),
+    0 22px 48px -22px rgba(44, 39, 34, 0.38);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+/* Something for the gloss to catch: a faint warm glow in two corners of the
+   page, fixed while it scrolls. On flat paper a translucent card is just a
+   white card. */
+.employee-shell,
+.employee-signin,
+.admin-shell,
+.client-page {
+  background-image:
+    radial-gradient(60rem 36rem at 100% 0%, rgba(169, 133, 95, 0.16), transparent 60%),
+    radial-gradient(48rem 32rem at 0% 100%, rgba(125, 138, 106, 0.12), transparent 60%);
+  background-attachment: fixed;
 }
 
 .glass-dark {
