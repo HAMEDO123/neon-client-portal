@@ -1,10 +1,6 @@
 import { CalendarClock, Clock, NotebookPen, Send, ShoppingCart, Sparkles, TriangleAlert } from "lucide-react";
 import { saveTimezone } from "@/lib/actions/whatsapp-actions";
-import {
-  clearOfficeShopAccount,
-  savePlanningNotes,
-  saveWorkHours,
-} from "@/lib/actions/settings-actions";
+import { clearOfficeShopAccount, savePlanningNotes, saveWorkHours } from "@/lib/actions/settings-actions";
 import { shopSessionState } from "@/lib/office-shop-account";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
@@ -46,11 +42,7 @@ const TIMEZONES = [
   "UTC",
 ];
 
-export default async function AdminSettingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ preview?: string }>;
-}) {
+export default async function AdminSettingsPage({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
   const { preview } = await searchParams;
   const timezone = await getTimezone();
   const planningNotes = await getPlanningNotes();
@@ -104,410 +96,489 @@ export default async function AdminSettingsPage({
       }
     : null;
 
+  // The new UI (2026-11-18): the settings in five groups with a menu that
+  // stays beside them on a desk — one long page of twelve cards had nothing to
+  // find your way by. On a phone the menu is a row of buttons across the top.
+  const groups = [
+    { id: "notifications", label: "Notifications" },
+    { id: "process", label: "The process" },
+    { id: "day", label: "The working day" },
+    { id: "channels", label: "Channels" },
+    { id: "account", label: "Account & system" },
+  ];
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Settings</h1>
         <p className="mt-1 text-sm text-ink/50">Integrations and the values the daily jobs run on.</p>
       </div>
 
-      <PushHealthCard health={pushHealth} timezone={timezone} />
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-10">
+        <nav
+          aria-label="Settings"
+          className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 lg:sticky lg:top-0 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0"
+        >
+          {groups.map((item) => (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              className="shrink-0 rounded-full border border-ink/12 bg-white px-4 py-2 text-sm font-medium text-ink/70 transition-colors hover:text-ink lg:rounded-xl lg:border-0 lg:bg-transparent lg:px-3 lg:hover:bg-ink/[0.04]"
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
 
-      {/* Under the health of everybody's push, because it is the same subject
+        <div className="flex min-w-0 flex-col gap-12">
+          <section id="notifications" aria-labelledby="notifications-title" className="flex scroll-mt-6 flex-col gap-6">
+            <div>
+              <h2 id="notifications-title" className="text-2xl text-ink">
+                Notifications
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                Whether push reaches the team&apos;s phones and yours, and the sounds.
+              </p>
+            </div>
+            <PushHealthCard health={pushHealth} timezone={timezone} />
+
+            {/* Under the health of everybody's push, because it is the same subject
           seen from your own side: whether this phone is one of the ones that
           hears anything. Above the sounds, which only play while the platform
           is open — these are what arrive when it is closed. */}
-      <AdminPushToggle
-        publicKey={await getPublicKey()}
-        configured={await isPushConfigured()}
-        paired={Boolean(managerId)}
-        devices={managerDevices}
-      />
+            <AdminPushToggle
+              publicKey={await getPublicKey()}
+              configured={await isPushConfigured()}
+              paired={Boolean(managerId)}
+              devices={managerDevices}
+            />
 
-      <SoundToggle />
+            <SoundToggle />
+          </section>
 
-      <StagePeriods
-        steps={stages.map((stage) => ({ id: stage.id, name: stage.name, sectionId: stage.sectionId }))}
-        sections={sections.map((section) => ({ id: section.id, name: section.name, color: section.color }))}
-        periods={periods.map((period) => ({
-          id: period.id,
-          fromTaskId: period.fromTaskId,
-          toTaskId: period.toTaskId,
-          days: period.days,
-        }))}
-      />
+          <section id="process" aria-labelledby="process-title" className="flex scroll-mt-6 flex-col gap-6">
+            <div>
+              <h2 id="process-title" className="text-2xl text-ink">
+                The process
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                How long each stretch of the delivery process takes, and what each step needs.
+              </p>
+            </div>
+            <StagePeriods
+              steps={stages.map((stage) => ({ id: stage.id, name: stage.name, sectionId: stage.sectionId }))}
+              sections={sections.map((section) => ({ id: section.id, name: section.name, color: section.color }))}
+              periods={periods.map((period) => ({
+                id: period.id,
+                fromTaskId: period.fromTaskId,
+                toTaskId: period.toTaskId,
+                days: period.days,
+              }))}
+            />
 
-      {/* Sits under the shape of the process, because it is the same list of
+            {/* Sits under the shape of the process, because it is the same list of
           steps seen from the other side: not where they come in the order, but
           what each one actually needs. */}
-      <TaskTypeLibrary
-        steps={stages.map((stage) => ({
-          id: stage.id,
-          name: stage.name,
-          sectionName: stage.section?.name ?? null,
-          deliverable: stage.deliverable,
-          acceptance: stage.acceptance,
-          estimateHours: stage.estimateHours,
-          evidence: stage.evidence,
-          checklist: stage.checklist,
-          autoAccept: stage.autoAccept,
-          reviewerId: stage.reviewerId,
-        }))}
-        employees={team.map((person) => ({ id: person.id, name: person.name }))}
-      />
-
-      {/* --- The working day ----------------------------------------------- */}
-      <section className="glass rounded-2xl p-6">
-        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-          <CalendarClock size={16} strokeWidth={2} />
-          The working day
-        </h2>
-        <p className="mt-1 text-sm text-ink/50">
-          Everything that plans a day or chases somebody reads these: what a day can hold, which days are worked,
-          and when nobody should be messaged. Changing them affects days not yet planned — nothing already recorded
-          is rewritten.
-        </p>
-
-        <form action={saveWorkHours} className="mt-4 flex flex-col gap-4">
-          <div>
-            <span className="mb-1.5 block text-xs font-medium text-ink/50">Working days</span>
-            <div className="flex flex-wrap gap-1.5">
-              {DAY_NAMES.map((label, day) => (
-                <label
-                  key={day}
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-ink/12 bg-white/70 px-2.5 py-1.5 text-xs text-ink/70 has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-bg"
-                >
-                  <input
-                    type="checkbox"
-                    name="days"
-                    value={day}
-                    defaultChecked={workHours.days.includes(day)}
-                    className="h-3 w-3 accent-ink"
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
-            <Field label="Starts" name="start" type="time" value={workHours.start} />
-            <Field label="Ends" name="end" type="time" value={workHours.end} />
-            <Field label="Lunch at" name="lunchAt" type="time" value={workHours.lunchAt} />
-            <Field label="Lunch (min)" name="lunchMinutes" type="number" value={String(workHours.lunchMinutes)} />
-            <Field
-              label="Margin (min)"
-              name="bufferMinutes"
-              type="number"
-              value={String(workHours.bufferMinutes)}
+            <TaskTypeLibrary
+              steps={stages.map((stage) => ({
+                id: stage.id,
+                name: stage.name,
+                sectionName: stage.section?.name ?? null,
+                deliverable: stage.deliverable,
+                acceptance: stage.acceptance,
+                estimateHours: stage.estimateHours,
+                evidence: stage.evidence,
+                checklist: stage.checklist,
+                autoAccept: stage.autoAccept,
+                reviewerId: stage.reviewerId,
+              }))}
+              employees={team.map((person) => ({ id: person.id, name: person.name }))}
             />
-            <Field label="Allowed late (min)" name="graceMinutes" type="number" value={String(workHours.graceMinutes)} />
-          </div>
+          </section>
 
-          {/* A day that ends at a different time — Saturday at 6 here. Empty is
+          <section id="day" aria-labelledby="day-title" className="flex scroll-mt-6 flex-col gap-6">
+            <div>
+              <h2 id="day-title" className="text-2xl text-ink">
+                The working day
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                When work happens, how a day is planned, and the rules that watch it.
+              </p>
+            </div>
+            {/* --- The working day ----------------------------------------------- */}
+            <section className="glass rounded-2xl p-6">
+              <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                <CalendarClock size={16} strokeWidth={2} />
+                The working day
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                Everything that plans a day or chases somebody reads these: what a day can hold, which days are worked,
+                and when nobody should be messaged. Changing them affects days not yet planned — nothing already
+                recorded is rewritten.
+              </p>
+
+              <form action={saveWorkHours} className="mt-4 flex flex-col gap-4">
+                <div>
+                  <span className="mb-1.5 block text-xs font-medium text-ink/50">Working days</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DAY_NAMES.map((label, day) => (
+                      <label
+                        key={day}
+                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-ink/12 bg-white/70 px-2.5 py-1.5 text-xs text-ink/70 has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-bg"
+                      >
+                        <input
+                          type="checkbox"
+                          name="days"
+                          value={day}
+                          defaultChecked={workHours.days.includes(day)}
+                          className="h-3 w-3 accent-ink"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+                  <Field label="Starts" name="start" type="time" value={workHours.start} />
+                  <Field label="Ends" name="end" type="time" value={workHours.end} />
+                  <Field label="Lunch at" name="lunchAt" type="time" value={workHours.lunchAt} />
+                  <Field label="Lunch (min)" name="lunchMinutes" type="number" value={String(workHours.lunchMinutes)} />
+                  <Field
+                    label="Margin (min)"
+                    name="bufferMinutes"
+                    type="number"
+                    value={String(workHours.bufferMinutes)}
+                  />
+                  <Field
+                    label="Allowed late (min)"
+                    name="graceMinutes"
+                    type="number"
+                    value={String(workHours.graceMinutes)}
+                  />
+                </div>
+
+                {/* A day that ends at a different time — Saturday at 6 here. Empty is
               the usual end. The marker says this form has the boxes, so a form
               without them (the phone app's) does not clear them. */}
-          <input type="hidden" name="endByDay" value="present" />
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-ink/50">Days that end at a different time</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-7">
-              {DAY_NAMES.map((label, day) => (
-                <Field
-                  key={day}
-                  label={label}
-                  name={`endOn-${day}`}
-                  type="time"
-                  value={workHours.endByDay[day] ?? ""}
-                />
-              ))}
-            </div>
-            <p className="mt-1 text-[11px] text-ink/40">Leave a day empty and it ends at {workHours.end}.</p>
-          </div>
+                <input type="hidden" name="endByDay" value="present" />
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-ink/50">Days that end at a different time</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-7">
+                    {DAY_NAMES.map((label, day) => (
+                      <Field
+                        key={day}
+                        label={label}
+                        name={`endOn-${day}`}
+                        type="time"
+                        value={workHours.endByDay[day] ?? ""}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-ink/40">Leave a day empty and it ends at {workHours.end}.</p>
+                </div>
 
-          {/* The number that matters, worked out rather than typed: it is what
+                {/* The number that matters, worked out rather than typed: it is what
               a plan is allowed to fill. */}
-          <p className="text-xs text-ink/50">
-            A day is <span className="font-medium text-ink/70">{describeMinutes(spanMinutes(workHours))}</span> long,
-            so <span className="font-semibold text-ink">{capacityMinutes(workHours)} minutes</span> (
-            {describeMinutes(capacityMinutes(workHours))}) can be planned after lunch and the margin.
-          </p>
+                <p className="text-xs text-ink/50">
+                  A day is <span className="font-medium text-ink/70">{describeMinutes(spanMinutes(workHours))}</span>{" "}
+                  long, so <span className="font-semibold text-ink">{capacityMinutes(workHours)} minutes</span> (
+                  {describeMinutes(capacityMinutes(workHours))}) can be planned after lunch and the margin.
+                </p>
 
-          {/* Said plainly because it is the one field here that takes money off
+                {/* Said plainly because it is the one field here that takes money off
               somebody, and the rounding is the part that surprises people. */}
-          <p className="text-xs text-ink/50">
-            Arriving by{" "}
-            <span className="font-medium text-ink/70">
-              {timeOf((minutesOf(workHours.start) ?? 0) + workHours.graceMinutes)}
-            </span>{" "}
-            is on time. After that, lateness is charged in{" "}
-            <span className="font-semibold text-ink">whole hours, rounded up</span> — a minute late costs an hour, an
-            hour and a half costs two. It applies to days the device records from now on; nothing already recorded is
-            rewritten.
-          </p>
+                <p className="text-xs text-ink/50">
+                  Arriving by{" "}
+                  <span className="font-medium text-ink/70">
+                    {timeOf((minutesOf(workHours.start) ?? 0) + workHours.graceMinutes)}
+                  </span>{" "}
+                  is on time. After that, lateness is charged in{" "}
+                  <span className="font-semibold text-ink">whole hours, rounded up</span> — a minute late costs an hour,
+                  an hour and a half costs two. It applies to days the device records from now on; nothing already
+                  recorded is rewritten.
+                </p>
 
-          <div>
-            <SaveButton label="Save the working day" />
-          </div>
-        </form>
-      </section>
+                <div>
+                  <SaveButton label="Save the working day" />
+                </div>
+              </form>
+            </section>
 
-      {/* --- The office's shop sign-in --------------------------------------- */}
-      <section className="glass rounded-2xl p-6">
-        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-          <ShoppingCart size={16} strokeWidth={2} />
-          The office shop sign-in
-        </h2>
-        <p className="mt-1 text-sm text-ink/50">
-          You sign in to the shop once, on your own phone, and every employee&apos;s phone opens the shop on
-          your account and your cart. Nobody on the team signs in to anything, and you never touch their
-          handset.
-        </p>
-
-        {/* Why the sign-in is not on this page. The shop sends a code by SMS
-            and the SMS arrives on the manager's phone — no screen here can
-            receive it, so the act has to happen where the message lands. */}
-        <div className="mt-4 rounded-xl border border-ink/10 bg-white/50 p-3.5">
-          <p className="text-xs font-semibold text-ink">How to sign the office in</p>
-          <ol className="mt-1.5 flex list-decimal flex-col gap-1 pl-4 text-xs leading-relaxed text-ink/60">
-            <li>Open <span className="font-medium text-ink/80">Office shopping</span> in the NEON app on your phone.</li>
-            <li>Sign in to the shop as you normally would — the code comes to your phone by SMS.</li>
-            <li>Tap <span className="font-medium text-ink/80">Share with the office</span>.</li>
-          </ol>
-          <p className="mt-2 text-xs text-ink/45">
-            It cannot be done from this page: the shop sends the code to your phone, and no screen here can
-            receive it.
-          </p>
-        </div>
-
-        {shop.readable ? (
-          <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5">
-            <p className="text-sm font-medium text-ink">The office is signed in.</p>
-            <p className="mt-1 text-xs text-ink/60">
-              {shop.shared
-                ? `Shared by ${shop.shared.name} · ${formatDayIn(timezone, new Date(shop.shared.at))} ${formatTimeIn(timezone, new Date(shop.shared.at))}`
-                : "Shared from your phone."}
-            </p>
-            {shop.lastFetch && (
-              <p className="mt-0.5 text-xs text-ink/45">
-                Last used by {shop.lastFetch.name} · {formatDayIn(timezone, new Date(shop.lastFetch.at))}{" "}
-                {formatTimeIn(timezone, new Date(shop.lastFetch.at))}
+            {/* --- How a day is planned ------------------------------------------ */}
+            <section className="glass rounded-2xl p-6">
+              <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                <NotebookPen size={16} strokeWidth={2} />
+                How we plan a day
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                Your rules, in your own words — nobody takes more than three jobs a day, site visits in the morning,
+                renders two days before a handover. This is read whenever a day is proposed for somebody, along with
+                what each person usually does (written on their own page) and what the board actually holds.
               </p>
-            )}
-            {/* The one thing nobody can predict: only the shop knows when it
-                will end the session, so this says what to do rather than
-                pretending to know. */}
-            <p className="mt-2 text-xs text-ink/50">
-              The shop ends a sign-in on its own schedule. When phones start asking for a login again, sign in
-              on yours and share it once more.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4 rounded-xl border border-ink/12 bg-ink/[0.02] p-3.5">
-            <p className="text-sm font-medium text-ink/70">The office is not signed in yet.</p>
-            <p className="mt-1 text-xs text-ink/50">
-              {shop.shared
-                ? "A sign-in was shared, but it can no longer be read — SESSION_SECRET has changed since. Share it again from your phone."
-                : "Phones will ask whoever is holding them to log in until you share yours."}
-            </p>
-          </div>
-        )}
 
-        {/* Said on the screen, not only in the code: whoever sits here next is
-            the person who needs to know what sharing this means. */}
-        <div className="mt-3 flex gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3">
-          <TriangleAlert size={15} strokeWidth={2} className="mt-0.5 shrink-0 text-amber-700" />
-          <p className="text-xs leading-relaxed text-ink/70">
-            Every phone on the team can use this sign-in, and that means ordering on your account. It is not
-            the account itself — nobody can change your phone number or read the SMS codes — and signing out
-            at the shop ends every copy of it at once.
-          </p>
-        </div>
+              <form action={savePlanningNotes} className="mt-4 max-w-2xl">
+                <TextArea label="Rules for planning" name="planningNotes" rows={5} defaultValue={planningNotes} />
+                <div className="mt-3">
+                  <SaveButton label="Save rules" />
+                </div>
+              </form>
+            </section>
 
-        {(shop.readable || shop.shared) && (
-          <form action={clearOfficeShopAccount} className="mt-3">
-            <button type="submit" className="text-xs font-medium text-ink/40 hover:text-red-600">
-              Sign the office out — every phone stops being able to shop
-            </button>
-          </form>
-        )}
-      </section>
-
-      {/* --- How a day is planned ------------------------------------------ */}
-      <section className="glass rounded-2xl p-6">
-        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-          <NotebookPen size={16} strokeWidth={2} />
-          How we plan a day
-        </h2>
-        <p className="mt-1 text-sm text-ink/50">
-          Your rules, in your own words — nobody takes more than three jobs a day, site visits in the morning,
-          renders two days before a handover. This is read whenever a day is proposed for somebody, along with what
-          each person usually does (written on their own page) and what the board actually holds.
-        </p>
-
-        <form action={savePlanningNotes} className="mt-4 max-w-2xl">
-          <TextArea
-            label="Rules for planning"
-            name="planningNotes"
-            rows={5}
-            defaultValue={planningNotes}
-          />
-          <div className="mt-3">
-            <SaveButton label="Save rules" />
-          </div>
-        </form>
-      </section>
-
-      {/* Sits under the rules for planning a day, because it is the other half
+            {/* Sits under the rules for planning a day, because it is the other half
           of the same thought: those say how a day is made, these say what
           happens when one goes wrong. */}
-      <AutomationRules rules={rules} switchedOn={automationSwitchedOn} preview={rulePreview} />
+            <AutomationRules rules={rules} switchedOn={automationSwitchedOn} preview={rulePreview} />
+          </section>
 
-      {/* --- Channels ------------------------------------------------------ */}
-      <section>
-        <h2 className="text-sm font-semibold text-ink">Company channels</h2>
-        <p className="mt-1 text-sm text-ink/50">
-          Link the studio&apos;s number once, and the portal sends from it — project links, updates and the
-          gallery PDF.
-        </p>
+          <section id="channels" aria-labelledby="channels-title" className="flex scroll-mt-6 flex-col gap-6">
+            <div>
+              <h2 id="channels-title" className="text-2xl text-ink">
+                Channels
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">WhatsApp, the company channels and the office&apos;s shop account.</p>
+            </div>
+            {/* --- Channels ------------------------------------------------------ */}
+            <section>
+              <h2 className="text-sm font-semibold text-ink">Company channels</h2>
+              <p className="mt-1 text-sm text-ink/50">
+                Link the studio&apos;s number once, and the portal sends from it — project links, updates and the
+                gallery PDF.
+              </p>
 
-        {/* One channel, because one is what sends. */}
-        <div className="mt-4 max-w-sm">
-          <WhatsAppChannelCard workerConfigured={Boolean(worker)} initial={linkState} />
-        </div>
-      </section>
+              {/* One channel, because one is what sends. */}
+              <div className="mt-4 max-w-sm">
+                <WhatsAppChannelCard workerConfigured={Boolean(worker)} initial={linkState} />
+              </div>
+            </section>
 
-      {/* --- WhatsApp detail ------------------------------------------------ */}
-      <section className="glass rounded-2xl p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-            <Send size={16} strokeWidth={2} />
-            Sending
-          </h2>
-          {transport === "none" ? (
-            <Badge tone="neutral">Not configured</Badge>
-          ) : connection?.ok ? (
-            <Badge tone="success">{transport === "cloud" ? "Cloud API" : "Session worker"}</Badge>
-          ) : (
-            <Badge tone="warning">Unreachable</Badge>
-          )}
-        </div>
+            {/* --- WhatsApp detail ------------------------------------------------ */}
+            <section className="glass rounded-2xl p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                  <Send size={16} strokeWidth={2} />
+                  Sending
+                </h2>
+                {transport === "none" ? (
+                  <Badge tone="neutral">Not configured</Badge>
+                ) : connection?.ok ? (
+                  <Badge tone="success">{transport === "cloud" ? "Cloud API" : "Session worker"}</Badge>
+                ) : (
+                  <Badge tone="warning">Unreachable</Badge>
+                )}
+              </div>
 
-        {transport !== "none" ? (
-          <>
-            <dl className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-              <Row
-                label="Transport"
-                value={
-                  transport === "cloud"
-                    ? "Official Cloud API — cannot get the number banned"
-                    : "whatsapp-web.js session (the studio's own worker)"
-                }
-              />
-              {cloud && <Row label="Phone number ID" value={cloud.phoneNumberId} />}
-              {worker && transport === "worker" && <Row label="Worker" value={worker.baseUrl} />}
-              {connection?.number && (
-                <Row label={transport === "cloud" ? "Sends from" : "Line"} value={connection.number} />
-              )}
-              <Row
-                label="Status"
-                value={connection?.detail ?? "Unknown"}
-                tone={connection?.ok ? undefined : "text-red-600"}
-              />
-            </dl>
+              {transport !== "none" ? (
+                <>
+                  <dl className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                    <Row
+                      label="Transport"
+                      value={
+                        transport === "cloud"
+                          ? "Official Cloud API — cannot get the number banned"
+                          : "whatsapp-web.js session (the studio's own worker)"
+                      }
+                    />
+                    {cloud && <Row label="Phone number ID" value={cloud.phoneNumberId} />}
+                    {worker && transport === "worker" && <Row label="Worker" value={worker.baseUrl} />}
+                    {connection?.number && (
+                      <Row label={transport === "cloud" ? "Sends from" : "Line"} value={connection.number} />
+                    )}
+                    <Row
+                      label="Status"
+                      value={connection?.detail ?? "Unknown"}
+                      tone={connection?.ok ? undefined : "text-red-600"}
+                    />
+                  </dl>
 
-            <WhatsAppTest disabled={!connection?.ok} />
-          </>
-        ) : (
-          <div className="mt-3 text-sm text-ink/60">
-            <p>
-              Two ways to send, from the same nexora-whatsapp library. Set either one.
-            </p>
+                  <WhatsAppTest disabled={!connection?.ok} />
+                </>
+              ) : (
+                <div className="mt-3 text-sm text-ink/60">
+                  <p>Two ways to send, from the same nexora-whatsapp library. Set either one.</p>
 
-            <p className="mt-4 text-xs font-medium uppercase tracking-wider text-ink/40">
-              Official Cloud API — recommended
-            </p>
-            <pre className="mt-2 overflow-x-auto rounded-lg bg-ink/[0.04] p-3 text-xs text-ink/70">
-{`WHATSAPP_CLOUD_PHONE_NUMBER_ID   from Meta Business
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wider text-ink/40">
+                    Official Cloud API — recommended
+                  </p>
+                  <pre className="mt-2 overflow-x-auto rounded-lg bg-ink/[0.04] p-3 text-xs text-ink/70">
+                    {`WHATSAPP_CLOUD_PHONE_NUMBER_ID   from Meta Business
 WHATSAPP_CLOUD_ACCESS_TOKEN      a permanent token
 WHATSAPP_CLOUD_APP_SECRET        optional, for inbound webhooks`}
-            </pre>
-            <p className="mt-1.5 text-xs text-ink/45">
-              Runs here with nothing else to host, and the number cannot be banned for automation.
-            </p>
+                  </pre>
+                  <p className="mt-1.5 text-xs text-ink/45">
+                    Runs here with nothing else to host, and the number cannot be banned for automation.
+                  </p>
 
-            <p className="mt-4 text-xs font-medium uppercase tracking-wider text-ink/40">
-              Or the studio&apos;s own session worker
-            </p>
-            <pre className="mt-2 overflow-x-auto rounded-lg bg-ink/[0.04] p-3 text-xs text-ink/70">
-{`WHATSAPP_WORKER_URL   where the studio's worker answers
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wider text-ink/40">
+                    Or the studio&apos;s own session worker
+                  </p>
+                  <pre className="mt-2 overflow-x-auto rounded-lg bg-ink/[0.04] p-3 text-xs text-ink/70">
+                    {`WHATSAPP_WORKER_URL   where the studio's worker answers
 WHATSAPP_WORKER_KEY   its WORKER_API_KEY
 WHATSAPP_LINE_ID      "main" for the company line (default)`}
-            </pre>
-            <p className="mt-1.5 text-xs text-ink/45">
-              The worker holds the linked WhatsApp Web session, so nothing is linked again here — but it must be
-              reachable from this deployment.
-            </p>
-          </div>
-        )}
-      </section>
+                  </pre>
+                  <p className="mt-1.5 text-xs text-ink/45">
+                    The worker holds the linked WhatsApp Web session, so nothing is linked again here — but it must be
+                    reachable from this deployment.
+                  </p>
+                </div>
+              )}
+            </section>
 
-      {/* --- The manager's own password ------------------------------------ */}
-      <AdminPasswordCard
-        usingOwnPassword={ownPassword}
-        minLength={MIN_ADMIN_PASSWORD}
-        unlockMinutes={UNLOCK_MINUTES}
-      />
+            {/* --- The office's shop sign-in --------------------------------------- */}
+            <section className="glass rounded-2xl p-6">
+              <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                <ShoppingCart size={16} strokeWidth={2} />
+                The office shop sign-in
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                You sign in to the shop once, on your own phone, and every employee&apos;s phone opens the shop on your
+                account and your cart. Nobody on the team signs in to anything, and you never touch their handset.
+              </p>
 
-      {/* --- Timezone ----------------------------------------------------- */}
-      <section className="glass rounded-2xl p-6">
-        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-          <Clock size={16} strokeWidth={2} />
-          Company timezone
-        </h2>
-        <p className="mt-1 text-sm text-ink/50">
-          Decides which day a task belongs to and when the 4:00 PM notifier runs. Stored in the database, so
-          changing it needs no redeploy.
-        </p>
+              {/* Why the sign-in is not on this page. The shop sends a code by SMS
+            and the SMS arrives on the manager's phone — no screen here can
+            receive it, so the act has to happen where the message lands. */}
+              <div className="mt-4 rounded-xl border border-ink/10 bg-white/50 p-3.5">
+                <p className="text-xs font-semibold text-ink">How to sign the office in</p>
+                <ol className="mt-1.5 flex list-decimal flex-col gap-1 pl-4 text-xs leading-relaxed text-ink/60">
+                  <li>
+                    Open <span className="font-medium text-ink/80">Office shopping</span> in the NEON app on your phone.
+                  </li>
+                  <li>Sign in to the shop as you normally would — the code comes to your phone by SMS.</li>
+                  <li>
+                    Tap <span className="font-medium text-ink/80">Share with the office</span>.
+                  </li>
+                </ol>
+                <p className="mt-2 text-xs text-ink/45">
+                  It cannot be done from this page: the shop sends the code to your phone, and no screen here can
+                  receive it.
+                </p>
+              </div>
 
-        <form action={saveTimezone} className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="min-w-48">
-            <span className="mb-1 block text-xs font-medium text-ink/50">Timezone</span>
-            <select
-              name="timezone"
-              defaultValue={timezone}
-              className="w-full rounded-lg border border-ink/12 bg-white/70 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
-            >
-              {[...new Set([timezone, ...TIMEZONES])].map((zone) => (
-                <option key={zone} value={zone}>
-                  {zone.replace("_", " ")}
-                </option>
-              ))}
-            </select>
-          </label>
-          <SaveButton label="Save timezone" />
-        </form>
-      </section>
+              {shop.readable ? (
+                <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5">
+                  <p className="text-sm font-medium text-ink">The office is signed in.</p>
+                  <p className="mt-1 text-xs text-ink/60">
+                    {shop.shared
+                      ? `Shared by ${shop.shared.name} · ${formatDayIn(timezone, new Date(shop.shared.at))} ${formatTimeIn(timezone, new Date(shop.shared.at))}`
+                      : "Shared from your phone."}
+                  </p>
+                  {shop.lastFetch && (
+                    <p className="mt-0.5 text-xs text-ink/45">
+                      Last used by {shop.lastFetch.name} · {formatDayIn(timezone, new Date(shop.lastFetch.at))}{" "}
+                      {formatTimeIn(timezone, new Date(shop.lastFetch.at))}
+                    </p>
+                  )}
+                  {/* The one thing nobody can predict: only the shop knows when it
+                will end the session, so this says what to do rather than
+                pretending to know. */}
+                  <p className="mt-2 text-xs text-ink/50">
+                    The shop ends a sign-in on its own schedule. When phones start asking for a login again, sign in on
+                    yours and share it once more.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-ink/12 bg-ink/[0.02] p-3.5">
+                  <p className="text-sm font-medium text-ink/70">The office is not signed in yet.</p>
+                  <p className="mt-1 text-xs text-ink/50">
+                    {shop.shared
+                      ? "A sign-in was shared, but it can no longer be read — SESSION_SECRET has changed since. Share it again from your phone."
+                      : "Phones will ask whoever is holding them to log in until you share yours."}
+                  </p>
+                </div>
+              )}
 
-      {/* --- Everything else that depends on a key ------------------------ */}
-      <section className="glass rounded-2xl p-6">
-        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-          <Sparkles size={16} strokeWidth={2} />
-          Other integrations
-        </h2>
+              {/* Said on the screen, not only in the code: whoever sits here next is
+            the person who needs to know what sharing this means. */}
+              <div className="mt-3 flex gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3">
+                <TriangleAlert size={15} strokeWidth={2} className="mt-0.5 shrink-0 text-amber-700" />
+                <p className="text-xs leading-relaxed text-ink/70">
+                  Every phone on the team can use this sign-in, and that means ordering on your account. It is not the
+                  account itself — nobody can change your phone number or read the SMS codes — and signing out at the
+                  shop ends every copy of it at once.
+                </p>
+              </div>
 
-        <dl className="mt-4 flex flex-col gap-3 text-sm">
-          <Integration
-            name="AI assistant & receipt reading"
-            configured={isAiConfigured()}
-            hint="ANTHROPIC_API_KEY — powers the manager's chat assistant and reads receipt photos."
-          />
-          <Integration
-            name="Push notifications"
-            configured={await isPushConfigured()}
-            hint="VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY — without them, notifications stay in-app."
-          />
-        </dl>
-      </section>
+              {(shop.readable || shop.shared) && (
+                <form action={clearOfficeShopAccount} className="mt-3">
+                  <button type="submit" className="text-xs font-medium text-ink/40 hover:text-red-600">
+                    Sign the office out — every phone stops being able to shop
+                  </button>
+                </form>
+              )}
+            </section>
+          </section>
+
+          <section id="account" aria-labelledby="account-title" className="flex scroll-mt-6 flex-col gap-6">
+            <div>
+              <h2 id="account-title" className="text-2xl text-ink">
+                Account & system
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                Your password, the studio&apos;s timezone and the keys everything else depends on.
+              </p>
+            </div>
+            {/* --- The manager's own password ------------------------------------ */}
+            <AdminPasswordCard
+              usingOwnPassword={ownPassword}
+              minLength={MIN_ADMIN_PASSWORD}
+              unlockMinutes={UNLOCK_MINUTES}
+            />
+
+            {/* --- Timezone ----------------------------------------------------- */}
+            <section className="glass rounded-2xl p-6">
+              <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                <Clock size={16} strokeWidth={2} />
+                Company timezone
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                Decides which day a task belongs to and when the 4:00 PM notifier runs. Stored in the database, so
+                changing it needs no redeploy.
+              </p>
+
+              <form action={saveTimezone} className="mt-4 flex flex-wrap items-end gap-3">
+                <label className="min-w-48">
+                  <span className="mb-1 block text-xs font-medium text-ink/50">Timezone</span>
+                  <select
+                    name="timezone"
+                    defaultValue={timezone}
+                    className="w-full rounded-lg border border-ink/12 bg-white/70 px-3 py-2 text-sm outline-none focus:border-cyan-strong"
+                  >
+                    {[...new Set([timezone, ...TIMEZONES])].map((zone) => (
+                      <option key={zone} value={zone}>
+                        {zone.replace("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <SaveButton label="Save timezone" />
+              </form>
+            </section>
+
+            {/* --- Everything else that depends on a key ------------------------ */}
+            <section className="glass rounded-2xl p-6">
+              <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
+                <Sparkles size={16} strokeWidth={2} />
+                Other integrations
+              </h2>
+
+              <dl className="mt-4 flex flex-col gap-3 text-sm">
+                <Integration
+                  name="AI assistant & receipt reading"
+                  configured={isAiConfigured()}
+                  hint="ANTHROPIC_API_KEY — powers the manager's chat assistant and reads receipt photos."
+                />
+                <Integration
+                  name="Push notifications"
+                  configured={await isPushConfigured()}
+                  hint="VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY — without them, notifications stay in-app."
+                />
+              </dl>
+            </section>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
@@ -523,17 +594,7 @@ function describeMinutes(total: number) {
   return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
-function Field({
-  label,
-  name,
-  type,
-  value,
-}: {
-  label: string;
-  name: string;
-  type: "time" | "number";
-  value: string;
-}) {
+function Field({ label, name, type, value }: { label: string; name: string; type: "time" | "number"; value: string }) {
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-ink/50">{label}</span>

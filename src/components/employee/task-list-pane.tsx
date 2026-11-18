@@ -82,10 +82,20 @@ export function TaskListPane({
                 >
                   <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", DOT[task.priority])} aria-hidden />
                   <span className="min-w-0 flex-1">
-                    <span dir="auto" className="block truncate text-sm font-semibold text-ink">
+                    {/* Work under way lit up in the In Progress button's own
+                        blue — asked for the day this shipped, so what you are
+                        on stands out from what you have not started. */}
+                    <span
+                      dir="auto"
+                      className={cn(
+                        "block truncate text-sm font-semibold",
+                        task.state === "IN_PROGRESS" ? "text-cyan-strong" : "text-ink"
+                      )}
+                    >
                       {task.title}
                     </span>
                     <span className={cn("block text-xs", late ? "font-medium text-red-700" : "text-ink/50")}>
+                      {task.state === "IN_PROGRESS" ? "In progress · " : ""}
                       {when(task, todayKey, late)}
                     </span>
                   </span>
