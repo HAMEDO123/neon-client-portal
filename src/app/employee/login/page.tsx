@@ -15,7 +15,6 @@ export default async function EmployeeLoginPage() {
     // outside the shell that normally provides them, and it is the first one
     // anybody sees.
     <main className="employee-signin relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6">
-      <div className="grid-overlay pointer-events-none absolute inset-0 opacity-60" />
       <EmployeeLoginForm />
     </main>
   );
