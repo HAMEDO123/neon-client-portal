@@ -12,8 +12,9 @@ export default async function EmployeeLeadFinderPage() {
   if (!employee.canUseLeadFinder) notFound();
 
   return (
-    // `fills-frame`: the page takes the whole frame and scrolls inside the app.
-    <div className="fills-frame flex flex-col">
+    // `fills-frame`: the page takes the whole frame and scrolls inside the app;
+    // `wide-page`: and its whole width on a desk (globals.css).
+    <div className="fills-frame wide-page flex flex-col">
       <div className="flex items-center justify-between gap-3 border-b border-warm-line bg-paper-soft px-4 py-2">
         <p className="text-sm font-semibold text-bark">Lead Finder</p>
         <a
