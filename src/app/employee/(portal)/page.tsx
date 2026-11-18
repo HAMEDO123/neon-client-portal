@@ -23,7 +23,7 @@ import { myDay } from "@/lib/now-next-queries";
 import { NowNextCard } from "@/components/employee/now-next-card";
 import { ClockCard } from "@/components/employee/clock-card";
 import { DayTimeline } from "@/components/employee/day-timeline";
-import { FocusCard, pickFocus } from "@/components/employee/focus-card";
+import { FocusCard, latestTaskFor } from "@/components/employee/focus-card";
 import { ReportLines } from "@/components/employee/report-lines";
 import { myClockDay } from "@/lib/clock-day";
 import { myAppClock } from "@/lib/app-clock-store";
@@ -129,8 +129,8 @@ export default async function EmployeeDashboard({ searchParams }: { searchParams
       <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
     );
 
-  // The job to be on now, from their own list (components/employee/focus-card.tsx).
-  const focusTask = pickFocus(assigned, todayDay);
+  // The newest job handed to them (components/employee/focus-card.tsx).
+  const latestTask = await latestTaskFor(employee.id);
   // A published plan still shows its own card; without one it would only say
   // "nothing planned", and the timeline says the day better.
   const hasPlan = nowNext.now !== null || nowNext.next !== null;
@@ -159,7 +159,7 @@ export default async function EmployeeDashboard({ searchParams }: { searchParams
               for everybody and this is the only place its owner can read it. */}
           <ClockCard day={clockDay} timezone={timezone} app={appClock} />
 
-          <FocusCard task={focusTask} todayKey={todayDay} openCount={openToday} />
+          <FocusCard task={latestTask} todayKey={todayDay} timezone={timezone} openCount={openToday} />
 
           {hasPlan && <NowNextCard state={nowNext} hours={hours} />}
 
