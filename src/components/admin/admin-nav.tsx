@@ -18,6 +18,7 @@ import {
   Wallet,
   Settings,
   Plus,
+  Radar,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
   const isWhatsApp = pathname.startsWith("/admin/whatsapp");
   const isVisits = pathname.startsWith("/admin/site-visits");
   const isSettings = pathname.startsWith("/admin/settings");
+  const isLeads = pathname.startsWith("/admin/leads");
 
   return (
     <nav className="flex min-h-full flex-col gap-0.5 p-4">
@@ -89,6 +91,10 @@ export function AdminNav({ badges }: { badges?: AdminBadges }) {
       </Item>
       <Item href="/admin/whatsapp" active={isWhatsApp} icon={<MessageCircle size={16} strokeWidth={1.75} />}>
         WhatsApp
+      </Item>
+      {/* The studio's client finder, served by the platform (lib/lead-finder-proxy.ts). */}
+      <Item href="/admin/leads" active={isLeads} icon={<Radar size={16} strokeWidth={1.75} />}>
+        Lead Finder
       </Item>
       <Item href="/admin/site-visits" active={isVisits} icon={<MapPinned size={16} strokeWidth={1.75} />}>
         Site visits

@@ -17,5 +17,7 @@ import { isConversationPath } from "@/lib/chat-conversations";
 
 export function fillsWindow(pathname: string): boolean {
   if (isConversationPath(pathname)) return true;
+  // Lead Finder fills the window beside the menu (app/admin/(dashboard)/leads).
+  if (/^\/admin\/leads\/?$/.test(pathname)) return true;
   return /^\/(admin|employee)\/whatsapp\/?$/.test(pathname);
 }
