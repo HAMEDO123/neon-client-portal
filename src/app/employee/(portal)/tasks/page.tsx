@@ -211,7 +211,13 @@ export default async function EmployeeTasksPage({
               openId={openId}
               hrefFor={(id) => `/employee/tasks?filter=${active}&open=${id}`}
             />
-            <div className="min-w-0">{openDetail}</div>
+            {/* Held in place while the list scrolls beside it — asked for the
+                day this shipped: a task picked from far down the list opened
+                at the top of the page, out of sight. Each column scrolls on its
+                own inside the visible frame. */}
+            <div className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(var(--app-height)-2rem)] lg:overflow-y-auto lg:pr-1">
+              {openDetail}
+            </div>
           </div>
         </>
       )}

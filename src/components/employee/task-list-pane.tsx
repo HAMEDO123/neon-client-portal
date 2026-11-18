@@ -55,7 +55,10 @@ export function TaskListPane({
   hrefFor: (id: string) => string;
 }) {
   return (
-    <nav aria-label="Your tasks" className="glass flex flex-col rounded-2xl p-2">
+    <nav
+      aria-label="Your tasks"
+      className="glass flex flex-col rounded-2xl p-2 lg:sticky lg:top-4 lg:max-h-[calc(var(--app-height)-2rem)] lg:overflow-y-auto"
+    >
       {GROUPS.map((group) => {
         const inGroup = rows.filter((row) => groupOf(row, todayKey) === group.key);
         if (inGroup.length === 0) return null;
