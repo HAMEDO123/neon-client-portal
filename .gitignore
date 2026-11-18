@@ -69,3 +69,6 @@ ios/NeonShare.entitlements
 # The deploy stamp the Dockerfile writes inside the image (next.config.ts).
 # A copy here would be a stale id handed to every local build.
 /.deploy-id
+
+# The preview instance's throwaway sign-ins and saved sessions (scripts/preview-instance.mjs).
+/.preview

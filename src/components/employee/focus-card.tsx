@@ -64,7 +64,7 @@ export function FocusCard({
   if (!task) {
     return (
       <section aria-label="Latest task" className="rounded-2xl bg-bark p-5 text-paper">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#c9a77f]">Latest task</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-on-dark">Latest task</p>
         <p className="mt-2 text-sm text-paper/80">Nothing open on your list.</p>
       </section>
     );
@@ -98,7 +98,7 @@ export function FocusCard({
 
   return (
     <section aria-label="Latest task" className="rounded-2xl bg-bark p-5 text-paper">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#c9a77f]">Latest task</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-on-dark">Latest task</p>
       {/* A heading of the card, not of the page. */}
       <p dir="auto" className="mt-2 font-display text-2xl leading-snug">
         {task.title}
@@ -113,7 +113,7 @@ export function FocusCard({
       </p>
       <Link
         href={`/employee/assigned/${task.id}`}
-        className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-[#c9a77f] px-4 text-sm font-semibold text-bark transition-opacity hover:opacity-90"
+        className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-on-dark px-4 text-sm font-semibold text-bark transition-opacity hover:opacity-90"
       >
         {action}
         <ArrowRight size={15} strokeWidth={2.25} />

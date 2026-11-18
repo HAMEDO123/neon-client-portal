@@ -72,7 +72,7 @@ export function AttendanceMonth({ month, thisMonth }: { month: Month; thisMonth:
             <table className="w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-clay-soft/40 text-[11px] uppercase tracking-wider text-bark/45">
-                  <th scope="col" className="sticky left-0 z-10 bg-[#f4efe9] px-4 py-2.5 text-left font-medium">
+                  <th scope="col" className="sticky left-0 z-10 bg-canvas px-4 py-2.5 text-left font-medium">
                     Who
                   </th>
                   {month.days.map((day) => (

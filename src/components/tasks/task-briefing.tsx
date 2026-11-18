@@ -315,7 +315,7 @@ export function TaskBriefing({ team, todayKey, className }: { team: Member[]; to
                 type="button"
                 onClick={prepare}
                 disabled={working !== null || !(words.trim() || interim.trim())}
-                className="ml-auto inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-purple to-purple-strong px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="ml-auto inline-flex h-10 items-center gap-2 rounded-full bg-ink px-5 text-sm font-semibold text-white transition-colors hover:bg-ink/85 disabled:opacity-40"
               >
                 {working === "reading" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={15} strokeWidth={2.25} />}
                 {working === "reading" ? "Reading…" : "Prepare tasks"}

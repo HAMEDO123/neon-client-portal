@@ -16,9 +16,10 @@ export const metadata: Metadata = {
   },
 };
 
+// No themeColor or colorScheme here: they come from the root layout, which
+// follows the colourway the manager chose — a literal here would override it
+// for the whole portal (viewport fields merge per key, root to leaf).
 export const viewport: Viewport = {
-  themeColor: "#f6f2ec",
-  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
   // Employees tap checkboxes and status chips one-handed; a stray double-tap

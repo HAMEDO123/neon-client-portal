@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { COLOURWAY_SETTING } from "@/lib/colourway";
 
 // One number that changes whenever anything in the platform does.
 //
@@ -36,7 +37,10 @@ export async function liveSignature(): Promise<string> {
       (SELECT COUNT(*) FROM "ProjectSectionAssignment"),
       -- Warnings, pinned to the top of the employee's home screen.
       (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("createdAt")) * 1000), 0)::bigint FROM "EmployeeWarning"),
-      (SELECT COUNT(*) FROM "EmployeeWarning")
+      (SELECT COUNT(*) FROM "EmployeeWarning"),
+      -- The colourway the manager chose (lib/colourway.ts): this row and only
+      -- this one — the table also holds stamps the scheduler writes every minute.
+      (SELECT COALESCE((EXTRACT(EPOCH FROM MAX("updatedAt")) * 1000), 0)::bigint FROM "AppSetting" WHERE "key" = ${COLOURWAY_SETTING})
     ) AS sig
   `;
 

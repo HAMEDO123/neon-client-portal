@@ -86,7 +86,7 @@ export default async function TasksPage({
           <MonthExport href="/admin/tasks/tasks.csv" label="Export month's tasks" month={periodOf(today)} />
           <Link
             href="/admin/projects/new"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple to-purple-strong px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-ink/85"
           >
             <Plus size={16} strokeWidth={2.5} />
             New project

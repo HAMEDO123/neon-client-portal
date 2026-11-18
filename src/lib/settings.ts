@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { resolveTimezone } from "@/lib/time";
+import { COLOURWAY_SETTING, readColourway, type ColourwayId } from "@/lib/colourway";
 import { parseWorkHours, type WorkHours } from "@/lib/work-hours";
 
 // Platform settings live in a small key/value table so the timezone can be
@@ -29,6 +30,17 @@ export async function setSetting(key: string, value: string) {
 
 export async function getTimezone() {
   return resolveTimezone(await getSetting(TIMEZONE_SETTING_KEY));
+}
+
+/**
+ * The colourway the platform wears (lib/colourway.ts). Read by the root layout
+ * on every request; unset, unknown and a database that did not answer all mean
+ * the default. No cache and no connection() here — scripts, cron and tests
+ * import this file, and a value cached across requests would answer the live
+ * refresh with the old colour.
+ */
+export async function getColourway(): Promise<ColourwayId> {
+  return readColourway(await getSetting(COLOURWAY_SETTING));
 }
 
 /** The studio's rules for planning a day. Empty until somebody writes them. */

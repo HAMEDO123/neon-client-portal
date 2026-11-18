@@ -3,7 +3,8 @@ import { saveTimezone } from "@/lib/actions/whatsapp-actions";
 import { clearOfficeShopAccount, savePlanningNotes, saveWorkHours } from "@/lib/actions/settings-actions";
 import { shopSessionState } from "@/lib/office-shop-account";
 import { formatDayIn, formatTimeIn } from "@/lib/time";
-import { getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
+import { getColourway, getPlanningNotes, getTimezone, getWorkHours } from "@/lib/settings";
+import { ColourwayPicker } from "@/components/admin/colourway-picker";
 import { capacityMinutes, minutesOf, spanMinutes, timeOf } from "@/lib/work-hours";
 import { TextArea } from "@/components/admin/fields";
 import { isAiConfigured } from "@/lib/ai/client";
@@ -46,6 +47,7 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   const { preview } = await searchParams;
   const timezone = await getTimezone();
   const planningNotes = await getPlanningNotes();
+  const colourway = await getColourway();
   // Whether the office is signed in to the shop, when, and who last took it.
   // Never the session itself: a settings page left open on a desk is the other
   // way a sign-in walks out of the building.
@@ -100,6 +102,7 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   // stays beside them on a desk — one long page of twelve cards had nothing to
   // find your way by. On a phone the menu is a row of buttons across the top.
   const groups = [
+    { id: "colours", label: "Colours" },
     { id: "notifications", label: "Notifications" },
     { id: "process", label: "The process" },
     { id: "day", label: "The working day" },
@@ -131,6 +134,22 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
         </nav>
 
         <div className="flex min-w-0 flex-col gap-12">
+          {/* First, because it is the one setting that changes what everybody sees. */}
+          <section id="colours" aria-labelledby="colours-title" className="flex scroll-mt-6 flex-col gap-6">
+            <div>
+              <h2 id="colours-title" className="text-2xl text-ink">
+                Colours
+              </h2>
+              <p className="mt-1 text-sm text-ink/50">
+                The colourway the whole platform wears — the team&apos;s portal, your screens and the clients&apos;
+                pages. One press changes it for everybody.
+              </p>
+            </div>
+            <div className="glass rounded-2xl p-6">
+              <ColourwayPicker current={colourway} />
+            </div>
+          </section>
+
           <section id="notifications" aria-labelledby="notifications-title" className="flex scroll-mt-6 flex-col gap-6">
             <div>
               <h2 id="notifications-title" className="text-2xl text-ink">

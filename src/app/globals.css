@@ -1,11 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  /* The Studio palette, everywhere (2026-11-18): warm paper and warm ink. */
-  --bg: #f6f2ec;
-  --bg-soft: #efe6d9;
-  --ink: #2c2722;
-  --foreground: #2c2722;
+  /* The semantic accents. In the portal and the admin they are state, not
+     decoration — in progress, review, late, soon — so no colourway moves
+     them (the client's page redefines them, below). */
   --cyan: #06b6d4;
   --cyan-strong: #0e7490;
   --purple: #8b5cf6;
@@ -14,36 +12,185 @@
   --pink-strong: #be185d;
   --orange: #f59e0b;
   --orange-strong: #b45309;
-  --line: rgba(44, 39, 34, 0.09);
   --glass: rgba(255, 255, 255, 0.55);
 }
 
-/* The studio's warm palette, for the chat workspace.
-   Its own token names, so every existing screen keeps the colours it has:
-   nothing outside the chat refers to these. */
-:root {
-  --paper: #f6f2ec;
-  --paper-soft: #fbf9f5;
-  --card: #ffffff;
-  --canvas: #f2ede5;
-  --clay: #a9855f;
-  --clay-deep: #8d6c4a;
-  --clay-soft: #efe6d9;
-  --bark: #2c2722;
-  --warm-line: rgba(44, 39, 34, 0.09);
+/* ---------------------------------------------------------------------------
+   The colourways (lib/colourway.ts; chosen in Settings → Colours and written
+   by the root layout as `data-theme` on <html>). Each block sets the source
+   colours and nothing else; every name the app reads is derived from them
+   below. Clay is also plain :root, so a page without the attribute is still
+   the Studio look. `page`, `accent` and `ink` must equal COLOURWAYS in
+   lib/colourway.ts — tests/colourway.test.ts reads both.
 
-  /* The rail down the left of the admin: near-black, but warm rather than
-     blue-black, so it sits under the same light as the paper beside it. Its own
-     tokens rather than inverted greys, because text on it needs contrast
-     decided once and kept — the clay pill marking where you are is the only
-     colour that crosses from the light side. */
-  /* Light since the Studio look (2026-11-18): paper, ink, and the clay pill
-     marking where you are. The admin's and the portal's menus both read these. */
-  --rail: #efe9e0;
+   Every accent carries white at 4.5:1 or better (the active menu pill, the
+   count pills), and every on-dark colour reads at 4.5:1 on its ink (the
+   "Latest task" card).
+   ------------------------------------------------------------------------ */
+:root,
+:root[data-theme="clay"] {
+  --cw-page: #f6f2ec;
+  --cw-page-soft: #fbf9f5;
+  --cw-canvas: #f2ede5;
+  --cw-tint: #efe6d9;
+  --cw-rail: #efe9e0;
+  --cw-ink: #2c2722;
+  --cw-ink-dim: #6b6259;
+  --cw-accent: #846342;
+  --cw-accent-deep: #6f5237;
+  --cw-on-dark: #cdae88;
+  --cw-mid: #a9855f;
+}
+
+:root[data-theme="olive"] {
+  --cw-page: #f4f3ec;
+  --cw-page-soft: #faf9f5;
+  --cw-canvas: #eeede3;
+  --cw-tint: #e3e7d3;
+  --cw-rail: #e8e8dc;
+  --cw-ink: #22261f;
+  --cw-ink-dim: #5f6457;
+  --cw-accent: #5f6e45;
+  --cw-accent-deep: #4e5a37;
+  --cw-on-dark: #c8d19a;
+  --cw-mid: #7f8c5e;
+}
+
+:root[data-theme="navy"] {
+  --cw-page: #f6f5f1;
+  --cw-page-soft: #fbfaf8;
+  --cw-canvas: #efeee9;
+  --cw-tint: #e1e7f0;
+  --cw-rail: #e8e9ee;
+  --cw-ink: #1b2233;
+  --cw-ink-dim: #5d6476;
+  --cw-accent: #2a4a7a;
+  --cw-accent-deep: #1f3a63;
+  --cw-on-dark: #d8b978;
+  --cw-mid: #5b79a8;
+}
+
+:root[data-theme="terracotta"] {
+  --cw-page: #faf4ef;
+  --cw-page-soft: #fdfaf7;
+  --cw-canvas: #f5ede6;
+  --cw-tint: #f6e1d6;
+  --cw-rail: #f2e6dc;
+  --cw-ink: #2e211b;
+  --cw-ink-dim: #6e5a50;
+  --cw-accent: #93503f;
+  --cw-accent-deep: #7e4232;
+  --cw-on-dark: #f0b595;
+  --cw-mid: #c0603f;
+}
+
+:root[data-theme="teal"] {
+  --cw-page: #f3f4f4;
+  --cw-page-soft: #f9fafa;
+  --cw-canvas: #eceeee;
+  --cw-tint: #dcebe6;
+  --cw-rail: #e6e9ea;
+  --cw-ink: #1d2124;
+  --cw-ink-dim: #5b6267;
+  --cw-accent: #2e6b5f;
+  --cw-accent-deep: #24584e;
+  --cw-on-dark: #94d2c2;
+  --cw-mid: #3f8e7f;
+}
+
+:root[data-theme="plum"] {
+  --cw-page: #f8f4f4;
+  --cw-page-soft: #fcfafa;
+  --cw-canvas: #f2ecec;
+  --cw-tint: #f2e1e9;
+  --cw-rail: #efe5e8;
+  --cw-ink: #2a1e26;
+  --cw-ink-dim: #6b5a64;
+  --cw-accent: #8e4a6b;
+  --cw-accent-deep: #6e3552;
+  --cw-on-dark: #e6b3c8;
+  --cw-mid: #a6668a;
+}
+
+/* Every name the app already reads, from the colourway's sources. The
+   duplicate families move together, here and nowhere else, so no seam can
+   open between a `bg-bg` panel and a `bg-paper` one: --bg = --paper,
+   --ink = --foreground = --bark = --rail-ink, --line = --warm-line =
+   --rail-line, --bg-soft = --clay-soft. Nothing below :root may restate one
+   of these with a literal — that is what used to pin the portal to clay. */
+:root {
+  --bg: var(--cw-page);
+  --paper: var(--cw-page);
+  --paper-soft: var(--cw-page-soft);
+  --canvas: var(--cw-canvas);
+  --bg-soft: var(--cw-tint);
+  --clay-soft: var(--cw-tint);
+  --clay: var(--cw-accent);
+  --clay-deep: var(--cw-accent-deep);
+  --on-dark: var(--cw-on-dark);
+  --ink: var(--cw-ink);
+  --foreground: var(--cw-ink);
+  --bark: var(--cw-ink);
+  --card: #ffffff;
+  /* The menus (admin and portal): light, in the colourway's rail colour,
+     with the accent pill marking where you are. */
+  --rail: var(--cw-rail);
   --rail-soft: #ffffff;
-  --rail-line: rgba(44, 39, 34, 0.09);
-  --rail-ink: #2c2722;
-  --rail-dim: #6b6259;
+  --rail-ink: var(--cw-ink);
+  --rail-dim: var(--cw-ink-dim);
+  --line: color-mix(in srgb, var(--cw-ink) 9%, transparent);
+  --warm-line: var(--line);
+  --rail-line: var(--line);
+
+  /* Secondary text (ink at 45–65% in the components) re-pointed at one
+     opaque muted ink that keeps 4.5:1 on the deepest part of a card face in
+     every colourway — see "Muted text" at the end of the file. */
+  --muted: color-mix(in srgb, var(--cw-ink) 74%, #ffffff);
+  /* Focus: the in-progress cyan the inputs already use; the client's page
+     takes its own deep accent instead. */
+  --focus: var(--cyan-strong);
+
+  /* --- The lacquer (the glossy finish, 2026-11-18), all derived. Opaque
+     mixes rather than alphas wherever a colour sits over something that
+     varies, so it is the same colour on every background. --- */
+
+  /* The face: clear white where the light falls — a band sized in rem, so a
+     short row and a tall card carry the same reflection — then the material,
+     a whisper of the tint deepening to a faint wash at the foot. 50% tint at
+     the foot is as deep as it goes: --muted is measured on that colour. */
+  --lq-face-dip: color-mix(in srgb, var(--cw-tint) 26%, #ffffff);
+  --lq-face-mid: color-mix(in srgb, var(--cw-tint) 30%, #ffffff);
+  --lq-face-low: color-mix(in srgb, var(--cw-tint) 50%, #ffffff);
+  --lq-face: linear-gradient(180deg, #ffffff 0, #ffffff 0.6rem, var(--lq-face-dip) 3.6rem, var(--lq-face-mid) 45%, var(--lq-face-low) 100%);
+  /* The edge that catches the light: white at the top, the accent's hue
+     gathering along the lower sides. */
+  --lq-edge-mid: color-mix(in srgb, var(--cw-accent) 24%, #ffffff);
+  --lq-edge-low: color-mix(in srgb, var(--cw-accent) 38%, #ffffff);
+  --lq-edge: linear-gradient(165deg, #ffffff 0%, #ffffff 12%, var(--lq-edge-mid) 45%, var(--lq-edge-low) 100%);
+  /* Shadows: an ink hairline for contact, and glows in the colourway's own
+     deep accent, a third of the way from the ink. */
+  --lq-contact: color-mix(in srgb, var(--cw-ink) 7%, transparent);
+  --lq-shade: color-mix(in srgb, var(--cw-accent-deep) 67%, var(--cw-ink));
+  --lq-glow: color-mix(in srgb, var(--lq-shade) 42%, transparent);
+  --lq-glow-near: color-mix(in srgb, var(--lq-shade) 16%, transparent);
+  --lq-rim: color-mix(in srgb, var(--cw-accent) 16%, transparent);
+  --lq-card-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -1px 0 var(--lq-rim),
+    0 1px 2px var(--lq-contact),
+    0 6px 14px -8px var(--lq-glow-near),
+    0 24px 46px -26px var(--lq-glow);
+  --lq-card:
+    var(--lq-face) padding-box,
+    var(--lq-edge) border-box;
+  /* Sheets (dialogs, floating controls, sign-in): a lighter wash. */
+  --lq-sheet-low: color-mix(in srgb, var(--cw-tint) 28%, #ffffff);
+  --lq-sheet-glow: color-mix(in srgb, var(--lq-shade) 40%, transparent);
+  --lq-ink-glow: color-mix(in srgb, var(--cw-ink) 55%, transparent);
+  /* The page: light pools of the colourway for the gloss to catch. */
+  --lq-page-a: color-mix(in srgb, var(--cw-tint) 80%, transparent);
+  --lq-page-b: color-mix(in srgb, var(--cw-on-dark) 14%, transparent);
+  --lq-page-c: color-mix(in srgb, var(--cw-tint) 45%, transparent);
 }
 
 @theme inline {
@@ -54,6 +201,7 @@
   --color-clay: var(--clay);
   --color-clay-deep: var(--clay-deep);
   --color-clay-soft: var(--clay-soft);
+  --color-on-dark: var(--on-dark);
   --color-bark: var(--bark);
   --color-warm-line: var(--warm-line);
   --color-rail: var(--rail);
@@ -124,51 +272,208 @@ h3, h4, h2.uppercase {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(44, 39, 34, 0.18);
+  background: color-mix(in srgb, var(--cw-ink) 18%, transparent);
   border-radius: 8px;
 }
 
-/* Cards: glossy (asked for on 2026-11-18, "something with glossy cards") —
-   a white sheen that fades down the card, a bright top edge like light on
-   glass, a soft blur of what is behind, and a deeper shadow to lift it. The
-   solid white cards of the first Studio pass lasted a day. The names stay, so
-   every card changed at once; the plain `bg-card` panels on the two portals
-   are given the same finish below, or half the screen would be matte. */
-.glass,
-.employee-main .bg-card.rounded-2xl,
-.admin-shell main .bg-card.rounded-2xl {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.74) 45%, rgba(255, 255, 255, 0.58) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(44, 39, 34, 0.04),
-    0 1px 2px rgba(44, 39, 34, 0.05),
-    0 14px 34px -18px rgba(44, 39, 34, 0.32);
-  /* No backdrop-filter, on purpose: it makes the card the containing block
-     for every `position: fixed` descendant, so a pop-up opened from inside a
-     card (the attendance day editor, the hotspot editor) is trapped in it. */
-}
+/* ---------------------------------------------------------------------------
+   The glossy finish: lacquer (asked for on 2026-11-18, "make it something
+   with glossy cards"; three designs were drawn on the real screens and this
+   one chosen, with the best-built one's readability fixes).
 
-.glass-strong {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.86) 50%, rgba(255, 255, 255, 0.72) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 1),
-    0 1px 2px rgba(44, 39, 34, 0.06),
-    0 22px 48px -22px rgba(44, 39, 34, 0.38);
-}
+   A card is a lacquered face: clear white where the light falls, deepening
+   into a faint wash of the colourway's tint; a reflection band across its
+   top; an edge that catches the light in the accent's hue; and a soft shadow
+   in the colourway's own colour. Everything is opaque — glossy means light on
+   a surface, not something you see through.
 
-/* Something for the gloss to catch: a faint warm glow in two corners of the
-   page, fixed while it scrolls. On flat paper a translucent card is just a
-   white card. */
+   A card rule may set only background, border and box-shadow. This file is
+   unlayered, so it beats every utility: position, overflow, radius, display,
+   transform, filter and backdrop-filter stay the components' own. The last
+   three matter most — each makes the card the containing block for every
+   `position: fixed` descendant, and a pop-up opened from inside a card (the
+   attendance day editor, the hotspot editor) is then trapped in it.
+   ------------------------------------------------------------------------ */
+
+/* The page: light pools of the colourway for the gloss to catch, sized in
+   percentages so a phone and a wide desk both get them. Only the image is
+   set; the frames keep their own colour. Not `fixed`: the frames are fixed
+   already and their `main` scrolls, and iOS ignores `fixed` anyway. */
 .employee-shell,
 .employee-signin,
 .admin-shell,
 .client-page {
   background-image:
-    radial-gradient(60rem 36rem at 100% 0%, rgba(169, 133, 95, 0.16), transparent 60%),
-    radial-gradient(48rem 32rem at 0% 100%, rgba(125, 138, 106, 0.12), transparent 60%);
-  background-attachment: fixed;
+    radial-gradient(70% 55% at 100% 0%, var(--lq-page-a), transparent 70%),
+    radial-gradient(60% 50% at 0% 100%, var(--lq-page-b), transparent 70%),
+    radial-gradient(45% 40% at 30% 35%, var(--lq-page-c), transparent 75%),
+    linear-gradient(180deg, var(--cw-page-soft), var(--cw-page) 34rem);
+}
+
+/* Cards. One plain `.glass` rule (0,1,0) fed by the tokens, so the priority
+   washes below (`.glass.task-high`, 0,2,0) keep winning and a colourway never
+   needs a selector here. The edge is the same image painted under the
+   transparent border (`border-box`), which makes the border a gradient. */
+.glass {
+  background: var(--lq-card);
+  border: 1px solid transparent;
+  box-shadow: var(--lq-card-shadow);
+}
+
+/* The portals' plain panels — the clock card, today's report, the attendance
+   and chat panels: `bg-card` with the warm-line border — wear the same face,
+   or half a screen would be matte. Only the bordered panel recipe: a dialog,
+   a textarea and the chat's incoming bubbles (`shadow-sm`) keep their own. */
+:is(.employee-main, .admin-shell main) .bg-card.rounded-2xl.border-warm-line:not(textarea, input, .shadow-sm),
+:is(.employee-main, .admin-shell main) .bg-card.rounded-3xl.border-warm-line {
+  background: var(--lq-card);
+  border-color: transparent;
+  box-shadow: var(--lq-card-shadow);
+}
+
+/* The section cards about nine screens draw as `rounded-2xl border
+   bg-white/40–70` instead of `.glass` — the admin Tasks page's stat cards,
+   its week planner and Upcoming, payroll's sections, routines, site visits.
+   Only at the top level (never inside a card already lacquered, where they
+   are inner tiles), and never one whose border carries a meaning (amber
+   "owed", red). */
+:is(.employee-main, .admin-shell main) :is(div, section, details, article).rounded-2xl.border:is(.bg-white\/40, .bg-white\/50, .bg-white\/60, .bg-white\/70):not([class*="border-amber"], [class*="border-red"], [class*="border-pink"]):not(.glass *):not(:is(.bg-card, .bg-white\/40, .bg-white\/50, .bg-white\/60, .bg-white\/70).rounded-2xl *) {
+  background: var(--lq-card);
+  border-color: transparent;
+  box-shadow: var(--lq-card-shadow);
+}
+
+/* The open conversation on a desk is a card too, but its inside is the
+   chat's own, so it takes only the edge and the glow. */
+@media (min-width: 1024px) {
+  :is(.employee-main, .admin-shell main) .bg-card.overflow-hidden.lg\:rounded-3xl {
+    border-color: var(--lq-edge-mid);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 1px 2px var(--lq-contact),
+      0 20px 40px -26px var(--lq-glow);
+  }
+}
+
+/* Sheets: `.glass-strong` is mostly things people type into or steer by —
+   dialogs, the client's floating navigation, a hotspot over a photo, the
+   sign-in card. Opaque paper with a stronger lift, never translucent. */
+.glass-strong {
+  background:
+    linear-gradient(180deg, #ffffff 0%, #ffffff 45%, var(--lq-sheet-low) 100%) padding-box,
+    var(--lq-edge) border-box;
+  border: 1px solid transparent;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 1px 2px var(--lq-contact),
+    0 10px 24px -14px var(--lq-contact),
+    0 30px 60px -28px var(--lq-sheet-glow);
+}
+
+/* Dark lacquer: primary buttons and selected pills (`bg-ink`). Only the image
+   and the shadow — `bg-ink` keeps painting the base, so `hover:bg-ink/85` and
+   `disabled:opacity-50` still work. The highlight is gone by 40% of the
+   height, above the label, so the text keeps its contrast. `:is(button, a)`
+   leaves the client page's dark surfaces (hero, welcome) alone. */
+:is(button, a).bg-ink {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 28%, rgba(255, 255, 255, 0) 40%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0) 45%);
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 1px 2px var(--lq-contact),
+    0 10px 22px -12px var(--lq-ink-glow);
+}
+:is(button, a).bg-ink:disabled {
+  box-shadow: none;
+}
+
+/* The "Latest task" card (focus-card.tsx, `bg-bark`): deep lacquer in the
+   ink, a soft pool of light at the top and a faint on-dark glow from the
+   bottom right. The pool stays under 10% white behind the label. */
+.bg-bark.rounded-2xl {
+  background-image:
+    radial-gradient(120% 80% at 50% -30%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 62%),
+    radial-gradient(70% 70% at 105% 115%, color-mix(in srgb, var(--cw-on-dark) 18%, transparent), transparent 70%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0) 50%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 2px 4px var(--lq-contact),
+    0 26px 48px -26px var(--lq-ink-glow);
+}
+
+/* Its button, a small light lacquer in the on-dark colour. */
+:is(button, a).bg-on-dark {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 45%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 8px 18px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* The accent: the active menu pill and the accent buttons (`bg-clay`). The
+   colour is still the utility's; this adds the lacquer and a shadow in the
+   accent's own colour in place of the pill's hard-coded clay one. */
+:is(button, a).bg-clay {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 28%, rgba(255, 255, 255, 0) 40%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0) 45%);
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    0 1px 2px var(--lq-contact),
+    0 10px 20px -12px color-mix(in srgb, var(--cw-accent-deep) 75%, transparent);
+}
+
+/* The small round count pills: a glint and no shadow, so a column of them
+   does not stack up into dots of glow. */
+span.bg-clay.rounded-full {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 45%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* The menus. The rail takes the same light from above as the cards; its
+   name and team boxes are small lacquer cards. */
+aside.bg-rail {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0, rgba(255, 255, 255, 0) 18rem);
+}
+
+.bg-rail-soft.rounded-2xl {
+  background: var(--lq-card);
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 1px 2px var(--lq-contact),
+    0 12px 24px -18px var(--lq-glow);
+}
+
+/* The phone's header and tab bar: solid, in the page colour (a translucent
+   bar over a glossy page reads as a smear), with a sheen that fades out
+   before the edge. */
+.employee-header,
+.employee-tabbar {
+  background-color: var(--cw-page);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+}
+
+/* Inputs: flat and solid — the one surface with no gloss, which is what says
+   "type here". Only fields that were already white: the chat's tinted search
+   and message boxes and the borderless inline fields keep their own look, and
+   the border — so the cyan focus border and a red error border — stays the
+   utilities'. The ring variables keep `focus-visible:ring-*` alive. */
+:is(.employee-shell, .employee-signin, .admin-shell, .client-page)
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"]), textarea, select)[class*="bg-white"] {
+  background-color: #ffffff;
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    inset 0 1px 2px color-mix(in srgb, var(--cw-ink) 8%, transparent);
 }
 
 .glass-dark {
@@ -180,10 +485,10 @@ h3, h4, h2.uppercase {
 }
 
 .text-gradient-neon {
-  /* Warm now: deep clay through clay to a pale gold and back — mid-tones on
-     purpose, because it is read on the paper (pricing, sign-in) and on the dark
+  /* The colourway's mid tone through its accent to its on-dark colour and
+     back — mid-tones on purpose, because it is read on the paper (pricing, sign-in) and on the dark
      welcome and presentation screens alike, and bark vanished on the dark. */
-  background: linear-gradient(100deg, var(--clay-deep) 0%, var(--clay) 35%, #c9a77f 65%, var(--clay-deep) 100%);
+  background: linear-gradient(100deg, var(--cw-mid) 0%, var(--cw-accent) 30%, var(--cw-on-dark) 62%, var(--cw-mid) 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
@@ -197,11 +502,11 @@ h3, h4, h2.uppercase {
   }
 }
 
-/* Neon glows became soft warm shadows with the Studio look. */
+/* Neon glows became soft shadows in the colourway's accent. */
 .glow-cyan,
 .glow-purple,
 .glow-pink {
-  box-shadow: 0 12px 32px -16px rgba(141, 108, 74, 0.45);
+  box-shadow: 0 12px 32px -16px color-mix(in srgb, var(--cw-accent-deep) 45%, transparent);
 }
 
 .border-glow {
@@ -213,7 +518,7 @@ h3, h4, h2.uppercase {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(140deg, rgba(169, 133, 95, 0.6), rgba(141, 108, 74, 0.35), transparent 65%);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--cw-accent) 60%, transparent), color-mix(in srgb, var(--cw-accent-deep) 35%, transparent), transparent 65%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -227,8 +532,8 @@ h3, h4, h2.uppercase {
 
 .grid-overlay {
   background-image:
-    linear-gradient(rgba(44, 39, 34, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(44, 39, 34, 0.035) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--cw-ink) 3.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--cw-ink) 3.5%, transparent) 1px, transparent 1px);
   background-size: 64px 64px;
 }
 
@@ -264,27 +569,6 @@ h3, h4, h2.uppercase {
   height: var(--app-height);
 }
 
-/* The portal in the studio's colours, keeping its phone shape.
-
-   The tokens are redefined on the frame rather than at :root, so every screen
-   in the portal turns warm without one component changing — bg-bg, text-ink,
-   the default border colour and the whole button set all read these — while
-   the client's own pages at /p/<token>, which share those utilities, cannot
-   move. The sign-in screen is outside the frame and carries the class itself.
-
-   The accents are deliberately left alone. In this portal cyan, pink, orange
-   and emerald are not decoration: they are priority, how much of a deadline is
-   left, unread, and what a request's state is. Repainting them clay would
-   delete what the screen is saying. */
-.employee-shell,
-.employee-signin {
-  --bg: #f6f2ec;
-  --bg-soft: #efe6d9;
-  --ink: #2c2722;
-  --foreground: #2c2722;
-  --line: rgba(44, 39, 34, 0.09);
-}
-
 /* Where the frame stops short of the bottom of the screen, the strip below it
    shows the page behind — so the page is paper too, not the old lavender. The
    sign-in screen needs it for the same reason: its card is centred in a page
@@ -296,28 +580,37 @@ body:has(.employee-signin) {
   background: var(--paper);
 }
 
-/* Cards here sit on paper rather than lavender, so the translucent white they
-   were is warmed to match. Scoped to the portal: .glass is shared with the
-   client's pages, which keep the original. */
-/* (Cards were warmed here for the portal alone; since the Studio look the
-   global .glass is the warm one, for every surface.) */
-
 /* A task card washed in its priority's colour (components/tasks/priority.ts).
    The studio asked for the whole card, not only the word: a high priority is
    red from across the room. Classes of their own, and written against .glass,
    because .glass sets a gradient outside any layer and a bg-* utility cannot
-   override it — and after the portal's own .glass above, which it has to beat. */
+   override it. Lacquered like a card, in red and in a cool grey; the red's
+   foot stops at #fdd8d8 so red "late" text and --muted keep 4.5:1 on it. */
 .glass.task-high,
 .employee-shell .glass.task-high {
-  background: linear-gradient(155deg, rgba(254, 226, 226, 0.96), rgba(254, 202, 202, 0.78));
-  border: 1px solid rgba(220, 38, 38, 0.5);
-  box-shadow: 0 10px 30px -14px rgba(220, 38, 38, 0.4);
+  background:
+    linear-gradient(180deg, #fff5f5 0, #fff5f5 0.6rem, #fee4e4 3.6rem, #fee2e2 45%, #fdd8d8 100%) padding-box,
+    linear-gradient(165deg, #ffffff 0%, #ffffff 12%, #f4a3a3 45%, #df5f5f 100%) border-box;
+  border: 1px solid transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(185, 28, 28, 0.14),
+    0 1px 2px rgba(127, 29, 29, 0.08),
+    0 4px 10px -6px rgba(220, 38, 38, 0.18),
+    0 20px 40px -24px rgba(220, 38, 38, 0.5);
 }
 
 .glass.task-low,
 .employee-shell .glass.task-low {
-  background: linear-gradient(155deg, rgba(241, 245, 249, 0.94), rgba(226, 232, 240, 0.66));
-  border: 1px solid rgba(100, 116, 139, 0.24);
+  background:
+    linear-gradient(180deg, #ffffff 0, #ffffff 0.6rem, #f1f4f8 3.6rem, #eef2f6 45%, #e3e8ef 100%) padding-box,
+    linear-gradient(165deg, #ffffff 0%, #ffffff 12%, #d3dae4 45%, #b4bfcd 100%) border-box;
+  border: 1px solid transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(100, 116, 139, 0.12),
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 20px 40px -26px rgba(71, 85, 105, 0.35);
 }
 
 /* ---------------------------------------------------------------------------
@@ -677,18 +970,21 @@ body:has(.admin-shell) {
 
 /* The client's page in the Studio palette. On this page cyan, purple and pink
    were decoration — the hero's wash, the journey line, hovers, the pricing
-   bars — not meaning, so they are redefined here into the studio's own
-   colours: clay, deep clay, sage and terracotta. (In the portal and the admin
+   bars — not meaning, so they are redefined here into the colourway: its
+   accent and deep accent, its dim ink, its mid tone and its on-dark colour. (In the portal and the admin
    the same names mean priority, deadlines and unread, and are left alone.) */
 .client-page {
-  --cyan: #a9855f;
-  --cyan-strong: #7a5b3d;
-  --purple: #7d8a6a;
-  --purple-strong: #56633f;
-  --pink: #b5654f;
-  --pink-strong: #8a3e2b;
-  --orange: #c99a4b;
-  --orange-strong: #8a6420;
+  --cyan: var(--cw-accent);
+  --cyan-strong: var(--cw-accent-deep);
+  --purple: var(--cw-ink-dim);
+  --purple-strong: color-mix(in srgb, var(--cw-ink-dim) 60%, var(--cw-ink));
+  --pink: var(--cw-mid);
+  --pink-strong: var(--cw-accent-deep);
+  --orange: var(--cw-on-dark);
+  --orange-strong: color-mix(in srgb, var(--cw-accent-deep) 80%, var(--cw-ink));
+  /* A custom property resolves where it is declared, so --focus worked out
+     on :root would still be the portal's cyan here; restated. */
+  --focus: var(--cw-accent-deep);
 }
 
 /* A project's name, written over its render (components/admin/project-hero.tsx). */
@@ -722,5 +1018,30 @@ body:has(.admin-shell) {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+}
+
+/* Muted text that the gloss cannot dim. The components write secondary text
+   as ink at 45–65%; on pure white that is already only 3.0–3.9:1, and a face
+   that deepens toward its foot takes a little more. Inside the four frames
+   those shades are re-pointed at --muted, one opaque muted ink at 4.5:1 or
+   better on the deepest part of a card (and on the red and grey priority
+   washes) in every colourway. 35% and 40% are left alone: placeholders,
+   disabled labels, decoration. In the utilities layer on purpose, so it
+   replaces the utility it names but still loses to `hover:text-ink`. */
+@layer utilities {
+  :where(.employee-shell, .employee-signin, .admin-shell, .client-page)
+    :is(.text-ink\/45, .text-ink\/50, .text-ink\/55, .text-ink\/60, .text-ink\/65, .text-bark\/50, .text-bark\/55, .text-bark\/60, .text-foreground\/50, .text-foreground\/60) {
+    color: var(--muted);
+  }
+}
+
+/* A visible focus ring for keyboard users on anything that has none of its
+   own. In the base layer, so a component's own `focus-visible:` utilities
+   (rings, `outline-none`) still win. */
+@layer base {
+  :where(a, button, summary, [role="button"], [role="radio"], [role="tab"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 }

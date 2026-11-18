@@ -26,7 +26,7 @@ const DOT: Record<TimelineKind, string> = {
   sent: "bg-emerald-600",
   approved: "bg-emerald-700",
   "sent-back": "bg-amber-600",
-  now: "bg-[#b5654f]",
+  now: "bg-clay",
   ends: "border-2 border-dashed border-ink/40 bg-white",
 };
 
@@ -117,12 +117,12 @@ function Row({ item }: { item: TimelineItem }) {
   if (item.kind === "now") {
     return (
       <li className="relative flex items-center gap-3 py-2">
-        <span className="w-14 shrink-0 text-right text-xs font-semibold tabular-nums text-[#b5654f]">
+        <span className="w-14 shrink-0 text-right text-xs font-semibold tabular-nums text-clay-deep">
           {clockLabel(item.minutes)}
         </span>
-        <span className="relative z-10 h-3 w-3 shrink-0 rounded-full bg-[#b5654f] ring-4 ring-[#b5654f]/15" />
-        <span className="h-px flex-1 bg-[#b5654f]/50" />
-        <span className="text-xs font-semibold uppercase tracking-wider text-[#b5654f]">Now</span>
+        <span className="relative z-10 h-3 w-3 shrink-0 rounded-full bg-clay ring-4 ring-clay/15" />
+        <span className="h-px flex-1 bg-clay/50" />
+        <span className="text-xs font-semibold uppercase tracking-wider text-clay-deep">Now</span>
       </li>
     );
   }

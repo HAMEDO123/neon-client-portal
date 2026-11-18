@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { PLANNING_NOTES_KEY, WORK_HOURS_KEYS, setSetting } from "@/lib/settings";
 import { parseWorkHours } from "@/lib/work-hours";
 import { clearShopSession } from "@/lib/office-shop-account";
+import { COLOURWAY_SETTING, isColourwayId } from "@/lib/colourway";
+import { answering, Refusal, type Answer } from "@/lib/refusal";
 
 // The studio's own rules, kept beside the timezone in the settings table.
 // Admin only: these are public POST endpoints, and the layout's redirect is a
@@ -93,4 +95,22 @@ export async function clearOfficeShopAccount() {
   await requireAdmin();
   await clearShopSession();
   revalidatePath("/admin/settings");
+}
+
+/**
+ * The colourway every surface wears (lib/colourway.ts), chosen in Settings.
+ *
+ * Answers with a sentence rather than throwing one, like every action a screen
+ * calls directly. Revalidating the root layout is what repaints the manager's
+ * own tab with the click; every other open page follows within a couple of
+ * seconds, because the live signature watches this row (lib/realtime.ts).
+ */
+export async function saveColourway(id: string): Promise<Answer> {
+  return answering(async () => {
+    await requireAdmin();
+    if (!isColourwayId(id)) throw new Refusal("That is not one of the colourways.");
+
+    await setSetting(COLOURWAY_SETTING, id);
+    revalidatePath("/", "layout");
+  });
 }

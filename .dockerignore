@@ -32,3 +32,6 @@ deploy/go2rtc/go2rtc.yaml
 
 # Written by the build itself; a copy from this folder would be a stale id.
 .deploy-id
+
+# The preview instance's throwaway sign-ins (scripts/preview-instance.mjs).
+.preview

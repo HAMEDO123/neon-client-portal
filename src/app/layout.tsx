@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import type { ReactNode } from "react";
+import { cache, type ReactNode } from "react";
+import { getColourway } from "@/lib/settings";
+import { COLOURWAYS } from "@/lib/colourway";
 import { Fraunces, Inter, Noto_Kufi_Arabic } from "next/font/google";
 import "./globals.css";
 
@@ -38,16 +40,38 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  themeColor: "#f6f2ec",
-  colorScheme: "light",
-  width: "device-width",
-  initialScale: 1,
-};
+// The colourway the manager chose (lib/colourway.ts), read on every request and
+// written as `data-theme` on <html>, where globals.css keys the colours.
+//
+// Load-bearing: without this line `/`, `/admin/login` and the 404 are
+// prerendered at build — where there is no database — and would wear the
+// default colourway after every deploy, whatever was chosen. `next dev` never
+// prerenders, so nothing there would show it; a test pins the line instead.
+// Every other document already renders per request.
+export const dynamic = "force-dynamic";
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+// One read per request, shared by the viewport and the layout.
+const colourway = cache(getColourway);
+
+// The phone's status bar in the colourway's own page colour: <meta
+// name="theme-color"> takes a literal, so it comes from lib/colourway.ts, which
+// a test keeps equal to the stylesheet.
+export async function generateViewport(): Promise<Viewport> {
+  return {
+    themeColor: COLOURWAYS[await colourway()].page,
+    colorScheme: "light",
+    width: "device-width",
+    initialScale: 1,
+  };
+}
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${displayFont.variable} ${sansFont.variable} ${arabicFont.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      data-theme={await colourway()}
+      className={`${displayFont.variable} ${sansFont.variable} ${arabicFont.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col bg-background">{children}</body>
     </html>
   );
