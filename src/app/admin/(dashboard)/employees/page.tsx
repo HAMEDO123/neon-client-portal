@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { ArrowRight, UserPlus, Users } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { PersonAvatar } from "@/components/chat/person-avatar";
 import { createEmployeeAccount } from "@/lib/actions/admin-employee-actions";
@@ -38,10 +38,7 @@ export default async function AdminEmployeesPage() {
         </div>
       </div>
 
-      <form
-        action={createEmployeeAccount}
-        className="glass mt-6 grid grid-cols-1 gap-3 rounded-2xl p-6 sm:grid-cols-3"
-      >
+      <form action={createEmployeeAccount} className="glass mt-6 grid grid-cols-1 gap-3 rounded-2xl p-6 sm:grid-cols-3">
         <div className="sm:col-span-3">
           <h2 className="inline-flex items-center gap-2 text-sm font-medium text-ink">
             <UserPlus size={15} strokeWidth={2} />
@@ -51,7 +48,13 @@ export default async function AdminEmployeesPage() {
 
         <TextInput label="Full name" name="name" placeholder="Ahmed Nasser" defaultValue="" />
         <TextInput label="Email" name="email" type="email" placeholder="ahmed@company.com" defaultValue="" />
-        <TextInput label="Password" name="password" type="password" placeholder="At least 8 characters" defaultValue="" />
+        <TextInput
+          label="Password"
+          name="password"
+          type="password"
+          placeholder="At least 8 characters"
+          defaultValue=""
+        />
         <TextInput label="Job title" name="role" placeholder="3D Visualizer" defaultValue="" required={false} />
         <TextInput label="Phone" name="phone" placeholder="+962 7 0000 0000" defaultValue="" required={false} />
         <TextInput label="Employee ID" name="employeeCode" placeholder="NEON-014" defaultValue="" required={false} />
@@ -72,20 +75,17 @@ export default async function AdminEmployeesPage() {
         />
       ) : (
         <>
-          {/* On a phone, a card per person that opens them: the table needs six columns. */}
-          <ul className="mt-4 flex flex-col gap-2 sm:hidden">
+          {/* A card per person that opens them, on every screen (the new UI,
+              2026-11-18) — the six-column table it replaced on a desk said the
+              same things less readably. */}
+          <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {employees.map((employee) => (
               <li key={employee.id}>
                 <Link
                   href={`/admin/employees/${employee.id}`}
                   className="glass flex items-center gap-3 rounded-2xl p-4"
                 >
-                  <PersonAvatar
-                    name={employee.name}
-                    photo={employee.photoUrl}
-                    color={employee.color}
-                    size={40}
-                  />
+                  <PersonAvatar name={employee.name} photo={employee.photoUrl} color={employee.color} size={40} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-ink">{employee.name}</p>
@@ -108,73 +108,6 @@ export default async function AdminEmployeesPage() {
               </li>
             ))}
           </ul>
-
-          <div className="mt-4 hidden overflow-x-auto rounded-2xl border border-ink/8 sm:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-ink/[0.03] text-xs uppercase tracking-wider text-ink/40">
-                <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Account</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Work</th>
-                  <th className="px-4 py-3">Last sign-in</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((employee) => (
-                  <tr key={employee.id} className="border-t border-ink/6">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <PersonAvatar
-                          name={employee.name}
-                          photo={employee.photoUrl}
-                          color={employee.color}
-                          size={30}
-                        />
-                        <div className="min-w-0">
-                          <p className="font-medium text-ink">{employee.name}</p>
-                          {employee.role && <p className="text-xs text-ink/45">{employee.role}</p>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-ink/60">
-                      {employee.email ?? <span className="text-ink/30">Board only — no login</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <AccountBadge email={employee.email} active={employee.active} />
-                        <WarningsBadge count={employee._count.warnings} />
-                        <SalesBadge sold={sold.get(employee.id) ?? 0} target={employee.monthlySalesTarget} />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink/50">
-                      {employee._count.tasks} step{employee._count.tasks === 1 ? "" : "s"}
-                      {employee._count.subscriptions > 0 && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-ink/40">
-                          <ShieldCheck size={11} strokeWidth={2} />
-                          {employee._count.subscriptions} device
-                          {employee._count.subscriptions === 1 ? "" : "s"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink/50">
-                      {employee.lastLoginAt ? formatDate(employee.lastLoginAt) : "Never"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/admin/employees/${employee.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-ink/50 hover:text-ink"
-                      >
-                        Manage
-                        <ArrowRight size={13} strokeWidth={2} />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </>
       )}
     </div>

@@ -34,7 +34,9 @@ export default async function ReviewsPage() {
           description="When someone finishes a task and sends a photo of it, it appears here."
         />
       ) : (
-        <ul className="mt-6 flex flex-col gap-4">
+        // Two to a row on a wide screen (the new UI, 2026-11-18): the queue is
+        // often dozens long, and one card per row made it a long scroll.
+        <ul className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
           {submissions.map((submission) => {
             // A board cell names its step and project; a hand-assigned job
             // has only its own title.
@@ -42,55 +44,55 @@ export default async function ReviewsPage() {
             const context = submission.entry?.project.name ?? "Handed out by you";
 
             return (
-            <ReviewItem key={submission.id} className="glass rounded-2xl p-4">
-              <div className="flex flex-col gap-4 sm:flex-row">
-                <a
-                  href={submission.imageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block shrink-0 overflow-hidden rounded-xl border border-ink/10 sm:w-56"
-                >
-                  <AttachmentPreview
-                    url={submission.imageUrl}
-                    alt={`Proof for ${name}`}
-                    className="h-44 w-full object-cover sm:h-40"
-                  />
-                </a>
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-ink/40">{context}</p>
-                  <h2 dir="auto" className="mt-0.5 text-base font-semibold text-ink">
-                    {name}
-                  </h2>
-                  <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-ink/55">
-                    <PersonAvatar
-                      name={submission.employee.name}
-                      photo={submission.employee.photoUrl}
-                      color={submission.employee.color}
-                      size={20}
+              <ReviewItem key={submission.id} className="glass rounded-2xl p-4">
+                <div className="flex flex-col gap-4 sm:flex-row xl:flex-col 2xl:flex-row">
+                  <a
+                    href={submission.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block shrink-0 overflow-hidden rounded-xl border border-ink/10 sm:w-56 xl:w-full 2xl:w-56"
+                  >
+                    <AttachmentPreview
+                      url={submission.imageUrl}
+                      alt={`Proof for ${name}`}
+                      className="h-44 w-full object-cover sm:h-40"
                     />
-                    {submission.employee.name} · {formatDayIn(timezone, submission.createdAt)}{" "}
-                    {formatTimeIn(timezone, submission.createdAt)}
-                  </p>
+                  </a>
 
-                  {submission.note && (
-                    <p dir="auto" className="mt-2 rounded-lg bg-ink/[0.04] px-3 py-2 text-sm text-ink/70">
-                      {submission.note}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-ink/40">{context}</p>
+                    <h2 dir="auto" className="mt-0.5 text-base font-semibold text-ink">
+                      {name}
+                    </h2>
+                    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-ink/55">
+                      <PersonAvatar
+                        name={submission.employee.name}
+                        photo={submission.employee.photoUrl}
+                        color={submission.employee.color}
+                        size={20}
+                      />
+                      {submission.employee.name} · {formatDayIn(timezone, submission.createdAt)}{" "}
+                      {formatTimeIn(timezone, submission.createdAt)}
                     </p>
-                  )}
 
-                  <SubmissionChecks
-                    checks={submission.checks}
-                    outcome={submission.outcome}
-                    checkedAt={submission.checkedAt}
-                  />
+                    {submission.note && (
+                      <p dir="auto" className="mt-2 rounded-lg bg-ink/[0.04] px-3 py-2 text-sm text-ink/70">
+                        {submission.note}
+                      </p>
+                    )}
 
-                  <div className="mt-3">
-                    <ReviewActions submissionId={submission.id} />
+                    <SubmissionChecks
+                      checks={submission.checks}
+                      outcome={submission.outcome}
+                      checkedAt={submission.checkedAt}
+                    />
+
+                    <div className="mt-3">
+                      <ReviewActions submissionId={submission.id} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </ReviewItem>
+              </ReviewItem>
             );
           })}
         </ul>

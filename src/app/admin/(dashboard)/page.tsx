@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FolderKanban, CheckCircle2, Clock, TrendingUp, ArrowRight } from "lucide-react";
+import { FolderKanban, CheckCircle2, Clock, TrendingUp } from "lucide-react";
 import { getDashboardStats, getProjects } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -86,39 +86,37 @@ export default async function AdminDashboardPage() {
           description="Create your first client project to start building its delivery portal."
         />
       ) : (
-        <div className="mt-4 flex flex-col gap-3">
+        // Cover cards (the new UI, "everything by project", 2026-11-18): the
+        // studio knows its projects by their renders long before their names.
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {projects.map((p) => (
             <Link
               key={p.id}
               href={`/admin/projects/${p.id}`}
-              className="glass group flex items-center gap-3 rounded-2xl p-3 transition-transform hover:-translate-y-0.5 sm:gap-4 sm:p-4"
+              className="glass group flex flex-col overflow-hidden rounded-2xl transition-shadow hover:shadow-lg"
             >
               <div
-                className="h-14 w-16 shrink-0 rounded-xl bg-cover bg-center bg-ink/5 sm:h-16 sm:w-24"
+                className="aspect-[16/10] w-full bg-clay-soft bg-cover bg-center"
                 style={p.coverImageUrl ? { backgroundImage: `url(${p.coverImageUrl})` } : undefined}
               />
-              <div className="min-w-0 flex-1">
-                {/* Name and state side by side where there is room; on a
-                    phone the state goes under the name, so the name keeps
-                    the width. */}
-                <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-                  <p className="max-w-full truncate font-medium text-ink">{p.name}</p>
-                  <div className="flex flex-wrap gap-1.5 sm:shrink-0">
-                    <Badge tone={publishTone(p.publishState)}>{p.publishState}</Badge>
-                    <Badge tone="neutral">{PIPELINE_LABEL.get(p.pipelineStatus) ?? p.pipelineStatus}</Badge>
-                  </div>
+              <div className="flex flex-1 flex-col gap-1.5 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <p dir="auto" className="min-w-0 truncate text-base font-semibold text-ink">
+                    {p.name}
+                  </p>
+                  <Badge tone={publishTone(p.publishState)}>{p.publishState}</Badge>
                 </div>
-                <p className="mt-1 truncate text-sm text-ink/50">
+                <p dir="auto" className="truncate text-sm text-ink/55">
                   {p.clientName} {p.location ? `· ${p.location}` : ""}
                 </p>
-                <p className="mt-0.5 text-xs text-ink/40 sm:hidden">Updated {formatDate(p.updatedAt)}</p>
+                <div className="mt-auto flex items-center justify-between gap-2 pt-2 text-xs text-ink/45">
+                  <Badge tone="neutral">{PIPELINE_LABEL.get(p.pipelineStatus) ?? p.pipelineStatus}</Badge>
+                  <span>
+                    {p._count.approvals} approvals · {p._count.comments} comments
+                  </span>
+                </div>
+                <p className="text-[11px] text-ink/40">Updated {formatDate(p.updatedAt)}</p>
               </div>
-              <div className="hidden shrink-0 text-right text-xs text-ink/40 sm:block">
-                <p>{p._count.approvals} approvals</p>
-                <p className="mt-0.5">{p._count.comments} comments</p>
-              </div>
-              <div className="hidden shrink-0 text-xs text-ink/40 sm:block">Updated {formatDate(p.updatedAt)}</div>
-              <ArrowRight size={16} className="shrink-0 text-ink/25 transition-transform group-hover:translate-x-1" />
             </Link>
           ))}
         </div>
