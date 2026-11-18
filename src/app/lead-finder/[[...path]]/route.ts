@@ -20,7 +20,8 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path?: s
   // opened without the session goes to the sign-in; anything else is 404.
   if (!(await hasAdminSession())) {
     if (request.method === "GET" && (request.headers.get("accept") ?? "").includes("text/html")) {
-      return NextResponse.redirect(new URL("/admin/login", request.url));
+      // A relative address: inside the container request.url is localhost:3000.
+      return new NextResponse(null, { status: 307, headers: { location: "/admin/login" } });
     }
     return new NextResponse("Not found", { status: 404 });
   }
