@@ -667,3 +667,31 @@ body:has(.admin-shell) {
   font-size: clamp(1.6rem, 1.1rem + 1.6vw, 2.5rem);
   line-height: 1.15;
 }
+
+/* The NEON mark, loading (components/ui/neon-loader.tsx). */
+@keyframes neon-loader-letter {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+  60% { opacity: 1; transform: translateY(0); }
+}
+@keyframes neon-loader-line {
+  0% { transform: scaleX(0); transform-origin: left; }
+  50% { transform: scaleX(1); transform-origin: left; }
+  51% { transform-origin: right; }
+  100% { transform: scaleX(0); transform-origin: right; }
+}
+.neon-loader-letter {
+  display: inline-block;
+  animation: neon-loader-letter 1.4s ease-in-out infinite;
+}
+.neon-loader-line {
+  animation: neon-loader-line 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .neon-loader-letter,
+  .neon-loader-line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
