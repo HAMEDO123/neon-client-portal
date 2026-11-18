@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Building2, ChevronRight, Plus } from "lucide-react";
+import { Building2, Plus } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireEmployee } from "@/lib/employee-session";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -33,7 +33,7 @@ export default async function EmployeeProjectsPage() {
     <div className="wide-page flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-ink">Projects</h1>
+          <h1 className="text-ink">Projects</h1>
           <p className="mt-1 text-sm text-ink/50">
             Add drawings, documents and photos. Anything you add goes onto the client&apos;s page straight away.
           </p>
@@ -50,37 +50,50 @@ export default async function EmployeeProjectsPage() {
       {projects.length === 0 ? (
         <EmptyState icon={Building2} title="No projects yet" description="Start one with New, or wait for the manager to add one." />
       ) : (
-        <ul className="flex flex-col gap-2">
+        // Cover cards, the project's own render on top (the Studio look,
+        // 2026-11-18): a studio's projects are recognised by their pictures
+        // long before their names. One column on a phone, three on a desk.
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <li key={project.id}>
               <Link
                 href={`/employee/projects/${project.id}`}
-                className="glass flex items-center gap-3 rounded-2xl p-3 active:bg-white/60"
+                className="glass flex h-full flex-col overflow-hidden rounded-2xl transition-shadow hover:shadow-lg"
               >
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-ink/8 bg-ink/5">
+                <div className="relative aspect-[16/10] w-full bg-clay-soft">
                   {project.coverImageUrl ? (
                     <Image src={project.coverImageUrl} alt="" fill className="object-cover" unoptimized />
                   ) : (
-                    <span className="flex h-full items-center justify-center text-ink/25">
-                      <Building2 size={18} strokeWidth={1.75} />
+                    <span className="flex h-full items-center justify-center text-clay">
+                      <Building2 size={28} strokeWidth={1.5} />
                     </span>
                   )}
                 </div>
 
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink">{project.name}</p>
-                  <p className="truncate text-xs text-ink/45">
+                <div className="flex flex-1 flex-col gap-1 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate text-base font-semibold text-ink" dir="auto">
+                      {project.name}
+                    </p>
+                    <span
+                      className={
+                        project.publishState === "DRAFT"
+                          ? "shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+                          : "shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900"
+                      }
+                    >
+                      {project.publishState === "DRAFT" ? "Draft" : "Live"}
+                    </span>
+                  </div>
+                  <p className="truncate text-sm text-ink/55" dir="auto">
                     {project.clientName}
                     {project.location ? ` · ${project.location}` : ""}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-ink/35">
+                  <p className="mt-auto pt-2 text-xs text-ink/45">
                     {project._count.drawings} drawings · {project._count.documents} documents ·{" "}
-                    {project._count.spaces} {project._count.spaces === 1 ? "space" : "spaces"}
-                    {project.publishState === "DRAFT" ? " · not published yet" : ""}
+                    {project._count.spaces} {project._count.spaces === 1 ? "room" : "rooms"}
                   </p>
                 </div>
-
-                <ChevronRight size={16} strokeWidth={2} className="shrink-0 text-ink/25" />
               </Link>
             </li>
           ))}

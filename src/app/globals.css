@@ -286,6 +286,82 @@ body:has(.employee-signin) {
   border: 1px solid rgba(100, 116, 139, 0.24);
 }
 
+/* ---------------------------------------------------------------------------
+   The Studio look (chosen 2026-11-18 from four directions: warm paper, serif
+   headings, solid white cards, a light side menu). Scoped to the team's portal
+   like the palette above, so the client's pages and the admin are untouched.
+
+   The type: Fraunces for headings, Inter for reading, Noto Kufi Arabic for
+   Arabic. Redefining the two font tokens on the frame is what reaches every
+   `font-display` / `font-sans` and every heading inside it at once.
+   ------------------------------------------------------------------------- */
+.employee-shell,
+.employee-signin {
+  --font-display: var(--font-studio-serif), Georgia, serif;
+  --font-sans: var(--font-studio-sans), var(--font-studio-arabic), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
+
+  /* The side menu goes light: paper, ink, the clay pill where you are. Its
+     component reads these tokens, so the admin's dark rail keeps its own. */
+  --rail: #efe9e0;
+  --rail-soft: #ffffff;
+  --rail-line: rgba(44, 39, 34, 0.09);
+  --rail-ink: #2c2722;
+  --rail-dim: #6b6259;
+}
+
+/* Page titles and section headings in the serif, regular weight — the serif is
+   what carries the look, and a bold serif at this size shouts. Smaller headings
+   stay in Inter, where a serif at 14px reads as a mistake; so do the small
+   uppercase labels that use h2 for structure. */
+.employee-shell h1,
+.employee-shell h2,
+.employee-signin h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.employee-shell h2.uppercase,
+.employee-shell h3,
+.employee-shell h4 {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+/* The page's own title, wherever a page writes it: larger than the old
+   text-xl, because in this look the title is the one big thing on the page. */
+.employee-main h1 {
+  font-size: 1.85rem;
+  line-height: 1.15;
+}
+@media (min-width: 1024px) {
+  .employee-main h1 {
+    font-size: 2.4rem;
+  }
+}
+
+/* Cards are solid white on paper with a hairline and a breath of shadow — no
+   frosted glass. Same specificity as the portal's .glass above and later, so
+   it wins; the priority washes (.task-high, .task-low) are more specific and
+   still win over it. */
+.employee-shell .glass,
+.employee-signin .glass,
+.employee-signin .glass-strong {
+  background: #ffffff;
+  border: 1px solid var(--warm-line);
+  box-shadow: 0 1px 2px rgba(44, 39, 34, 0.05), 0 8px 24px -18px rgba(44, 39, 34, 0.25);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.employee-shell ::selection {
+  background: var(--clay);
+  color: #fff;
+}
+.employee-shell ::-webkit-scrollbar-thumb {
+  background: rgba(44, 39, 34, 0.18);
+}
+
 /* The mark, in the studio's own colours instead of the cyan-purple-pink
    gradient the rest of the platform wears. */
 .wordmark-warm {

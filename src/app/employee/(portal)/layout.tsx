@@ -1,3 +1,4 @@
+import type { Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -12,6 +13,9 @@ import { appVersion } from "@/lib/app-version";
 import { SoundCues } from "@/components/sound-cues";
 import { DeviceGuard } from "@/components/employee/device-guard";
 import { CallProvider } from "@/components/calls/call-provider";
+
+// The phone's status bar in the portal's paper rather than the old lavender.
+export const viewport: Viewport = { themeColor: "#f6f2ec" };
 
 // Server-side gate for the whole portal. Anything under this layout has an
 // authenticated, enabled employee behind it — and every action it can reach

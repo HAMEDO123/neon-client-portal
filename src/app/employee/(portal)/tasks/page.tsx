@@ -184,7 +184,9 @@ export default async function EmployeeTasksPage({
           description={EMPTY[active].description}
         />
       ) : (
-        <div className="flex flex-col gap-3">
+        // Two to a row on a desk (the Studio look): one long column of cards
+        // left half the screen empty and the list twice as long as it is.
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {items.map((item) => (
             <AssignedTaskCard key={item.task.id} task={item.task} timezone={timezone} />
           ))}
