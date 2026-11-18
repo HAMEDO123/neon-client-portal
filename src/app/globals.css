@@ -151,8 +151,10 @@ h3, h4, h2.uppercase {
 }
 
 .text-gradient-neon {
-  /* Warm now: bark into clay and back, the studio's own colours. */
-  background: linear-gradient(100deg, var(--bark) 0%, var(--clay-deep) 35%, var(--clay) 65%, var(--bark) 100%);
+  /* Warm now: deep clay through clay to a pale gold and back — mid-tones on
+     purpose, because it is read on the paper (pricing, sign-in) and on the dark
+     welcome and presentation screens alike, and bark vanished on the dark. */
+  background: linear-gradient(100deg, var(--clay-deep) 0%, var(--clay) 35%, #c9a77f 65%, var(--clay-deep) 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;

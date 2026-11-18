@@ -4,7 +4,6 @@ import { Lock } from "lucide-react";
 export default function GatewayPage() {
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6">
-      <div className="grid-overlay pointer-events-none absolute inset-0 opacity-60" />
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-cyan/20 via-purple/10 to-pink/10 blur-3xl" />
 
       <div className="glass-strong relative z-10 flex w-full max-w-md flex-col items-center rounded-3xl px-10 py-14 text-center">
