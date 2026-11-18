@@ -25,6 +25,7 @@ export function EmployeeRail({
   unread = 0,
   unreadChat = 0,
   canReadWhatsApp = false,
+  canUseLeadFinder = false,
 }: {
   name: string;
   role: string | null;
@@ -33,9 +34,11 @@ export function EmployeeRail({
   unreadChat?: number;
   /** Whether this person may read the company WhatsApp. */
   canReadWhatsApp?: boolean;
+  /** Whether this person may open Lead Finder (desk only: a phone has no room for an eighth tab). */
+  canUseLeadFinder?: boolean;
 }) {
   const pathname = usePathname();
-  const destinations = employeeDestinations(canReadWhatsApp);
+  const destinations = employeeDestinations(canReadWhatsApp, canUseLeadFinder);
 
   return (
     <nav className="flex min-h-full flex-col gap-0.5 p-4">
@@ -45,9 +48,7 @@ export function EmployeeRail({
       </Link>
 
       {destinations.map((destination) => {
-        const active = destination.exact
-          ? pathname === destination.href
-          : pathname.startsWith(destination.href);
+        const active = destination.exact ? pathname === destination.href : pathname.startsWith(destination.href);
 
         return (
           <Item

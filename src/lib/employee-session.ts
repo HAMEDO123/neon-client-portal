@@ -23,6 +23,8 @@ export type SessionEmployee = {
   canAssignTasks: boolean;
   /** Whether this person keeps the site-visit diary — see requireSiteVisitor. */
   canLogSiteVisits: boolean;
+  /** Whether this person may open Lead Finder — see the /lead-finder route. */
+  canUseLeadFinder: boolean;
 };
 
 export async function getSessionEmployee(): Promise<SessionEmployee | null> {
@@ -46,6 +48,7 @@ export async function getSessionEmployee(): Promise<SessionEmployee | null> {
       canReadWhatsApp: true,
       canAssignTasks: true,
       canLogSiteVisits: true,
+      canUseLeadFinder: true,
     },
   });
 

@@ -54,10 +54,23 @@ describe("Lead Finder through the platform", () => {
     assert.equal(withBase(withBase("<head></head>")), '<head><base href="/lead-finder/"></head>');
   });
 
-  it("is the manager's alone", () => {
+  it("is the manager's, and whoever on the team the manager ticked", () => {
     const route = read("src", "app", "lead-finder", "[[...path]]", "route.ts");
-    assert.match(route, /if \(!\(await hasAdminSession\(\)\)\)/);
+    assert.match(
+      route,
+      /if \(!\(await hasAdminSession\(\)\) && !\(await getSessionEmployee\(\)\)\?\.canUseLeadFinder\)/
+    );
     const page = read("src", "app", "admin", "(dashboard)", "leads", "page.tsx");
     assert.match(page, /await requireAdminRead\(\)/);
+    const team = read("src", "app", "employee", "(portal)", "leads", "page.tsx");
+    assert.match(team, /if \(!employee\.canUseLeadFinder\) notFound\(\)/);
+  });
+
+  it("is not taken away by a form that never showed the tick", () => {
+    const action = read("src", "lib", "actions", "admin-employee-actions.ts");
+    assert.match(
+      action,
+      /formData\.has\("leadFinderField"\) \? formData\.get\("canUseLeadFinder"\) !== null : undefined/
+    );
   });
 });

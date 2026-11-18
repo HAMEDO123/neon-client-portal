@@ -162,6 +162,16 @@ export default async function AdminEmployeeDetailPage({ params }: { params: Prom
           description="Adds a Site visits view to their Tasks tab: they schedule a visit, then say afterwards whether they went and what came of it. You see all of it."
         />
 
+        {/* Says this form has the box, so an unticked one means "take it away". */}
+        <input type="hidden" name="leadFinderField" value="present" />
+        <Checkbox
+          className="sm:col-span-2"
+          label="Can use Lead Finder"
+          name="canUseLeadFinder"
+          defaultChecked={employee.canUseLeadFinder}
+          description="Adds Lead Finder to their menu: the campaigns, the leads and the messages to them — the same app you open from yours."
+        />
+
         {/* In your own words, because this is what a proposed day is built
             from: the trade, what they are normally given, what they never
             are, and how much fits in a day. */}

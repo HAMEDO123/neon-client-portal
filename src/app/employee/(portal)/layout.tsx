@@ -43,6 +43,7 @@ export default async function EmployeePortalLayout({ children }: { children: Rea
           unread={unread}
           unreadChat={unreadChat}
           canReadWhatsApp={employee.canReadWhatsApp}
+          canUseLeadFinder={employee.canUseLeadFinder}
         />
       </aside>
 

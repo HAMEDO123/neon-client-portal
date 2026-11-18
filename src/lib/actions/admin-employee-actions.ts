@@ -30,15 +30,26 @@ const MIN_PASSWORD_LENGTH = 8;
 
 function readAccountFields(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
-  const emailRaw = String(formData.get("email") ?? "").trim().toLowerCase();
+  const emailRaw = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
   const role = String(formData.get("role") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const employeeCode = String(formData.get("employeeCode") ?? "").trim();
   const targetRaw = String(formData.get("monthlySalesTarget") ?? "").trim();
   // How this person is usually worked, for whoever plans their day.
-  const playbook = String(formData.get("playbook") ?? "").trim().slice(0, 4000) || null;
-  const skills = String(formData.get("skills") ?? "").trim().slice(0, 2000) || null;
-  const examples = String(formData.get("examples") ?? "").trim().slice(0, 2000) || null;
+  const playbook =
+    String(formData.get("playbook") ?? "")
+      .trim()
+      .slice(0, 4000) || null;
+  const skills =
+    String(formData.get("skills") ?? "")
+      .trim()
+      .slice(0, 2000) || null;
+  const examples =
+    String(formData.get("examples") ?? "")
+      .trim()
+      .slice(0, 2000) || null;
   const reviewerId = String(formData.get("reviewerId") ?? "") || null;
   const capacityRaw = String(formData.get("dailyCapacityMinutes") ?? "").trim();
   // A checkbox: present means ticked, absent means cleared. Read from the same
@@ -47,6 +58,9 @@ function readAccountFields(formData: FormData) {
   const canReadWhatsApp = formData.get("canReadWhatsApp") !== null;
   const canAssignTasks = formData.get("canAssignTasks") !== null;
   const canLogSiteVisits = formData.get("canLogSiteVisits") !== null;
+  // Only read where the form carries the box: the phone app's employee form
+  // predates it, and an absent box must not take the permission away.
+  const canUseLeadFinder = formData.has("leadFinderField") ? formData.get("canUseLeadFinder") !== null : undefined;
 
   if (!name) throw new Error("Full name is required.");
   if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
@@ -77,6 +91,7 @@ function readAccountFields(formData: FormData) {
     canReadWhatsApp,
     canAssignTasks,
     canLogSiteVisits,
+    ...(canUseLeadFinder === undefined ? {} : { canUseLeadFinder }),
     playbook,
     skills,
     examples,
@@ -99,9 +114,7 @@ export async function createEmployeeAccount(formData: FormData) {
 
   if (fields.email && !password) throw new Error("Set a password for the account.");
 
-  const existing = fields.email
-    ? await prisma.employee.findUnique({ where: { email: fields.email } })
-    : null;
+  const existing = fields.email ? await prisma.employee.findUnique({ where: { email: fields.email } }) : null;
   if (existing) throw new Error("An employee with that email already exists.");
 
   const count = await prisma.employee.count();

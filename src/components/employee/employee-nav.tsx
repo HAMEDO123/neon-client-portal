@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Home, ListChecks, MessageCircle, MessagesSquare, ShoppingBag, User } from "lucide-react";
+import { Building2, Home, ListChecks, MessageCircle, MessagesSquare, Radar, ShoppingBag, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Six destinations. This said five for a long time, and the sixth was added
@@ -42,8 +42,20 @@ export const WHATSAPP_DESTINATION = {
   exact: false,
 };
 
-export function employeeDestinations(canReadWhatsApp: boolean) {
-  return canReadWhatsApp ? [...EMPLOYEE_DESTINATIONS, WHATSAPP_DESTINATION] : EMPLOYEE_DESTINATIONS;
+/** Lead Finder, for whoever the manager ticked (`canUseLeadFinder`). */
+export const LEAD_FINDER_DESTINATION = {
+  href: "/employee/leads",
+  label: "Leads",
+  icon: Radar,
+  exact: false,
+};
+
+export function employeeDestinations(canReadWhatsApp: boolean, canUseLeadFinder = false) {
+  return [
+    ...EMPLOYEE_DESTINATIONS,
+    ...(canReadWhatsApp ? [WHATSAPP_DESTINATION] : []),
+    ...(canUseLeadFinder ? [LEAD_FINDER_DESTINATION] : []),
+  ];
 }
 
 export function EmployeeNav({

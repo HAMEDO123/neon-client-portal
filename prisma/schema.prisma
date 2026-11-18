@@ -568,6 +568,10 @@ model Employee {
   // visit, saying afterwards whether they went, and writing up what came of
   // it. Off by default and granted one person at a time, like the two above.
   canLogSiteVisits Boolean   @default(false)
+  // Whether this person may open Lead Finder, the studio's client finder,
+  // from their own portal (lib/lead-finder-proxy.ts). Off by default and
+  // granted one person at a time, like the ticks above.
+  canUseLeadFinder Boolean   @default(false)
   lastLoginAt      DateTime?
 
   // Payroll. The amount is per pay period: a month for monthly staff, a week

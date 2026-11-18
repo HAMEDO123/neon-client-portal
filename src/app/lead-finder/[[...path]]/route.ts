@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { hasAdminSession } from "@/lib/session-token";
+import { getSessionEmployee } from "@/lib/employee-session";
 import {
   forwardedRequestHeaders,
   forwardedResponseHeaders,
@@ -16,12 +17,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
-  // A route handler is a public URL: it checks for the manager itself. A page
-  // opened without the session goes to the sign-in; anything else is 404.
-  if (!(await hasAdminSession())) {
+  // A route handler is a public URL: it checks for itself. The manager, or
+  // somebody on the team the manager has ticked (`canUseLeadFinder`). A page
+  // opened by anybody else goes to a sign-in; anything else is 404.
+  if (!(await hasAdminSession()) && !(await getSessionEmployee())?.canUseLeadFinder) {
     if (request.method === "GET" && (request.headers.get("accept") ?? "").includes("text/html")) {
       // A relative address: inside the container request.url is localhost:3000.
-      return new NextResponse(null, { status: 307, headers: { location: "/admin/login" } });
+      return new NextResponse(null, { status: 307, headers: { location: "/employee/login" } });
     }
     return new NextResponse("Not found", { status: 404 });
   }
