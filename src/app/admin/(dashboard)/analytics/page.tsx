@@ -15,6 +15,7 @@ import { TodaySummary } from "@/components/employee/today-summary";
 import { ApplyDeductions } from "@/components/admin/apply-deductions";
 import { dotTone } from "@/lib/task-board";
 import { cn } from "@/lib/utils";
+import { SectionBar } from "@/components/admin/section-bar";
 
 // How each person's day and month are going.
 //
@@ -73,11 +74,23 @@ export default async function AnalyticsPage({
       <h1 className="text-2xl font-semibold text-ink">Analytics</h1>
       <p className="mt-1 text-sm text-ink/50">How each person&apos;s day and month are going.</p>
 
+      {/* The new UI (2026-11-18): the two halves of the page in a bar that
+          stays at the top, and wider rows of people. */}
+      <div className="mt-6">
+        <SectionBar
+          label="Analytics"
+          items={[
+            { id: "day", label: "The day" },
+            { id: "month", label: "The month" },
+          ]}
+        />
+      </div>
+
       {/* --- The day ---------------------------------------------------------- */}
-      <section className="mt-8" aria-labelledby="daily-heading">
+      <section id="day" className="mt-8 scroll-mt-20" aria-labelledby="daily-heading">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h2 id="daily-heading" className="text-sm font-medium uppercase tracking-wider text-ink/40">
+            <h2 id="daily-heading" className="text-2xl text-ink">
               Daily progress
             </h2>
             <p className="mt-1 text-lg font-semibold text-ink">{dayHeading(day, today)}</p>
@@ -97,8 +110,8 @@ export default async function AnalyticsPage({
           </nav>
         </div>
         <p className="mt-1 text-xs text-ink/45">
-          Each person&apos;s list for the day — board steps scheduled on it and jobs from the week table — counted
-          the way their own phone shows it.
+          Each person&apos;s list for the day — board steps scheduled on it and jobs from the week table — counted the
+          way their own phone shows it.
         </p>
 
         {daily.length === 0 ? (
@@ -120,7 +133,7 @@ export default async function AnalyticsPage({
               )}
             </div>
 
-            <ul className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <ul className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {daily.map((person) => (
                 <DayCard
                   key={person.employee.id}
@@ -136,10 +149,10 @@ export default async function AnalyticsPage({
       </section>
 
       {/* --- The month -------------------------------------------------------- */}
-      <section className="mt-12" aria-labelledby="monthly-heading">
+      <section id="month" className="mt-14 scroll-mt-20" aria-labelledby="monthly-heading">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h2 id="monthly-heading" className="text-sm font-medium uppercase tracking-wider text-ink/40">
+            <h2 id="monthly-heading" className="text-2xl text-ink">
               Monthly progress
             </h2>
             <p className="mt-1 text-lg font-semibold text-ink">{periodLabel(period)}</p>
@@ -158,10 +171,7 @@ export default async function AnalyticsPage({
           <Stat label="Team" value={String(rows.length)} />
           <Stat label="Average progress" value={`${asPercent(average)}%`} />
           <Stat label={`Below ${target}%`} value={String(below.length)} />
-          <Stat
-            label="Deductions applied"
-            value={`${rows.filter((row) => row.deduction).length} of ${below.length}`}
-          />
+          <Stat label="Deductions applied" value={`${rows.filter((row) => row.deduction).length} of ${below.length}`} />
         </div>
 
         {owing.length > 0 && (

@@ -16,6 +16,7 @@ import { countedHours } from "@/lib/attendance";
 import type { WorkHours } from "@/lib/work-hours";
 import { DeviceUsers } from "@/components/admin/device-users";
 import { SaveButton } from "@/components/admin/form-buttons";
+import { SectionBar } from "@/components/admin/section-bar";
 import { appPunchesBetween } from "@/lib/app-clock-store";
 import { mapLink } from "@/lib/app-clock";
 import { officeLocation } from "@/lib/mobile/location-service";
@@ -32,11 +33,7 @@ import { metresBetween } from "@/lib/staff-location";
 
 export const dynamic = "force-dynamic";
 
-export default async function AttendanceDevicePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ month?: string }>;
-}) {
+export default async function AttendanceDevicePage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const { month: askedMonth } = await searchParams;
   // Where it is now — the router can move it, and the platform follows.
   const at = await currentDeviceAddress();
@@ -131,110 +128,137 @@ export default async function AttendanceDevicePage({
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-semibold text-bark">Attendance device</h1>
+      <h1 className="font-display text-2xl font-semibold text-bark">Attendance</h1>
       <p className="mt-1 text-sm text-bark/50">
-        The fingerprint machine on the wall. It records arrivals; payroll turns them into hours late. A figure you
-        type on the payroll screen is never overwritten by it.
+        The fingerprint machine on the wall. It records arrivals; payroll turns them into hours late. A figure you type
+        on the payroll screen is never overwritten by it.
       </p>
 
-      {/* --- Is it there, and is its clock right? ------------------------- */}
-      <div className="mt-6 rounded-2xl border border-warm-line bg-card p-5">
-        <p className="flex items-center gap-2 text-sm font-medium text-bark">
-          <Fingerprint size={16} strokeWidth={1.75} className="shrink-0 text-clay" />
-          {at ? `${at.ip}:${at.port}` : "No device configured"}
-        </p>
-
-        {!at && (
-          <p className="mt-2 text-xs text-bark/55">
-            Set ATTENDANCE_DEVICE_IP for this to do anything. Without it the scheduled pass simply does nothing,
-            which is the right behaviour on a machine that has no device.
-          </p>
-        )}
-
-        {reachError && (
-          <p className="mt-2 text-xs text-amber-700">
-            The device did not answer: {reachError}. It may be switched off, or on a different network from this
-            server.
-          </p>
-        )}
-
-        {clock && (
-          <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-            <Fact label="Its clock reads">{clock.wallClock}</Fact>
-            <Fact label="Out by">
-              <span className={driftBad ? "text-amber-700" : undefined}>
-                {Math.abs(clock.driftSeconds) < 90
-                  ? `${clock.driftSeconds}s`
-                  : `${Math.round(clock.driftSeconds / 60)} minutes`}
-              </span>
-            </Fact>
-            <Fact label="Enrolled">{users.length}</Fact>
-          </dl>
-        )}
-
-        {driftBad && (
-          <p className="mt-3 text-xs text-amber-700">
-            Nothing will be recorded while it is this far out — the times would be wrong. Press “Set its clock”. If
-            it keeps drifting back, its backup battery needs replacing.
-          </p>
-        )}
-      </div>
-
-      <AttendanceConsole />
-
-      {/* --- Who the device knows, and the three things that change it ---- */}
-      <DeviceUsers
-        users={users.map((user) => ({
-          uid: user.uid,
-          deviceUserId: user.deviceUserId,
-          name: user.name,
-          isAdmin: user.isAdmin,
-        }))}
-        paired={[...mapped.values()].map((person) => ({
-          deviceUserId: person.deviceUserId as string,
-          name: person.name,
-          active: person.active,
-        }))}
-        canReach={Boolean(at) && !reachError}
-      />
-
-      {/* --- Pairing ------------------------------------------------------ */}
-      <h2 className="mt-10 text-sm font-medium uppercase tracking-wider text-bark/40">Pair people</h2>
-      <p className="mt-1 text-xs text-bark/45">
-        By the device’s number, never by name: the two lists of names rarely match, and a wrong pair takes money
-        from the wrong person with nothing on screen to say why.
-      </p>
-
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {employees.map((employee) => (
-          <form
-            key={employee.id}
-            action={setDeviceUserId.bind(null, employee.id)}
-            className="flex items-center gap-2 rounded-xl border border-warm-line bg-card px-3 py-2"
-          >
-            <span className="min-w-0 flex-1 truncate text-sm text-bark">
-              {employee.name}
-              {employee.role && <span className="ml-1.5 text-xs text-bark/40">{employee.role}</span>}
-            </span>
-            <input
-              name="deviceUserId"
-              defaultValue={employee.deviceUserId ?? ""}
-              placeholder="number"
-              inputMode="numeric"
-              aria-label={`Device number for ${employee.name}`}
-              className="w-20 rounded-lg border border-warm-line bg-paper-soft px-2 py-1.5 text-sm text-bark outline-none focus:border-clay"
-            />
-            <SaveButton label="Pair" />
-          </form>
-        ))}
+      {/* The new UI (2026-11-18): what was recorded first — the month is what
+          this page is opened for — and the machine itself after it, with a
+          bar of the sections that stays at the top while the page scrolls. */}
+      <div className="mt-6">
+        <SectionBar
+          label="Attendance"
+          items={[
+            { id: "month", label: "The month" },
+            { id: "times", label: "Clock times" },
+            ...(appPunches.length > 0 ? [{ id: "app", label: "From the app" }] : []),
+            { id: "device", label: "The device" },
+            { id: "pairing", label: "Pair people" },
+          ]}
+        />
       </div>
 
       {/* --- What it has recorded, a month at a time ---------------------- */}
-      <AttendanceMonth month={month} thisMonth={thisMonth} />
+      <section id="month" className="scroll-mt-20">
+        <AttendanceMonth month={month} thisMonth={thisMonth} />
+      </section>
 
-      <ClockTimes rows={monthRecords} timezone={timezone} monthKey={monthKey} hours={workHours} />
+      <section id="times" className="scroll-mt-20">
+        <ClockTimes rows={monthRecords} timezone={timezone} monthKey={monthKey} hours={workHours} />
+      </section>
 
-      <AppPunchList punches={appPunches} timezone={timezone} office={office} />
+      <section id="app" className="scroll-mt-20">
+        <AppPunchList punches={appPunches} timezone={timezone} office={office} />
+      </section>
+
+      <section id="device" className="mt-14 scroll-mt-20">
+        <h2 className="text-2xl text-ink">The device</h2>
+        {/* --- Is it there, and is its clock right? ------------------------- */}
+        <div className="mt-4 rounded-2xl border border-warm-line bg-card p-5">
+          <p className="flex items-center gap-2 text-sm font-medium text-bark">
+            <Fingerprint size={16} strokeWidth={1.75} className="shrink-0 text-clay" />
+            {at ? `${at.ip}:${at.port}` : "No device configured"}
+          </p>
+
+          {!at && (
+            <p className="mt-2 text-xs text-bark/55">
+              Set ATTENDANCE_DEVICE_IP for this to do anything. Without it the scheduled pass simply does nothing, which
+              is the right behaviour on a machine that has no device.
+            </p>
+          )}
+
+          {reachError && (
+            <p className="mt-2 text-xs text-amber-700">
+              The device did not answer: {reachError}. It may be switched off, or on a different network from this
+              server.
+            </p>
+          )}
+
+          {clock && (
+            <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+              <Fact label="Its clock reads">{clock.wallClock}</Fact>
+              <Fact label="Out by">
+                <span className={driftBad ? "text-amber-700" : undefined}>
+                  {Math.abs(clock.driftSeconds) < 90
+                    ? `${clock.driftSeconds}s`
+                    : `${Math.round(clock.driftSeconds / 60)} minutes`}
+                </span>
+              </Fact>
+              <Fact label="Enrolled">{users.length}</Fact>
+            </dl>
+          )}
+
+          {driftBad && (
+            <p className="mt-3 text-xs text-amber-700">
+              Nothing will be recorded while it is this far out — the times would be wrong. Press “Set its clock”. If it
+              keeps drifting back, its backup battery needs replacing.
+            </p>
+          )}
+        </div>
+
+        <AttendanceConsole />
+
+        {/* --- Who the device knows, and the three things that change it ---- */}
+        <DeviceUsers
+          users={users.map((user) => ({
+            uid: user.uid,
+            deviceUserId: user.deviceUserId,
+            name: user.name,
+            isAdmin: user.isAdmin,
+          }))}
+          paired={[...mapped.values()].map((person) => ({
+            deviceUserId: person.deviceUserId as string,
+            name: person.name,
+            active: person.active,
+          }))}
+          canReach={Boolean(at) && !reachError}
+        />
+      </section>
+
+      <section id="pairing" className="mt-14 scroll-mt-20">
+        {/* --- Pairing ------------------------------------------------------ */}
+        <h2 className="text-2xl text-ink">Pair people</h2>
+        <p className="mt-1 text-xs text-bark/45">
+          By the device’s number, never by name: the two lists of names rarely match, and a wrong pair takes money from
+          the wrong person with nothing on screen to say why.
+        </p>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {employees.map((employee) => (
+            <form
+              key={employee.id}
+              action={setDeviceUserId.bind(null, employee.id)}
+              className="flex items-center gap-2 rounded-xl border border-warm-line bg-card px-3 py-2"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm text-bark">
+                {employee.name}
+                {employee.role && <span className="ml-1.5 text-xs text-bark/40">{employee.role}</span>}
+              </span>
+              <input
+                name="deviceUserId"
+                defaultValue={employee.deviceUserId ?? ""}
+                placeholder="number"
+                inputMode="numeric"
+                aria-label={`Device number for ${employee.name}`}
+                className="w-20 rounded-lg border border-warm-line bg-paper-soft px-2 py-1.5 text-sm text-bark outline-none focus:border-clay"
+              />
+              <SaveButton label="Pair" />
+            </form>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -261,7 +285,9 @@ function AppPunchList({
   const away = (punch: { latitude: number; longitude: number }) => {
     if (!office) return null;
     const metres = metresBetween(punch, office);
-    return metres < 1000 ? `${Math.round(metres)} m from the office` : `${(metres / 1000).toFixed(1)} km from the office`;
+    return metres < 1000
+      ? `${Math.round(metres)} m from the office`
+      : `${(metres / 1000).toFixed(1)} km from the office`;
   };
 
   return (
@@ -287,7 +313,12 @@ function AppPunchList({
                 <td className="px-4 py-2 text-bark/70">{formatDayIn(timezone, punch.at)}</td>
                 <td className="px-4 py-2 tabular-nums text-bark">{formatTimeIn(timezone, punch.at)}</td>
                 <td className="px-4 py-2">
-                  <a href={mapLink(punch)} target="_blank" rel="noreferrer" className="font-medium text-cyan-700 underline">
+                  <a
+                    href={mapLink(punch)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-cyan-700 underline"
+                  >
                     Open map
                   </a>
                   <span className="ml-2 text-xs text-bark/50">
@@ -404,13 +435,11 @@ function ClockTimes({
                 </span>
 
                 <span className="ml-auto flex items-center gap-3 text-xs">
-                  {day.missing > 0 && (
-                    <span className="text-amber-700">
-                      {day.missing} no clock-out
-                    </span>
-                  )}
+                  {day.missing > 0 && <span className="text-amber-700">{day.missing} no clock-out</span>}
                   <span
-                    className={day.hoursOff > 0 ? "font-medium tabular-nums text-amber-700" : "tabular-nums text-bark/30"}
+                    className={
+                      day.hoursOff > 0 ? "font-medium tabular-nums text-amber-700" : "tabular-nums text-bark/30"
+                    }
                   >
                     {day.hoursOff > 0 ? `${day.hoursOff}h off` : "full days"}
                   </span>
@@ -440,9 +469,7 @@ function ClockTimes({
                       const worked =
                         row.arrivedAt && row.departedAt
                           ? Math.round(
-                              ((row.departedAt.getTime() - row.arrivedAt.getTime()) / 3_600_000 -
-                                row.awayHours) *
-                                100
+                              ((row.departedAt.getTime() - row.arrivedAt.getTime()) / 3_600_000 - row.awayHours) * 100
                             ) / 100
                           : null;
                       // Paid by the hour, so the day counts up to the studio's

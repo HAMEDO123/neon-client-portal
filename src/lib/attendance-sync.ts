@@ -1,10 +1,10 @@
-import { attendanceFromPunches, clockLabel, cutoffFor } from "@/lib/attendance";
+import { attendanceFromPunches, clockLabel, cutoffFor, workDayKey } from "@/lib/attendance";
 import { readClock, readPunches, type DeviceAddress, type DeviceClock } from "@/lib/attendance-device";
 import { currentDeviceAddress, relocateDevice, rememberDevice } from "@/lib/attendance-locate";
 import { applyAttendance, type SyncOutcome } from "@/lib/attendance-store";
 import { dispatchNotification } from "@/lib/notifications/engine";
 import { getSetting, getTimezone, getWorkHours, setSetting } from "@/lib/settings";
-import { dayKeyIn, dayKeyToDate, instantAt } from "@/lib/time";
+import { dayKeyToDate, instantAt } from "@/lib/time";
 import { appPunchKey, recordedPunches } from "@/lib/app-clock";
 import { appPunchesSince } from "@/lib/app-clock-store";
 import { prisma } from "@/lib/db";
@@ -164,7 +164,9 @@ async function readAndWrite(
     const devicePunches = await readPunches(at, timeZone);
     // Read one after the other, like the other multi-query paths here.
     const hours = await getWorkHours();
-    const since = cutoffFor(options.since, dayKeyIn(timeZone, now));
+    // The working day, not the calendar one: at half past midnight the day
+    // still open is yesterday's, and its clock-out is what is being scanned.
+    const since = cutoffFor(options.since, workDayKey(timeZone, now));
     // Clock-ins made from the app (lib/app-clock.ts) are reads like the
     // device's, filed under the same number, so the two make one day.
     const sinceAt = instantAt(since, "00:00", timeZone);
@@ -214,7 +216,9 @@ export async function writeAppDay(employeeId: string, now: Date = new Date()): P
 
   const timeZone = await getTimezone();
   const hours = await getWorkHours();
-  const dayKey = dayKeyIn(timeZone, now);
+  // The working day the punch belongs to (DAY_TURNS_AT): a clock-out from a
+  // site at 00:30 closes yesterday, it does not open today.
+  const dayKey = workDayKey(timeZone, now);
   const start = instantAt(dayKey, "00:00", timeZone);
   if (!start) return;
 

@@ -1,4 +1,4 @@
-import { dayKeyIn, formatTimeIn, wallClockIn } from "@/lib/time";
+import { dayKeyIn, formatTimeIn, shiftDayKey, wallClockIn } from "@/lib/time";
 import { hoursOn, isWorkingDay, minutesOf, type WorkHours } from "@/lib/work-hours";
 
 // Turning a fingerprint device's punches into the one number payroll already
@@ -168,8 +168,10 @@ const MIN_SHIFT_MINUTES = 60;
  * and a negative number here would quietly pay it through payroll's
  * multiplication, which is exactly the trap `lateHours` avoids at its own end.
  */
-export function earlyHours(hours: WorkHours, departure: string): number {
-  const leftAt = minutesOf(departure);
+export function earlyHours(hours: WorkHours, departure: string, arrival?: string): number {
+  // After midnight is later, not earlier, than the day's end: 00:01 after a
+  // 4 PM start is 1441, never one minute into the day (minutesInDay).
+  const leftAt = arrival ? minutesInDay(departure, arrival) : minutesOf(departure);
   const endsAt = minutesOf(hours.end);
   if (leftAt == null || endsAt == null) return 0;
 
@@ -473,6 +475,25 @@ export function chargedHours(input: {
 }
 
 /**
+ * When the studio's working day turns over, studio time: a read before it
+ * belongs to the day before.
+ *
+ * Midnight was the boundary, and Salem works into the night: his clock-out at
+ * 12:01 AM on 2026-11-18 was filed under the 18th as that day's *arrival*, so
+ * his real arrival at 1:37 PM read as a clock-out — "arrived 12:01 AM, left
+ * 1:37 PM, 6 h short" — while the 17th was left with no clock-out and charged
+ * the missing hour. Nobody arrives at the studio before five in the morning,
+ * and plenty of people leave after midnight, so the day runs 05:00 to 05:00.
+ */
+export const DAY_TURNS_AT = "05:00";
+
+/** The working day an instant belongs to: its calendar day, or the day before if it is before DAY_TURNS_AT. */
+export function workDayKey(timeZone: string, instant: Date): string {
+  const day = dayKeyIn(timeZone, instant);
+  return wallClockIn(timeZone, instant) < DAY_TURNS_AT ? shiftDayKey(day, -1) : day;
+}
+
+/**
  * Punches grouped by the person and the calendar day they fall on **in the
  * company's timezone**.
  *
@@ -486,7 +507,7 @@ export function groupPunches(punches: Punch[], timeZone: string): Map<string, Pu
 
   for (const punch of punches) {
     if (!(punch.at instanceof Date) || Number.isNaN(punch.at.getTime())) continue;
-    const key = `${punch.deviceUserId}|${dayKeyIn(timeZone, punch.at)}`;
+    const key = `${punch.deviceUserId}|${workDayKey(timeZone, punch.at)}`;
     const list = byKey.get(key);
     if (list) list.push(punch);
     else byKey.set(key, [punch]);
@@ -537,7 +558,7 @@ export function attendanceFromPunches(
       lastAt,
       lastLocal: formatTimeIn(timeZone, lastAt) ?? wallClockIn(timeZone, lastAt),
       // Against that day's own end: Saturday's is earlier.
-      earlyAtLast: earlyHours(hoursOn(hours, dayKey), wallClockIn(timeZone, lastAt)),
+      earlyAtLast: earlyHours(hoursOn(hours, dayKey), wallClockIn(timeZone, lastAt), wallClockIn(timeZone, arrivedAt)),
       departedAt,
       departedLocal: departedAt ? formatTimeIn(timeZone, departedAt) ?? wallClockIn(timeZone, departedAt) : null,
       punches: sorted.length,
@@ -545,7 +566,9 @@ export function attendanceFromPunches(
       // Zero where nobody clocked out, because this is "how much of the day
       // was left unworked" and there is no departure to measure. The day is
       // not free: `dayCharge` prices a missing scan at MISSING_PUNCH_HOURS.
-      earlyHours: departedAt ? earlyHours(hoursOn(hours, dayKey), wallClockIn(timeZone, departedAt)) : 0,
+      earlyHours: departedAt
+        ? earlyHours(hoursOn(hours, dayKey), wallClockIn(timeZone, departedAt), wallClockIn(timeZone, arrivedAt))
+        : 0,
       appReads: sorted.filter((punch) => punch.fromApp).length,
     });
   }

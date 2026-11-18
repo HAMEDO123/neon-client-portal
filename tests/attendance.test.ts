@@ -156,10 +156,35 @@ describe("a clock-out, and when the device has not given one", () => {
 
 describe("grouping what the device reports", () => {
   it("puts a person's punches under the day they happened in Amman, not in UTC", () => {
-    // 21:30Z on Thursday is 00:30 Friday in Amman — a different day, and at the
-    // end of a month a different payslip.
-    const grouped = groupPunches([at(THURSDAY, "21:30")], TZ);
+    // 02:30Z on Friday is 05:30 Friday in Amman: Friday's, wherever UTC puts it.
+    const grouped = groupPunches([at("2026-09-18", "02:30")], TZ);
     assert.deepEqual([...grouped.keys()], ["7|2026-09-18"]);
+  });
+
+  // Salem, 2026-11-18: clocked out at 12:01 AM, which was filed as the next
+  // day's arrival and made his real 1:37 PM arrival read as a clock-out.
+  it("files a read before five in the morning under the night before", () => {
+    // 21:30Z on Thursday is 00:30 Friday in Amman — Thursday's night still.
+    const grouped = groupPunches([at(THURSDAY, "21:30")], TZ);
+    assert.deepEqual([...grouped.keys()], ["7|2026-09-17"]);
+  });
+
+  it("makes a late arrival and a clock-out after midnight one day, owed nothing", () => {
+    // In at 15:57, out at 00:01: five hours late, so the day is owed until
+    // midnight, and he left a minute after it.
+    // Wednesday 16th into Thursday 17th, both working days.
+    const days = attendanceFromPunches(
+      [at("2026-09-16", "12:57"), at("2026-09-16", "21:01"), at(THURSDAY, "10:37")],
+      hours,
+      TZ
+    );
+    assert.deepEqual(
+      days.map((day) => [day.dayKey, day.arrivedLocal, day.departedLocal, day.earlyHours]),
+      [
+        ["2026-09-16", "3:57 PM", "12:01 AM", 0],
+        ["2026-09-17", "1:37 PM", null, 0],
+      ]
+    );
   });
 
   it("keeps two people's days apart", () => {
@@ -168,10 +193,7 @@ describe("grouping what the device reports", () => {
   });
 
   it("ignores a timestamp that is not a date", () => {
-    const grouped = groupPunches(
-      [{ deviceUserId: "7", at: new Date("nonsense") }, at(THURSDAY, "08:00")],
-      TZ
-    );
+    const grouped = groupPunches([{ deviceUserId: "7", at: new Date("nonsense") }, at(THURSDAY, "08:00")], TZ);
     assert.equal(grouped.size, 1);
   });
 });
@@ -518,10 +540,7 @@ describe("a stretch of days added up", () => {
   it("rounds once, at the end", () => {
     // 0.12 + 0.33 in binary floating point is 0.44999999999999996, and a
     // figure like that printed beside somebody's pay is a figure nobody trusts.
-    const total = workedHours(
-      [day("2026-10-20", "08:00", "08:07"), day("2026-10-21", "08:00", "08:20")],
-      studio
-    );
+    const total = workedHours([day("2026-10-20", "08:00", "08:07"), day("2026-10-21", "08:00", "08:20")], studio);
     assert.equal(total.hours, 0.45);
   });
 
