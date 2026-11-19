@@ -108,9 +108,18 @@ export async function runTaskCutoffs(now = new Date()) {
     const mine = out.filter((task) => task.employeeId === person.id);
     if (mine.length === 0) continue;
 
+    // A job sent back is due again (redeployDay), and each sending-back is
+    // its own thing to be late for — counted, so it is charged once per round.
+    const sentBack = await prisma.taskSubmission.groupBy({
+      by: ["assignedTaskId"],
+      where: { assignedTaskId: { in: mine.map((task) => task.id) }, status: "REJECTED" },
+      _count: { _all: true },
+    });
+    const rounds = new Map(sentBack.map((row) => [row.assignedTaskId, row._count._all]));
+
     let fresh = 0;
     for (const task of mine) {
-      if (await chargeLateTask(task, person, dayKey)) fresh++;
+      if (await chargeLateTask(task, person, dayKey, rounds.get(task.id) ?? 0)) fresh++;
     }
     charged += fresh;
 

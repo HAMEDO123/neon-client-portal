@@ -85,7 +85,9 @@ export async function addManualDeduction(input: {
 export async function chargeLateTask(
   task: { id: string; title: string },
   employee: { id: string; salaryAmount: number | null; payBasis: "MONTHLY" | "WEEKLY" },
-  dayKey: string
+  dayKey: string,
+  /** How many times the job has been sent back; 0 for one never sent back. */
+  round = 0
 ) {
   try {
     await prisma.deduction.create({
@@ -96,9 +98,9 @@ export async function chargeLateTask(
         kind: "TASK",
         hours: HOURS_PER_TASK,
         amount: hoursAsMoney(employee.salaryAmount, employee.payBasis, HOURS_PER_TASK),
-        reason: `Not handed in by 11:59 PM: ${task.title}`.slice(0, 300),
+        reason: `${round > 0 ? "Sent back and not handed in again" : "Not handed in"} by 11:59 PM: ${task.title}`.slice(0, 300),
         assignedTaskId: task.id,
-        dedupeKey: taskDedupe(task.id),
+        dedupeKey: taskDedupe(task.id, round),
       },
     });
     return true;

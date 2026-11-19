@@ -10,6 +10,10 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 import { taskUrl } from "@/lib/notifications/types";
 import { recordStateChange } from "@/lib/task-state-log";
 import { submitProof } from "@/lib/task-proof";
+import { getTimezone, getWorkHours } from "@/lib/settings";
+import { redeployDay } from "@/lib/task-cutoff";
+import { dateToDayKey, dayKeyIn, dayKeyToDate, wallClockIn } from "@/lib/time";
+import { minutesOf } from "@/lib/work-hours";
 
 // Finishing a task is a claim, not a fact.
 //
@@ -152,6 +156,32 @@ export async function approveSubmission(submissionId: string, formData?: FormDat
   refresh(submission);
 }
 
+/**
+ * A job sent back is due again — today, while there is time to fix it
+ * (lib/task-cutoff.ts redeployDay) — so the 11:59 PM rule sees it. Answers
+ * the day in words for the notification, or null when the day did not move.
+ */
+async function redeploy(assignedTaskId: string) {
+  const task = await prisma.assignedTask.findUnique({
+    where: { id: assignedTaskId },
+    select: { startDay: true, endDay: true, siteVisitId: true },
+  });
+  // A site visit's job is finished in the diary, never by proof.
+  if (!task || task.siteVisitId) return null;
+  const [timeZone, hours] = await Promise.all([getTimezone(), getWorkHours()]);
+  const now = new Date();
+  const todayKey = dayKeyIn(timeZone, now);
+  const endKey = dateToDayKey(task.endDay) ?? todayKey;
+  const day = redeployDay(hours, todayKey, minutesOf(wallClockIn(timeZone, now)) ?? 0, endKey);
+  if (day === endKey) return null;
+  const startKey = dateToDayKey(task.startDay) ?? day;
+  await prisma.assignedTask.update({
+    where: { id: assignedTaskId },
+    data: { endDay: dayKeyToDate(day), ...(startKey > day ? { startDay: dayKeyToDate(day) } : {}) },
+  });
+  return day === todayKey ? "today" : `on ${day}`;
+}
+
 /** The manager sends it back, with a reason. */
 export async function rejectSubmission(submissionId: string, formData?: FormData) {
   await requireAdmin();
@@ -167,6 +197,7 @@ export async function rejectSubmission(submissionId: string, formData?: FormData
   // Back to being worked on, not back to untouched: the employee has already
   // done something, and the history of the attempt is kept.
   await settle(submission, "IN_PROGRESS", reason);
+  const dueAgain = submission.assignedTaskId ? await redeploy(submission.assignedTaskId) : null;
 
   const subject = describe(submission);
   after(() =>
@@ -174,7 +205,9 @@ export async function rejectSubmission(submissionId: string, formData?: FormData
       employeeId: submission.employeeId,
       type: "SYSTEM_NOTIFICATION",
       title: "Work sent back",
-      message: reason ? `${subject.name} needs more work: ${reason}` : `${subject.name} was sent back for more work.`,
+      message:
+        (reason ? `${subject.name} needs more work: ${reason}` : `${subject.name} was sent back for more work.`) +
+        (dueAgain ? ` Due again ${dueAgain} by 11:59 PM.` : ""),
       url: subject.url,
       entryId: subject.entryId,
       dedupeKey: `SUBMISSION_REJECTED:${submission.id}`,

@@ -1,6 +1,6 @@
 import type { PayBasis } from "@/generated/prisma/enums";
 import { hourlyRate } from "@/lib/payroll";
-import { minutesOf } from "@/lib/work-hours";
+import { isWorkingDay, minutesOf, nextWorkingDay, type WorkHours } from "@/lib/work-hours";
 
 // Money taken off for a reason: the manager's own cutoffs, and the studio's
 // rule that a task not handed in by nine in the evening costs an hour's pay.
@@ -86,6 +86,24 @@ export function chargeable(
   return task.createdAt.getTime() <= cutoffAt.getTime() - NOTICE_HOURS * 60 * 60 * 1000;
 }
 
+/**
+ * The day a job sent back is due again (asked for on 2026-11-19: "make the
+ * rejected task redeploy at the same day"). Before this a job sent back after
+ * its day had nothing left to be late for: the cutoff only reads jobs due
+ * today, so every job sent back sat in progress, uncharged, for ever.
+ *
+ * The same day it was sent back — unless that is too late to be fair. The
+ * notice rule a new job has applies here too: sent back within NOTICE_HOURS
+ * of the cutoff, or on a day the studio does not work, it is due the next
+ * working day instead. And never earlier than it already was: a job due on
+ * Saturday sent back on Thursday stays Saturday's.
+ */
+export function redeployDay(hours: WorkHours, todayKey: string, minutesNow: number, endDayKey: string) {
+  const inTime = isWorkingDay(hours, todayKey) && minutesNow <= CUTOFF_MINUTES - NOTICE_HOURS * 60;
+  const day = inTime ? todayKey : nextWorkingDay(hours, todayKey);
+  return endDayKey > day ? endDayKey : day;
+}
+
 /** An hour of somebody's pay, to the fils, as payroll works it out. */
 export function hoursAsMoney(salaryAmount: number | null | undefined, basis: PayBasis, hours: number) {
   if (!Number.isFinite(hours) || hours <= 0) return 0;
@@ -158,5 +176,11 @@ export const noticeKey = (employeeId: string, stamp: string) => `TASK_CUTOFF_NOT
 export const warningKey = (employeeId: string, dayKey: string) => `TASK_CUTOFF_WARN:${employeeId}:${dayKey}`;
 export const chargeKey = (employeeId: string, dayKey: string) => `TASK_CUTOFF_CHARGE:${employeeId}:${dayKey}`;
 export const managerKey = (dayKey: string) => `TASK_CUTOFF_MANAGER:${dayKey}`;
-/** One charge per task, ever — whatever is done to its dates afterwards. */
-export const taskDedupe = (taskId: string) => `TASK:${taskId}`;
+/**
+ * One charge per task, ever — whatever is done to its dates afterwards — and
+ * one more each time it is sent back (`round`, how many times it has been):
+ * being sent back makes it due again, so not handing it in again is a new
+ * thing to be late for. Round 0 keeps the old key, so nothing already charged
+ * is charged twice.
+ */
+export const taskDedupe = (taskId: string, round = 0) => (round > 0 ? `TASK:${taskId}:SENT-BACK:${round}` : `TASK:${taskId}`);
