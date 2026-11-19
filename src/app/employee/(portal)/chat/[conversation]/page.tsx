@@ -16,6 +16,8 @@ import { avatarUrl } from "@/lib/avatar";
 import { getTimezone } from "@/lib/settings";
 import { ChatRoom } from "@/components/chat/chat-room";
 import { ConversationPanel } from "@/components/chat/studio/conversation-panel";
+import { TeamStrip } from "@/components/chat/team-strip";
+import { ConversationExtras } from "@/components/chat/conversation-extras";
 import { getSessionEmployee } from "@/lib/employee-session";
 import { inboxSummary } from "@/lib/notifications/whatsapp-events";
 import { whatsAppChatBase } from "@/lib/whatsapp-watch";
@@ -95,7 +97,17 @@ export default async function EmployeeConversationPage({
     // Its own screen, WhatsApp-style: the conversation's header replaces the
     // portal's (.chat-screen in globals.css), and the messages scroll inside
     // the frame so the text box sits on the keyboard.
-    <div className="chat-screen fills-frame wide-page flex overflow-hidden lg:gap-4 lg:p-5">
+    // On a desk (design 2): the faces across the top, then the list, the
+    // conversation and — on a wide screen — its tasks and shared files.
+    <div className="chat-screen fills-frame wide-page flex flex-col overflow-hidden lg:gap-4 lg:px-8 lg:pb-1 lg:pt-1">
+      <TeamStrip
+        conversations={conversations}
+        basePath="/employee/chat"
+        activeSlug={slug}
+        className="hidden shrink-0 lg:flex"
+      />
+
+      <div className="flex min-h-0 flex-1 overflow-hidden lg:gap-4">
       <aside className="hidden w-[18rem] shrink-0 overflow-hidden rounded-3xl border border-warm-line bg-card shadow-[0_18px_40px_-30px_rgba(44,39,34,0.5)] lg:flex xl:w-[19rem]">
         <ConversationPanel
           items={conversations}
@@ -145,6 +157,11 @@ export default async function EmployeeConversationPage({
           }
           emptyText={group ? undefined : `No messages yet. Only you and ${withName} can see this chat.`}
         />
+      </div>
+
+      <aside className="hidden w-[18rem] shrink-0 xl:flex">
+        <ConversationExtras messages={messages} basePath="/employee/chat" slug={slug} timeZone={timezone} />
+      </aside>
       </div>
     </div>
   );

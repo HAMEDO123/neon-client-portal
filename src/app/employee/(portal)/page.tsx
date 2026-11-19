@@ -28,6 +28,8 @@ import { ReportLines } from "@/components/employee/report-lines";
 import { myClockDay } from "@/lib/clock-day";
 import { myAppClock } from "@/lib/app-clock-store";
 import { linesOf, reportForDay } from "@/lib/daily-report";
+import { conversationsFor } from "@/lib/chat";
+import { ChatTile } from "@/components/employee/chat-tile";
 
 function greeting(hour: number) {
   if (hour < 12) return "Good Morning";
@@ -44,6 +46,15 @@ function greeting(hour: number) {
 type DayItem = { kind: "board"; task: EmployeeTask } | { kind: "assigned"; task: AssignedTaskView };
 
 const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 } as const;
+
+// The latest task's width in the top row: whatever the clock and the ring
+// leave of twelve columns. Written out so Tailwind sees each class.
+const FOCUS_SPAN: Record<number, string> = {
+  0: "lg:col-span-12",
+  3: "lg:col-span-9",
+  5: "lg:col-span-7",
+  8: "lg:col-span-4",
+};
 
 function byPriority(a: DayItem, b: DayItem) {
   return PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority];
@@ -135,16 +146,24 @@ export default async function EmployeeDashboard({ searchParams }: { searchParams
   // "nothing planned", and the timeline says the day better.
   const hasPlan = nowNext.now !== null || nowNext.next !== null;
 
-  // The new UI (2026-11-18): the day as a timeline in the wide column, with
-  // the clock, what to do now and the report beside it on a desk; on a phone
-  // the side column comes first, then the day and the lists.
+  // The newest conversations, for the chat tile. On its own, like the rest.
+  const conversations = await conversationsFor({
+    type: "EMPLOYEE",
+    id: employee.id,
+    name: employee.name,
+  });
+
+  // Design 2 (chosen 2026-11-19): the day as tiles. Across the top the clock,
+  // the latest task in the accent colour and today's progress as a ring; under
+  // them the day's work in the wide column and the report, the chat and the
+  // rest beside it. On a phone the tiles stack, the side column first.
   return (
-    <div className="wide-page flex flex-col gap-6">
+    <div className="wide-page flex flex-col gap-4 lg:gap-5">
       <div>
         <h1 className="text-xl font-semibold text-ink">
-          {greeting(hourIn(timezone))}, {firstName} 👋
+          {greeting(hourIn(timezone))}, {firstName}
         </h1>
-        <p className="mt-1 text-sm text-ink/50">
+        <p className="mt-1 text-sm text-ink/55">
           {openToday === 0
             ? "Nothing outstanding for today."
             : `${openToday} task${openToday === 1 ? "" : "s"} still open today.`}
@@ -153,27 +172,39 @@ export default async function EmployeeDashboard({ searchParams }: { searchParams
 
       <WarningsCard warnings={warnings} timezone={timezone} />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-start">
-        <div className="flex flex-col gap-6 lg:order-2">
-          {/* First on a phone, because the end of the day is no longer the same
-              for everybody and this is the only place its owner can read it. */}
-          <ClockCard day={clockDay} timezone={timezone} app={appClock} />
-
+      <div className="grid gap-4 lg:grid-cols-12 lg:gap-5">
+        {/* The clock card draws nothing on a day the studio is closed; the
+            latest task then takes its room. */}
+        {clockDay.working && (
+          <div className="lg:col-span-5 [&>*]:h-full">
+            <ClockCard day={clockDay} timezone={timezone} app={appClock} />
+          </div>
+        )}
+        <div className={FOCUS_SPAN[(clockDay.working ? 5 : 0) + (todayCounts.total > 0 ? 3 : 0)]}>
           <FocusCard task={latestTask} todayKey={todayDay} timezone={timezone} openCount={openToday} />
+        </div>
+        {todayCounts.total > 0 && (
+          <div className="lg:col-span-3">
+            <TodaySummary counts={todayCounts} look="ring" />
+          </div>
+        )}
+      </div>
 
+      <div className="grid gap-4 lg:grid-cols-12 lg:items-start lg:gap-5">
+        <div className="flex flex-col gap-4 lg:order-2 lg:col-span-5 lg:gap-5">
           {hasPlan && <NowNextCard state={nowNext} hours={hours} />}
 
           {/* Written where the work is, a line at a time. */}
           <ReportLines lines={linesOf(report.text)} />
 
-          <TodaySummary counts={todayCounts} />
+          <ChatTile conversations={conversations} timeZone={timezone} now={new Date()} />
 
           <SalesCard projects={sales.projects} target={sales.target} period={period} timezone={timezone} />
 
           <PushPrompt publicKey={pushKey} />
         </div>
 
-        <div className="flex flex-col gap-6 lg:order-1">
+        <div className="flex flex-col gap-4 lg:order-1 lg:col-span-7 lg:gap-5">
           <DayTimeline
             employeeId={employee.id}
             dayKey={todayDay}
@@ -200,7 +231,7 @@ export default async function EmployeeDashboard({ searchParams }: { searchParams
           <section id="tomorrow" className={cn(focus === "tomorrow" && "order-1")}>
             <SectionHeading icon={CalendarClock} label="Tomorrow" count={tomorrowItems.length} tone="text-amber-700" />
             {tomorrowItems.length === 0 ? (
-              <p className="mt-3 rounded-2xl border border-dashed border-ink/12 bg-ink/[0.02] px-4 py-6 text-center text-sm text-ink/45">
+              <p className="mt-3 rounded-2xl border border-dashed border-ink/12 bg-ink/[0.02] px-4 py-6 text-center text-sm text-ink/55">
                 Nothing scheduled for tomorrow yet.
               </p>
             ) : (
@@ -210,7 +241,7 @@ export default async function EmployeeDashboard({ searchParams }: { searchParams
 
           <Link
             href="/employee/tasks"
-            className="order-3 rounded-2xl border border-ink/10 bg-white/60 px-4 py-3 text-center text-sm font-medium text-ink/70 transition-colors hover:bg-white"
+            className="lq-pill order-3 rounded-full px-4 py-3 text-center text-sm font-semibold text-ink/75 transition-colors hover:text-ink"
           >
             View all my tasks
           </Link>

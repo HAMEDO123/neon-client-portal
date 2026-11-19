@@ -3,7 +3,9 @@ import { ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { dateToDayKey, dayKeyIn, formatTimeIn, shiftDayKey } from "@/lib/time";
 
-// The newest job handed to somebody, in the darkest card on their home screen.
+// The newest job handed to somebody, in the one tile on their home screen
+// painted in the colourway's accent (design 2, 2026-11-19; it was the dark
+// bark card before).
 //
 // It began (2026-11-18) as "what to do now" — something in progress, else the
 // most urgent of today's — and on the first day the studio asked instead for
@@ -63,9 +65,9 @@ export function FocusCard({
 }) {
   if (!task) {
     return (
-      <section aria-label="Latest task" className="rounded-2xl bg-bark p-5 text-paper">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-on-dark">Latest task</p>
-        <p className="mt-2 text-sm text-paper/80">Nothing open on your list.</p>
+      <section aria-label="Latest task" className="lq-accent flex h-full flex-col rounded-2xl p-5 text-white">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/85">Latest task</p>
+        <p className="mt-2 text-sm text-white/90">Nothing open on your list.</p>
       </section>
     );
   }
@@ -97,23 +99,24 @@ export function FocusCard({
         : "Open and start";
 
   return (
-    <section aria-label="Latest task" className="rounded-2xl bg-bark p-5 text-paper">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-on-dark">Latest task</p>
+    <section aria-label="Latest task" className="lq-accent flex h-full flex-col rounded-2xl p-5 text-white">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/85">Latest task</p>
       {/* A heading of the card, not of the page. */}
-      <p dir="auto" className="mt-2 font-display text-2xl leading-snug">
+      <p dir="auto" className="mt-2 font-display text-2xl leading-snug lg:text-[1.7rem]">
         {task.title}
       </p>
-      <p className="mt-1 text-xs text-paper/65">
+      <p className="mt-2 text-xs text-white/85">
         {when.trim()} · from {task.from}
       </p>
-      <p className="mt-0.5 text-xs text-paper/65">
+      <p className="mt-0.5 text-xs text-white/85">
         {due}
         {task.priority === "HIGH" ? " · high priority" : ""}
         {openCount > 1 ? ` · ${openCount - 1} other open` : ""}
       </p>
+      <span aria-hidden className="block min-h-4 flex-1" />
       <Link
         href={`/employee/assigned/${task.id}`}
-        className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-on-dark px-4 text-sm font-semibold text-bark transition-opacity hover:opacity-90"
+        className="mt-auto inline-flex h-11 items-center gap-2 self-start rounded-full bg-white px-5 text-sm font-semibold text-clay-deep transition-opacity hover:opacity-90"
       >
         {action}
         <ArrowRight size={15} strokeWidth={2.25} />

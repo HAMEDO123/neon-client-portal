@@ -453,13 +453,51 @@ aside.bg-rail {
     0 12px 24px -18px var(--lq-glow);
 }
 
-/* The phone's header and tab bar: solid, in the page colour (a translucent
-   bar over a glossy page reads as a smear), with a sheen that fades out
-   before the edge. */
-.employee-header,
-.employee-tabbar {
+/* The portal's header: solid, in the page colour (a translucent bar over a
+   glossy page reads as a smear), with a sheen that fades out before the edge. */
+.employee-header {
   background-color: var(--cw-page);
   background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+}
+
+/* The floating dock (design 2, 2026-11-19): its row is see-through, so the
+   pill floats over the page colour; the pill is a lacquer card of its own,
+   lifted further than the cards so it reads as above them. The bell in the
+   header is a small one of the same. */
+.employee-tabbar {
+  background: transparent;
+}
+.employee-dock,
+.lq-pill {
+  background: var(--lq-card);
+  border: 1px solid transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 1px 2px var(--lq-contact),
+    0 18px 36px -16px var(--lq-glow);
+}
+.lq-pill {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 1px 2px var(--lq-contact);
+}
+
+/* The accent tile (design 2): the one tile on a screen painted in the
+   colourway's accent — the latest task, your staff badge, the task a chat
+   turned into. White on every accent is at least 5.46:1. */
+.lq-accent {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 40%), var(--clay);
+  border: 1px solid transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 1px 2px var(--lq-contact),
+    0 24px 46px -24px var(--lq-glow);
+}
+
+/* Design 2's tiles are rounder than the old cards. Only the radius changes —
+   nothing here may trap a pop-up (see the card rules above). */
+.employee-main :is(.glass, .lq-accent, .bg-card.border-warm-line).rounded-2xl {
+  border-radius: 1.5rem;
 }
 
 /* Inputs: flat and solid — the one surface with no gloss, which is what says
@@ -685,8 +723,10 @@ body[data-keyboard="open"] .employee-tabbar {
 /* The chat is its own screen, WhatsApp-style: the group's header takes the
    place of the portal's instead of sitting underneath it, and so it carries
    the status-bar space the portal's header would have. */
-body:has(.chat-screen) .employee-header {
-  display: none;
+@media (max-width: 1023.98px) {
+  body:has(.chat-screen) .employee-header {
+    display: none;
+  }
 }
 
 .chat-screen .chat-header {
@@ -696,8 +736,10 @@ body:has(.chat-screen) .employee-header {
 /* Inside a conversation the tab bar goes too, as it does in WhatsApp: the
    header's back arrow leads to the list of chats, and the room is the
    conversation's. */
-body:has(.chat-screen) .employee-tabbar {
-  display: none;
+@media (max-width: 1023.98px) {
+  body:has(.chat-screen) .employee-tabbar {
+    display: none;
+  }
 }
 
 /* With the tab bar gone from a conversation, nothing under the message box

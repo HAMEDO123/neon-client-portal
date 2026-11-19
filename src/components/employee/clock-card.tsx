@@ -15,7 +15,7 @@ function Fact({ label, value, tone }: { label: string; value: string; tone?: str
   return (
     <div>
       <p className="text-[11px] font-medium uppercase tracking-wider text-ink/40">{label}</p>
-      <p className={`mt-0.5 text-lg font-semibold tabular-nums ${tone ?? "text-ink"}`}>{value}</p>
+      <p className={`mt-1 text-2xl font-semibold leading-none tabular-nums lg:text-[2rem] ${tone ?? "text-ink"}`}>{value}</p>
     </div>
   );
 }

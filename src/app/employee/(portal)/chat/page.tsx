@@ -8,6 +8,7 @@ import { inboxUrl, whatsAppChatBase } from "@/lib/whatsapp-watch";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { ConversationList } from "@/components/chat/conversation-list";
 import { TaskList } from "@/components/chat/task-list";
+import { TeamStrip } from "@/components/chat/team-strip";
 
 // The employee's chats — the team's group, their private conversation with the
 // manager, one with each colleague, and the clients writing to the company's
@@ -46,7 +47,10 @@ export default async function EmployeeChatsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-ink">Chats</h1>
+      <h1 className="text-xl font-semibold text-ink">Chat</h1>
+
+      {/* Everybody you talk to, as faces (design 2). */}
+      <TeamStrip conversations={conversations} basePath="/employee/chat" />
 
       <ChatSidebar
         className="flex flex-col gap-3"

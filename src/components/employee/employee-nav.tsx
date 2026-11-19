@@ -61,44 +61,57 @@ export function employeeDestinations(canReadWhatsApp: boolean, canUseLeadFinder 
 export function EmployeeNav({
   unreadChat = 0,
   canReadWhatsApp = false,
+  canUseLeadFinder = false,
 }: {
   unreadChat?: number;
   canReadWhatsApp?: boolean;
+  /** Lead Finder is a desk tool: its button shows from lg up only. */
+  canUseLeadFinder?: boolean;
 }) {
   const pathname = usePathname();
-  const TABS = employeeDestinations(canReadWhatsApp);
+  const TABS = employeeDestinations(canReadWhatsApp, canUseLeadFinder);
 
+  // The floating dock (design 2, chosen 2026-11-19): one pill of buttons at
+  // the foot of every screen, on a phone and on a desk alike — it replaced the
+  // side rail and the phone's tab bar. The row itself is transparent and in
+  // the flow, so a page that fills the frame (the chat) ends above it rather
+  // than under it, and the keyboard rules that hide .employee-tabbar still
+  // apply. On a phone only the current button carries its word; on a desk
+  // every one does.
   return (
-    // Thumb-reach on a phone; on a desktop the same destinations are in the
-    // rail down the left, where a mouse expects them.
-    <nav className="employee-tabbar shrink-0 border-t border-ink/8 bg-bg/95 backdrop-blur-lg lg:hidden">
-      {/* .employee-tabbar-row keeps it clear of the home indicator (globals.css). */}
-      <div className="employee-tabbar-row mx-auto flex w-full max-w-2xl items-stretch justify-around px-2">
-        {TABS.map((tab) => {
-          const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] font-medium transition-colors",
-                active ? "text-ink" : "text-ink/45"
-              )}
-            >
-              <span className="relative">
-                <tab.icon size={21} strokeWidth={active ? 2.25 : 1.75} />
-                {tab.href === "/employee/chat" && unreadChat > 0 && (
-                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 text-[10px] font-semibold text-white">
-                    {unreadChat > 9 ? "9+" : unreadChat}
-                  </span>
+    <nav aria-label="Main" className="employee-tabbar shrink-0 lg:pb-2">
+      <div className="employee-tabbar-row flex justify-center px-2 pt-1.5 pb-2.5">
+        <div className="employee-dock flex max-w-full items-center rounded-full p-1.5 lg:gap-1">
+          {TABS.map((tab) => {
+            const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
+            const count = tab.href === "/employee/chat" ? unreadChat : 0;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                aria-current={active ? "page" : undefined}
+                aria-label={count > 0 ? `${tab.label}, ${count} unread` : tab.label}
+                className={cn(
+                  "relative flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full text-[13px] font-semibold transition-colors lg:h-12 lg:px-4 lg:text-sm",
+                  active
+                    ? "bg-clay px-3.5 text-white lg:px-5"
+                    : "w-10 text-ink/60 hover:bg-ink/5 hover:text-ink lg:w-auto",
+                  tab.href === LEAD_FINDER_DESTINATION.href && "hidden lg:flex"
                 )}
-              </span>
-              {tab.label}
-              {active && <span className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-ink" />}
-            </Link>
-          );
-        })}
+              >
+                <span className={cn("relative", count > 0 && "lg:mr-2", count > 0 && active && "mr-2")}>
+                  <tab.icon size={19} strokeWidth={active ? 2.25 : 1.85} />
+                  {count > 0 && (
+                    <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white ring-2 ring-paper">
+                      {count > 9 ? "9+" : count}
+                    </span>
+                  )}
+                </span>
+                <span className={cn(active ? "inline" : "hidden lg:inline")}>{tab.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );

@@ -125,6 +125,18 @@ describe("what counts as news", () => {
     assert.equal(whatsAppPreview({ body: "  ", type: "call_log" }), "Call");
   });
 
+  it("never shows a photo's own bytes as its words", () => {
+    const thumb = "/9j/4AAQSkZJRgABAQAAAQABAAD/4gKASUNDX1BST0ZJTEUAAQEAAAJwQURCRQQQAABtbnRyUkdCIFhZWiAH";
+    assert.equal(whatsAppPreview({ body: thumb, type: "image" }), "Photo");
+    assert.equal(whatsAppPreview({ body: thumb, type: "chat" }), "Photo");
+    // A row stored before the guard existed.
+    assert.equal(rowPreview({ preview: thumb, fromMe: false }), "Photo");
+    // Real words, a caption and a pasted link stay as they are.
+    assert.equal(whatsAppPreview({ body: "مرحبا فريق بيت الطيب لتجارة العطور", type: "chat" }), "مرحبا فريق بيت الطيب لتجارة العطور");
+    assert.equal(whatsAppPreview({ body: "the kitchen, second option", type: "image" }), "the kitchen, second option");
+    assert.equal(whatsAppPreview({ body: "https://maps.app.goo.gl/AbCdEf", type: "chat" }), "https://maps.app.goo.gl/AbCdEf");
+  });
+
   it("puts several arrivals in the order they were sent", () => {
     const { arrivals } = look(
       [chat({ id: "late@c.us", last: { timestamp: minutesAgo(1) } }), chat({ id: "early@c.us", last: { timestamp: minutesAgo(4) } })],

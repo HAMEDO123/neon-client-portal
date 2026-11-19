@@ -128,10 +128,22 @@ export function describeWhatsAppType(type: string): string {
   return TYPE_WORDS[type] ?? "Attachment";
 }
 
+/**
+ * Whether a message's text is really the picture's own bytes. For a photo with
+ * no caption the handset hands over its thumbnail, base64-encoded, where the
+ * words would be — and a row reading "/9j/4AAQSkZJRgABAQ…" (seen 2026-11-19) is
+ * worse than one that says what was sent. Real words have spaces or are short.
+ */
+export function isMediaData(text: string): boolean {
+  return text.length >= 64 && /^[A-Za-z0-9+/=\s]+$/.test(text) && !/\s/.test(text.slice(0, 64));
+}
+
 /** The line under a chat's name: their words, or what they sent. */
 export function whatsAppPreview(last: { body: string; type: string } | null): string {
   if (!last) return "No messages yet";
-  return last.body.trim() || describeWhatsAppType(last.type);
+  const words = last.body.trim();
+  if (!words || isMediaData(words)) return describeWhatsAppType(last.type === "chat" && words ? "image" : last.type);
+  return words;
 }
 
 /** Who a chat is with, the way the inbox says it. */
@@ -350,7 +362,9 @@ export function mergeChatList<T extends Listed>(items: T[], rows: InboxRow[]): L
 
 /** The line under a client's name in the list: "You: …" for what the studio sent. */
 export function rowPreview(row: Pick<InboxRow, "preview" | "fromMe">): string {
-  return row.fromMe ? `You: ${row.preview}` : row.preview;
+  // Rows stored before isMediaData existed still carry the bytes.
+  const preview = isMediaData(row.preview) ? describeWhatsAppType("image") : row.preview;
+  return row.fromMe ? `You: ${preview}` : preview;
 }
 
 /** A WhatsApp conversation as the thread screen needs it, from its id alone if need be. */
