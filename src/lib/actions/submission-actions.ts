@@ -11,7 +11,8 @@ import { taskUrl } from "@/lib/notifications/types";
 import { recordStateChange } from "@/lib/task-state-log";
 import { submitProof } from "@/lib/task-proof";
 import { getTimezone, getWorkHours } from "@/lib/settings";
-import { redeployDay } from "@/lib/task-cutoff";
+import { chargesForSendingBack, redeployDay } from "@/lib/task-cutoff";
+import { chargeSentBack } from "@/lib/deduction-store";
 import { dateToDayKey, dayKeyIn, dayKeyToDate, wallClockIn } from "@/lib/time";
 import { minutesOf } from "@/lib/work-hours";
 
@@ -36,6 +37,7 @@ function refresh(subject?: Subject) {
   revalidatePath("/admin/tasks");
   revalidatePath("/admin/reviews");
   revalidatePath("/admin/analytics");
+  revalidatePath("/admin/payroll");
 }
 
 /** The employee sends their evidence for a cell on the board. */
@@ -200,6 +202,18 @@ export async function rejectSubmission(submissionId: string, formData?: FormData
   const dueAgain = submission.assignedTaskId ? await redeploy(submission.assignedTaskId) : null;
 
   const subject = describe(submission);
+  // On 2026-11-19 only, being sent back cost an hour there and then
+  // (chargesForSendingBack) — the board's steps as well as hand-given jobs.
+  const todayKey = dayKeyIn(await getTimezone(), new Date());
+  const charged = chargesForSendingBack(todayKey)
+    ? await chargeSentBack({
+        submissionId: submission.id,
+        employeeId: submission.employeeId,
+        assignedTaskId: submission.assignedTaskId,
+        name: subject.name,
+        dayKey: todayKey,
+      }).catch(() => null)
+    : null;
   after(() =>
     dispatchNotification({
       employeeId: submission.employeeId,
@@ -207,6 +221,7 @@ export async function rejectSubmission(submissionId: string, formData?: FormData
       title: "Work sent back",
       message:
         (reason ? `${subject.name} needs more work: ${reason}` : `${subject.name} was sent back for more work.`) +
+        (charged != null ? ` One hour's pay (${charged.toFixed(2)} JOD) was taken off.` : "") +
         (dueAgain ? ` Due again ${dueAgain} by 11:59 PM.` : ""),
       url: subject.url,
       entryId: subject.entryId,

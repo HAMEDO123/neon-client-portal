@@ -11,7 +11,9 @@ import {
   handedIn,
   hoursAsMoney,
   readManualCutoff,
+  chargesForSendingBack,
   redeployDay,
+  sentBackDedupe,
   taskDedupe,
 } from "../src/lib/task-cutoff";
 import type { WorkHours } from "../src/lib/work-hours";
@@ -218,5 +220,21 @@ describe("a job sent back is due again", () => {
     assert.equal(taskDedupe("t1", 0), "TASK:t1");
     assert.notEqual(taskDedupe("t1", 1), taskDedupe("t1"));
     assert.notEqual(taskDedupe("t1", 2), taskDedupe("t1", 1));
+  });
+});
+
+describe("being sent back cost an hour, there and then, on 2026-11-19 only", () => {
+  it("on that day and no other", () => {
+    assert.equal(chargesForSendingBack("2026-11-19"), true);
+    assert.equal(chargesForSendingBack("2026-11-20"), false);
+    assert.equal(chargesForSendingBack("2026-11-18"), false);
+  });
+
+  it("is charged by rejectSubmission, once per sending-back", () => {
+    const actions = readFileSync(join(process.cwd(), "src", "lib", "actions", "submission-actions.ts"), "utf8");
+    const body = actions.slice(actions.indexOf("export async function rejectSubmission("));
+    assert.match(body.slice(0, 2500), /chargeSentBack\(\{\s*submissionId: submission\.id/);
+    // The key the first of these were written under by hand.
+    assert.equal(sentBackDedupe("s1"), "REJECTED:s1");
   });
 });

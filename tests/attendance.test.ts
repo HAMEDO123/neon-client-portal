@@ -67,11 +67,13 @@ describe("how late an arrival is", () => {
     assert.equal(lateHours(hours, "14:20", 5), 4);
   });
 
-  it("measures the hours from the end of the allowance, not from the start of the day", () => {
-    // 12:05 is 65 minutes after 11:00 but exactly 60 after the allowance, so it
-    // is one hour rather than two. Taking the grace off afterwards would round
-    // the same arrival up to two and quietly overcharge every late morning.
-    assert.equal(lateHours(hours, "12:05", 5), 1);
+  it("gives the allowance at the start only, then counts from the start", () => {
+    // The owner, 2026-11-19: "the 5 minutes allowance is only for 11 am".
+    // 12:05 is 65 minutes after 11:00, so two hours; 13:03 is three.
+    assert.equal(lateHours(hours, "12:00", 5), 1);
+    assert.equal(lateHours(hours, "12:01", 5), 2);
+    assert.equal(lateHours(hours, "12:05", 5), 2);
+    assert.equal(lateHours(hours, "13:03", 5), 3);
   });
 
   it("never charges more than a day, however wrong the reading", () => {
@@ -411,8 +413,8 @@ describe("a day that is always eight hours", () => {
     // A minute past the allowance is an hour of lateness everywhere else in
     // this file, so it is an hour here: 11:06 works until 8, not until 7:06.
     assert.equal(endOfDayMinutes(studio, MON, "11:06"), 20 * 60);
-    assert.equal(endOfDayMinutes(studio, MON, "12:05"), 20 * 60, "an hour late to the minute");
-    assert.equal(endOfDayMinutes(studio, MON, "12:06"), 21 * 60, "a minute more is another hour");
+    assert.equal(endOfDayMinutes(studio, MON, "12:00"), 20 * 60, "an hour late to the minute");
+    assert.equal(endOfDayMinutes(studio, MON, "12:01"), 21 * 60, "a minute more is another hour");
     assert.equal(endOfDayMinutes(studio, MON, "14:00"), 22 * 60);
   });
 

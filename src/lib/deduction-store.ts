@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { periodOf } from "@/lib/payroll";
 import { dayKeyToDate } from "@/lib/time";
-import { HOURS_PER_TASK, hoursAsMoney, taskDedupe } from "@/lib/task-cutoff";
+import { HOURS_PER_TASK, hoursAsMoney, sentBackDedupe, taskDedupe } from "@/lib/task-cutoff";
 
 // The database side of deductions (lib/task-cutoff.ts has the rules).
 // Deliberately not "use server": these trust their caller to have checked who
@@ -106,6 +106,47 @@ export async function chargeLateTask(
     return true;
   } catch (error) {
     if (isUniqueViolation(error)) return false;
+    throw error;
+  }
+}
+
+/**
+ * One hour for work the manager sent back, charged when it is sent back
+ * (asked for on 2026-11-19: "even the rejected recently today should be
+ * charge"). Keyed on the submission, so each sending-back costs once and a
+ * repeated call charges nothing. The manager takes it back like any cutoff.
+ * Answers the amount, or null when it was already charged or nobody was found.
+ */
+export async function chargeSentBack(input: {
+  submissionId: string;
+  employeeId: string;
+  assignedTaskId: string | null;
+  name: string;
+  dayKey: string;
+}) {
+  const employee = await prisma.employee.findUnique({
+    where: { id: input.employeeId },
+    select: { salaryAmount: true, payBasis: true },
+  });
+  if (!employee) return null;
+  const amount = hoursAsMoney(employee.salaryAmount, employee.payBasis, HOURS_PER_TASK);
+  try {
+    await prisma.deduction.create({
+      data: {
+        employeeId: input.employeeId,
+        day: dayKeyToDate(input.dayKey),
+        periodKey: periodOf(input.dayKey),
+        kind: "TASK",
+        hours: HOURS_PER_TASK,
+        amount,
+        reason: `Sent back by the manager: ${input.name}`.slice(0, 300),
+        assignedTaskId: input.assignedTaskId,
+        dedupeKey: sentBackDedupe(input.submissionId),
+      },
+    });
+    return amount;
+  } catch (error) {
+    if (isUniqueViolation(error)) return null;
     throw error;
   }
 }

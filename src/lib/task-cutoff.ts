@@ -184,3 +184,21 @@ export const managerKey = (dayKey: string) => `TASK_CUTOFF_MANAGER:${dayKey}`;
  * is charged twice.
  */
 export const taskDedupe = (taskId: string, round = 0) => (round > 0 ? `TASK:${taskId}:SENT-BACK:${round}` : `TASK:${taskId}`);
+/**
+ * The charge for being sent back at all, one per sending-back. "REJECTED:" is
+ * the key the first of these were written under by hand on 2026-11-19, so the
+ * code and those rows can never charge the same sending-back twice.
+ */
+export const sentBackDedupe = (submissionId: string) => `REJECTED:${submissionId}`;
+
+/**
+ * The only day on which being sent back costs an hour by itself. The owner
+ * asked for it for that day and no other ("no just for today man"); on every
+ * other day a job sent back costs nothing until it is not handed in again by
+ * 11:59 PM.
+ */
+export const SENT_BACK_CHARGE_DAY = "2026-11-19";
+
+export function chargesForSendingBack(dayKey: string) {
+  return dayKey === SENT_BACK_CHARGE_DAY;
+}

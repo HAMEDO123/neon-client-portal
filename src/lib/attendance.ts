@@ -112,7 +112,8 @@ const MAX_DELAY_HOURS = 24;
  * in a screen or a query:
  *
  * - **An allowance, then nothing forgiven.** Minutes up to `graceMinutes` past
- *   the start are not late at all — 11:05 on an 11:00 day. A minute past it is.
+ *   the start are not late at all — 11:05 on an 11:00 day. A minute past it is,
+ *   and is counted from the start: the allowance is for 11:00 only.
  * - **Charged in whole hours, rounded up.** 11:06 is an hour, 12:40 is two,
  *   14:20 is four. The studio asked for this deliberately: the point is that
  *   being late costs something worth avoiding, not that the arithmetic is
@@ -128,8 +129,12 @@ export function lateHours(hours: WorkHours, arrival: string, graceMinutes = hour
   const startsAt = minutesOf(hours.start);
   if (arrivedAt == null || startsAt == null) return 0;
 
-  const late = arrivedAt - startsAt - Math.max(0, graceMinutes);
-  if (late <= 0) return 0;
+  // The allowance forgives the first minutes after the start and nothing
+  // else: once past it, the hours are counted from the start itself. The
+  // owner, 2026-11-19: "the 5 minutes allowance is only for 11 am" — so 12:05
+  // is two hours, not one; before that day it was counted from 11:05.
+  const late = arrivedAt - startsAt;
+  if (late <= Math.max(0, graceMinutes)) return 0;
 
   // Rounded up rather than to two decimals: a part of an hour is an hour.
   return Math.min(Math.ceil(late / 60), MAX_DELAY_HOURS);
