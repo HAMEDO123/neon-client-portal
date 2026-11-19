@@ -31,8 +31,10 @@ const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Refuses an assigner everything after the handing out — except editing a job
- * of their own that is still open (2026-11-15, `refuseUnlessOwnOpenJob`).
+ * Refuses an assigner everything after the handing out, editing included.
+ * From 2026-11-15 she could edit a job of her own while it was open; the
+ * owner took that back on 2026-11-19: "remove the ability of editing the
+ * tasks for sally".
  *
  * The studio's rule, in the owner's words: an assigner "keeps receiving tasks
  * from the manager but can assign tasks on employees" (2026-11-09), and sees
@@ -152,43 +154,18 @@ export async function createAssignedTask(formData: FormData) {
   return { id: task.id };
 }
 
-/**
- * The one thing an assigner may change: a job they handed out themselves,
- * while it is still open.
- *
- * The owner, 2026-11-15, having seen the jobs Sally gives out: "خليها تقدر
- * تعدلهم" — let her edit them. Editing only: deleting, dragging and deciding
- * it is finished stay the manager's (`refuseAssigner`), and somebody else's
- * job — the manager's, or a job given before `assignedById` existed — is not
- * hers to change. Once approved it is closed: rewriting what was asked after
- * the manager accepted what was sent would leave the approval about a job
- * that no longer says what was approved.
- */
-function refuseUnlessOwnOpenJob(
-  staff: Staff,
-  job: { assignedById: string | null; state: string }
-) {
-  if (staff.type !== "EMPLOYEE") return;
-  if (job.assignedById !== staff.id) {
-    throw new Error("You can edit the jobs you handed out yourself — this one isn't yours to change.");
-  }
-  if (job.state === "DONE") {
-    throw new Error("The manager has already approved this job, so it can't be changed now.");
-  }
-}
-
 export async function updateAssignedTask(id: string, formData: FormData) {
   const staff = await requireTaskAssigner();
+  refuseAssigner(staff, "Editing a job");
   // A site visit's job follows the visit — see lib/site-visit-task-store.ts.
   await refuseVisitTask(id);
   const input = readForm(formData);
 
   const before = await prisma.assignedTask.findUnique({
     where: { id },
-    select: { employeeId: true, title: true, startDay: true, endDay: true, assignedById: true, state: true },
+    select: { employeeId: true, title: true, startDay: true, endDay: true },
   });
   if (!before) throw new Error("That task no longer exists.");
-  refuseUnlessOwnOpenJob(staff, before);
 
   // Handed to somebody else: the same check as handing it out in the first
   // place, so an edit is never a way to give work to the manager's own row or

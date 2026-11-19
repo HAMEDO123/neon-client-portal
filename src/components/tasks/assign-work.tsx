@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Pencil, Plus } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
 import { TaskDialog } from "@/components/admin/week-board";
 import { TaskBriefing } from "@/components/tasks/task-briefing";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
@@ -17,15 +17,12 @@ import { cn } from "@/lib/utils";
 // and the box that turns a spoken briefing into a list. The bottom is watching
 // it: what this person handed out today, under the name of whoever got it.
 //
-// Watching, and correcting what they wrote. The studio's rule (2026-11-14): an
-// assigner sees what they assigned "but still can't accept or reject, just
-// see" — and on 2026-11-15, "خليها تقدر تعدلهم": she may edit her own. So a row
-// that is still open opens the same form to fix its wording, person or days,
-// with no delete and no done tick on it. Every job on this list is one this
-// person handed out (`assignedByToday`); the server checks that again, and
-// refuses an approved job, a site visit, and everything past editing
-// (`refuseUnlessOwnOpenJob`, `refuseAssigner`). The manager's Tasks page is
-// where a job is deleted, accepted or sent back.
+// Watching, and nothing more. The studio's rule (2026-11-14): an assigner sees
+// what they assigned "but still can't accept or reject, just see". From
+// 2026-11-15 she could edit her own; on 2026-11-19 the owner took that back
+// ("remove the ability of editing the tasks for sally"), so the rows are to
+// read and the server refuses an edit (`refuseAssigner`). The manager's Tasks
+// page is where a job is changed, deleted, accepted or sent back.
 //
 // The form is the manager's own dialog, imported rather than rebuilt: it is
 // the one place "counts as done when" gets typed, and a second copy of it is a
@@ -44,7 +41,6 @@ export function AssignWork({
   todayKey: string;
 }) {
   const [writing, setWriting] = useState(false);
-  const [editing, setEditing] = useState<AssignedTaskView | null>(null);
 
   // In the team's own order, and only the people who got something.
   const groups = team
@@ -92,11 +88,8 @@ export function AssignWork({
               color={member.color}
               jobs={jobs}
               todayKey={todayKey}
-              onEdit={setEditing}
             />
           ))}
-          {/* Not editable: the form's "For" list has nobody to show for them,
-              and would quietly hand the job to whoever is first on it. */}
           {others.length > 0 && <Person name="No longer on the team" color={null} jobs={others} todayKey={todayKey} />}
         </div>
       )}
@@ -109,9 +102,6 @@ export function AssignWork({
           onClose={() => setWriting(false)}
         />
       )}
-
-      {/* No onDelete, no onToggleDone: the form shows neither button. */}
-      {editing && <TaskDialog team={team} task={editing} initial={null} onClose={() => setEditing(null)} />}
     </div>
   );
 }
@@ -121,13 +111,11 @@ function Person({
   color,
   jobs,
   todayKey,
-  onEdit,
 }: {
   name: string;
   color: string | null;
   jobs: AssignedTaskView[];
   todayKey: string;
-  onEdit?: (job: AssignedTaskView) => void;
 }) {
   const done = jobs.filter((job) => job.state === "DONE").length;
 
@@ -150,19 +138,12 @@ function Person({
       <ul className="flex flex-col gap-1.5">
         {jobs.map((job) => {
           const late = isLate(job.state, job.endKey, todayKey);
-          // Approved work is closed, and a site visit is changed on the visit.
-          const editable = onEdit != null && job.state !== "DONE" && !job.siteVisitId;
           return (
             <li key={job.id}>
-              <button
-                type="button"
-                disabled={!editable}
-                onClick={() => onEdit?.(job)}
-                aria-label={editable ? `Edit ${job.title}` : undefined}
+              <div
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-xl border p-2.5 text-left transition-colors",
-                  PRIORITY_ROW[job.state === "DONE" ? "MEDIUM" : job.priority],
-                  editable ? "cursor-pointer hover:border-ink/25 active:opacity-80" : "cursor-default"
+                  "flex w-full items-start gap-3 rounded-xl border p-2.5 text-left",
+                  PRIORITY_ROW[job.state === "DONE" ? "MEDIUM" : job.priority]
                 )}
               >
                 <StateBadge state={job.state} />
@@ -185,8 +166,7 @@ function Person({
                     )}
                   </span>
                 </span>
-                {editable && <Pencil size={14} strokeWidth={1.75} className="mt-0.5 shrink-0 text-ink/30" />}
-              </button>
+              </div>
             </li>
           );
         })}

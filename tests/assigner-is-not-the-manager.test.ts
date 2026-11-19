@@ -13,11 +13,12 @@ import { canMove, describeMove, needsApproval } from "../src/lib/task-transition
 //     tasks on employees";
 //   - 2026-11-14: she sees what she assigned today "but still can't accept or
 //     reject, just see";
-//   - 2026-11-15: "خليها تقدر تعدلهم" — she may edit the ones she gave out.
+//   - 2026-11-15: "خليها تقدر تعدلهم" — she may edit the ones she gave out;
+//   - 2026-11-19: taken back — "remove the ability of editing the tasks for
+//     sally".
 //
-// So an assigner gives work, watches it, and may correct a job of their own
-// while it is open. Moving, deleting and deciding a job is finished stay the
-// manager's, on everybody's jobs; editing somebody else's does too. None of
+// So an assigner gives work and watches it. Editing, moving, deleting and
+// deciding a job is finished stay the manager's, on everybody's jobs. None of
 // this shows in a type, a lint or a build — every refused path still
 // typechecks — which is why it is pinned at the source.
 
@@ -68,19 +69,12 @@ describe("an assigner hands work out and sees it — nothing after", () => {
     assert.match(bodyOf("setAssignedTaskState"), /refuseAssigner\(staff, "Accepting or sending back work"\)/);
   });
 
-  it("may edit only a job they handed out, and only while it is open", () => {
-    const helper = sliceFrom(action, "function refuseUnlessOwnOpenJob(");
-    assert.match(helper, /if \(staff\.type !== "EMPLOYEE"\) return;/, "the manager edits anything");
-    assert.match(helper, /job\.assignedById !== staff\.id/, "somebody else's job is refused");
-    assert.match(helper, /job\.state === "DONE"/, "an approved job is refused");
-
+  it("editing is refused, before the row is read", () => {
     const body = bodyOf("updateAssignedTask");
-    assert.doesNotMatch(body, /refuseAssigner\(/, "editing is no longer refused outright");
-    assert.match(body, /select: \{[^}]*assignedById: true[^}]*state: true/, "reads who handed it out");
-    const read = body.indexOf("prisma.assignedTask.findUnique");
-    const check = body.indexOf("refuseUnlessOwnOpenJob(staff, before)");
-    const write = body.indexOf("prisma.assignedTask.update");
-    assert.ok(read >= 0 && check > read && write > check, "checked after it is read and before it is written");
+    const guard = body.indexOf('refuseAssigner(staff, "Editing a job")');
+    assert.ok(guard >= 0, "refused in words about editing");
+    assert.ok(body.indexOf("prisma.assignedTask.findUnique") > guard, "before the row is touched");
+    assert.doesNotMatch(action, /refuseUnlessOwnOpenJob/, "the 2026-11-15 allowance is gone");
   });
 
   it("cannot use an edit to hand a job to somebody who could not be given one", () => {
@@ -127,7 +121,7 @@ describe("what an assigner sees", () => {
     assert.match(body, /createdAt: \{ gte: since \}/, "or was given today");
   });
 
-  it("on the website, as rows that open the form to edit — and nothing more", () => {
+  it("on the website, as rows to read — and nothing more", () => {
     const page = read("src", "app", "employee", "(portal)", "tasks", "page.tsx");
     assert.match(page, /assignedByToday\(employee\.id, today, timezone\)/);
     assert.doesNotMatch(page, /assignedTasksForWeek/, "not the team's week");
@@ -135,8 +129,7 @@ describe("what an assigner sees", () => {
     const screen = read("src", "components", "tasks", "assign-work.tsx");
     assert.doesNotMatch(screen, /setAssignedTaskState|deleteAssignedTask|moveAssignedTask/);
     assert.doesNotMatch(screen, /onDelete=|onToggleDone=/, "the form shows no delete and no done tick");
-    assert.match(screen, /task=\{editing\}/, "an open row opens the form on itself");
-    assert.match(screen, /job\.state !== "DONE" && !job\.siteVisitId/, "not an approved job or a visit");
+    assert.doesNotMatch(screen, /task=\{editing\}|onEdit/, "a row opens no form");
 
     const dialog = read("src", "components", "admin", "week-board.tsx");
     assert.match(dialog, /\{task && onDelete && onToggleDone && \(/, "those buttons only where they were given");
