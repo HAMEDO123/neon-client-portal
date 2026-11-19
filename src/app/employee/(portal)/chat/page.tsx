@@ -9,6 +9,8 @@ import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { ConversationList } from "@/components/chat/conversation-list";
 import { TaskList } from "@/components/chat/task-list";
 import { TeamStrip } from "@/components/chat/team-strip";
+import { OpenOnDesk } from "@/components/chat/open-on-desk";
+import { NeonLoader } from "@/components/ui/neon-loader";
 
 // The employee's chats — the team's group, their private conversation with the
 // manager, one with each colleague, and the clients writing to the company's
@@ -45,8 +47,22 @@ export default async function EmployeeChatsPage({
   const open = tasks.filter((task) => !progressOf(task.assignments).complete);
   const late = open.filter((task) => isOverdue(task.dueAt, task.assignments, now));
 
+  // On a desk this page opens the newest conversation in the three-panel
+  // view (open-on-desk.tsx) — unless it was asked for the Tasks tab, which
+  // only this page shows.
+  const deskHref = view !== "tasks" && conversations[0] ? `/employee/chat/${conversations[0].slug}` : null;
+
   return (
     <div className="flex flex-col gap-4">
+      {deskHref && (
+        <>
+          <OpenOnDesk href={deskHref} />
+          <div className="hidden min-h-[50vh] items-center justify-center lg:flex">
+            <NeonLoader size="small" />
+          </div>
+        </>
+      )}
+      <div className={deskHref ? "flex flex-col gap-4 lg:hidden" : "contents"}>
       <h1 className="text-xl font-semibold text-ink">Chat</h1>
 
       {/* Everybody you talk to, as faces (design 2). */}
@@ -86,6 +102,7 @@ export default async function EmployeeChatsPage({
           </div>
         }
       />
+      </div>
     </div>
   );
 }
