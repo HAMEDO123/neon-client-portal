@@ -87,6 +87,17 @@ export function chargeable(
 }
 
 /**
+ * The first day a job sent back becomes due again. The owner, 2026-11-19:
+ * "just for today all rejected gets charged, from tomorrow gets due for the
+ * same day" — so a job sent back on the 19th keeps its date.
+ */
+export const REDEPLOY_FROM = "2026-11-20";
+
+export function redeploysOn(dayKey: string) {
+  return dayKey >= REDEPLOY_FROM;
+}
+
+/**
  * The day a job sent back is due again (asked for on 2026-11-19: "make the
  * rejected task redeploy at the same day"). Before this a job sent back after
  * its day had nothing left to be late for: the cutoff only reads jobs due

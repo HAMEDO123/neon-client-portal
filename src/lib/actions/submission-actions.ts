@@ -11,7 +11,7 @@ import { taskUrl } from "@/lib/notifications/types";
 import { recordStateChange } from "@/lib/task-state-log";
 import { submitProof } from "@/lib/task-proof";
 import { getTimezone, getWorkHours } from "@/lib/settings";
-import { chargesForSendingBack, redeployDay } from "@/lib/task-cutoff";
+import { chargesForSendingBack, redeployDay, redeploysOn } from "@/lib/task-cutoff";
 import { chargeSentBack } from "@/lib/deduction-store";
 import { dateToDayKey, dayKeyIn, dayKeyToDate, wallClockIn } from "@/lib/time";
 import { minutesOf } from "@/lib/work-hours";
@@ -173,6 +173,7 @@ async function redeploy(assignedTaskId: string) {
   const [timeZone, hours] = await Promise.all([getTimezone(), getWorkHours()]);
   const now = new Date();
   const todayKey = dayKeyIn(timeZone, now);
+  if (!redeploysOn(todayKey)) return null;
   const endKey = dateToDayKey(task.endDay) ?? todayKey;
   const day = redeployDay(hours, todayKey, minutesOf(wallClockIn(timeZone, now)) ?? 0, endKey);
   if (day === endKey) return null;

@@ -13,6 +13,7 @@ import {
   readManualCutoff,
   chargesForSendingBack,
   redeployDay,
+  redeploysOn,
   sentBackDedupe,
   taskDedupe,
 } from "../src/lib/task-cutoff";
@@ -196,6 +197,13 @@ describe("answering a review", () => {
 });
 
 describe("a job sent back is due again", () => {
+  it("from 2026-11-20, not on the 19th", () => {
+    assert.equal(redeploysOn("2026-11-19"), false);
+    assert.equal(redeploysOn("2026-11-20"), true);
+    const actions = readFileSync(join(process.cwd(), "src", "lib", "actions", "submission-actions.ts"), "utf8");
+    assert.match(actions, /if \(!redeploysOn\(todayKey\)\) return null;/);
+  });
+
   // Saturday to Thursday; 2026-11-19 is a Thursday, 2026-11-20 a Friday.
   const HOURS = { days: [0, 1, 2, 3, 4, 6] } as unknown as WorkHours;
   const at = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
