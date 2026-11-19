@@ -110,15 +110,6 @@ describe("one reading of a task's standing, on every screen", () => {
     }
   });
 
-  // The Assign view lost its filter buttons on 2026-11-14, when it became one
-  // day's short list of what the assigner handed out. "Late" on it is still
-  // the shared reading, not a second one.
-  it("is what the Assign view calls late", () => {
-    const source = read("src", "components", "tasks", "assign-work.tsx");
-    assert.match(source, /import \{ isLate \} from "@\/lib\/task-filters"/);
-    assert.match(source, /isLate\(/);
-  });
-
   // A project's own steps are not in the task list any more.
   //
   // The studio asked for that on 2026-11-03 — "ما يبينش عندهم كتاسك" — and a

@@ -12,7 +12,7 @@ import { getMyReceipts } from "@/lib/payroll-queries";
 import { periodOf, periodLabel, RECEIPT_CAP } from "@/lib/payroll";
 import { getPreferences } from "@/lib/notifications/engine";
 import { deviceLabel } from "@/lib/devices";
-import { myAssignedTasks, myAssignedTask, assignedTasksForWeek, assignedByToday } from "@/lib/assigned-tasks";
+import { myAssignedTasks, myAssignedTask, assignedTasksForWeek } from "@/lib/assigned-tasks";
 import { submissionsForAssignedTask } from "@/lib/submissions";
 import { openFollowUpForTask } from "@/lib/follow-up-queue";
 import { answerFollowUp } from "@/lib/actions/follow-up-actions";
@@ -264,11 +264,10 @@ export const reads: ReadRegistry = {
   // week works, lib/week.ts resolves it).
   //
   // The manager gets that week's jobs, whoever they are for. An employee with
-  // `canAssignTasks` gets only what *they* handed out — what runs today plus
-  // what they gave today (`assignedByToday`) — whatever week is asked for, and
-  // `readOnly: true`: the studio's rule since 2026-11-14 is that they see it
-  // and do not change, accept or send back anything (the actions refuse it in
-  // words). Same shape either way, so an app build from before still decodes.
+  // `canAssignTasks` gets an empty list and `readOnly: true`: since 2026-11-19
+  // they hand work out and see none of it afterwards, and change, accept or
+  // send back nothing (the actions refuse it in words). Same shape either way,
+  // so an app build from before still decodes.
   "me/assign/week": guarded(requireTaskAssigner, async (params, staff) => {
     const timezone = await getTimezone();
     const today = todayKey(timezone);
@@ -279,7 +278,9 @@ export const reads: ReadRegistry = {
         weekLabel: "Assigned by you today",
         todayKey: today,
         readOnly: true,
-        tasks: await assignedByToday(staff.id, today, timezone),
+        // Hands work out and sees none of it (2026-11-19: "cant see the
+        // status of them just hands them").
+        tasks: [],
       };
     }
 

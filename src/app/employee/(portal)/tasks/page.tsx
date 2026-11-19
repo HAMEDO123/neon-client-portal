@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { AssignWork } from "@/components/tasks/assign-work";
 import { SiteVisits } from "@/components/tasks/site-visits";
 import { projectsForVisits, siteVisitsFor } from "@/lib/site-visit-queries";
-import { assignedByToday } from "@/lib/assigned-tasks";
 import { prisma } from "@/lib/db";
 import { chipClass, chipCountClass } from "@/components/tasks/filter-chip";
 import {
@@ -104,21 +103,18 @@ export default async function EmployeeTasksPage({
   if (assigning) {
     const today = dayKeyIn(timezone, new Date());
 
-    // Only what this person handed out, today — not the team's week. The
-    // studio's rule (2026-11-14): they "see what she assigned … just see".
-    const [team, tasks] = await Promise.all([
-      prisma.employee.findMany({
-        where: { active: true, accessRole: "EMPLOYEE" },
-        orderBy: [{ order: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, color: true, role: true, photoUrl: true },
-      }),
-      assignedByToday(employee.id, today, timezone),
-    ]);
+    // Handing work out and nothing after it — not even where it stands
+    // (2026-11-19: "cant see the status of them just hands them").
+    const team = await prisma.employee.findMany({
+      where: { active: true, accessRole: "EMPLOYEE" },
+      orderBy: [{ order: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, color: true, role: true, photoUrl: true },
+    });
 
     return (
       <div className="flex flex-col gap-4">
         <ViewSwitch view="studio" canAssign canVisit={employee.canLogSiteVisits} />
-        <AssignWork team={team} tasks={tasks} todayKey={today} />
+        <AssignWork team={team} todayKey={today} />
       </div>
     );
   }

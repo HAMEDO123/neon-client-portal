@@ -111,35 +111,23 @@ describe("who handed it out is written down", () => {
   });
 });
 
-describe("what an assigner sees", () => {
-  const loader = read("src", "lib", "assigned-tasks.ts");
-
-  it("is their own handing out only, today's and given today", () => {
-    const body = sliceFrom(loader, "export async function assignedByToday(");
-    assert.match(body, /assignedById: assignerId/);
-    assert.match(body, /startDay: \{ lte: day \}, endDay: \{ gte: day \}/, "runs today");
-    assert.match(body, /createdAt: \{ gte: since \}/, "or was given today");
-  });
-
-  it("on the website, as rows to read — and nothing more", () => {
+describe("what an assigner sees: nothing of the work after it is handed out", () => {
+  // 2026-11-19: "and also cant see the status of them just hands them".
+  it("on the website, the button and the briefing box, and no list", () => {
     const page = read("src", "app", "employee", "(portal)", "tasks", "page.tsx");
-    assert.match(page, /assignedByToday\(employee\.id, today, timezone\)/);
-    assert.doesNotMatch(page, /assignedTasksForWeek/, "not the team's week");
+    assert.match(page, /<AssignWork team=\{team\} todayKey=\{today\} \/>/);
+    assert.doesNotMatch(page, /assignedByToday|assignedTasksForWeek/, "no jobs are read for it");
 
     const screen = read("src", "components", "tasks", "assign-work.tsx");
-    assert.doesNotMatch(screen, /setAssignedTaskState|deleteAssignedTask|moveAssignedTask/);
-    assert.doesNotMatch(screen, /onDelete=|onToggleDone=/, "the form shows no delete and no done tick");
-    assert.doesNotMatch(screen, /task=\{editing\}|onEdit/, "a row opens no form");
-
-    const dialog = read("src", "components", "admin", "week-board.tsx");
-    assert.match(dialog, /\{task && onDelete && onToggleDone && \(/, "those buttons only where they were given");
+    assert.doesNotMatch(screen, /StateBadge|STATE_LABEL|AssignedTaskView/, "no job and no state is drawn");
+    assert.doesNotMatch(screen, /setAssignedTaskState|deleteAssignedTask|moveAssignedTask|onEdit/);
   });
 
-  it("in the phone app, the same list, marked read-only", () => {
+  it("in the phone app, an empty list marked read-only", () => {
     const registry = read("src", "lib", "mobile", "registry", "me.ts");
     const body = sliceFrom(registry, '"me/assign/week"');
     assert.match(body, /if \(staff\.type === "EMPLOYEE"\)/);
-    assert.match(body, /assignedByToday\(staff\.id, today, timezone\)/);
-    assert.match(body, /readOnly: true/);
+    assert.match(body, /readOnly: true,[\s\S]*?tasks: \[\],/);
+    assert.doesNotMatch(registry, /assignedByToday/);
   });
 });
