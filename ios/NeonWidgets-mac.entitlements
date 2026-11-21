@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The widgets on a Mac (Catalyst). macOS shows only sandboxed widget
+     extensions in the widget gallery, so the Mac build adds the sandbox and
+     the outgoing connection it needs to read the phone API. The iPhone build
+     keeps NeonWidgets.entitlements (generated from project.yml). -->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.neonjo.staff.shared</string>
+	</array>
+</dict>
+</plist>

@@ -234,6 +234,8 @@ targets:
       base:
         PRODUCT_NAME: NeonWidgets
         PRODUCT_BUNDLE_IDENTIFIER: com.neonjo.staff.widgets
+        # macOS lists only sandboxed widget extensions (NeonWidgets-mac.entitlements).
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": NeonWidgets-mac.entitlements
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: YES
         "TARGETED_DEVICE_FAMILY[sdk=macosx*]": "2,6"
