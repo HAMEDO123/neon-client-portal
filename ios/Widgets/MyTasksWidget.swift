@@ -124,7 +124,7 @@ struct MyTasksView: View {
     }
 
     @ViewBuilder private func content(_ mine: MyTasks, _ words: Words) -> some View {
-        VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 8) {
+        VStack(alignment: .leading, spacing: 6) {
             WidgetTitle(title: words.t("My tasks", "مهامي"), symbol: "checklist")
             HStack(spacing: 10) {
                 Figure(value: mine.open.count, label: words.t("open", "مفتوحة"), tint: Palette.purple)
@@ -140,10 +140,12 @@ struct MyTasksView: View {
                         .foregroundStyle(Palette.muted)
                 } else {
                     VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
-                        ForEach(Array(mine.next.prefix(family == .systemLarge ? 9 : 3)), id: \.id) { row in
+                        ForEach(Array(mine.next.prefix(family == .systemLarge ? 9 : 2)), id: \.id) { row in
                             line(row, words)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassPane()
                 }
             }
             Spacer(minLength: 0)

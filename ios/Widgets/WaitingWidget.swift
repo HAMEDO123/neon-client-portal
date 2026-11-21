@@ -113,7 +113,7 @@ struct WaitingView: View {
         VStack(alignment: .leading, spacing: 8) {
             WidgetTitle(title: words.t("Waiting on you", "بانتظارك"), symbol: "tray.fill", tint: Palette.amber)
             let columns = family == .systemSmall ? 2 : max(waiting.counts.count, 2)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: columns), alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: columns), alignment: .leading, spacing: 6) {
                 ForEach(waiting.counts, id: \.label) { count in
                     Link(destination: neonLink(count.path)) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -121,7 +121,7 @@ struct WaitingView: View {
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(count.value > 0 ? count.tint : Palette.grey)
                             Text("\(count.value)")
-                                .font(.system(size: family == .systemSmall ? 20 : 24, weight: .bold, design: .rounded))
+                                .font(.system(size: family == .systemSmall ? 17 : 22, weight: .bold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(count.value > 0 ? Palette.ink : Palette.grey)
                             Text(count.label)
@@ -130,7 +130,9 @@ struct WaitingView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                         }
+                        .widgetAccentable()
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassPane(radius: 12, padding: 7)
                     }
                 }
             }

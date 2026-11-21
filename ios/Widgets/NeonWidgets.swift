@@ -32,27 +32,81 @@ struct Words {
     var direction: LayoutDirection { ar ? .rightToLeft : .leftToRight }
 }
 
+// Liquid Glass: glass tiles over a deep colour field, white type. In the
+// system's own clear and tinted looks (iOS 26 / macOS 26) the colour field
+// steps aside and the system's glass shows through instead.
 enum Palette {
-    static let purple = Color(red: 0.36, green: 0.25, blue: 0.86)
-    static let ink = Color(red: 0.11, green: 0.10, blue: 0.16)
-    static let muted = Color(red: 0.42, green: 0.41, blue: 0.48)
-    static let green = Color(red: 0.09, green: 0.64, blue: 0.29)
-    static let amber = Color(red: 0.85, green: 0.47, blue: 0.02)
-    static let red = Color(red: 0.86, green: 0.15, blue: 0.15)
-    static let blue = Color(red: 0.15, green: 0.39, blue: 0.92)
-    static let grey = Color(red: 0.58, green: 0.6, blue: 0.65)
+    static let purple = Color(red: 0.78, green: 0.72, blue: 1.0)
+    static let ink = Color.white
+    static let muted = Color.white.opacity(0.72)
+    static let green = Color(red: 0.45, green: 0.93, blue: 0.6)
+    static let amber = Color(red: 0.99, green: 0.79, blue: 0.33)
+    static let red = Color(red: 1.0, green: 0.52, blue: 0.52)
+    static let blue = Color(red: 0.5, green: 0.78, blue: 1.0)
+    static let grey = Color.white.opacity(0.45)
 }
 
+/// The colour the glass sits on: NEON's purple running into a deep blue, with
+/// two soft lights so the glass has something to bend.
 private struct WidgetSurface: View {
+    @Environment(\.widgetRenderingMode) private var mode
+
     var body: some View {
-        LinearGradient(
-            colors: [Color(red: 0.98, green: 0.97, blue: 1.0), Color(red: 0.93, green: 0.91, blue: 0.99)],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
+        if mode == .fullColor {
+            ZStack {
+                LinearGradient(
+                    colors: [Color(red: 0.29, green: 0.16, blue: 0.62), Color(red: 0.13, green: 0.18, blue: 0.5), Color(red: 0.06, green: 0.31, blue: 0.47)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+                Circle()
+                    .fill(Color(red: 0.93, green: 0.36, blue: 0.75).opacity(0.55))
+                    .frame(width: 180, height: 180)
+                    .blur(radius: 60)
+                    .offset(x: 90, y: -70)
+                Circle()
+                    .fill(Color(red: 0.3, green: 0.85, blue: 0.95).opacity(0.4))
+                    .frame(width: 160, height: 160)
+                    .blur(radius: 60)
+                    .offset(x: -90, y: 80)
+            }
+        } else {
+            Color.clear
+        }
+    }
+}
+
+/// A pane of glass: a frosted face, a bright edge that catches the light at
+/// the top and fades down, and a soft shadow under it.
+private struct GlassPane: ViewModifier {
+    var radius: CGFloat
+    @Environment(\.widgetRenderingMode) private var mode
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        content
+            .background {
+                if mode == .fullColor {
+                    shape
+                        .fill(LinearGradient(colors: [Color.white.opacity(0.26), Color.white.opacity(0.09)], startPoint: .top, endPoint: .bottom))
+                        .overlay(
+                            shape.strokeBorder(
+                                LinearGradient(colors: [Color.white.opacity(0.75), Color.white.opacity(0.12), Color.white.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 1
+                            )
+                        )
+                        .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
+                } else {
+                    shape.fill(Color.white.opacity(0.1))
+                }
+            }
     }
 }
 
 extension View {
+    func glassPane(radius: CGFloat = 14, padding: CGFloat = 8) -> some View {
+        self.padding(padding).modifier(GlassPane(radius: radius))
+    }
+
     @ViewBuilder func neonWidgetBackground() -> some View {
         if #available(iOS 17.0, *) {
             containerBackground(for: .widget) { WidgetSurface() }
@@ -120,7 +174,7 @@ struct Figure: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text("\(value)")
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(tint)
                 .minimumScaleFactor(0.6)
@@ -130,7 +184,9 @@ struct Figure: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
+        .widgetAccentable()
         .frame(maxWidth: .infinity, alignment: .leading)
+        .glassPane(radius: 12, padding: 7)
     }
 }
 

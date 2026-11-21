@@ -114,11 +114,11 @@ struct TeamMapView: View {
     }
 
     @ViewBuilder private func content(_ place: TeamPlace, _ words: Words) -> some View {
-        VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 8) {
+        VStack(alignment: .leading, spacing: 6) {
             WidgetTitle(title: words.t("Team map", "خريطة الفريق"), symbol: "map.fill", tint: Palette.green)
             HStack(spacing: 10) {
                 Figure(value: place.atOffice, label: words.t("at the office", "بالمكتب"), tint: Palette.green)
-                Figure(value: place.sending, label: words.t("sending", "بيبعتوا موقع"), tint: Palette.blue)
+                Figure(value: place.sending, label: words.t("sending", "موقع واصل"), tint: Palette.blue)
                 if family != .systemSmall {
                     Figure(value: place.people.count, label: words.t("on the team", "بالفريق"))
                 }
@@ -130,12 +130,14 @@ struct TeamMapView: View {
                     .lineLimit(2)
             }
             if family != .systemSmall {
-                let shown = Array(place.people.prefix(family == .systemLarge ? 10 : 3))
+                let shown = Array(place.people.prefix(family == .systemLarge ? 10 : 2))
                 VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
                     ForEach(shown, id: \.id) { person in
                         row(person, words)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassPane()
             }
             Spacer(minLength: 0)
         }

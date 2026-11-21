@@ -118,7 +118,7 @@ struct StudioTodayView: View {
     }
 
     @ViewBuilder private func content(_ today: StudioToday, _ words: Words) -> some View {
-        VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 8) {
+        VStack(alignment: .leading, spacing: 6) {
             WidgetTitle(title: words.t("Today's tasks", "مهام اليوم"), symbol: "checklist")
             HStack(spacing: 10) {
                 Figure(value: today.work.count - today.done, label: words.t("still open", "لسا مفتوحة"), tint: Palette.purple)
@@ -134,10 +134,12 @@ struct StudioTodayView: View {
                     .foregroundStyle(Palette.muted)
             } else if family != .systemSmall {
                 VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
-                    ForEach(Array(today.ordered.prefix(family == .systemLarge ? 9 : 3)), id: \.id) { item in
+                    ForEach(Array(today.ordered.prefix(family == .systemLarge ? 9 : 2)), id: \.id) { item in
                         row(item, words)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassPane()
             }
             Spacer(minLength: 0)
         }
