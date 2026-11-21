@@ -18,7 +18,7 @@ enum MeScreens {
         "me-today", "me-tasks", "me-task-detail", "me-job-detail", "me-proof",
         "me-assign", "me-requests", "me-notifications", "me-profile",
         "more-admin", "more-employee",
-        "me-tasks-fixture", "me-tasks-fixture-late", "me-tasks-fixture-review", "me-ask-fixture",
+        "me-tasks-fixture", "me-tasks-fixture-late", "me-tasks-fixture-review", "me-ask-fixture", "me-clock-fixture",
     ]
 
     @MainActor static func view(_ id: String) -> AnyView? {
@@ -35,6 +35,10 @@ enum MeScreens {
         case "me-tasks-fixture": return AnyView(TasksView(preview: MeFixtures.tasks))
         case "me-tasks-fixture-late": return AnyView(MeFixtureTasks(filter: .late))
         case "me-tasks-fixture-review": return AnyView(MeFixtureTasks(filter: .review))
+        case "me-clock-fixture":
+            return AnyView(NeonScroll(spacing: NeonSpace.stack, lazy: false) {
+                AppClockCard(preview: .init(allowed: true, punches: [.init(time: "10:58 AM", link: "https://maps.google.com/?q=31.95,35.91")]))
+            })
         case "me-ask-fixture":
             return debugPushed(
                 NeonScroll(spacing: NeonSpace.stack, lazy: false) {

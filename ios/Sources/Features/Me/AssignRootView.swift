@@ -25,7 +25,20 @@ struct AssignRootView: View {
             // Several jobs at once, by saying them.
             TaskBriefingCard { briefing = true }
 
-            if let week {
+            if let week, week.readOnly == true {
+                // Somebody on the team who hands work out: since 2026-11-19
+                // they see none of it afterwards and change nothing, so there
+                // is no week to walk through — only the button.
+                EmptyState(
+                    symbol: "paperplane.fill",
+                    title: L("Hand out a job"),
+                    detail: L("It goes to the person straight away. Following it up is the manager's."),
+                    actionTitle: L("Hand out a job"),
+                    action: { creating = true },
+                    hue: .purple,
+                    card: true
+                )
+            } else if let week {
                 weekHeader(week)
 
                 if week.tasks.isEmpty {

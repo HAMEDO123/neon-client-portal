@@ -148,3 +148,20 @@
 "Item %d" = "الغرض %d";
 "Remove this item" = "احذف هذا الغرض";
 "How many" = "العدد";
+
+/* Clocking in from the app (AppClockCard.swift) */
+"Clock in from the app" = "تسجيل الحضور من التطبيق";
+"Recorded with where you are, like the fingerprint at the studio." = "بينسجّل مع مكانك، متل البصمة بالمكتب.";
+"Finding where you are…" = "عم ندوّر على مكانك…";
+"Recording…" = "عم نسجّل…";
+"Clock in here" = "سجّل حضوري من هون";
+"Clock out here" = "سجّل انصرافي من هون";
+"Where" = "المكان";
+"Recorded at %@, with your location." = "انسجّل الساعة %@ مع مكانك.";
+"Location is blocked for NEON. Allow it in Settings → NEON → Location, then try again." = "الموقع مسكّر على NEON. افتحه من الإعدادات ← NEON ← الموقع، وجرّب مرة ثانية.";
+"Your location took too long to come through. Step outside if you can and try again." = "موقعك تأخر كتير. اطلع برّا إذا بتقدر وجرّب مرة ثانية.";
+"Your phone couldn't find where you are. Turn location on and try again." = "جوالك ما عرف وين إنت. شغّل الموقع وجرّب مرة ثانية.";
+"Your location didn't come through. Turn location on for NEON and try again." = "موقعك ما وصل. شغّل الموقع لـ NEON وجرّب مرة ثانية.";
+"Your phone only knows roughly where you are. Turn on precise location for NEON, step outside if you can, and try again." = "جوالك بيعرف مكانك تقريبًا بس. شغّل الموقع الدقيق لـ NEON، واطلع برّا إذا بتقدر، وجرّب مرة ثانية.";
+"Clocking in from the app isn't on for you — use the fingerprint at the studio." = "تسجيل الحضور من التطبيق مش مفعّل إلك — استعمل البصمة بالمكتب.";
+"It goes to the person straight away. Following it up is the manager's." = "بتوصل للشخص فورًا. ومتابعتها على المدير.";

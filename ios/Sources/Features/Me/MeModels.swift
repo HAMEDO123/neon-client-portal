@@ -183,4 +183,7 @@ struct AssignWeekResponse: Decodable {
     let weekLabel: String
     let todayKey: String
     let tasks: [MyAssignedJob]
+    /// Somebody on the team who hands work out: since 2026-11-19 they see
+    /// none of it afterwards and change nothing (`tasks` is empty).
+    var readOnly: Bool? = nil
 }

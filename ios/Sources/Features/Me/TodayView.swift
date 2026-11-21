@@ -48,6 +48,8 @@ struct TodayView: View {
                             await addToReport(line)
                         }
                         // What this phone shares with the team map, and when.
+                        // Clock in from here, for whoever the manager turned it on for.
+                        AppClockCard()
                         LocationSharingCard()
 
                         if day.tasks.isEmpty {
