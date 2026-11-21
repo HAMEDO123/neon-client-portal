@@ -48,21 +48,6 @@ struct TasksView: View {
                         EmptyState(symbol: "checklist", title: emptyTitle, detail: emptyDetail, hue: .blue, card: true)
                     }
 
-                    if !board.isEmpty {
-                        SectionCard(L("On the project board"), subtitle: L("%d on the board", board.count), symbol: "square.stack.3d.up.fill", hue: .blue) {
-                            VStack(spacing: NeonSpace.sm) {
-                                ForEach(Array(board.enumerated()), id: \.element.id) { index, task in
-                                    NavigationLink(value: TaskRoute(id: task.id)) {
-                                        TodayTaskRow(task: task)
-                                    }
-                                    .buttonStyle(.pressableCard)
-                                    .staggered(index)
-                                    if task.id != board.last?.id { NeonDivider() }
-                                }
-                            }
-                        }
-                    }
-
                     if !jobs.isEmpty {
                         SectionCard(L("Handed to you"), subtitle: L("%d handed to you directly", jobs.count), symbol: "shippingbox.fill", hue: .purple) {
                             VStack(spacing: NeonSpace.sm) {
@@ -80,6 +65,21 @@ struct TasksView: View {
 
                     MyChatJobsSection(parts: fromChat) { part, card in
                         proofFor = ProofTarget(id: part.id, title: card.title, detail: card.description)
+                    }
+
+                    if !board.isEmpty {
+                        SectionCard(L("On the project board"), subtitle: L("%d on the board", board.count), symbol: "square.stack.3d.up.fill", hue: .blue) {
+                            VStack(spacing: NeonSpace.sm) {
+                                ForEach(Array(board.enumerated()), id: \.element.id) { index, task in
+                                    NavigationLink(value: TaskRoute(id: task.id)) {
+                                        TodayTaskRow(task: task)
+                                    }
+                                    .buttonStyle(.pressableCard)
+                                    .staggered(index)
+                                    if task.id != board.last?.id { NeonDivider() }
+                                }
+                            }
+                        }
                     }
                 } else if let errorMessage {
                     ErrorState(message: errorMessage) { await load() }
