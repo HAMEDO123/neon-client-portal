@@ -9,7 +9,7 @@
 // Pure, so the limits are tested: this comes from a phone.
 
 export type ShopStorageItem = {
-  /** The page origin the entry belongs to, "https://www.yasermallonline.com". */
+  /** The page origin the entry belongs to, "https://www.hypermax.com.jo". */
   origin: string;
   key: string;
   value: string;

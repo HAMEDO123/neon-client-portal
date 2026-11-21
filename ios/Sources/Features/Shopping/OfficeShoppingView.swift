@@ -1,13 +1,16 @@
 import SwiftUI
 import WebKit
 
-// The office's shared shop cart: the supermarket's own website (Yaser Mall),
+// The office's shared shop cart: the supermarket's own website (HyperMax —
+// it was Yaser Mall until 2026-11-21, when Yaser Mall closed its website and
+// sent every visitor to its app; the owner: "replace yasser mall with hypermax
+// website with the same thing"),
 // in a web view, signed in to ONE office account on every phone. Everybody
 // adds to the same cart — the cart lives at the shop, on that account — and
 // only the manager orders.
 //
-// The shop signs in with a phone number and an SMS code, and keeps the result
-// as a token in local storage ("wk_token") — there is no password to share.
+// The shop signs in with a code it sends, and keeps the result in its cookies
+// and local storage — there is no password to share.
 // So the manager signs in once, on their own phone where the SMS arrives, and
 // presses "Share with the office": the shop's cookies and local-storage
 // entries go to the server (`me/shopping/share`, sealed there). Every team
@@ -27,14 +30,18 @@ import WebKit
 // manager is told (`me/shopping/added`).
 
 enum OfficeShop {
-    static let home = URL(string: "https://www.yasermallonline.com/")!
-    static let name = "Yaser Mall"
+    static let home = URL(string: "https://www.hypermax.com.jo/mafjor/ar")!
+    static let name = "HyperMax"
+    /// Said after the web view's own "Mobile/15E148", so the shop sees Safari on
+    /// an iPhone. A shop that does not recognise an in-app browser can send it
+    /// to its app instead of its website — what ended Yaser Mall here.
+    static let browserName = "Version/18.0 Mobile/15E148 Safari/604.1"
 
     /// Paths and API addresses that place or pay for an order. Tuned against
     /// the real site once it has been tried; kept here so that is one edit.
     static let checkoutPattern = #"(check-?out|payment|pay-?now|(place|confirm|submit|create|add)-?order|order\/(create|place|submit|confirm))"#
     /// Button wording that leads to ordering, English and Arabic.
-    static let checkoutTextPattern = #"(checkout|check out|place order|confirm order|proceed to (checkout|payment)|pay now|complete order|إتمام الطلب|اتمام الطلب|تأكيد الطلب|تاكيد الطلب|إتمام الشراء|اتمام الشراء|الدفع|ادفع|اطلب الآن|اطلب الان|تثبيت الطلب|إرسال الطلب|ارسال الطلب)"#
+    static let checkoutTextPattern = #"(checkout|check out|place order|confirm order|proceed to (checkout|payment)|continue to (checkout|payment)|pay now|complete order|المتابعة للدفع|متابعة الدفع|المتابعة إلى الدفع|إتمام الطلب|اتمام الطلب|تأكيد الطلب|تاكيد الطلب|إتمام الشراء|اتمام الشراء|الدفع|ادفع|اطلب الآن|اطلب الان|تثبيت الطلب|إرسال الطلب|ارسال الطلب)"#
     /// What counts as the cart, in an address or a label.
     static let cartPattern = #"(cart|basket|سلة|السلة)"#
 
@@ -482,6 +489,7 @@ private struct OfficeShopWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
+        config.applicationNameForUserAgent = OfficeShop.browserName
         // The default store keeps the shop's sign-in on this phone between
         // visits, so the manager signs the office account in once.
         config.websiteDataStore = .default()
