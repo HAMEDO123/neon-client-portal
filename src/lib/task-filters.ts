@@ -47,13 +47,17 @@ export function isLate(state: State, dueDayKey: string | null | undefined, today
  * studio asked for it out of that list: it has a button of its own. It comes
  * back by itself if the manager sends it back, because that returns it to in
  * progress.
+ *
+ * Late work is not open either — it is under Late and only there (the studio,
+ * 2026-11-21: "remove the tasks labeled as late from the open tab so they
+ * don't have to scroll for ages"). Open is today's and what is coming.
  */
 export function matchesFilter(item: Filterable, filter: TaskFilter) {
   switch (filter) {
     case "all":
       return true;
     case "open":
-      return item.state !== "DONE" && item.state !== "SUBMITTED";
+      return item.state !== "DONE" && item.state !== "SUBMITTED" && !item.late;
     case "progress":
       return item.state === "IN_PROGRESS";
     case "review":

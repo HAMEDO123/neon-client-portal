@@ -39,10 +39,12 @@ enum TaskFilter: String, CaseIterable, Identifiable {
     /// sent for review has left their hands — it is the manager's move — so
     /// it is not open, and has a button of its own. It comes back by itself
     /// if the manager sends it back, because that returns it to in progress.
+    /// Late work is not open either: it is under Late and only there, so
+    /// today's work is not scrolled for under a long list of late jobs.
     func matches(_ item: TaskStanding) -> Bool {
         switch self {
         case .all: return true
-        case .open: return item.state != "DONE" && item.state != "SUBMITTED"
+        case .open: return item.state != "DONE" && item.state != "SUBMITTED" && !item.late
         // Sent back is in progress underneath; it only reads "Rejected".
         case .progress: return item.state == "IN_PROGRESS" || item.state == "REJECTED"
         case .review: return item.state == "SUBMITTED"

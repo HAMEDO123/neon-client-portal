@@ -52,7 +52,7 @@ describe("the filters", () => {
   it("each show one kind of work", () => {
     const shown = (filter: (typeof TASK_FILTERS)[number]) => items.filter((item) => matchesFilter(item, filter)).length;
     assert.equal(shown("all"), 9);
-    assert.equal(shown("open"), 5);
+    assert.equal(shown("open"), 3);
     assert.equal(shown("progress"), 2);
     assert.equal(shown("review"), 2);
     assert.equal(shown("late"), 3);
@@ -69,6 +69,15 @@ describe("the filters", () => {
     // Sent back by the manager is in progress again, and so open again.
     for (const state of ["TODO", "IN_PROGRESS", "TOMORROW"] as const) {
       assert.equal(matchesFilter({ state, late: false }, "open"), true, state);
+    }
+  });
+
+  // Late work is under Late and nowhere else: the open list was mostly late
+  // work, and the studio asked for it out so today's is not scrolled for.
+  it("leave late work out of what is open", () => {
+    for (const state of ["TODO", "IN_PROGRESS", "TOMORROW"] as const) {
+      assert.equal(matchesFilter({ state, late: true }, "open"), false, state);
+      assert.equal(matchesFilter({ state, late: true }, "late"), true, state);
     }
   });
 
