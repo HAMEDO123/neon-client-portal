@@ -96,7 +96,7 @@ enum MacWindow {
 enum MacRoute {
     static func admin(_ path: String) -> String {
         let routes: [(String, String)] = [
-            ("/admin/chat", "chat"), ("/admin/whatsapp", "whatsapp"),
+            ("/admin/chat", "chat"), ("/admin/whatsapp", "whatsapp"), ("/admin/leads", "leads"),
             ("/admin/tasks", "tasks"), ("/admin/projects", "projects"),
             ("/admin/reviews", "reviews"), ("/admin/requests", "requests"),
             ("/admin/alerts", "alerts"), ("/admin/meetings", "meetings"),
@@ -141,6 +141,7 @@ extension AdminHome {
                 SidebarItem(id: "meetings", title: L("Meetings"), symbol: "calendar") { AnyView(MeetingsView()) },
                 SidebarItem(id: "visits", title: L("Site visits"), symbol: "mappin.and.ellipse") { AnyView(SiteVisitsRootView()) },
                 SidebarItem(id: "whatsapp", title: L("WhatsApp"), symbol: "phone.bubble") { AnyView(WhatsAppRootView()) },
+                SidebarItem(id: "leads", title: L("Lead Finder"), symbol: "person.crop.circle.badge.plus") { AnyView(LeadFinderView()) },
             ]),
             SidebarSection(id: "team", title: L("Team"), items: [
                 SidebarItem(id: "employees", title: L("Employees"), symbol: "person.2") { AnyView(EmployeesRootView()) },

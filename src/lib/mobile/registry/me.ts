@@ -60,6 +60,9 @@ export const reads: ReadRegistry = {
     canReadWhatsApp: me.canReadWhatsApp,
     canAssignTasks: me.canAssignTasks,
     canLogSiteVisits: me.canLogSiteVisits,
+    // Lead Finder, opened in the app as the /lead-finder page (the route's own
+    // check is the gate; this only says whether to offer it).
+    canUseLeadFinder: me.canUseLeadFinder,
   })),
 
   // The office's shop sign-in, so a phone opens the shop already signed in to

@@ -24,6 +24,7 @@ struct AdminMoreView: View {
                     MoreDestinationTile(L("Meetings"), symbol: "calendar", hue: .cyan) { MeetingsView() }
                     MoreDestinationTile(L("Site visits"), symbol: "mappin.and.ellipse", hue: .pink) { SiteVisitsRootView() }
                     MoreDestinationTile(L("WhatsApp"), symbol: "phone.bubble.fill", hue: .green) { WhatsAppRootView() }
+                    MoreDestinationTile(L("Lead Finder"), symbol: "person.crop.circle.badge.plus", hue: .indigo) { LeadFinderView() }
                 }
 
                 MoreDestinationGroup(L("Team"), symbol: "person.2.fill", hue: .purple) {
@@ -70,6 +71,18 @@ struct EmployeeMoreView: View {
         var canReadWhatsApp = false
         var canAssignTasks = false
         var canLogSiteVisits = false
+        var canUseLeadFinder = false
+
+        init() {}
+        // An older server sends no `canUseLeadFinder`: read as not given.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            canReadWhatsApp = try c.decodeIfPresent(Bool.self, forKey: .canReadWhatsApp) ?? false
+            canAssignTasks = try c.decodeIfPresent(Bool.self, forKey: .canAssignTasks) ?? false
+            canLogSiteVisits = try c.decodeIfPresent(Bool.self, forKey: .canLogSiteVisits) ?? false
+            canUseLeadFinder = try c.decodeIfPresent(Bool.self, forKey: .canUseLeadFinder) ?? false
+        }
+        private enum CodingKeys: String, CodingKey { case canReadWhatsApp, canAssignTasks, canLogSiteVisits, canUseLeadFinder }
     }
 
     /// How many of the three "given to you" destinations this person has.
@@ -112,6 +125,11 @@ struct EmployeeMoreView: View {
 
                     NeonDivider()
                     MoreDestinationListRow(L("Office shopping"), subtitle: L("Add what the office needs"), leading: .icon("cart.fill", tint: .neonSuccessStrong)) { OfficeShoppingView() }
+
+                    if permissions.canUseLeadFinder {
+                        NeonDivider()
+                        MoreDestinationListRow(L("Lead Finder"), subtitle: L("Find new clients"), leading: .icon("person.crop.circle.badge.plus", tint: .neonPurpleStrong)) { LeadFinderView() }
+                    }
 
                     if givenToCount > 0 && givenToCount < 3 {
                         if permissions.canAssignTasks {

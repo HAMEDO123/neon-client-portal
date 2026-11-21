@@ -79,6 +79,8 @@ struct TeamEmployeeDetail: Decodable {
     let canReadWhatsApp: Bool
     let canAssignTasks: Bool
     let canLogSiteVisits: Bool
+    /// Absent from a server before 2026-11-21.
+    let canUseLeadFinder: Bool?
     let playbook: String?
     let skills: String?
     let examples: String?

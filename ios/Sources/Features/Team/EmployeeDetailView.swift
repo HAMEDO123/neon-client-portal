@@ -130,6 +130,7 @@ struct EmployeeDetailView: View {
                 permissionChip(L("WhatsApp"), on: data.employee.canReadWhatsApp, symbol: "message")
                 permissionChip(L("Assign tasks"), on: data.employee.canAssignTasks, symbol: "person.2.badge.gearshape")
                 permissionChip(L("Site visits"), on: data.employee.canLogSiteVisits, symbol: "mappin.and.ellipse")
+                permissionChip(L("Lead Finder"), on: data.employee.canUseLeadFinder ?? false, symbol: "person.crop.circle.badge.plus")
             }
         }
     }

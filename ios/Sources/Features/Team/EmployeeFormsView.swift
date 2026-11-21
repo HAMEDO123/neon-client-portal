@@ -20,6 +20,7 @@ struct EditEmployeeSheet: View {
     @State private var monthlySalesTarget: Int
     @State private var canReadWhatsApp: Bool
     @State private var canAssignTasks: Bool
+    @State private var canUseLeadFinder: Bool
     @State private var canLogSiteVisits: Bool
     @State private var playbook: String
     @State private var skills: String
@@ -40,6 +41,7 @@ struct EditEmployeeSheet: View {
         _monthlySalesTarget = State(initialValue: employee.monthlySalesTarget)
         _canReadWhatsApp = State(initialValue: employee.canReadWhatsApp)
         _canAssignTasks = State(initialValue: employee.canAssignTasks)
+        _canUseLeadFinder = State(initialValue: employee.canUseLeadFinder ?? false)
         _canLogSiteVisits = State(initialValue: employee.canLogSiteVisits)
         _playbook = State(initialValue: employee.playbook ?? "")
         _skills = State(initialValue: employee.skills ?? "")
@@ -71,6 +73,7 @@ struct EditEmployeeSheet: View {
                 ToggleRow(L("Can use the company WhatsApp"), detail: L("Read the studio's conversations and reply as the studio."), symbol: "message.fill", isOn: $canReadWhatsApp)
                 ToggleRow(L("Can hand out tasks"), detail: L("Choose who a job is for and which days it runs over."), symbol: "person.2.badge.gearshape.fill", isOn: $canAssignTasks)
                 ToggleRow(L("Keeps the site-visit diary"), detail: L("Schedule a visit, then say what came of it."), symbol: "mappin.and.ellipse", isOn: $canLogSiteVisits)
+                ToggleRow(L("Can use Lead Finder"), detail: L("Find new clients with the studio's Lead Finder."), symbol: "person.crop.circle.badge.plus", isOn: $canUseLeadFinder)
             }
 
             FormSection(L("Day planning"), footer: L("All optional: left empty, nothing about this person is invented.")) {
@@ -110,6 +113,10 @@ struct EditEmployeeSheet: View {
         if canReadWhatsApp { form["canReadWhatsApp"] = "on" }
         if canAssignTasks { form["canAssignTasks"] = "on" }
         if canLogSiteVisits { form["canLogSiteVisits"] = "on" }
+        // The server reads the tick only with this marker, so an older build
+        // that does not know it never takes it away.
+        form["leadFinderField"] = "present"
+        if canUseLeadFinder { form["canUseLeadFinder"] = "on" }
 
         do {
             try await api.perform("team/updateEmployee", args: [employeeId], form: form)

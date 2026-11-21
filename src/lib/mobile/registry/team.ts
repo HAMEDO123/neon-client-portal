@@ -133,6 +133,7 @@ export const reads: ReadRegistry = {
         canReadWhatsApp: employee.canReadWhatsApp,
         canAssignTasks: employee.canAssignTasks,
         canLogSiteVisits: employee.canLogSiteVisits,
+        canUseLeadFinder: employee.canUseLeadFinder,
         playbook: employee.playbook,
         skills: employee.skills,
         examples: employee.examples,
