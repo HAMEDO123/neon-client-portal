@@ -13,6 +13,7 @@ import {
   countedHours,
   dayLengthHours,
   endOfDayMinutes,
+  lateStaysLate,
   groupPunches,
   hoursShort,
   minutesInDay,
@@ -21,7 +22,7 @@ import {
   workedHours,
   type Punch,
 } from "../src/lib/attendance";
-import { DEFAULT_WORK_HOURS, type WorkHours } from "../src/lib/work-hours";
+import { DEFAULT_WORK_HOURS, hoursOn, type WorkHours } from "../src/lib/work-hours";
 
 // Amman runs at UTC+3 all year, so 11:00 there is 08:00 Z. The studio's default
 // day is 11:00–19:00, Sunday to Thursday.
@@ -416,6 +417,18 @@ describe("a day that is always eight hours", () => {
     assert.equal(endOfDayMinutes(studio, MON, "12:00"), 20 * 60, "an hour late to the minute");
     assert.equal(endOfDayMinutes(studio, MON, "12:01"), 21 * 60, "a minute more is another hour");
     assert.equal(endOfDayMinutes(studio, MON, "14:00"), 22 * 60);
+  });
+
+  // The owner, 2026-11-21: on Saturday the late hour is just deducted; the
+  // day still ends at 6 PM. Earlier Saturdays keep the old rule.
+  it("does not let a Saturday's lateness be made up, from 2026-11-21", () => {
+    assert.equal(lateStaysLate("2026-11-21"), true);
+    assert.equal(lateStaysLate("2026-11-14"), false, "before it was asked for");
+    assert.equal(lateStaysLate("2026-11-22"), false, "Sunday");
+    assert.equal(endOfDayMinutes(withSaturday, "2026-11-21", "12:10"), 18 * 60);
+    assert.equal(endOfDayMinutes(withSaturday, "2026-11-14", "12:10"), 20 * 60);
+    assert.equal(endOfDayMinutes(withSaturday, "2026-11-21", "11:00", 30), 19 * 60, "a step-out still moves it");
+    assert.equal(lateHours(hoursOn(withSaturday, "2026-11-21"), "12:10", 5), 2, "and the lateness is still charged");
   });
 
   it("gives back a step-out in whole hours too", () => {

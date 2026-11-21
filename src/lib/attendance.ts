@@ -1,5 +1,5 @@
 import { dayKeyIn, formatTimeIn, shiftDayKey, wallClockIn } from "@/lib/time";
-import { hoursOn, isWorkingDay, minutesOf, type WorkHours } from "@/lib/work-hours";
+import { hoursOn, isWorkingDay, minutesOf, weekdayOf, type WorkHours } from "@/lib/work-hours";
 
 // Turning a fingerprint device's punches into the one number payroll already
 // understands: how many hours somebody arrived late on a given day.
@@ -186,6 +186,20 @@ export function earlyHours(hours: WorkHours, departure: string, arrival?: string
   return Math.min(Math.ceil(early / 60), MAX_DELAY_HOURS);
 }
 
+/** The first Saturday on which coming late is not made up by staying later. */
+export const SATURDAY_NO_MAKE_UP_FROM = "2026-11-21";
+
+/**
+ * Whether coming late that day is simply charged, with the day still ending
+ * at its own end. Saturday, from 2026-11-21 — the owner: "on Saturday, coming
+ * late should not be made up by staying later (the day still ends at 6 PM and
+ * the late hour is just deducted)", "yes starting from today". Stepping out
+ * still pushes the end; only lateness stopped.
+ */
+export function lateStaysLate(dayKey: string) {
+  return weekdayOf(dayKey) === 6 && dayKey >= SATURDAY_NO_MAKE_UP_FROM;
+}
+
 /**
  * When somebody's own day ends, as minutes past that day's midnight.
  *
@@ -228,7 +242,8 @@ export function endOfDayMinutes(
   // function payroll is measured by, allowance and rounding included. An
   // arrival nobody can read moves nothing, which leaves the studio's own end
   // standing and charges no more than the old rule did.
-  const late = minutesOf(arrival) != null ? lateHours(today, arrival, graceMinutes) * 60 : 0;
+  const late =
+    minutesOf(arrival) != null && !lateStaysLate(dayKey) ? lateHours(today, arrival, graceMinutes) * 60 : 0;
 
   // And the step-out the same way, since it is charged in whole hours too
   // (awayHoursOf): out for ten minutes costs an hour, so it gives back an hour.
