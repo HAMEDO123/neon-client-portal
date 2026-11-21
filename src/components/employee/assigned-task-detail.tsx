@@ -20,7 +20,7 @@ import { formatDayIn, formatTimeIn } from "@/lib/time";
 import { dayLabel, daysBetween } from "@/lib/week";
 import { conversationFromKey, employeeChatUrl } from "@/lib/chat-conversations";
 import { dueLabel } from "@/lib/chat-tasks";
-import { EMPLOYEE_STATE_LABEL, PRIORITY_LABEL } from "@/lib/task-board";
+import { PRIORITY_LABEL, employeeStateLabel } from "@/lib/task-board";
 import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
 import { Countdown } from "@/components/employee/countdown";
@@ -141,7 +141,7 @@ export async function AssignedTaskDetail({
 
       <div className="glass grid grid-cols-2 gap-3 rounded-2xl p-4">
         <Detail icon={Flag} label="Priority" value={PRIORITY_LABEL[task.priority]} />
-        <Detail icon={ClipboardList} label="Status" value={EMPLOYEE_STATE_LABEL[task.state]} />
+        <Detail icon={ClipboardList} label="Status" value={employeeStateLabel(task.state, task.sentBack)} />
         {fromChat && (
           <div className="col-span-2">
             <Detail icon={CalendarClock} label="Due" value={dueLabel(fromChat.dueAt, new Date(), timezone)} />

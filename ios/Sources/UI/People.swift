@@ -358,6 +358,7 @@ struct StateBadge: View {
         case "SUBMITTED": return "paperplane.fill"
         case "DONE": return "checkmark.seal.fill"
         case "TOMORROW": return "moon.stars.fill"
+        case "REJECTED": return "arrow.uturn.backward.circle.fill"
         default: return nil
         }
     }

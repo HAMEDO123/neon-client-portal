@@ -153,16 +153,15 @@ export function redeploysOn(dayKey: string) {
  * its day had nothing left to be late for: the cutoff only reads jobs due
  * today, so every job sent back sat in progress, uncharged, for ever.
  *
- * The same day it was sent back — unless that is too late to be fair. The
- * notice rule a new job has applies here too: sent back within NOTICE_HOURS
- * of the cutoff, or on a day the studio does not work, it is due the next
- * working day instead. And never earlier than it already was: a job due on
- * Saturday sent back on Thursday stays Saturday's.
+ * The same day it was sent back, whatever the hour and whatever it was due
+ * before — the owner, 2026-11-21: "it will be charged if not done again before
+ * 12 am of the same day the tasks has been rejected". Until then a job sent
+ * back after 8:59 PM went to the next working day (the three hours' notice a
+ * new job gets), and one due later kept its later day. Only a day the studio
+ * does not work still moves it on, since no cutoff runs on such a day.
  */
-export function redeployDay(hours: WorkHours, todayKey: string, minutesNow: number, endDayKey: string) {
-  const inTime = isWorkingDay(hours, todayKey) && minutesNow <= CUTOFF_MINUTES - NOTICE_HOURS * 60;
-  const day = inTime ? todayKey : nextWorkingDay(hours, todayKey);
-  return endDayKey > day ? endDayKey : day;
+export function redeployDay(hours: WorkHours, todayKey: string) {
+  return isWorkingDay(hours, todayKey) ? todayKey : nextWorkingDay(hours, todayKey);
 }
 
 /** An hour of somebody's pay, to the fils, as payroll works it out. */

@@ -209,21 +209,17 @@ describe("a job sent back is due again", () => {
 
   // Saturday to Thursday; 2026-11-19 is a Thursday, 2026-11-20 a Friday.
   const HOURS = { days: [0, 1, 2, 3, 4, 6] } as unknown as WorkHours;
-  const at = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
 
-  it("is due the same day it was sent back", () => {
-    assert.equal(redeployDay(HOURS, "2026-11-19", at("10:00"), "2026-11-12"), "2026-11-19");
-    assert.equal(redeployDay(HOURS, "2026-11-19", at("20:59"), "2026-11-12"), "2026-11-19");
+  it("is due the same day it was sent back, whatever the hour", () => {
+    assert.equal(redeployDay(HOURS, "2026-11-19"), "2026-11-19");
+    // The owner, 2026-11-21: due again before 12 AM that same day — late in
+    // the evening too, and even for a job that was due later.
+    assert.equal(redeployDay(HOURS, "2026-11-21"), "2026-11-21");
   });
 
-  it("goes to the next working day when sent back too late to fix tonight", () => {
-    // Within three hours of 11:59 PM, and Friday is not worked.
-    assert.equal(redeployDay(HOURS, "2026-11-19", at("21:00"), "2026-11-12"), "2026-11-21");
-    assert.equal(redeployDay(HOURS, "2026-11-20", at("10:00"), "2026-11-12"), "2026-11-21");
-  });
-
-  it("never pulls a job earlier than it was due", () => {
-    assert.equal(redeployDay(HOURS, "2026-11-19", at("10:00"), "2026-11-22"), "2026-11-22");
+  it("goes to the next working day only when sent back on a day off", () => {
+    // Friday is not worked.
+    assert.equal(redeployDay(HOURS, "2026-11-20"), "2026-11-21");
   });
 
   it("charges each sending-back once, and keeps the old key for a job never sent back", () => {

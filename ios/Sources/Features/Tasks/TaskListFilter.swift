@@ -43,7 +43,8 @@ enum TaskFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return true
         case .open: return item.state != "DONE" && item.state != "SUBMITTED"
-        case .progress: return item.state == "IN_PROGRESS"
+        // Sent back is in progress underneath; it only reads "Rejected".
+        case .progress: return item.state == "IN_PROGRESS" || item.state == "REJECTED"
         case .review: return item.state == "SUBMITTED"
         case .late: return item.late
         case .done: return item.state == "DONE"

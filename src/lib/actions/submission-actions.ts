@@ -11,7 +11,7 @@ import { taskUrl } from "@/lib/notifications/types";
 import { recordStateChange } from "@/lib/task-state-log";
 import { submitProof } from "@/lib/task-proof";
 import { getTimezone, getWorkHours } from "@/lib/settings";
-import { chargesForSendingBack, redeployDay, redeploysOn } from "@/lib/task-cutoff";
+import { WARN_MINUTES, chargesForSendingBack, redeployDay, redeploysOn, warningCopy, warningKey } from "@/lib/task-cutoff";
 import { chargeSentBack } from "@/lib/deduction-store";
 import { dateToDayKey, dayKeyIn, dayKeyToDate, wallClockIn } from "@/lib/time";
 import { minutesOf } from "@/lib/work-hours";
@@ -163,7 +163,7 @@ export async function approveSubmission(submissionId: string, formData?: FormDat
  * (lib/task-cutoff.ts redeployDay) — so the 11:59 PM rule sees it. Answers
  * the day in words for the notification, or null when the day did not move.
  */
-async function redeploy(assignedTaskId: string) {
+async function redeploy(assignedTaskId: string, employeeId: string) {
   const task = await prisma.assignedTask.findUnique({
     where: { id: assignedTaskId },
     select: { startDay: true, endDay: true, siteVisitId: true },
@@ -174,15 +174,30 @@ async function redeploy(assignedTaskId: string) {
   const now = new Date();
   const todayKey = dayKeyIn(timeZone, now);
   if (!redeploysOn(todayKey)) return null;
-  const endKey = dateToDayKey(task.endDay) ?? todayKey;
-  const day = redeployDay(hours, todayKey, minutesOf(wallClockIn(timeZone, now)) ?? 0, endKey);
-  if (day === endKey) return null;
+  const day = redeployDay(hours, todayKey);
+  const endKey = dateToDayKey(task.endDay);
   const startKey = dateToDayKey(task.startDay) ?? day;
-  await prisma.assignedTask.update({
-    where: { id: assignedTaskId },
-    data: { endDay: dayKeyToDate(day), ...(startKey > day ? { startDay: dayKeyToDate(day) } : {}) },
-  });
-  return day === todayKey ? "today" : `on ${day}`;
+  if (endKey !== day) {
+    await prisma.assignedTask.update({
+      where: { id: assignedTaskId },
+      data: { endDay: dayKeyToDate(day), ...(startKey > day ? { startDay: dayKeyToDate(day) } : {}) },
+    });
+  }
+  if (day !== todayKey) return `on ${day}`;
+
+  // Sent back after the 10:59 PM warning went out: the cutoff charges only
+  // somebody warned that evening, so this is their warning. Keyed like the
+  // scheduler's own, so nobody is warned twice.
+  if ((minutesOf(wallClockIn(timeZone, now)) ?? 0) >= WARN_MINUTES) {
+    await dispatchNotification({
+      employeeId,
+      type: "WARNING",
+      ...warningCopy(1),
+      url: "/employee/tasks?filter=open",
+      dedupeKey: warningKey(employeeId, todayKey),
+    }).catch(() => null);
+  }
+  return "today";
 }
 
 /** The manager sends it back, with a reason. */
@@ -200,7 +215,7 @@ export async function rejectSubmission(submissionId: string, formData?: FormData
   // Back to being worked on, not back to untouched: the employee has already
   // done something, and the history of the attempt is kept.
   await settle(submission, "IN_PROGRESS", reason);
-  const dueAgain = submission.assignedTaskId ? await redeploy(submission.assignedTaskId) : null;
+  const dueAgain = submission.assignedTaskId ? await redeploy(submission.assignedTaskId, submission.employeeId) : null;
 
   const subject = describe(submission);
   // On 2026-11-19 only, being sent back cost an hour there and then

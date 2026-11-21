@@ -4,7 +4,7 @@ import type { AssignedTaskView } from "@/lib/assigned-tasks";
 import { Countdown } from "@/components/employee/countdown";
 import { DeadlineMeter } from "@/components/employee/deadline-meter";
 import { STATE_STYLE } from "@/components/employee/task-card";
-import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
+import { employeeStateLabel } from "@/lib/task-board";
 import { daysBetween, dayLabel } from "@/lib/week";
 import { PRIORITY_CARD, PRIORITY_CHIP } from "@/components/tasks/priority";
 import { cn } from "@/lib/utils";
@@ -64,8 +64,13 @@ export function AssignedTaskCard({ task, timezone }: { task: AssignedTaskView; t
           )}
 
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium", STATE_STYLE[task.state])}>
-              {EMPLOYEE_STATE_LABEL[task.state]}
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                task.sentBack ? "border-red-200 bg-red-50 text-red-700" : STATE_STYLE[task.state]
+              )}
+            >
+              {employeeStateLabel(task.state, task.sentBack)}
             </span>
             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/50">
               <CalendarRange size={12} strokeWidth={2} />

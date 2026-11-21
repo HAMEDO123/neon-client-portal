@@ -196,6 +196,7 @@
 "Task" = "مهمة";
 "Pending" = "قيد الانتظار";
 "In progress" = "قيد التنفيذ";
+"Rejected" = "مرفوض";
 "Sent for review" = "أُرسلت للمراجعة";
 "Planned for tomorrow" = "مخطط لها غدًا";
 "High priority" = "أولوية عالية";

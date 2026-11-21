@@ -65,6 +65,8 @@ func taskStateLabel(_ state: String) -> String {
     case "SUBMITTED": return L("Sent for review")
     case "DONE": return L("Completed")
     case "TOMORROW": return L("Planned for tomorrow")
+    // Sent back and not handed in again (onPhone in src/lib/mobile/registry/me.ts).
+    case "REJECTED": return L("Rejected")
     default: return state.replacingOccurrences(of: "_", with: " ").capitalized
     }
 }
@@ -75,6 +77,7 @@ func taskStateTone(_ state: String) -> BadgeTone {
     case "SUBMITTED": return .purple
     case "DONE": return .success
     case "TOMORROW": return .orange
+    case "REJECTED": return .danger
     default: return .neutral
     }
 }

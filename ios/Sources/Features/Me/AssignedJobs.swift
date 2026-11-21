@@ -163,7 +163,8 @@ struct JobDetailView: View {
                         await move(to: "TODO")
                     }
                     .disabled(cachedAt != nil)
-                } else {
+                } else if job.state != "REJECTED" {
+                    // Sent back is already being worked on: proof is the only way on.
                     NeonButton(L("Start this task"), symbol: "play.fill", kind: .secondary) {
                         await move(to: "IN_PROGRESS")
                     }

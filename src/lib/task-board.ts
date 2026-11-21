@@ -76,6 +76,24 @@ export const EMPLOYEE_STATE_LABEL: Record<TaskState, string> = {
   TOMORROW: "Planned for tomorrow",
 };
 
+/**
+ * What a job sent back and not yet handed in again says instead of its state —
+ * the owner, 2026-11-21: "show a text saying rejected in the app and do not
+ * show what was its status before rejecting it". The state underneath is still
+ * IN_PROGRESS (being sent back puts it there); only what is shown changes.
+ */
+export const SENT_BACK_LABEL = "Rejected";
+
+/** Sent back: its latest hand-in was rejected and it has not been handed in since. */
+export function isSentBack(state: TaskState, latestSubmission: "PENDING" | "APPROVED" | "REJECTED" | null | undefined) {
+  return latestSubmission === "REJECTED" && state !== "SUBMITTED" && state !== "DONE";
+}
+
+/** The state as an employee reads it, "Rejected" for a job sent back. */
+export function employeeStateLabel(state: TaskState, sentBack = false) {
+  return sentBack ? SENT_BACK_LABEL : EMPLOYEE_STATE_LABEL[state];
+}
+
 // The statuses an employee can set with a tap. Completion is not among them:
 // finishing a task means sending evidence for review, which is a different
 // action with a photo attached.

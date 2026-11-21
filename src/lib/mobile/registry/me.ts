@@ -12,7 +12,7 @@ import { getMyReceipts } from "@/lib/payroll-queries";
 import { periodOf, periodLabel, RECEIPT_CAP } from "@/lib/payroll";
 import { getPreferences } from "@/lib/notifications/engine";
 import { deviceLabel } from "@/lib/devices";
-import { myAssignedTasks, myAssignedTask, assignedTasksForWeek } from "@/lib/assigned-tasks";
+import { myAssignedTasks, myAssignedTask, assignedTasksForWeek, type AssignedTaskView } from "@/lib/assigned-tasks";
 import { submissionsForAssignedTask } from "@/lib/submissions";
 import { openFollowUpForTask } from "@/lib/follow-up-queue";
 import { answerFollowUp } from "@/lib/actions/follow-up-actions";
@@ -95,7 +95,7 @@ export const reads: ReadRegistry = {
     const filtered = jobs.filter((job) =>
       filter === "completed" ? job.state === "DONE" : filter === "all" ? true : job.state !== "DONE"
     );
-    return { jobs: filtered };
+    return { jobs: filtered.map(onPhone) };
   }),
 
   // Everything on this person's list, as `/employee/tasks` reads it before it
@@ -123,7 +123,7 @@ export const reads: ReadRegistry = {
           late: isLate(task.state, deadline ? dayKeyIn(timezone, deadline) : null, today),
         };
       }),
-      jobs: jobs.map((job) => ({ ...job, dueKey: job.endKey, late: isLate(job.state, job.endKey, today) })),
+      jobs: jobs.map((job) => ({ ...onPhone(job), dueKey: job.endKey, late: isLate(job.state, job.endKey, today) })),
     };
   }),
 
@@ -155,7 +155,7 @@ export const reads: ReadRegistry = {
     // A job that came from a chat's task card is discussed under that card,
     // so its page offers no second place to ask (`/employee/assigned/[id]`).
     const card = await prisma.chatTask.findFirst({ where: { assignments: { some: { id: job.id } } }, select: { id: true } });
-    return { job, submissions, fromChat: card !== null };
+    return { job: onPhone(job), submissions, fromChat: card !== null };
   }),
 
   // Everything `/employee/requests` shows across its three tabs, read once:
@@ -456,4 +456,17 @@ function readCookies(raw: unknown): ShopCookie[] {
   }
 
   return cookies;
+}
+
+/**
+ * A job as the phone shows it: state "REJECTED" while it is sent back and not
+ * handed in again (`sentBack`), in place of the IN_PROGRESS underneath — the
+ * owner, 2026-11-21: "show a text saying rejected in the app and do not show
+ * what was its status before rejecting it". A string the app shows as it is
+ * when it has no word of its own for it, so a build from before already says
+ * "Rejected"; nothing on the phone acts on the state except to label it, to
+ * offer sending it in (anything not sent or done) and to start or pause it.
+ */
+function onPhone<T extends AssignedTaskView>(job: T): Omit<T, "state"> & { state: AssignedTaskView["state"] | "REJECTED" } {
+  return { ...job, state: job.sentBack ? "REJECTED" : job.state };
 }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { dateToDayKey, dayKeyToDate } from "@/lib/time";
+import { isSentBack } from "@/lib/task-board";
 import { weekDayKeys } from "@/lib/week";
 
 // Work the manager hands out directly, outside any project.
@@ -28,6 +29,11 @@ export type AssignedTaskView = {
   siteVisitId: string | null;
   /** Set when this is one day of a routine task (lib/routine-store.ts). */
   routineId: string | null;
+  /**
+   * Sent back and not handed in again (`isSentBack`). Shown as "Rejected" in
+   * place of the state, which says nothing about why it is open again.
+   */
+  sentBack: boolean;
 };
 
 function toView(row: {
@@ -43,6 +49,7 @@ function toView(row: {
   priority: AssignedTaskView["priority"];
   siteVisitId: string | null;
   routineId: string | null;
+  submissions: { status: "PENDING" | "APPROVED" | "REJECTED" }[];
 }): AssignedTaskView {
   return {
     id: row.id,
@@ -57,6 +64,7 @@ function toView(row: {
     priority: row.priority,
     siteVisitId: row.siteVisitId,
     routineId: row.routineId,
+    sentBack: isSentBack(row.state, row.submissions[0]?.status),
   };
 }
 
@@ -78,6 +86,8 @@ const view = {
   priority: true,
   siteVisitId: true,
   routineId: true,
+  // The latest hand-in only, for `sentBack`.
+  submissions: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
 } as const;
 
 /**
