@@ -180,9 +180,11 @@ struct TaskBriefingView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L("Close")) {
+                    Button {
                         listener.stop()
                         dismiss()
+                    } label: {
+                        SheetCloseLabel()
                     }
                 }
             }

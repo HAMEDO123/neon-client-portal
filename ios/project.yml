@@ -118,6 +118,9 @@ targets:
       base:
         PRODUCT_NAME: NeonAdmin
         PRODUCT_BUNDLE_IDENTIFIER: com.neonjo.staff
+        # On a Mac the hardened runtime refuses the microphone, camera,
+        # location and photos without these (NeonAdmin-mac.entitlements).
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": NeonAdmin-mac.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
         # The same app on a Mac, natively (Mac Catalyst): built for

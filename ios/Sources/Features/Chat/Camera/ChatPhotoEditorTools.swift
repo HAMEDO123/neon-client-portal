@@ -210,7 +210,7 @@ struct ChatStickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L("Close")) { dismiss() }
+                    Button { dismiss() } label: { SheetCloseLabel() }
                 }
             }
         }

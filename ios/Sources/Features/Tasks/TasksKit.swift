@@ -654,7 +654,7 @@ struct TasksReviewsSheet: View {
             ReviewsRootView()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(L("Close")) { dismiss() }
+                        Button { dismiss() } label: { SheetCloseLabel() }
                     }
                 }
         }

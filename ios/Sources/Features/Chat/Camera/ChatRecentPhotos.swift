@@ -248,7 +248,7 @@ struct ChatLibrarySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L("Close")) { dismiss() }
+                    Button { dismiss() } label: { SheetCloseLabel() }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(L("All photos")) {

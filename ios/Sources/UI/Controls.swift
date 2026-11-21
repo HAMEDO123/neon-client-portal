@@ -531,3 +531,18 @@ private func neonSearchMatches(_ query: String, _ fields: [String]) -> Bool {
     let haystack = fields.map(\.searchFolded).joined(separator: " ")
     return words.allSatisfy { haystack.contains($0) }
 }
+
+/// "Close" on a sheet's toolbar. On a Mac the system draws the toolbar's
+/// button as a small round glass pill that the word does not fit ("Cl…"), so
+/// there it is the cross every Mac sheet uses; the phone keeps the word.
+struct SheetCloseLabel: View {
+    var body: some View {
+        #if targetEnvironment(macCatalyst)
+        Image(systemName: "xmark")
+            .font(.system(size: 13, weight: .semibold))
+            .accessibilityLabel(Text(L("Close")))
+        #else
+        Text(L("Close"))
+        #endif
+    }
+}
