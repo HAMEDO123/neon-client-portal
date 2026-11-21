@@ -112,6 +112,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.neonjo.staff
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
+        # The same app on a Mac, natively (Mac Catalyst): built for
+        # "platform=macOS,variant=Mac Catalyst", as an iPad-idiom window that
+        # resizes. The iPhone build is untouched — it is still iPhone only.
+        SUPPORTS_MACCATALYST: YES
+        "TARGETED_DEVICE_FAMILY[sdk=macosx*]": "2,6"
         SWIFT_VERSION: "5.0"
         # Signed with the studio's paid team for TestFlight (and later an Apple
         # Business Manager Custom App). ios-build.yml passes
@@ -179,6 +184,8 @@ targets:
         PRODUCT_NAME: NeonShare
         PRODUCT_BUNDLE_IDENTIFIER: com.neonjo.staff.share
         TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: YES
+        "TARGETED_DEVICE_FAMILY[sdk=macosx*]": "2,6"
         SWIFT_VERSION: "5.0"
         APPLICATION_EXTENSION_API_ONLY: YES
         # Signed as the app is (see NeonAdmin above).
