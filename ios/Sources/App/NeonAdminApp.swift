@@ -72,6 +72,24 @@ struct NeonAdminApp: App {
             #if DEBUG
             .task { if DecodeCheck.requested, api.isLoggedIn { await DecodeCheck.run(api) } }
             #endif
+            // The widgets (Widgets/): who is signed in and in which language,
+            // so they read the right side's figures and speak the app's language.
+            .task(id: "\(api.isLoggedIn)|\(api.side?.rawValue ?? "")|\(languageRaw)") {
+                if api.isLoggedIn, let side = api.side {
+                    WidgetShare.save(WidgetContext(side: side == .employee ? "employee" : "admin", language: languageRaw))
+                } else {
+                    WidgetShare.save(nil)
+                }
+            }
+            // A widget opens its screen: neon://open?path=/admin/tasks, the
+            // web path a notification would carry, routed the same way.
+            .onOpenURL { url in
+                guard url.scheme == "neon",
+                      let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                        .queryItems?.first(where: { $0.name == "path" })?.value
+                else { return }
+                PushCenter.shared.pendingPath = path
+            }
             .environmentObject(api)
             .tint(.neonPurpleStrong)
             .preferredColorScheme(.light)
@@ -92,9 +110,52 @@ struct EmployeeHome: View {
     @EnvironmentObject var api: APIClient
     @StateObject private var store = StaffStore()
     @State private var tab: EmployeeTab = .today
+    /// The sidebar row on a Mac (MacSidebarHome.swift).
+    @State private var macRow = "today"
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
+        layout
+        .environmentObject(store)
+        .task { await store.poll() }
+        // Shares this phone's position during working hours (and only then).
+        .task { LocationSharing.shared.activate() }
+        // A tapped notification: its tab, and the chat list opens the
+        // conversation itself.
+        .onReceive(PushCenter.shared.$pendingPath) { webPath in
+            guard let webPath else { return }
+            tab = PushRoute.employeeTab(webPath)
+            macRow = MacRoute.employee(webPath)
+            if tab != .chat { PushCenter.shared.pendingPath = nil }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                Task { await store.refresh() }
+                LocationSharing.shared.activate()
+                WidgetShare.reload()
+            }
+        }
+    }
+
+    @ViewBuilder private var layout: some View {
+        #if targetEnvironment(macCatalyst)
+        MacSidebarHome(
+            sections: macSections(
+                unreadChat: store.badges.unreadChat,
+                unread: store.badges.unread,
+                onUnread: { total in
+                    if total != store.badges.unreadChat { Task { await store.refresh() } }
+                },
+                openChat: { macRow = "chat" }
+            ),
+            selection: $macRow
+        )
+        #else
+        tabs
+        #endif
+    }
+
+    private var tabs: some View {
         TabView(selection: $tab) {
             TodayView()
                 .tabItem { Label(L("Today"), systemImage: "sun.max") }
@@ -121,23 +182,6 @@ struct EmployeeHome: View {
                 .badge(store.badges.unread)
                 .tag(EmployeeTab.more)
         }
-        .environmentObject(store)
-        .task { await store.poll() }
-        // Shares this phone's position during working hours (and only then).
-        .task { LocationSharing.shared.activate() }
-        // A tapped notification: its tab, and the chat list opens the
-        // conversation itself.
-        .onReceive(PushCenter.shared.$pendingPath) { webPath in
-            guard let webPath else { return }
-            tab = PushRoute.employeeTab(webPath)
-            if tab != .chat { PushCenter.shared.pendingPath = nil }
-        }
-        .onChange(of: scenePhase) { phase in
-            if phase == .active {
-                Task { await store.refresh() }
-                LocationSharing.shared.activate()
-            }
-        }
     }
 }
 
@@ -157,7 +201,38 @@ struct AdminHome: View {
         _tab = State(initialValue: initialTab)
     }
 
+    /// The sidebar row on a Mac (MacSidebarHome.swift).
+    @State private var macRow = "home"
+
     var body: some View {
+        layout
+        .task { await pollUnread() }
+        // Who the manager is to the studio's screens: `/me` carries their own
+        // face, which Home, More and "My Story" draw.
+        .task { _ = try? await api.fetchMe() }
+        .onReceive(PushCenter.shared.$pendingPath) { webPath in
+            guard let webPath else { return }
+            tab = PushRoute.adminTab(webPath)
+            macRow = MacRoute.admin(webPath)
+            if tab != .chat { PushCenter.shared.pendingPath = nil }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                Task { await refreshUnread() }
+                WidgetShare.reload()
+            }
+        }
+    }
+
+    @ViewBuilder private var layout: some View {
+        #if targetEnvironment(macCatalyst)
+        MacSidebarHome(sections: macSections(unreadChat: unreadChat, onUnread: { unreadChat = $0 }), selection: $macRow)
+        #else
+        tabs
+        #endif
+    }
+
+    private var tabs: some View {
         TabView(selection: $tab) {
             AdminHomeView()
                 .tabItem { Label(L("Home"), systemImage: "house") }
@@ -179,18 +254,6 @@ struct AdminHome: View {
             AdminMoreView()
                 .tabItem { Label(L("More"), systemImage: "ellipsis.circle") }
                 .tag(AdminTab.more)
-        }
-        .task { await pollUnread() }
-        // Who the manager is to the studio's screens: `/me` carries their own
-        // face, which Home, More and "My Story" draw.
-        .task { _ = try? await api.fetchMe() }
-        .onReceive(PushCenter.shared.$pendingPath) { webPath in
-            guard let webPath else { return }
-            tab = PushRoute.adminTab(webPath)
-            if tab != .chat { PushCenter.shared.pendingPath = nil }
-        }
-        .onChange(of: scenePhase) { phase in
-            if phase == .active { Task { await refreshUnread() } }
         }
     }
 

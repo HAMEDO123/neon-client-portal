@@ -38,6 +38,9 @@ targets:
       - package: WebRTC
       # The share extension ("NEON" in the share sheet), in PlugIns.
       - target: NeonShare
+      # The widgets (Widgets/): the team map, today's tasks, what is waiting,
+      # my tasks — on the Mac's desktop and the iPhone's Home Screen.
+      - target: NeonWidgets
     # Push notifications (APNs). Xcode's automatic signing turns the
     # capability on for the App ID; an App Store export makes it "production".
     # The keychain group is the one the share extension also has: the session
@@ -102,6 +105,11 @@ targets:
         # which is only ever read and corrected before anything is sent.
         NSSpeechRecognitionUsageDescription: "NEON turns what you say into text, so you can hand out tasks by speaking. You check the list before anything is sent."
         UIApplicationSupportsIndirectInputEvents: true
+        # neon://open?path=<web path>: a widget opening its screen, routed
+        # as a notification's link is (NeonAdminApp's onOpenURL).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.neonjo.staff.open
+            CFBundleURLSchemes: [neon]
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -189,6 +197,48 @@ targets:
         SWIFT_VERSION: "5.0"
         APPLICATION_EXTENSION_API_ONLY: YES
         # Signed as the app is (see NeonAdmin above).
+        DEVELOPMENT_TEAM: 745F9U99BC
+        CODE_SIGN_STYLE: Automatic
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"
+        "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+
+  # The widgets: WidgetKit, reading the phone API with the app's token from the
+  # shared Keychain group, and who is signed in / which language from
+  # WidgetShare.swift. Widgets/NeonWidgets.swift has the whole story.
+  NeonWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+        excludes:
+          - "**/*.md"
+      - path: Sources/Core/TokenStore.swift
+      - path: Sources/Core/WidgetShare.swift
+    entitlements:
+      path: NeonWidgets.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.neonjo.staff.shared
+    info:
+      path: NeonWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: "NEON"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, ar]
+        NeonKeychainGroup: "$(DEVELOPMENT_TEAM).com.neonjo.staff.shared"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_NAME: NeonWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: com.neonjo.staff.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: YES
+        "TARGETED_DEVICE_FAMILY[sdk=macosx*]": "2,6"
+        SWIFT_VERSION: "5.0"
+        APPLICATION_EXTENSION_API_ONLY: YES
         DEVELOPMENT_TEAM: 745F9U99BC
         CODE_SIGN_STYLE: Automatic
         "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "YES"

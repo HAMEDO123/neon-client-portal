@@ -1,5 +1,5 @@
-// Makes (or refreshes) the two manual App Store profiles the upload signs
-// with — the app and its share extension — through the App Store Connect API,
+// Makes (or refreshes) the manual App Store profiles the upload signs
+// with — the app, its share extension and its widgets — through the App Store Connect API,
 // using the team's Apple Distribution certificate in this Mac's keychain.
 //
 // Why manual: the team's API key has the App Manager role, which may not use
@@ -79,3 +79,4 @@ async function ensureProfile(identifier, bundleName, profileName) {
 
 await ensureProfile("com.neonjo.staff", "NEON", "NEON App Store");
 await ensureProfile("com.neonjo.staff.share", "NEON Share", "NEON Share App Store");
+await ensureProfile("com.neonjo.staff.widgets", "NEON Widgets", "NEON Widgets App Store");
