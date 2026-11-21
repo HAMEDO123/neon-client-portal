@@ -10,6 +10,7 @@ import {
   mapLink,
   readClockFix,
   checkClockPlace,
+  clockedInAlert,
   distanceMetres,
   readClockPlaces,
   DEFAULT_PLACE_RADIUS_METRES,
@@ -187,9 +188,18 @@ describe("a place to clock in from", () => {
     assert.deepEqual(readClockPlaces(null), {});
   });
 
+  // "it must show me also the exact location he clocked in"
+  it("tells the manager the exact spot of every clock-in", () => {
+    const alert = clockedInAlert("Wael", "11:02 AM", at(31.97802, 35.866423, 12), place);
+    assert.equal(alert.title, "Wael clocked in from the app at 11:02 AM");
+    assert.match(alert.message, /^At 31\.978020, 35\.866423 \(±12 m\) — 101 m from their place\. https:\/\/www\.google\.com\/maps\?q=31\.978020,35\.866423$/);
+    const store = read("src", "lib", "app-clock-store.ts");
+    assert.match(store, /await notifyAdmin\(\{\s*type: "ATTENDANCE",\s*\.\.\.clockedInAlert\(/);
+  });
+
   it("is checked on the clock-in", () => {
     const store = read("src", "lib", "app-clock-store.ts");
-    assert.match(store, /checkClockPlace\(fix, readClockPlaces\(await getSetting\(APP_CLOCK_PLACES\)\)\[employeeId\]\)/);
+    assert.match(store, /const place = readClockPlaces\(await getSetting\(APP_CLOCK_PLACES\)\)\[employeeId\];\s*checkClockPlace\(fix, place\);/);
   });
 });
 

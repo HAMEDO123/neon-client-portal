@@ -207,6 +207,19 @@ export function checkClockPlace(fix: ClockFix, place: ClockPlace | null | undefi
   );
 }
 
+/**
+ * What the manager is told when somebody clocks in from the app: who, when,
+ * the exact coordinates with a map link, how sure the phone was, and how far
+ * that is from their place when they have one.
+ */
+export function clockedInAlert(name: string, time: string, fix: ClockFix, place: ClockPlace | null) {
+  const from = place ? ` — ${Math.round(distanceMetres(fix, place))} m from their place` : "";
+  return {
+    title: `${name} clocked in from the app at ${time}`,
+    message: `At ${fix.latitude.toFixed(6)}, ${fix.longitude.toFixed(6)} (±${Math.round(fix.accuracy)} m)${from}. ${mapLink(fix)}`,
+  };
+}
+
 /** A link that opens the place on a map, on any phone or computer. */
 export function mapLink(place: { latitude: number; longitude: number }): string {
   return `https://www.google.com/maps?q=${place.latitude.toFixed(6)},${place.longitude.toFixed(6)}`;

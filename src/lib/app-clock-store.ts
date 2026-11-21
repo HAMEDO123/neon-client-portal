@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { APP_CLOCK_PLACES, asPunches, checkClockPlace, isDoubleTap, mapLink, readClockPlaces, type ClockFix } from "@/lib/app-clock";
+import { notifyAdmin } from "@/lib/admin-notifications";
+import { APP_CLOCK_PLACES, asPunches, checkClockPlace, clockedInAlert, isDoubleTap, mapLink, readClockPlaces, type ClockFix } from "@/lib/app-clock";
 import { getSetting, getTimezone } from "@/lib/settings";
 import { dayKeyIn, dayKeyToDate, formatTimeIn, instantAt, shiftDayKey } from "@/lib/time";
 import type { Punch } from "@/lib/attendance";
@@ -71,11 +72,24 @@ export async function recordAppPunch(employeeId: string, fix: ClockFix, now: Dat
   // And only from their place, for somebody the manager gave one
   // (APP_CLOCK_PLACES): "for wael clock in outside the office he should
   // around this coordinates 31.977115, 35.866423".
-  checkClockPlace(fix, readClockPlaces(await getSetting(APP_CLOCK_PLACES))[employeeId]);
+  const place = readClockPlaces(await getSetting(APP_CLOCK_PLACES))[employeeId];
+  checkClockPlace(fix, place);
 
   const row = await prisma.appPunch.create({
     data: { employeeId, at: now, latitude: fix.latitude, longitude: fix.longitude, accuracy: fix.accuracy },
     select: { id: true, at: true },
+  });
+
+  // The manager is told at once, with the exact spot — the owner, 2026-11-21:
+  // "it must show me also the exact location he clocked in". The month's list
+  // on /admin/attendance has the same punch with its map link.
+  const who = await prisma.employee.findUnique({ where: { id: employeeId }, select: { name: true } });
+  await notifyAdmin({
+    type: "ATTENDANCE",
+    ...clockedInAlert(who?.name ?? "Somebody", formatTimeIn(await getTimezone(), row.at) ?? "", fix, place ?? null),
+    url: "/admin/attendance",
+    dedupeKey: `APP_CLOCK_IN:${row.id}`,
+    employeeId,
   });
   return { ...row, repeated: false };
 }
