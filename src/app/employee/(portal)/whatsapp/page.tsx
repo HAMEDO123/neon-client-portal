@@ -30,7 +30,8 @@ export default async function EmployeeWhatsAppPage({
   if (typeof chat === "string" && chat) redirect(whatsAppChatUrl("employee", chat));
 
   return (
-    <div className="fills-frame flex h-full flex-col">
+    // `wide-page`: and the whole width on a desk (globals.css), like Lead Finder.
+    <div className="fills-frame wide-page flex h-full flex-col">
       <iframe src="/whatsapp-desk" title="WhatsApp" className="min-h-0 w-full flex-1 border-0 bg-white" />
     </div>
   );
