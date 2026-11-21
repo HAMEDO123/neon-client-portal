@@ -9,6 +9,10 @@ import {
   isDoubleTap,
   mapLink,
   readClockFix,
+  checkClockPlace,
+  distanceMetres,
+  readClockPlaces,
+  DEFAULT_PLACE_RADIUS_METRES,
   recordedPunches,
 } from "../src/lib/app-clock";
 import { attendanceFromPunches } from "../src/lib/attendance";
@@ -130,13 +134,18 @@ describe("where it is wired in", () => {
     assert.match(phone, /"me\/clock": guardedAction\(requireEmployee/);
   });
 
-  // Wael, 2026-11-21: in on the fingerprint, the app offered "Clock in here"
-  // all day, so a clock-out from a site looked impossible.
-  it("says Clock out once the day has an arrival, from the fingerprint too", () => {
+  // The owner, 2026-11-21: Wael clocks in from the app, outside, and clocks
+  // out "from inside the company" — on the fingerprint.
+  it("clocks in only; the clock-out is on the fingerprint", () => {
+    const store = read("src", "lib", "app-clock-store.ts");
+    assert.match(store, /if \(await arrivedToday\(employeeId, now\)\) \{\s*throw new Refusal\("You're already clocked in today\. Clock out on the fingerprint at the studio\."\)/);
     const phone = read("src", "lib", "mobile", "registry", "me.ts");
     assert.match(phone, /clockedIn: punches\.length > 0 \|\| record\?\.arrivedAt != null/);
     const card = read("ios", "Sources", "Features", "Me", "AppClockCard.swift");
-    assert.match(card, /\(clock\.clockedIn \?\? !clock\.punches\.isEmpty\) \? L\("Clock out here"\) : L\("Clock in here"\)/);
+    assert.match(card, /if clock\.clockedIn \?\? !clock\.punches\.isEmpty \{\s*Text\(L\("Clock out on the fingerprint at the studio\."\)\)/);
+    const web = read("src", "components", "employee", "clock-card.tsx");
+    assert.doesNotMatch(web, /Clock out here/);
+    assert.match(web, /Clock out on the fingerprint at the studio\./);
   });
 
   it("shows the manager where each one was made", () => {
@@ -144,3 +153,43 @@ describe("where it is wired in", () => {
     assert.match(page, /<AppPunchList punches=\{appPunches\}/);
   });
 });
+
+// The owner, 2026-11-21: Wael clocks in from the app only around
+// 31.977115, 35.866423.
+describe("a place to clock in from", () => {
+  const place = { latitude: 31.977115, longitude: 35.866423, radiusMetres: 300 };
+  const at = (latitude: number, longitude: number, accuracy = 20) => ({ latitude, longitude, accuracy });
+
+  it("measures distance on the Earth", () => {
+    // 0.001° of latitude is about 111 m.
+    const metres = distanceMetres(place, { latitude: 31.978115, longitude: 35.866423 });
+    assert.ok(metres > 105 && metres < 117, String(metres));
+  });
+
+  it("takes a punch around the place and refuses one away from it", () => {
+    assert.doesNotThrow(() => checkClockPlace(at(31.977115, 35.866423), place));
+    assert.doesNotThrow(() => checkClockPlace(at(31.979, 35.8664), place), "about 210 m");
+    assert.throws(() => checkClockPlace(at(31.9515, 35.9239), place), /km from where you clock in/);
+    assert.doesNotThrow(() => checkClockPlace(at(31.9515, 35.9239), null), "nobody's place, anywhere");
+  });
+
+  it("lets a fix's uncertainty help only so far", () => {
+    // About 390 m away: in with 100 m of uncertainty, not with less.
+    assert.doesNotThrow(() => checkClockPlace(at(31.9806, 35.8664, 100), place));
+    assert.throws(() => checkClockPlace(at(31.9806, 35.8664, 10), place));
+    assert.throws(() => checkClockPlace(at(31.99, 35.8664, 3000), place), "3 km of doubt proves nothing");
+  });
+
+  it("reads the saved places, with 300 m when none is named", () => {
+    const places = readClockPlaces('{"w1":{"latitude":31.977115,"longitude":35.866423},"bad":{"latitude":"x"}}');
+    assert.deepEqual(places, { w1: { latitude: 31.977115, longitude: 35.866423, radiusMetres: DEFAULT_PLACE_RADIUS_METRES } });
+    assert.deepEqual(readClockPlaces("not json"), {});
+    assert.deepEqual(readClockPlaces(null), {});
+  });
+
+  it("is checked on the clock-in", () => {
+    const store = read("src", "lib", "app-clock-store.ts");
+    assert.match(store, /checkClockPlace\(fix, readClockPlaces\(await getSetting\(APP_CLOCK_PLACES\)\)\[employeeId\]\)/);
+  });
+});
+

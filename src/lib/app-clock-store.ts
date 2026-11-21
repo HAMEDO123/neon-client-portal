@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
-import { asPunches, isDoubleTap, mapLink, type ClockFix } from "@/lib/app-clock";
-import { formatTimeIn, instantAt, shiftDayKey } from "@/lib/time";
+import { APP_CLOCK_PLACES, asPunches, checkClockPlace, isDoubleTap, mapLink, readClockPlaces, type ClockFix } from "@/lib/app-clock";
+import { getSetting, getTimezone } from "@/lib/settings";
+import { dayKeyIn, dayKeyToDate, formatTimeIn, instantAt, shiftDayKey } from "@/lib/time";
 import type { Punch } from "@/lib/attendance";
 import { Refusal } from "@/lib/refusal";
 
@@ -53,19 +54,44 @@ export async function recordAppPunch(employeeId: string, fix: ClockFix, now: Dat
   if (!person?.active || !person.appClockIn) {
     throw new Refusal("Clocking in from the app isn't on for you — use the fingerprint at the studio.");
   }
-
+  // The app clocks people in and nothing more: the clock-out is on the
+  // fingerprint at the studio — the owner, 2026-11-21: "the clock out from
+  // inside the company". A second press inside a minute is still the same
+  // punch (just below), so a double tap on the way in is not refused.
   const last = await prisma.appPunch.findFirst({
     where: { employeeId },
     orderBy: { at: "desc" },
     select: { id: true, at: true },
   });
   if (last && isDoubleTap(last.at, now)) return { id: last.id, at: last.at, repeated: true };
+  if (await arrivedToday(employeeId, now)) {
+    throw new Refusal("You're already clocked in today. Clock out on the fingerprint at the studio.");
+  }
+
+  // And only from their place, for somebody the manager gave one
+  // (APP_CLOCK_PLACES): "for wael clock in outside the office he should
+  // around this coordinates 31.977115, 35.866423".
+  checkClockPlace(fix, readClockPlaces(await getSetting(APP_CLOCK_PLACES))[employeeId]);
 
   const row = await prisma.appPunch.create({
     data: { employeeId, at: now, latitude: fix.latitude, longitude: fix.longitude, accuracy: fix.accuracy },
     select: { id: true, at: true },
   });
   return { ...row, repeated: false };
+}
+
+/** Whether today already has an arrival for this person: a read from the fingerprint or an app punch. */
+async function arrivedToday(employeeId: string, now: Date) {
+  const timeZone = await getTimezone();
+  const dayKey = dayKeyIn(timeZone, now);
+  const record = await prisma.attendanceRecord.findUnique({
+    where: { employeeId_day: { employeeId, day: dayKeyToDate(dayKey) } },
+    select: { arrivedAt: true },
+  });
+  if (record?.arrivedAt) return true;
+  const from = instantAt(dayKey, "00:00", timeZone);
+  if (!from) return false;
+  return (await prisma.appPunch.count({ where: { employeeId, at: { gte: from } } })) > 0;
 }
 
 /**

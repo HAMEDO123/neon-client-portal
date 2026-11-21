@@ -156,6 +156,7 @@
 "Recording…" = "عم نسجّل…";
 "Clock in here" = "سجّل حضوري من هون";
 "Clock out here" = "سجّل انصرافي من هون";
+"Clock out on the fingerprint at the studio." = "سجّل انصرافك على البصمة بالمكتب.";
 "Where" = "المكان";
 "Recorded at %@, with your location." = "انسجّل الساعة %@ مع مكانك.";
 "Location is blocked for NEON. Allow it in Settings → NEON → Location, then try again." = "الموقع مسكّر على NEON. افتحه من الإعدادات ← NEON ← الموقع، وجرّب مرة ثانية.";

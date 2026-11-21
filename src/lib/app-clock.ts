@@ -138,6 +138,75 @@ export function recordedPunches(
   return reads.map((at) => ({ deviceUserId: key, at }));
 }
 
+/**
+ * Where somebody may clock in and out from the app — the owner, 2026-11-21:
+ * "for wael clock in outside the office he should around this coordinates
+ * 31.977115, 35.866423". Kept in AppSetting `app_clock_places` as JSON of
+ * employee id → { latitude, longitude, radiusMetres }; somebody without an
+ * entry may clock in from anywhere, as before. The fingerprint at the studio
+ * is untouched by it.
+ */
+export const APP_CLOCK_PLACES = "app_clock_places";
+
+/** How near "around" is, when an entry names no radius. */
+export const DEFAULT_PLACE_RADIUS_METRES = 300;
+
+/**
+ * The most a position's own uncertainty is allowed to help. A phone that
+ * knows only "within 3 km" cannot show it is within 300 m of anywhere.
+ */
+export const PLACE_ACCURACY_ALLOWANCE_METRES = 100;
+
+export type ClockPlace = { latitude: number; longitude: number; radiusMetres: number };
+
+/** The saved places, each checked; anything unreadable is left out. */
+export function readClockPlaces(raw: string | null | undefined): Record<string, ClockPlace> {
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== "object") return {};
+  const places: Record<string, ClockPlace> = {};
+  for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!value || typeof value !== "object") continue;
+    const entry = value as Record<string, unknown>;
+    const latitude = finite(entry.latitude);
+    const longitude = finite(entry.longitude);
+    if (latitude === null || longitude === null || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
+    const radius = finite(entry.radiusMetres);
+    places[id] = { latitude, longitude, radiusMetres: radius && radius > 0 ? radius : DEFAULT_PLACE_RADIUS_METRES };
+  }
+  return places;
+}
+
+/** Metres between two points on the Earth (haversine). */
+export function distanceMetres(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  const R = 6_371_000;
+  const rad = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = rad(b.latitude - a.latitude);
+  const dLon = rad(b.longitude - a.longitude);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * Refuses a punch made away from the person's place, in words. Within the
+ * radius, plus as much of the position's uncertainty as is fair to allow.
+ */
+export function checkClockPlace(fix: ClockFix, place: ClockPlace | null | undefined) {
+  if (!place) return;
+  const away = distanceMetres(fix, place);
+  const allowed = place.radiusMetres + Math.min(Math.max(0, fix.accuracy), PLACE_ACCURACY_ALLOWANCE_METRES);
+  if (away <= allowed) return;
+  const said = away >= 1000 ? `${(away / 1000).toFixed(1)} km` : `${Math.round(away / 10) * 10} m`;
+  throw new Refusal(
+    `You're ${said} from where you clock in from the app. Clock in there, or on the fingerprint at the studio.`
+  );
+}
+
 /** A link that opens the place on a map, on any phone or computer. */
 export function mapLink(place: { latitude: number; longitude: number }): string {
   return `https://www.google.com/maps?q=${place.latitude.toFixed(6)},${place.longitude.toFixed(6)}`;

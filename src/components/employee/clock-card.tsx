@@ -159,11 +159,16 @@ export function ClockCard({ day, timezone, app = null }: { day: ClockDay; timezo
             : "Clock out by then and nothing is taken off."}
       </p>
 
-      {/* The last read of the day is the clock-out, wherever it is made — so
-          the button stays after one, for somebody who carries on working. */}
+      {/* The app clocks in and nothing more; the clock-out is on the
+          fingerprint at the studio (2026-11-21: "the clock out from inside the
+          company"), so once in, the card says where instead of a button. */}
       {app && (
         <>
-          <AppClockButton label={done ? "Clock out again here" : "Clock out here"} />
+          {!done && (
+            <p className="mt-3 rounded-xl bg-paper-soft/70 px-3 py-2 text-xs leading-relaxed text-ink/65">
+              Clock out on the fingerprint at the studio.
+            </p>
+          )}
           <AppPunches app={app} />
         </>
       )}

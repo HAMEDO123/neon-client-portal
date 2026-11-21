@@ -57,10 +57,19 @@ struct AppClockCard: View {
                                 }
                             }
                         }
-                        NeonButton(buttonTitle(clock), symbol: "mappin.and.ellipse", kind: .brand, isLoading: busy != nil) {
-                            await record()
+                        // Clocking in only: the clock-out is on the fingerprint
+                        // at the studio (2026-11-21), so once in, it says so.
+                        if clock.clockedIn ?? !clock.punches.isEmpty {
+                            Text(L("Clock out on the fingerprint at the studio."))
+                                .font(.neonFootnote)
+                                .foregroundStyle(Color.neonInk.opacity(0.65))
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            NeonButton(buttonTitle(clock), symbol: "mappin.and.ellipse", kind: .brand, isLoading: busy != nil) {
+                                await record()
+                            }
+                            .disabled(busy != nil)
                         }
-                        .disabled(busy != nil)
                         if let done {
                             Text(done).font(.neonFootnote).foregroundStyle(Color.neonSuccessStrong)
                         }
@@ -81,9 +90,7 @@ struct AppClockCard: View {
         switch busy {
         case .locating: return L("Finding where you are…")
         case .saving: return L("Recording…")
-        // In on the fingerprint counts: the button read only this app's
-        // punches, so somebody in at the studio was offered "Clock in" all day.
-        case nil: return (clock.clockedIn ?? !clock.punches.isEmpty) ? L("Clock out here") : L("Clock in here")
+        case nil: return L("Clock in here")
         }
     }
 

@@ -256,9 +256,9 @@ export const reads: ReadRegistry = {
   // build shows a "Clock in here" button only when `allowed`.
   //
   // `clockedIn`: today already has an arrival, from the fingerprint or the app.
-  // The button says "Clock out here" then. It read only the app's punches, so
-  // Wael, in on the fingerprint at 11:01, saw "Clock in here" all day and took
-  // it that he could not clock out from a site (2026-11-21).
+  // The app clocks in and nothing more — the clock-out is on the fingerprint
+  // at the studio (2026-11-21) — so once in, the card hides its button and
+  // says so. A press anyway is refused in words (recordAppPunch).
   "me/clock": guarded(requireEmployee, async (_params, me) => {
     const timezone = await getTimezone();
     const today = todayKey(timezone);
