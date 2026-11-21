@@ -553,6 +553,14 @@ The studio's client finder (`C:\Users\USER\lead-finder`: Python/FastAPI on port 
 - **The subdomain is off**: Lead Finder's `public_link` setting is false, so it no longer starts its own `lead-finder` tunnel (`~/.cloudflared/lead-finder.yml`). `leads.neonjo.com` answers with Cloudflare's error until its DNS record is removed in the Cloudflare dashboard.
 - **It has to be running** for the page to work; the platform says so in words (502) when it is not. Start it with `run.bat` in its folder, or `python app.py --port 8733 --no-browser`.
 
+### The WhatsApp tab is the reply desk
+Asked on 2026-11-21 ("بدي اربط هاض البرنامج على تطبيق الشركة … حطه بدل خانة الواتساب القديمه"): the WhatsApp tab in both portals now shows the studio's reply desk instead of the old inbox. The desk is its own program on this PC (`C:\Users\USER\whatsapp-claude`, Node on port 3477, `start.bat`): its own linked session (Baileys), Claude Code for drafts and automatic replies, the brief, the appointment book, and the alerts it posts to the "Neon" group. Its own README-level notes live in that folder's code comments.
+- **`/whatsapp-desk/*` passes everything through to it** (`src/app/whatsapp-desk/[[...path]]/route.ts`; helpers in `lib/whatsapp-desk-proxy.ts`, tested) — the Lead Finder pattern exactly, including its live event stream (`events`, streamed through, `x-accel-buffering: no`, closed when the browser leaves via `request.signal`). `WHATSAPP_DESK_URL` defaults to `http://host.docker.internal:3477`.
+- **Who:** the same people as the old tab — the manager, or an employee with `canReadWhatsApp` — checked by the route itself. Note the desk can switch automatic replies and unlink its number; anybody with the tab can.
+- **The desk accepts only `localhost`, `127.0.0.1` and `host.docker.internal`** as a Host, and binds to 127.0.0.1; it has no login of its own, so the platform's session is the only gate from outside. Its page uses relative URLs (`api/…`, `events`) and gets `<base href="/whatsapp-desk/">` from `withBase`.
+- **Nothing old was removed.** `components/whatsapp/whatsapp-inbox.tsx`, the worker (`neon-whatsapp`) and the WhatsApp rows in the team's chat list and its notifications all still run on the worker's own session. Going back is restoring the two page bodies from git.
+- **It has to be running** for the tab to work; the route says so in words (502) when it is not.
+
 ### Office shopping
 The supermarket's own website in a web view in the app, one office account, one
 shared cart: everybody adds, only the manager orders. The cart lives at the

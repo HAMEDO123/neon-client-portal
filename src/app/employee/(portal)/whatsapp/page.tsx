@@ -1,22 +1,15 @@
 import { redirect } from "next/navigation";
-import { getTimezone } from "@/lib/settings";
 import { requireWhatsAppAccess } from "@/lib/admin-guard";
-import { whatsAppChats } from "@/lib/whatsapp/worker";
 import { whatsAppChatUrl } from "@/lib/whatsapp-watch";
-import { WhatsAppInbox } from "@/components/whatsapp/whatsapp-inbox";
 
-// The same WhatsApp tab, for the people the manager has trusted with it.
+// The same WhatsApp tab, for the people the manager has trusted with it — since
+// 2026-11-21 the studio's reply desk (lib/whatsapp-desk-proxy.ts) in a frame,
+// as on the admin side. One guard for both portals, so they cannot disagree
+// about who may read the studio's messages or answer in them.
 //
-// One component and one guard, mounted twice, rather than a second inbox: the
-// two portals must not be able to disagree about who may read the studio's
-// messages, or answer in them. Somebody without the permission is sent home
-// rather than shown an empty tab, because an empty tab reads as "no messages".
-//
-// `fills-frame` is what takes the portal's padding and scrolling off this page
-// so it can manage both itself — and the class has to be on the element this
-// returns, because the selector behind it (`.employee-main:has(> .fills-frame)`
-// in globals.css) matches a **direct** child. Wrapping this in a div would
-// quietly give the page back its scrollbar.
+// `fills-frame` is what takes the portal's padding and scrolling off this page,
+// and the class has to be on the element this returns: the selector behind it
+// (`.employee-main:has(> .fills-frame)` in globals.css) matches a direct child.
 
 export const dynamic = "force-dynamic";
 
@@ -36,16 +29,9 @@ export default async function EmployeeWhatsAppPage({
   const { chat } = await searchParams;
   if (typeof chat === "string" && chat) redirect(whatsAppChatUrl("employee", chat));
 
-  const timezone = await getTimezone();
-  const result = await whatsAppChats();
-
   return (
-    <div className="fills-frame">
-      <WhatsAppInbox
-        initialChats={result.ok ? result.data.chats : []}
-        initialError={result.ok ? null : result.error}
-        timeZone={timezone}
-      />
+    <div className="fills-frame flex h-full flex-col">
+      <iframe src="/whatsapp-desk" title="WhatsApp" className="min-h-0 w-full flex-1 border-0 bg-white" />
     </div>
   );
 }
