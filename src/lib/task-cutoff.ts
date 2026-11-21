@@ -86,6 +86,56 @@ export function chargeable(
   return task.createdAt.getTime() <= cutoffAt.getTime() - NOTICE_HOURS * 60 * 60 * 1000;
 }
 
+type Handover = { createdAt: Date; reviewedAt: Date | null; status: "PENDING" | "APPROVED" | "REJECTED" };
+
+/**
+ * Whether a job had been handed in at the cutoff — read from when it was
+ * handed in, not from its state now, because the pass that charges a day can
+ * run after midnight (lastDayToCharge) and work sent at 00:20 was not in by
+ * 23:59. A hand-in sent back before the cutoff does not count; one with no
+ * record of a hand-in is judged by its state, the benefit of the doubt.
+ */
+export function handedInBy(
+  task: { state: State; completedAt: Date | null; submissions: Handover[] },
+  cutoffAt: Date
+) {
+  const by = cutoffAt.getTime();
+  if (task.submissions.length === 0) return handedIn(task.state);
+  if (task.state === "DONE" && task.completedAt && task.completedAt.getTime() <= by) return true;
+  return task.submissions.some(
+    (sub) =>
+      sub.createdAt.getTime() <= by &&
+      !(sub.status === "REJECTED" && sub.reviewedAt && sub.reviewedAt.getTime() <= by)
+  );
+}
+
+/** Late at the cutoff: chargeable, with "handed in" judged as of 23:59. */
+export function lateAt(
+  task: { state: State; createdAt: Date; siteVisitId: string | null; completedAt: Date | null; submissions: Handover[] },
+  cutoffAt: Date
+) {
+  if (handedInBy(task, cutoffAt)) return false;
+  return chargeable({ ...task, state: "IN_PROGRESS" }, cutoffAt);
+}
+
+/** How many times a job had been sent back by the cutoff — its charge's round. */
+export function roundAt(submissions: Handover[], cutoffAt: Date) {
+  return submissions.filter(
+    (sub) => sub.status === "REJECTED" && sub.reviewedAt && sub.reviewedAt.getTime() <= cutoffAt.getTime()
+  ).length;
+}
+
+/**
+ * The days a scheduler pass charges. The cutoff is 23:59 and the scheduler
+ * comes round every ten minutes, so "charge from 23:59 until midnight" is a
+ * one-minute window it almost never landed in: from 25 Oct to 21 Nov 2026
+ * nobody was charged at all. So every pass also charges the day before, and
+ * today once its 23:59 has come. Each charge is keyed, so it lands once.
+ */
+export function daysToCharge(todayKey: string, phase: "before" | "warn" | "charge", previousDayKey: string) {
+  return phase === "charge" ? [previousDayKey, todayKey] : [previousDayKey];
+}
+
 /**
  * The first day a job sent back becomes due again. The owner, 2026-11-19:
  * "just for today all rejected gets charged, from tomorrow gets due for the
@@ -163,7 +213,7 @@ export function warningCopy(count: number) {
 export function chargeCopy(count: number, amount: number) {
   return {
     title: `${tasks(count)} not handed in by 11:59 PM`,
-    message: `${count === 1 ? "One hour's pay" : `${count} hours' pay`} (${money(amount)}) was taken off for today. Talk to the manager if that is not right.`,
+    message: `${count === 1 ? "One hour's pay" : `${count} hours' pay`} (${money(amount)}) was taken off. Talk to the manager if that is not right.`,
   };
 }
 

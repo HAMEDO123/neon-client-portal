@@ -7,6 +7,9 @@ import {
   chargeable,
   cutoffOn,
   cutoffPhase,
+  daysToCharge,
+  lateAt,
+  roundAt,
   dayCounts,
   handedIn,
   hoursAsMoney,
@@ -158,8 +161,8 @@ describe("who may take money off", () => {
   // An evening the server could not warn is one it could not take the work in.
   it("charges only somebody who was warned that evening", () => {
     const runner = read("src", "lib", "notifications", "task-cutoff-events.ts");
-    assert.match(runner, /if \(!warnedIds\.has\(person\.id\)\) continue;/);
-    assert.match(runner, /!isWorkingDay\(hours, dayKey\) \|\| !dayCounts\(dayKey, announcedDay\)/);
+    assert.match(runner, /team\.filter\(\(person\) => warnedIds\.has\(person\.id\)\)/);
+    assert.match(runner, /!isWorkingDay\(hours, day\) \|\| !dayCounts\(day, announcedDay\)/);
   });
 });
 
@@ -244,5 +247,56 @@ describe("being sent back cost an hour, there and then, on 2026-11-19 only", () 
     assert.match(body.slice(0, 2500), /chargeSentBack\(\{\s*submissionId: submission\.id/);
     // The key the first of these were written under by hand.
     assert.equal(sentBackDedupe("s1"), "REJECTED:s1");
+  });
+});
+
+// The cutoff is 23:59 and the scheduler passes every ten minutes, so a charge
+// that only ran inside that minute never ran (25 Oct – 21 Nov 2026). Each pass
+// charges yesterday too, judged by what was in at 23:59.
+describe("charging after midnight", () => {
+  const cutoff = new Date("2026-11-19T20:59:00Z"); // 23:59 Amman
+  const sub = (createdAt: string, status: "PENDING" | "APPROVED" | "REJECTED" = "PENDING", reviewedAt: string | null = null) => ({
+    createdAt: new Date(createdAt),
+    reviewedAt: reviewedAt ? new Date(reviewedAt) : null,
+    status,
+  });
+  const task = (state: "TODO" | "IN_PROGRESS" | "SUBMITTED" | "DONE", submissions: ReturnType<typeof sub>[], completedAt: string | null = null) => ({
+    state,
+    createdAt: new Date("2026-11-19T08:00:00Z"),
+    siteVisitId: null,
+    completedAt: completedAt ? new Date(completedAt) : null,
+    submissions,
+  });
+
+  it("charges yesterday on every pass, and today from 23:59", () => {
+    assert.deepEqual(daysToCharge("2026-11-21", "before", "2026-11-20"), ["2026-11-20"]);
+    assert.deepEqual(daysToCharge("2026-11-21", "warn", "2026-11-20"), ["2026-11-20"]);
+    assert.deepEqual(daysToCharge("2026-11-21", "charge", "2026-11-20"), ["2026-11-20", "2026-11-21"]);
+  });
+
+  it("judges hand-ins by their time, not by the state now", () => {
+    assert.equal(lateAt(task("IN_PROGRESS", []), cutoff), true);
+    assert.equal(lateAt(task("SUBMITTED", [sub("2026-11-19T18:00:00Z")]), cutoff), false, "sent at 21:00");
+    assert.equal(lateAt(task("SUBMITTED", [sub("2026-11-19T21:20:00Z")]), cutoff), true, "sent at 00:20 is late");
+    assert.equal(lateAt(task("DONE", [sub("2026-11-19T21:20:00Z", "APPROVED")], "2026-11-20T08:00:00Z"), cutoff), true);
+  });
+
+  it("does not count a hand-in sent back before the cutoff", () => {
+    const back = sub("2026-11-19T10:00:00Z", "REJECTED", "2026-11-19T12:00:00Z");
+    assert.equal(lateAt(task("IN_PROGRESS", [back]), cutoff), true);
+    assert.equal(roundAt([back], cutoff), 1);
+    const later = sub("2026-11-19T10:00:00Z", "REJECTED", "2026-11-20T09:00:00Z");
+    assert.equal(lateAt(task("IN_PROGRESS", [later]), cutoff), false, "it was in at 23:59");
+    assert.equal(roundAt([later], cutoff), 0);
+  });
+
+  it("gives the benefit of the doubt to a job with no record of a hand-in", () => {
+    assert.equal(lateAt(task("SUBMITTED", []), cutoff), false);
+  });
+
+  it("is what the scheduler runs", () => {
+    const source = read("src", "lib", "notifications", "task-cutoff-events.ts");
+    assert.match(source, /daysToCharge\(dayKey, phase, shiftDayKey\(dayKey, -1\)\)/);
+    assert.match(source, /lateAt\(task, cutoffAt\)/);
   });
 });

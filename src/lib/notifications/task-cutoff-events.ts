@@ -10,6 +10,9 @@ import {
   chargeCopy,
   chargeKey,
   chargeable,
+  daysToCharge,
+  lateAt,
+  roundAt,
   cutoffOn,
   cutoffPhase,
   dayCounts,
@@ -21,7 +24,7 @@ import {
   warningCopy,
   warningKey,
 } from "@/lib/task-cutoff";
-import { dayKeyIn, dayKeyToDate, instantAt, wallClockIn } from "@/lib/time";
+import { dayKeyIn, dayKeyToDate, instantAt, shiftDayKey, wallClockIn } from "@/lib/time";
 import { isWorkingDay, minutesOf } from "@/lib/work-hours";
 
 // The nine o'clock rule, run on every scheduler pass (lib/task-cutoff.ts has
@@ -60,24 +63,17 @@ export async function runTaskCutoffs(now = new Date()) {
 
   const hours = await getWorkHours();
   const announcedDay = dayKeyIn(timeZone, new Date(stamp));
-  if (!isWorkingDay(hours, dayKey) || !dayCounts(dayKey, announcedDay)) {
-    return { on: true as const, announced, warned: 0, charged: 0 };
-  }
-
-  // Minutes rather than the hour: the cutoff is 23:59, which no hour can name.
   const phase = cutoffPhase(minutesOf(wallClockIn(timeZone, now)) ?? 0);
-  if (phase === "before") return { on: true as const, announced, warned: 0, charged: 0 };
 
-  // Every job due today, with who it belongs to.
-  const due = await prisma.assignedTask.findMany({
-    where: { endDay: dayKeyToDate(dayKey), employeeId: { in: team.map((person) => person.id) } },
-    select: { id: true, title: true, state: true, createdAt: true, siteVisitId: true, employeeId: true },
-  });
-  const cutoffAt = instantAt(dayKey, CUTOFF_TIME, timeZone) ?? now;
-  const out = due.filter((task) => chargeable(task, cutoffAt));
-
-  if (phase === "warn") {
-    let warned = 0;
+  let warned = 0;
+  if (phase === "warn" && isWorkingDay(hours, dayKey) && dayCounts(dayKey, announcedDay)) {
+    // Every job due today, with who it belongs to.
+    const due = await prisma.assignedTask.findMany({
+      where: { endDay: dayKeyToDate(dayKey), employeeId: { in: team.map((person) => person.id) } },
+      select: { id: true, state: true, createdAt: true, siteVisitId: true, employeeId: true },
+    });
+    const cutoffAt = instantAt(dayKey, CUTOFF_TIME, timeZone) ?? now;
+    const out = due.filter((task) => chargeable(task, cutoffAt));
     for (const person of team) {
       const count = out.filter((task) => task.employeeId === person.id).length;
       if (count === 0) continue;
@@ -90,51 +86,76 @@ export async function runTaskCutoffs(now = new Date()) {
       }).catch(() => null);
       if (result?.created) warned++;
     }
-    return { on: true as const, announced, warned, charged: 0 };
   }
 
-  // Past nine. Only people who were warned this evening: an evening the server
-  // could not warn is an evening it could not have taken the work in either.
+  // Yesterday on every pass, and today once 23:59 has come (daysToCharge).
+  let charged = 0;
+  for (const day of daysToCharge(dayKey, phase, shiftDayKey(dayKey, -1))) {
+    if (!isWorkingDay(hours, day) || !dayCounts(day, announcedDay)) continue;
+    charged += await chargeDay(day, team, timeZone);
+  }
+
+  return { on: true as const, announced, warned, charged };
+}
+
+type Person = { id: string; name: string; salaryAmount: number | null; payBasis: "MONTHLY" | "WEEKLY" };
+
+/** Charges one day's cutoff: each job due that day not handed in by its 23:59. */
+async function chargeDay(dayKey: string, team: Person[], timeZone: string) {
+  const cutoffAt = instantAt(dayKey, CUTOFF_TIME, timeZone);
+  if (!cutoffAt) return 0;
+
+  // Only people who were warned that evening: an evening the server could not
+  // warn is an evening it could not have taken the work in either.
   const warnedRows = await prisma.notification.findMany({
     where: { dedupeKey: { in: team.map((person) => warningKey(person.id, dayKey)) } },
     select: { employeeId: true },
   });
   const warnedIds = new Set(warnedRows.map((row) => row.employeeId));
+  const people = team.filter((person) => warnedIds.has(person.id));
+  if (people.length === 0) return 0;
+
+  const due = await prisma.assignedTask.findMany({
+    where: { endDay: dayKeyToDate(dayKey), employeeId: { in: people.map((person) => person.id) } },
+    select: {
+      id: true,
+      title: true,
+      state: true,
+      createdAt: true,
+      completedAt: true,
+      siteVisitId: true,
+      employeeId: true,
+      submissions: { select: { createdAt: true, reviewedAt: true, status: true } },
+    },
+  });
+  const out = due.filter((task) => lateAt(task, cutoffAt));
 
   let charged = 0;
   const summary: { name: string; count: number }[] = [];
-  for (const person of team) {
-    if (!warnedIds.has(person.id)) continue;
+  for (const person of people) {
     const mine = out.filter((task) => task.employeeId === person.id);
     if (mine.length === 0) continue;
 
     // A job sent back is due again (redeployDay), and each sending-back is
     // its own thing to be late for — counted, so it is charged once per round.
-    const sentBack = await prisma.taskSubmission.groupBy({
-      by: ["assignedTaskId"],
-      where: { assignedTaskId: { in: mine.map((task) => task.id) }, status: "REJECTED" },
-      _count: { _all: true },
-    });
-    const rounds = new Map(sentBack.map((row) => [row.assignedTaskId, row._count._all]));
-
     let fresh = 0;
     for (const task of mine) {
-      if (await chargeLateTask(task, person, dayKey, rounds.get(task.id) ?? 0)) fresh++;
+      if (await chargeLateTask(task, person, dayKey, roundAt(task.submissions, cutoffAt))) fresh++;
     }
     charged += fresh;
 
-    // Told from what stands charged for today, not from this pass's count, so
-    // a pass that stopped between charging and telling is finished by the next.
-    const today = await prisma.deduction.findMany({
+    // Told from what stands charged for that day, not from this pass's count,
+    // so a pass that stopped between charging and telling is finished by the next.
+    const that = await prisma.deduction.findMany({
       where: { employeeId: person.id, kind: "TASK", day: dayKeyToDate(dayKey), cancelledAt: null },
       select: { amount: true },
     });
-    if (today.length === 0) continue;
-    summary.push({ name: person.name, count: today.length });
+    if (that.length === 0) continue;
+    summary.push({ name: person.name, count: that.length });
     await dispatchNotification({
       employeeId: person.id,
       type: "WARNING",
-      ...chargeCopy(today.length, today.reduce((sum, row) => sum + row.amount, 0)),
+      ...chargeCopy(that.length, that.reduce((sum, row) => sum + row.amount, 0)),
       url: "/employee/tasks?filter=late",
       dedupeKey: chargeKey(person.id, dayKey),
     }).catch(() => undefined);
@@ -148,8 +169,7 @@ export async function runTaskCutoffs(now = new Date()) {
       dedupeKey: managerKey(dayKey),
     });
   }
-
-  return { on: true as const, announced, warned: 0, charged };
+  return charged;
 }
 
 /** For a screen: whether the rule is on, and how many of today's jobs are still out. */
