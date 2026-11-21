@@ -130,6 +130,15 @@ describe("where it is wired in", () => {
     assert.match(phone, /"me\/clock": guardedAction\(requireEmployee/);
   });
 
+  // Wael, 2026-11-21: in on the fingerprint, the app offered "Clock in here"
+  // all day, so a clock-out from a site looked impossible.
+  it("says Clock out once the day has an arrival, from the fingerprint too", () => {
+    const phone = read("src", "lib", "mobile", "registry", "me.ts");
+    assert.match(phone, /clockedIn: punches\.length > 0 \|\| record\?\.arrivedAt != null/);
+    const card = read("ios", "Sources", "Features", "Me", "AppClockCard.swift");
+    assert.match(card, /\(clock\.clockedIn \?\? !clock\.punches\.isEmpty\) \? L\("Clock out here"\) : L\("Clock in here"\)/);
+  });
+
   it("shows the manager where each one was made", () => {
     const page = read("src", "app", "admin", "(dashboard)", "attendance", "page.tsx");
     assert.match(page, /<AppPunchList punches=\{appPunches\}/);

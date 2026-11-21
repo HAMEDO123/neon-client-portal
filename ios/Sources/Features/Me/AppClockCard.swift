@@ -11,7 +11,7 @@ import SwiftUI
 /// beside the fingerprint device's reads, so lateness, the clock-out and the
 /// reminders follow from it unchanged.
 ///
-///   GET get/me/clock → { allowed, punches: [{ time, link }] }
+///   GET get/me/clock → { allowed, punches: [{ time, link }], clockedIn }
 ///   POST do/me/clock args [latitude, longitude, accuracy, fixedAtISO] → { ok, time }
 struct AppClockCard: View {
     @EnvironmentObject var api: APIClient
@@ -35,6 +35,8 @@ struct AppClockCard: View {
     struct AppClock: Decodable {
         let allowed: Bool
         let punches: [Punch]
+        /// Already in today, on the fingerprint or here. Missing from a server before 2026-11-21.
+        let clockedIn: Bool?
         struct Punch: Decodable, Hashable {
             let time: String
             let link: String?
@@ -79,7 +81,9 @@ struct AppClockCard: View {
         switch busy {
         case .locating: return L("Finding where you are…")
         case .saving: return L("Recording…")
-        case nil: return clock.punches.isEmpty ? L("Clock in here") : L("Clock out here")
+        // In on the fingerprint counts: the button read only this app's
+        // punches, so somebody in at the studio was offered "Clock in" all day.
+        case nil: return (clock.clockedIn ?? !clock.punches.isEmpty) ? L("Clock out here") : L("Clock in here")
         }
     }
 

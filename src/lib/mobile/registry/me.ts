@@ -254,10 +254,23 @@ export const reads: ReadRegistry = {
   // manager has turned it on for this person, and `punches` today's from the
   // app, each { time, link } with a map link to where it was made. An app
   // build shows a "Clock in here" button only when `allowed`.
+  //
+  // `clockedIn`: today already has an arrival, from the fingerprint or the app.
+  // The button says "Clock out here" then. It read only the app's punches, so
+  // Wael, in on the fingerprint at 11:01, saw "Clock in here" all day and took
+  // it that he could not clock out from a site (2026-11-21).
   "me/clock": guarded(requireEmployee, async (_params, me) => {
     const timezone = await getTimezone();
-    const app = await myAppClock(me.id, todayKey(timezone), timezone);
-    return { allowed: app !== null, punches: app?.punches ?? [] };
+    const today = todayKey(timezone);
+    const app = await myAppClock(me.id, today, timezone);
+    const record = app
+      ? await prisma.attendanceRecord.findUnique({
+          where: { employeeId_day: { employeeId: me.id, day: dayKeyToDate(today) } },
+          select: { arrivedAt: true },
+        })
+      : null;
+    const punches = app?.punches ?? [];
+    return { allowed: app !== null, punches, clockedIn: punches.length > 0 || record?.arrivedAt != null };
   }),
 
   // The jobs on the Assign screen, ?week=YYYY-MM-DD (a Sunday; any day in the

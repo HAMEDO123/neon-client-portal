@@ -37,7 +37,7 @@ enum MeScreens {
         case "me-tasks-fixture-review": return AnyView(MeFixtureTasks(filter: .review))
         case "me-clock-fixture":
             return AnyView(NeonScroll(spacing: NeonSpace.stack, lazy: false) {
-                AppClockCard(preview: .init(allowed: true, punches: [.init(time: "10:58 AM", link: "https://maps.google.com/?q=31.95,35.91")]))
+                AppClockCard(preview: .init(allowed: true, punches: [.init(time: "10:58 AM", link: "https://maps.google.com/?q=31.95,35.91")], clockedIn: true))
             })
         case "me-ask-fixture":
             return debugPushed(
