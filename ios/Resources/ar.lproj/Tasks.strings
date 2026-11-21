@@ -409,3 +409,9 @@
 "On the list from today" = "على القائمة من اليوم";
 "If the studio works today, today's is handed out as soon as it is added. A day the studio does not work makes none." = "إن كان اليوم يوم عمل، تُسند مهمة اليوم فور إضافتها. اليوم الذي لا يعمل فيه الاستوديو لا يُضيف شيئًا.";
 "Every working day, from today." = "كل يوم عمل، من اليوم.";
+
+/* The Today segment */
+"Today's jobs, and adding one" = "مهام اليوم، وإضافة مهمة";
+"job today" = "مهمة اليوم";
+"jobs today" = "مهام اليوم";
+"Nothing handed out for today yet." = "ما في مهام لليوم لسا.";

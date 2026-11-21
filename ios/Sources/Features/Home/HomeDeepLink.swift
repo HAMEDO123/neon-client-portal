@@ -62,7 +62,7 @@ func parseAdminLink(_ raw: String) -> HomeLinkDestination? {
 @ViewBuilder
 func homeDestinationView(_ destination: HomeLinkDestination?) -> some View {
     switch destination {
-    case .tasksBoard: TasksRootView()
+    case .tasksBoard: TasksRootView(initialSegment: .board)
     case .reviews: ReviewsRootView()
     case .employees: EmployeesRootView()
     case .employee(let id): EmployeeDetailView(employeeId: id)

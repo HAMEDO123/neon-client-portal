@@ -16,6 +16,9 @@ struct WeekBoardView: View {
     @Binding var editing: JobSheetTarget?
     /// The page's scroll, so tapping a day in the strip goes to its card.
     var proxy: ScrollViewProxy?
+    /// The "Today" segment: only today's jobs, in one card, with no week to
+    /// scroll past to reach them (asked for on 2026-11-21).
+    var todayOnly = false
 
     @State private var person: String?
     /// Which jobs are drawn. Every day stays, so the week keeps its shape and
@@ -47,17 +50,26 @@ struct WeekBoardView: View {
                 SkeletonRows(count: 3)
             }
         } content: { week in
-            // The person's jobs this week, then the kind the buttons ask for.
-            let theirs = week.tasks.filter { person == nil || $0.employeeId == person }
+            // The person's jobs this week — or today — then the kind the buttons ask for.
+            let theirs = week.tasks.filter {
+                (person == nil || $0.employeeId == person)
+                    && (!todayOnly || ($0.startKey <= week.todayKey && week.todayKey <= $0.endKey))
+            }
             let jobs = theirs.filter { filter.matches(standing($0, week)) }
+            let days = todayOnly ? [week.todayKey] : week.weekKeys
             VStack(alignment: .leading, spacing: NeonSpace.stack) {
-                weekCard(week, jobs: theirs)
-                    .neonAppear()
+                if todayOnly {
+                    todayCard(week, jobs: theirs)
+                        .neonAppear()
+                } else {
+                    weekCard(week, jobs: theirs)
+                        .neonAppear()
 
-                // What is handed out every working day, by itself: each day
-                // it makes is one of the jobs below.
-                RoutinesCard(store: routines, team: week.team)
-                    .neonAppear(delay: 0.05)
+                    // What is handed out every working day, by itself: each day
+                    // it makes is one of the jobs below.
+                    RoutinesCard(store: routines, team: week.team)
+                        .neonAppear(delay: 0.05)
+                }
 
                 if !week.team.isEmpty {
                     TasksPersonFilter(selection: $person, people: week.team)
@@ -70,7 +82,7 @@ struct WeekBoardView: View {
                 }
 
                 VStack(spacing: NeonSpace.stack) {
-                    ForEach(Array(week.weekKeys.enumerated()), id: \.element) { index, day in
+                    ForEach(Array(days.enumerated()), id: \.element) { index, day in
                         dayCard(
                             day, week: week,
                             jobs: jobs.filter { $0.startKey <= day && day <= $0.endKey },
@@ -147,6 +159,43 @@ struct WeekBoardView: View {
             }
             if jobs.isEmpty {
                 Text(L("Nothing handed out for this week yet."))
+                    .font(.neonSubtitle)
+                    .foregroundStyle(Color.neonTextTertiary)
+            } else {
+                TasksBreakdown(parts: TasksBreakdownPart.states(jobs.map(\.state), order: Self.jobStates), barHeight: 8, columns: 2)
+            }
+        }
+        .padding(NeonSpace.card)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .neonSurface(.glass, radius: NeonRadius.lg)
+    }
+
+    /// Today at the top of the Today segment: the date, how many jobs cover
+    /// it, and how they stand.
+    private func todayCard(_ week: WeekBoardResponse, jobs: [AssignedJob]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tasksWeekdayName(week.todayKey))
+                        .font(.neonCardTitle)
+                        .foregroundStyle(Color.neonInk)
+                    Text(formattedDayKey(week.todayKey))
+                        .font(.neonSubtitle)
+                        .foregroundStyle(Color.neonTextSecondary)
+                }
+                Spacer(minLength: 8)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(NeonFormat.integer(jobs.count))
+                        .font(.system(.title2, weight: .heavy))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.neonInk)
+                    Text(jobs.count == 1 ? L("job today") : L("jobs today"))
+                        .font(.neonLabel)
+                        .foregroundStyle(Color.neonTextSecondary)
+                }
+            }
+            if jobs.isEmpty {
+                Text(L("Nothing handed out for today yet."))
                     .font(.neonSubtitle)
                     .foregroundStyle(Color.neonTextTertiary)
             } else {

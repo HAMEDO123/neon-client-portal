@@ -27,7 +27,7 @@ enum TasksScreens {
         "tasks-process-owner", "tasks-process-owner-new",
         "tasks-process-period", "tasks-process-period-new",
         "tasks-briefing", "tasks-briefing-list",
-        "tasks-routines-fixture", "tasks-routine-new-fixture", "tasks-week-fixture",
+        "tasks-routines-fixture", "tasks-routine-new-fixture", "tasks-week-fixture", "tasks-today-fixture", "tasks-today",
     ]
 
     private static let briefingTeam = [
@@ -73,6 +73,8 @@ enum TasksScreens {
                     }
             )
         case "tasks-week-fixture": return AnyView(TasksDebugWeekFixture())
+        case "tasks-today-fixture": return AnyView(TasksDebugWeekFixture(todayOnly: true))
+        case "tasks-today": return AnyView(TasksRootView(initialSegment: .today))
         case "tasks-board": return AnyView(TasksRootView(initialSegment: .board))
         case "tasks-week": return AnyView(TasksRootView(initialSegment: .week))
         case "tasks-chat": return AnyView(TasksRootView(initialSegment: .chat))
@@ -236,6 +238,7 @@ enum TasksFixtures {
 /// The Week segment drawn from the fixture: the week card, the "Every day"
 /// card under it, and the days, with no network.
 private struct TasksDebugWeekFixture: View {
+    var todayOnly = false
     @StateObject private var week = TaskWeekStore(preview: TasksFixtures.week)
     @StateObject private var routines = TaskRoutinesStore(preview: TasksFixtures.routines)
 
@@ -243,7 +246,7 @@ private struct TasksDebugWeekFixture: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 NeonScroll(spacing: NeonSpace.stack) {
-                    WeekBoardView(store: week, routines: routines, editing: .constant(nil), proxy: proxy)
+                    WeekBoardView(store: week, routines: routines, editing: .constant(nil), proxy: proxy, todayOnly: todayOnly)
                 }
                 .debugScroll(proxy)
             }

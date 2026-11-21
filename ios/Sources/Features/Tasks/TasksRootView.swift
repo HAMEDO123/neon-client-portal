@@ -13,10 +13,11 @@ import SwiftUI
 /// the system bar and its back button instead of opening a second stack.
 struct TasksRootView: View {
     enum Segment: String, CaseIterable, Identifiable {
-        case board, week, chat, team
+        case today, board, week, chat, team
         var id: String { rawValue }
         var label: String {
             switch self {
+            case .today: return L("Today")
             case .board: return L("Board")
             case .week: return L("Week")
             case .chat: return L("Chat")
@@ -25,6 +26,7 @@ struct TasksRootView: View {
         }
         var symbol: String {
             switch self {
+            case .today: return "sun.max.fill"
             case .board: return "square.grid.3x3.fill"
             case .week: return "calendar"
             case .chat: return "bubble.left.and.bubble.right.fill"
@@ -34,6 +36,7 @@ struct TasksRootView: View {
         /// The grey line under the page's title.
         var subtitle: String {
             switch self {
+            case .today: return L("Today's jobs, and adding one")
             case .board: return L("Every project, step by step")
             case .week: return L("Jobs handed out by hand")
             case .chat: return L("Task cards handed out in chat")
@@ -46,6 +49,9 @@ struct TasksRootView: View {
     @Environment(\.isPresented) private var isPushed
     @StateObject private var boardStore = TaskBoardStore()
     @StateObject private var weekStore = TaskWeekStore()
+    /// Today's own copy of the week, so walking the Week segment to another
+    /// week never takes today's jobs with it.
+    @StateObject private var todayStore = TaskWeekStore()
     @StateObject private var routinesStore = TaskRoutinesStore()
     @StateObject private var peopleStore = TaskPeopleStore()
     @StateObject private var chatCards = ChatCardsLoader()
@@ -54,7 +60,7 @@ struct TasksRootView: View {
     @State private var openingTeamChat = false
     @State private var briefing = false
 
-    init(initialSegment: Segment = .board) {
+    init(initialSegment: Segment = .today) {
         _segment = State(initialValue: initialSegment)
     }
 
@@ -67,6 +73,7 @@ struct TasksRootView: View {
             }
         }
         .task {
+            await todayStore.load(api)
             await boardStore.load(api)
             await weekStore.load(api)
             await routinesStore.load(api)
@@ -78,6 +85,7 @@ struct TasksRootView: View {
             guard let name = note.object as? String,
                   name.hasPrefix("tasks/") || name.hasPrefix("team/routines/") || isFaceChange(name) else { return }
             Task {
+                await todayStore.load(api)
                 await boardStore.load(api)
                 await weekStore.load(api)
                 if name.hasPrefix("team/routines/") || isFaceChange(name) { await routinesStore.load(api) }
@@ -97,13 +105,14 @@ struct TasksRootView: View {
                     .padding(.bottom, NeonSpace.xs)
 
                 // Handing work out by saying it, on the board and the week.
-                if segment == .board || segment == .week {
+                if segment == .today || segment == .board || segment == .week {
                     TaskBriefingCard { briefing = true }
                         .transition(.opacity)
                 }
 
                 Group {
                     switch segment {
+                    case .today: WeekBoardView(store: todayStore, routines: routinesStore, editing: $jobSheet, proxy: proxy, todayOnly: true)
                     case .board: TaskBoardView(store: boardStore)
                     case .week: WeekBoardView(store: weekStore, routines: routinesStore, editing: $jobSheet, proxy: proxy)
                     case .chat: ManagerTasksView(cards: chatCards, team: weekStore.value?.team ?? boardStore.value?.team ?? []) { openingTeamChat = true }
@@ -121,8 +130,8 @@ struct TasksRootView: View {
                 if !isPushed { TasksTopScrim() }
             }
             .modifier(TasksSoftTopEdge())
-            .floatingActionButton(label: L("New job"), isVisible: segment == .week && weekStore.value != nil) {
-                jobSheet = .new(day: weekStore.value?.todayKey ?? NeonFormat.dayKey(Date()))
+            .floatingActionButton(label: L("New job"), isVisible: (segment == .week && weekStore.value != nil) || (segment == .today && todayStore.value != nil)) {
+                jobSheet = .new(day: (segment == .today ? todayStore.value?.todayKey : weekStore.value?.todayKey) ?? NeonFormat.dayKey(Date()))
             }
             #if DEBUG
             .debugScroll(proxy)
@@ -137,7 +146,7 @@ struct TasksRootView: View {
             TaskPeopleDetailView(personId: route.id, store: peopleStore, board: boardStore)
         }
         .sheet(item: $jobSheet) { target in
-            JobEditorSheet(target: target, team: weekStore.value?.team ?? [])
+            JobEditorSheet(target: target, team: weekStore.value?.team ?? todayStore.value?.team ?? [])
         }
         .sheet(isPresented: $briefing) {
             TaskBriefingView()
@@ -173,6 +182,7 @@ struct TasksRootView: View {
     private func reload() async {
         Haptic.soft()
         switch segment {
+        case .today: await todayStore.load(api)
         case .board: await boardStore.load(api)
         case .week: await weekStore.load(api)
         case .chat: await chatCards.load(api)
