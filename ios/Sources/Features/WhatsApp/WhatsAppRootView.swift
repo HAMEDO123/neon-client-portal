@@ -9,7 +9,7 @@ import SwiftUI
 /// `{ chats: [], error: "…" }`, not a thrown error, because "not linked" and
 /// "the worker is down" each want their own screen, never an empty list that
 /// reads as "no messages".
-struct WhatsAppRootView: View {
+struct WhatsAppInboxView: View {
     @EnvironmentObject var api: APIClient
     @State private var inbox: WhatsAppInboxResponse?
     @State private var cachedAt: Date?

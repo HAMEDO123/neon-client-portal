@@ -1,0 +1,4 @@
+# the WhatsApp session, chats and the Claude token: never in git
+data/
+node_modules/
+*.log

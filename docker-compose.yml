@@ -52,6 +52,7 @@ services:
     environment:
       DATABASE_URL: postgresql://neon:${POSTGRES_PASSWORD:?run compose with --env-file .env.docker}@db:5432/neon
       WHATSAPP_WORKER_URL: http://host.docker.internal:4100
+      WHATSAPP_DESK_URL: http://neon-desk:3477
     depends_on:
       db:
         condition: service_healthy
@@ -176,5 +177,25 @@ services:
       app:
         condition: service_healthy
 
+  desk:
+    # The studio's WhatsApp reply desk (whatsapp-desk/): its own linked WhatsApp
+    # session, Claude Code for automatic replies, the brief and the appointment
+    # book. The portal shows it as the WhatsApp tab and reaches it at
+    # http://neon-desk:3477 (WHATSAPP_DESK_URL). In the stack since 2026-11-21 so
+    # it starts with the PC like everything else — before, it was a Node process
+    # someone had to start (start.bat). Claude Code runs on the studio's
+    # subscription through a `claude setup-token` token kept in its volume.
+    build: ./whatsapp-desk
+    container_name: neon-desk
+    restart: unless-stopped
+    volumes:
+      # The WhatsApp session, chats, appointments, company info, the token.
+      # Named, so `down` leaves it alone; losing it means scanning the QR again.
+      - desk-data:/app/data
+    ports:
+      # This PC only: the desk's own page, and the one place its Claude key is set.
+      - "127.0.0.1:3477:3477"
+
 volumes:
   db-data:
+  desk-data:
