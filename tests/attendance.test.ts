@@ -12,6 +12,7 @@ import {
   clockLabel,
   countedHours,
   dayLengthHours,
+  dayCharge,
   endOfDayMinutes,
   lateStaysLate,
   groupPunches,
@@ -428,7 +429,27 @@ describe("a day that is always eight hours", () => {
     assert.equal(endOfDayMinutes(withSaturday, "2026-11-21", "12:10"), 18 * 60);
     assert.equal(endOfDayMinutes(withSaturday, "2026-11-14", "12:10"), 20 * 60);
     assert.equal(endOfDayMinutes(withSaturday, "2026-11-21", "11:00", 30), 19 * 60, "a step-out still moves it");
-    assert.equal(lateHours(hoursOn(withSaturday, "2026-11-21"), "12:10", 5), 2, "and the lateness is still charged");
+    assert.equal(lateHours(hoursOn(withSaturday, "2026-11-21"), "12:10", 5), 2, "and the lateness is still counted");
+  });
+
+  // Pay is multiplied by shortHours alone, so this is the half that takes the
+  // money: for a day it was missing, a late Saturday cost nothing at all.
+  it("takes a Saturday's late hours off, whatever time they left", () => {
+    const cost = (dayKey: string, arrival: string, left: string | null) =>
+      dayCharge({
+        hours: withSaturday,
+        timeZone: "Asia/Amman",
+        dayKey,
+        arrivedAt: new Date(`${dayKey}T${arrival}:00+03:00`),
+        departedAt: left ? new Date(`${dayKey}T${left}:00+03:00`) : null,
+      }).shortHours;
+    assert.equal(cost("2026-11-21", "11:05", "18:00"), 0, "inside the allowance");
+    assert.equal(cost("2026-11-21", "12:10", "18:00"), 2, "worked to six: only the lateness");
+    assert.equal(cost("2026-11-21", "12:10", "21:00"), 2, "staying later gives nothing back");
+    assert.equal(cost("2026-11-21", "12:10", "17:00"), 3, "and leaving early is on top");
+    assert.equal(cost("2026-11-21", "12:10", null), 3, "beside the forgotten scan's hour");
+    assert.equal(cost("2026-11-14", "12:10", "20:00"), 0, "before it was asked for, made up");
+    assert.equal(cost("2026-11-22", "12:10", "21:00"), 0, "a weekday is still made up");
   });
 
   it("gives back a step-out in whole hours too", () => {

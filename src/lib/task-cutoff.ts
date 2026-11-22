@@ -3,7 +3,7 @@ import { hourlyRate } from "@/lib/payroll";
 import { isWorkingDay, minutesOf, nextWorkingDay, type WorkHours } from "@/lib/work-hours";
 
 // Money taken off for a reason: the manager's own cutoffs, and the studio's
-// rule that a task not handed in by nine in the evening costs an hour's pay.
+// rule that a task not handed in by 11:59 PM costs an hour's pay.
 //
 // The rule, as the studio asked for it: every job due today that has not been
 // handed in — sent for review, or approved — by 23:59 costs its owner one
@@ -14,7 +14,7 @@ import { isWorkingDay, minutesOf, nextWorkingDay, type WorkHours } from "@/lib/w
 // - Everybody with work still out is warned an hour before.
 // - Nobody is charged on an evening they were not warned on: an evening the
 //   server could not warn is an evening it could not take the work in either.
-// - A job given too late in the day to be finished by nine is not charged.
+// - A job given too late in the day to be finished in time is not charged.
 // - A task is charged once, ever, and the manager can take any charge back.
 
 /** The time, on the studio's clock, a day's work has to be handed in by. */

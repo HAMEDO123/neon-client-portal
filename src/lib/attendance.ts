@@ -194,7 +194,8 @@ export const SATURDAY_NO_MAKE_UP_FROM = "2026-11-21";
  * at its own end. Saturday, from 2026-11-21 — the owner: "on Saturday, coming
  * late should not be made up by staying later (the day still ends at 6 PM and
  * the late hour is just deducted)", "yes starting from today". Stepping out
- * still pushes the end; only lateness stopped.
+ * still pushes the end; only lateness stopped. `dayCharge` is what deducts the
+ * late hours: pay is multiplied by `shortHours` and nothing else.
  */
 export function lateStaysLate(dayKey: string) {
   return weekdayOf(dayKey) === 6 && dayKey >= SATURDAY_NO_MAKE_UP_FROM;
@@ -450,17 +451,23 @@ export function dayCharge(input: {
   const arrival = wallClockIn(timeZone, arrivedAt);
   const endsAtMinutes = endOfDayMinutes(hours, dayKey, arrival, input.awayMinutes ?? 0);
 
+  // On a day whose lateness cannot be worked off, the end has not moved for it,
+  // so the shortfall below knows nothing about it: the late hours are charged
+  // here or not at all. They are measured, unlike a missing scan, so they are
+  // owed beside its flat hour as well.
+  const lateOff = lateStaysLate(dayKey) ? lateHours(hoursOn(hours, dayKey), arrival) : 0;
+
   if (!departedAt) {
     // No clock-out. This still does not invent a departure — `hoursShort` is
     // not asked, and nothing is measured against an end nobody reached. The
     // studio charges a flat hour for the day it cannot account for
     // (MISSING_PUNCH_HOURS), and that is the whole of it: charging the
     // shortfall as well would price the same unknown twice, once as a guess.
-    return { shortHours: MISSING_PUNCH_HOURS, endsAtMinutes };
+    return { shortHours: Math.min(MISSING_PUNCH_HOURS + lateOff, MAX_DELAY_HOURS), endsAtMinutes };
   }
 
   const left = minutesInDay(wallClockIn(timeZone, departedAt), arrival);
-  return { shortHours: hoursShort(endsAtMinutes, left), endsAtMinutes };
+  return { shortHours: Math.min(hoursShort(endsAtMinutes, left) + lateOff, MAX_DELAY_HOURS), endsAtMinutes };
 }
 
 /**

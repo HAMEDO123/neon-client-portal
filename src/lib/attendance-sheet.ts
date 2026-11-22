@@ -5,6 +5,7 @@ import {
   clockLabel,
   endOfDayMinutes,
   lateHours,
+  lateStaysLate,
   MISSING_PUNCH_HOURS,
   workedHours,
 } from "@/lib/attendance";
@@ -294,6 +295,7 @@ function describeDay(input: {
       late,
       recomputed,
       steps: steps.length,
+      keepsLate: lateStaysLate(dayKey),
     }),
   };
 }
@@ -312,8 +314,10 @@ function explain(input: {
   /** What these times cost under today's rule, for comparing with what was charged. */
   recomputed: number;
   steps: number;
+  /** A day whose lateness is charged rather than worked off (Saturday, lateStaysLate). */
+  keepsLate: boolean;
 }): string {
-  const { person, record, arrived, left, owedUntil, worked, onSite, late, recomputed, steps } = input;
+  const { person, record, arrived, left, owedUntil, worked, onSite, late, recomputed, steps, keepsLate } = input;
 
   const stepped = steps > 0 ? ` Out and back ${steps === 1 ? "once" : `${steps} times`}, ${hours2(record.awayHours)} h.` : "";
   // Only ever on a day where the two disagree, and then it is the important
@@ -333,17 +337,21 @@ function explain(input: {
       ? ` Paid by the hour: ${worked} h${onSite != null && onSite > worked ? ` (here ${hours2(onSite)} h — there is no overtime)` : ""}.`
       : "";
 
+  // Hours off for coming late that staying later could not give back.
+  const lateOff = keepsLate ? late : 0;
   const owed =
-    late > 0 ? `${hours2(late)} h late, so the day owed until ${owedUntil}` : `the day owed until ${owedUntil}`;
+    lateOff > 0
+      ? `${hours2(late)} h late and not made up on a Saturday, the day owed until ${owedUntil}`
+      : late > 0 ? `${hours2(late)} h late, so the day owed until ${owedUntil}` : `the day owed until ${owedUntil}`;
 
   if (worked == null) {
     // The studio's flat price for a day it cannot account for, not a guess at
     // when they left (lib/attendance.ts, MISSING_PUNCH_HOURS).
-    return `In ${arrived}, ${owed}. No clock-out recorded — ${hours2(MISSING_PUNCH_HOURS)} h off for the forgotten scan, and nothing measured against the end.${stepped}${charged}`;
+    return `In ${arrived}, ${owed}. No clock-out recorded — ${hours2(MISSING_PUNCH_HOURS)} h off for the forgotten scan${lateOff > 0 ? ` and ${hours2(lateOff)} h for coming late` : ""}, and nothing measured against the end.${stepped}${charged}`;
   }
 
   const outcome =
-    recomputed > 0 ? `left ${left}, ${hours2(recomputed)} h short` : `left ${left} — the day was worked, nothing off`;
+    recomputed > 0 ? `left ${left}, ${hours2(recomputed)} h ${lateOff > 0 ? "off" : "short"}` : `left ${left} — the day was worked, nothing off`;
 
   return `In ${arrived}, ${owed}; ${outcome}.${byTheHour}${stepped}${charged}`;
 }
