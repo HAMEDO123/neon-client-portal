@@ -550,11 +550,12 @@ final class APIClient: ObservableObject {
     }
 
     /// Hands finished work in — a board cell or a job handed out by hand, the
-    /// server finds which. Answers SUBMITTED, never DONE.
-    func submitProof(taskId: String, file: UploadFile, note: String?) async throws {
+    /// server finds which. One file or several; the server reads every `photo`.
+    /// Answers SUBMITTED, never DONE.
+    func submitProof(taskId: String, files: [UploadFile], note: String?) async throws {
         var fields: [String: String] = [:]
         if let note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { fields["note"] = note }
-        try await postMultipart("tasks/\(taskId)/proof", fields: fields, files: [file])
+        try await postMultipart("tasks/\(taskId)/proof", fields: fields, files: files)
     }
 
     func fetchNotifications() async throws -> Loaded<NotificationsResponse> {

@@ -239,7 +239,9 @@
 "File" = "ملف";
 "Note for the manager (optional)" = "ملاحظة للمدير (اختيارية)";
 "What should the manager know?" = "ماذا يجب أن يعرف المدير؟";
-"Add a photo or a file of the finished work" = "أضف صورة أو ملفًا للعمل المنجز";
+"Add photos or files of the finished work" = "أضف صورًا أو ملفات للعمل المنجز";
+"Up to %d files can be sent together." = "بتقدر تبعت لحد %d ملفات مع بعض.";
+"That is too much for one upload: %@ together is the most." = "حجمهم كبير على إرسال واحد: أقصى إشي %@ مع بعض.";
 "Sending puts this in the manager's review. It is marked done only when they approve it." = "الإرسال يضعها في مراجعة المدير، ولا تُعلَّم منجزة إلا عندما يعتمدها.";
 "That photo could not be read." = "تعذّرت قراءة هذه الصورة.";
 "That file could not be read." = "تعذّرت قراءة هذا الملف.";

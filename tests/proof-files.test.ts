@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MAX_PROOF_FILES, proofFiles, proofUrls } from "../src/lib/attachments";
+import { MAX_UPLOAD_BYTES } from "../src/lib/upload-limits";
 
 const read = (...parts: string[]) => readFileSync(join(process.cwd(), ...parts), "utf8");
 
@@ -30,6 +31,14 @@ describe("a proof of several files", () => {
     assert.ok(MAX_PROOF_FILES >= 5);
     assert.match(read("src", "lib", "task-proof.ts"), /photos\.length > MAX_PROOF_FILES/);
     assert.match(read("src", "components", "employee", "proof-picker.tsx"), /MAX_PROOF_FILES - picked\.length/);
+  });
+
+  // Written a second time in Swift, where a refusal costs an upload from a site.
+  it("is held to the same limits in the phone app", () => {
+    const sheet = read("ios", "Sources", "Features", "Me", "ProofSheet.swift");
+    assert.equal(Number(sheet.match(/static let most = (\d+)/)?.[1]), MAX_PROOF_FILES);
+    assert.equal(Number(sheet.match(/static let mostBytes = (\d+) \* 1024 \* 1024/)?.[1]) * 1024 * 1024, MAX_UPLOAD_BYTES);
+    assert.match(sheet, /files: files\.map\(\\\.file\)/, "everything picked is sent");
   });
 
   // Work approved on one photo of five is what a screen that forgets the rest does.

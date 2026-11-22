@@ -19,6 +19,7 @@ enum MeScreens {
         "me-assign", "me-requests", "me-notifications", "me-profile",
         "more-admin", "more-employee",
         "me-tasks-fixture", "me-tasks-fixture-late", "me-tasks-fixture-review", "me-ask-fixture", "me-clock-fixture",
+        "me-proof-fixture", "me-proof-fixture-one",
     ]
 
     @MainActor static func view(_ id: String) -> AnyView? {
@@ -71,6 +72,21 @@ enum MeScreens {
                     acceptance: linesOf(task.effectiveAcceptance)
                 ) {}
             })
+        case "me-proof-fixture", "me-proof-fixture-one":
+            let photos: [UploadFile] = [UIColor.systemTeal, .systemOrange, .systemIndigo].compactMap { color in
+                UploadMaker.photo(UIGraphicsImageRenderer(size: CGSize(width: 600, height: 800)).image { context in
+                    color.setFill()
+                    context.fill(CGRect(x: 0, y: 0, width: 600, height: 800))
+                })
+            }
+            let report = UploadFile(field: "photo", filename: "site-report.pdf", mimeType: "application/pdf", data: Data(count: 240_000))
+            return AnyView(ProofSheet(
+                targetId: "fx-job",
+                title: "تصوير الموقع",
+                subtitle: "Handed out directly",
+                acceptance: ["A photo of each wall"],
+                previewFiles: id == "me-proof-fixture" ? photos + [report] : Array(photos.prefix(1))
+            ) {})
         case "me-assign": return debugPushed(AssignRootView())
         case "me-requests": return debugPushed(MyRequestsRootView())
         case "me-notifications": return debugPushed(NotificationsView().environmentObject(StaffStore()))
