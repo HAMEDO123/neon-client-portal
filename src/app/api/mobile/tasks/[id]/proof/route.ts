@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { mobileEmployee } from "@/lib/mobile-auth";
 import { taskForEmployee } from "@/lib/employee-tasks";
 import { submitProof } from "@/lib/task-proof";
+import { proofFiles } from "@/lib/attachments";
 
 // Handing in finished work from the phone.
 //
@@ -13,7 +14,8 @@ import { submitProof } from "@/lib/task-proof";
 // review queue would fill with claims and no evidence.
 //
 // Multipart, with the same field names the web form posts:
-//   photo  — required. An image, or a PDF, drawing, spreadsheet or ZIP.
+//   photo  — required. An image, or a PDF, drawing, spreadsheet or ZIP. Repeat
+//            the field to send several together.
 //   note   — optional, what the manager should know.
 //
 // The work itself goes through `submitProof`, which is the same path both web
@@ -44,8 +46,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "That upload could not be read." }, { status: 400 });
   }
 
-  const photo = formData.get("photo");
-  if (!(photo instanceof File) || photo.size === 0) {
+  const photos = proofFiles(formData);
+  if (photos.length === 0) {
     return NextResponse.json({ error: "Attach a photo or a file of the finished work." }, { status: 400 });
   }
 
@@ -59,7 +61,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const result = await submitProof(
       employee,
       { kind: "entry", id: entry.id, state: entry.state, name: `${entry.task.name} — ${entry.project.name}` },
-      photo,
+      photos,
       note
     );
     return result.ok
@@ -76,7 +78,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const result = await submitProof(
     employee,
     { kind: "assigned", id: job.id, state: job.state, name: job.title },
-    photo,
+    photos,
     note
   );
 

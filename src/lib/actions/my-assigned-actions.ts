@@ -8,6 +8,7 @@ import { EMPLOYEE_STATE_LABEL } from "@/lib/task-board";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
 import { submitProof } from "@/lib/task-proof";
+import { proofFiles } from "@/lib/attachments";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // What an employee can do with a job the manager handed to them directly.
@@ -82,7 +83,7 @@ export async function submitAssignedTaskCompletion(id: string, formData: FormDat
   const result = await submitProof(
     employee,
     { kind: "assigned", id: task.id, state: task.state, name: task.title },
-    formData.get("photo") as File,
+    proofFiles(formData),
     String(formData.get("note") ?? "").trim().slice(0, 1000) || null
   );
   if (!result.ok) throw new Error(result.error);

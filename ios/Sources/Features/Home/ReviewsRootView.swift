@@ -102,6 +102,8 @@ private struct SubmissionCard: View {
                 Spacer(minLength: 0)
             }
 
+            if let extra = submission.extraFiles, !extra.isEmpty { extraStrip(extra) }
+
             if let note = submission.note {
                 DirText(note, font: .neonFootnote, color: .neonTextSecondary)
                     .padding(NeonSpace.sm)
@@ -148,6 +150,35 @@ private struct SubmissionCard: View {
                 .neonSurface(.sunken, radius: NeonRadius.md)
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    /// Every file after the first, so nothing is approved unseen.
+    private func extraStrip(_ files: [ProofFile]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: NeonSpace.xs) {
+                ForEach(Array(files.enumerated()), id: \.offset) { _, file in
+                    Button {
+                        if let url = resolvedMediaURL(file.url) { openURL(url) }
+                    } label: {
+                        Group {
+                            if file.isImage {
+                                RemoteImage(url: resolvedMediaURL(file.url), contentMode: .fill)
+                            } else {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "doc.fill").foregroundStyle(Color.neonPurpleStrong)
+                                    Text(file.label).font(.neonCaption).foregroundStyle(Color.neonTextSecondary)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .neonSurface(.sunken, radius: NeonRadius.md)
+                            }
+                        }
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: NeonRadius.md, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 

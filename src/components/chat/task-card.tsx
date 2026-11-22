@@ -10,7 +10,6 @@ import {
   CircleAlert,
   ClipboardList,
   FileText,
-  ImageUp,
   Loader2,
   MessageSquare,
   MoreVertical,
@@ -18,11 +17,12 @@ import {
   Send,
   Trash2,
   Undo2,
-  X,
 } from "lucide-react";
 import type { TaskPriority, TaskState } from "@/generated/prisma/enums";
 import type { ChatTaskView } from "@/lib/chat-task-store";
 import { listTime, type ChatViewer } from "@/lib/chat-conversations";
+import { ProofPicker, useProofFiles } from "@/components/employee/proof-picker";
+import { ProofThumbs } from "@/components/ui/proof-thumbs";
 import {
   CARD_STATE_LABEL,
   TASK_COMMENT_MAX,
@@ -38,11 +38,11 @@ import { addChatTaskComment, deleteChatTask } from "@/lib/actions/chat-task-acti
 import { setMyAssignedTaskStatus, submitAssignedTaskCompletion } from "@/lib/actions/my-assigned-actions";
 import { approveSubmission, rejectSubmission } from "@/lib/actions/submission-actions";
 import { setAssignedTaskState } from "@/lib/actions/assigned-task-actions";
-import { shrinkPhoto } from "@/lib/client-image";
 import { useMinuteNow } from "@/lib/use-minute-now";
 import { PersonAvatar } from "@/components/chat/person-avatar";
 import { AttachmentPreview } from "@/components/ui/attachment-preview";
-import { isPictureFile, PROOF_ACCEPT } from "@/lib/attachments";
+import { proofUrls } from "@/lib/attachments";
+import { whileBusy } from "@/lib/busy";
 import { cn } from "@/lib/utils";
 
 // A task the manager handed out, as a card in the conversation.
@@ -440,7 +440,7 @@ function PartRow({ part, viewer, late, move }: { part: Part; viewer: ChatViewer;
         (submission ? (
           <Review
             key={submission.id}
-            imageUrl={submission.imageUrl}
+            files={proofUrls(submission)}
             note={submission.note}
             busy={busy}
             onApprove={() => run("DONE", () => approveSubmission(submission.id))}
@@ -575,40 +575,27 @@ function StatusMenu({
 }
 
 function ProofForm({ onSend, onCancel }: { onSend: (formData: FormData) => Promise<void>; onCancel: () => void }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const files = useProofFiles();
+  const noteId = useId();
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sending, start] = useTransition();
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const libraryRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => () => {
-    if (preview) URL.revokeObjectURL(preview);
-  }, [preview]);
-
-  function pick(chosen: File | undefined) {
-    if (!chosen) return;
-    setError(null);
-    setFile(chosen);
-    // Only a picture gets an object URL — an <img> pointed at a PDF draws a
-    // broken icon, which reads as "it did not work".
-    setPreview(isPictureFile(chosen) ? URL.createObjectURL(chosen) : null);
-  }
+  const some = files.picked.length > 0;
 
   function send() {
-    if (!file) {
+    if (!some) {
       setError("Take a photo or choose a file first.");
       return;
     }
+    setError(null);
     start(async () => {
       try {
         const formData = new FormData();
-        // Shrunk on the phone first: uploading the full photo was most of the
-        // wait. Anything that is not a picture goes up as it is.
-        formData.set("photo", isPictureFile(file) ? await shrinkPhoto(file) : file);
         if (note.trim()) formData.set("note", note.trim());
-        await onSend(formData);
+        await whileBusy(async () => {
+          await files.fill(formData);
+          await onSend(formData);
+        });
       } catch (cause) {
         setError(failure(cause, "Could not send it. Try again."));
       }
@@ -617,60 +604,15 @@ function ProofForm({ onSend, onCancel }: { onSend: (formData: FormData) => Promi
 
   return (
     <div className="neon-rise mt-2 rounded-xl bg-ink/[0.03] p-2.5 ring-1 ring-ink/[0.06]">
-      <p className="text-xs font-medium text-ink/60">A photo of the finished work, or the file itself, for the manager to review.</p>
+      <p className="text-xs font-medium text-ink/60">Photos of the finished work, or the files themselves, for the manager to review.</p>
 
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => pick(event.target.files?.[0])} />
-      <input ref={libraryRef} type="file" accept={PROOF_ACCEPT} hidden onChange={(event) => pick(event.target.files?.[0])} />
+      <ProofPicker files={files} disabled={sending} />
 
-      {file ? (
-        <div className="relative mt-2 overflow-hidden rounded-lg ring-1 ring-ink/10">
-          {preview ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={preview} alt="The photo you are sending" className="aspect-[4/3] max-h-56 w-full object-cover" />
-          ) : (
-            <div className="flex items-center gap-2.5 bg-white px-3 py-4">
-              <FileText size={20} strokeWidth={1.75} className="shrink-0 text-ink/45" aria-hidden />
-              <p className="min-w-0 truncate text-xs font-medium text-ink/75">{file.name}</p>
-            </div>
-          )}
-          <button
-            type="button"
-            disabled={sending}
-            onClick={() => {
-              setFile(null);
-              setPreview(null);
-            }}
-            aria-label="Remove what you picked"
-            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ink/70 text-white backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          >
-            <X size={15} strokeWidth={2.5} />
-          </button>
-        </div>
-      ) : (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => cameraRef.current?.click()}
-            className="flex h-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-ink/15 bg-white text-xs font-medium text-ink/60 transition-colors hover:bg-ink/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-strong/50"
-          >
-            <Camera size={18} strokeWidth={1.75} aria-hidden />
-            Take photo
-          </button>
-          <button
-            type="button"
-            onClick={() => libraryRef.current?.click()}
-            className="flex h-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-ink/15 bg-white text-xs font-medium text-ink/60 transition-colors hover:bg-ink/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-strong/50"
-          >
-            <ImageUp size={18} strokeWidth={1.75} aria-hidden />
-            Choose file
-          </button>
-        </div>
-      )}
-
-      <label className="sr-only" htmlFor={`${cameraRef}-note`}>
+      <label className="sr-only" htmlFor={noteId}>
         Note for the manager
       </label>
       <input
+        id={noteId}
         value={note}
         onChange={(event) => setNote(event.target.value)}
         maxLength={1000}
@@ -689,7 +631,7 @@ function ProofForm({ onSend, onCancel }: { onSend: (formData: FormData) => Promi
         <button type="button" disabled={sending} onClick={onCancel} className={cn(BUTTON, TONE.ghost)}>
           Cancel
         </button>
-        <button type="button" disabled={sending || !file} onClick={send} className={cn(BUTTON, TONE.emerald)}>
+        <button type="button" disabled={sending || !some} onClick={send} className={cn(BUTTON, TONE.emerald)}>
           {sending ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Send size={14} aria-hidden />}
           {sending ? "Sending…" : "Send for review"}
         </button>
@@ -699,13 +641,14 @@ function ProofForm({ onSend, onCancel }: { onSend: (formData: FormData) => Promi
 }
 
 function Review({
-  imageUrl,
+  files,
   note,
   busy,
   onApprove,
   onReject,
 }: {
-  imageUrl: string;
+  /** Everything it was sent with, first one first. */
+  files: string[];
   note: string | null;
   busy: boolean;
   onApprove: () => void;
@@ -717,13 +660,14 @@ function Review({
   return (
     <div className="mt-2 pl-[38px]">
       <a
-        href={imageUrl}
+        href={files[0]}
         target="_blank"
         rel="noreferrer"
         className="block overflow-hidden rounded-xl ring-1 ring-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-strong"
       >
-        <AttachmentPreview url={imageUrl} alt="Sent for review" className="aspect-[4/3] w-full bg-ink/[0.04] object-cover" />
+        <AttachmentPreview url={files[0]} alt="Sent for review" className="aspect-[4/3] w-full bg-ink/[0.04] object-cover" />
       </a>
+      <ProofThumbs urls={files.slice(1)} label="Sent for review" className="mt-1.5" />
       {note && (
         <p dir="auto" className="mt-1.5 text-xs text-ink/60">
           “{note}”

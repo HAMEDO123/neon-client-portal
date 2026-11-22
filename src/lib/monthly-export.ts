@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { proofUrls } from "@/lib/attachments";
 import { csvFile, csvRow } from "@/lib/csv";
 import { dateToDayKey, dayKeyIn, dayKeyToDate, formatTimeIn, instantAt } from "@/lib/time";
 import { nextPeriod, periodDayKeys, periodFirstDayKey, periodOf } from "@/lib/pay-period";
@@ -377,10 +378,10 @@ const ASSIGNER_RECORDED_FROM = new Date("2026-11-14T11:16:25Z");
 /** Every proof sent, oldest first: the first is when it was handed in, the rest is what came with it. */
 const sent = {
   orderBy: { createdAt: "asc" as const },
-  select: { createdAt: true, note: true, imageUrl: true, reviewNote: true },
+  select: { createdAt: true, note: true, imageUrl: true, extraUrls: true, reviewNote: true },
 };
 
-type Sent = { createdAt: Date; note: string | null; imageUrl: string; reviewNote: string | null };
+type Sent = { createdAt: Date; note: string | null; imageUrl: string; extraUrls: string[]; reviewNote: string | null };
 
 const joined = (values: (string | null)[]) =>
   values
@@ -448,7 +449,7 @@ export async function loadMonthTasks(month: string, timezone: string): Promise<T
 
   const handedIn = (submissions: Sent[]) => ({
     sentKey: submissions[0] ? dayKeyIn(timezone, submissions[0].createdAt) : null,
-    proof: joined(submissions.map((submission) => submission.imageUrl)),
+    proof: joined(submissions.flatMap((submission) => proofUrls(submission))),
     managerNote:
       [...submissions]
         .reverse()

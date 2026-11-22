@@ -191,7 +191,14 @@ export async function homeReviews() {
       imageUrl: submission.imageUrl,
       isImage: isImage(submission.imageUrl),
       fileLabel: attachmentLabel(submission.imageUrl),
-      note: submission.note,
+      // The rest of what was sent with it, in order.
+      extraFiles: submission.extraUrls.map((url) => ({ url, isImage: isImage(url), label: attachmentLabel(url) })),
+      // Said in the note as well: a build from before extraFiles draws only the
+      // first, and approving work on one photo of five is the mistake this stops.
+      note:
+        submission.extraUrls.length > 0
+          ? [submission.note, `(${submission.extraUrls.length + 1} files sent)`].filter(Boolean).join("\n")
+          : submission.note,
       createdAt: submission.createdAt,
       employee: submission.employee,
       outcome: submission.outcome,

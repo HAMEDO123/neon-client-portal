@@ -194,6 +194,12 @@ struct CriterionCheckRow: Codable, Identifiable {
     let gap: String?
 }
 
+struct ProofFile: Codable {
+    let url: String
+    let isImage: Bool
+    let label: String
+}
+
 struct HomeSubmission: Codable, Identifiable {
     let id: String
     let name: String
@@ -203,6 +209,9 @@ struct HomeSubmission: Codable, Identifiable {
     let imageUrl: String
     let isImage: Bool
     let fileLabel: String
+    /// What was sent beside the first file. Absent from a server before
+    /// several could be sent together.
+    let extraFiles: [ProofFile]?
     let note: String?
     let createdAt: String
     let employee: SubmissionEmployee

@@ -55,6 +55,8 @@ struct AskedQuestionsResponse: Decodable { let asked: [AskedQuestion] }
 struct JobSubmission: Decodable, Identifiable {
     let id: String
     let imageUrl: String
+    /// What was sent beside the first file.
+    let extraUrls: [String]?
     let status: String
     let reviewNote: String?
     let createdAt: String

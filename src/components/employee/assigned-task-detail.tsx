@@ -25,6 +25,7 @@ import { StatusControl } from "@/components/employee/status-control";
 import { CompletionForm } from "@/components/employee/completion-form";
 import { Countdown } from "@/components/employee/countdown";
 import { AttachmentPreview } from "@/components/ui/attachment-preview";
+import { ProofThumbs } from "@/components/ui/proof-thumbs";
 import { AskAboutTask } from "@/components/employee/ask-about-task";
 import { questionsAbout } from "@/lib/task-question-store";
 
@@ -260,6 +261,7 @@ export async function AssignedTaskDetail({
                       {submission.reviewNote}
                     </p>
                   )}
+                  <ProofThumbs urls={submission.extraUrls} label="What you sent" className="mt-2" />
                 </div>
               </li>
             ))}

@@ -68,6 +68,19 @@ export function attachmentLabel(url: string | null | undefined): string {
  */
 export const PROOF_ACCEPT = "image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.dwg,.dxf,.mp4";
 
+/** The most that can be sent as one proof. */
+export const MAX_PROOF_FILES = 10;
+
+/** Everything a proof was sent with, first one first. */
+export function proofUrls(submission: { imageUrl: string; extraUrls?: string[] | null }): string[] {
+  return [submission.imageUrl, ...(submission.extraUrls ?? [])];
+}
+
+/** What a form sent as proof: every `photo` in it that is really a file. */
+export function proofFiles(formData: FormData): File[] {
+  return formData.getAll("photo").filter((value): value is File => value instanceof File && value.size > 0);
+}
+
 /**
  * Whether a file just chosen in the browser is a picture: something an `<img>`
  * can draw, and something `shrinkPhoto` can shrink. Everything else goes up

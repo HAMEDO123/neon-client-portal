@@ -8,6 +8,7 @@ import { ReviewActions } from "@/components/admin/review-actions";
 import { ReviewItem } from "@/components/admin/review-item";
 import { SubmissionChecks } from "@/components/admin/submission-checks";
 import { AttachmentPreview } from "@/components/ui/attachment-preview";
+import { ProofThumbs } from "@/components/ui/proof-thumbs";
 
 // The evidence queue.
 //
@@ -46,18 +47,21 @@ export default async function ReviewsPage() {
             return (
               <ReviewItem key={submission.id} className="glass rounded-2xl p-4">
                 <div className="flex flex-col gap-4 sm:flex-row xl:flex-col 2xl:flex-row">
-                  <a
-                    href={submission.imageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block shrink-0 overflow-hidden rounded-xl border border-ink/10 sm:w-56 xl:w-full 2xl:w-56"
-                  >
-                    <AttachmentPreview
-                      url={submission.imageUrl}
-                      alt={`Proof for ${name}`}
-                      className="h-44 w-full object-cover sm:h-40"
-                    />
-                  </a>
+                  <div className="shrink-0 sm:w-56 xl:w-full 2xl:w-56">
+                    <a
+                      href={submission.imageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block overflow-hidden rounded-xl border border-ink/10"
+                    >
+                      <AttachmentPreview
+                        url={submission.imageUrl}
+                        alt={`Proof for ${name}`}
+                        className="h-44 w-full object-cover sm:h-40"
+                      />
+                    </a>
+                    <ProofThumbs urls={submission.extraUrls} label={`Proof for ${name}`} className="mt-1.5" />
+                  </div>
 
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-medium uppercase tracking-wider text-ink/40">{context}</p>

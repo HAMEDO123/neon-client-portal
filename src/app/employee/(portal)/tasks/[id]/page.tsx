@@ -30,6 +30,7 @@ import { planForTasks } from "@/lib/stage-deadlines";
 import { Countdown } from "@/components/employee/countdown";
 import { SaveButton } from "@/components/admin/form-buttons";
 import { AttachmentPreview } from "@/components/ui/attachment-preview";
+import { ProofThumbs } from "@/components/ui/proof-thumbs";
 import { AskAboutTask } from "@/components/employee/ask-about-task";
 import { questionsAbout } from "@/lib/task-question-store";
 
@@ -271,6 +272,7 @@ export default async function EmployeeTaskDetail({ params }: { params: Promise<{
                   {submission.reviewNote && (
                     <p className="mt-1 text-sm text-ink/70">{submission.reviewNote}</p>
                   )}
+                  <ProofThumbs urls={submission.extraUrls} label="What you sent" className="mt-2" />
                 </div>
               </li>
             ))}

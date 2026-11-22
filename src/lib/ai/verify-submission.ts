@@ -8,7 +8,7 @@ import {
   type Verdict,
 } from "@/lib/verification";
 import { effectiveDetail, linesOf, policyFor } from "@/lib/task-types";
-import { attachmentLabel, isImage } from "@/lib/attachments";
+import { attachmentLabel, isImage, proofUrls } from "@/lib/attachments";
 
 // Checking a claim of finished work against what was actually asked for.
 //
@@ -150,6 +150,7 @@ export async function verifySubmission(
     select: {
       id: true,
       imageUrl: true,
+      extraUrls: true,
       note: true,
       entry: {
         select: {
@@ -201,7 +202,13 @@ export async function verifySubmission(
     return { ok: true, outcome: "human-review", checks: pending, note: "Checking needs ANTHROPIC_API_KEY on the server." };
   }
 
-  if (!reachable(submission.imageUrl)) {
+  // Several can be sent together: every picture is looked at, and what cannot
+  // be looked at is named so its contents are never guessed.
+  const files = proofUrls(submission);
+  const pictures = files.filter((url) => isImage(url));
+  const unseen = files.filter((url) => !isImage(url));
+
+  if (!files.every(reachable)) {
     const cannotSee = pending.map((check) => ({
       ...check,
       gap: "The photo is stored on this machine and could not be opened for checking.",
@@ -215,7 +222,7 @@ export async function verifySubmission(
   // model as a picture would simply fail, and calling it unreadable would be a
   // verdict on work that is very likely fine. It goes to the manager, which is
   // where every path that cannot honestly judge ends.
-  if (!isImage(submission.imageUrl)) {
+  if (pictures.length === 0) {
     const notAPicture = pending.map((check) => ({
       ...check,
       gap: `The proof is a ${attachmentLabel(submission.imageUrl)}, which has to be read by a person rather than looked at.`,
@@ -239,7 +246,7 @@ export async function verifySubmission(
         {
           role: "user",
           content: [
-            { type: "image", source: { type: "url", url: submission.imageUrl } },
+            ...pictures.map((url) => ({ type: "image" as const, source: { type: "url" as const, url } })),
             {
               type: "text",
               text: [
@@ -249,8 +256,11 @@ export async function verifySubmission(
                 ...criteria.map((line, index) => `${index + 1}. ${line}`),
                 "",
                 `What the employee said: ${submission.note?.trim() || "(nothing)"}`,
+                ...(unseen.length > 0
+                  ? [`Also sent, and not shown to you: ${unseen.map((url) => attachmentLabel(url)).join(", ")}. Say nothing about what is in them.`]
+                  : []),
                 "",
-                "Check each criterion against the photo and answer with the JSON described.",
+                "Check each criterion against what was sent and answer with the JSON described.",
               ].join("\n"),
             },
           ],

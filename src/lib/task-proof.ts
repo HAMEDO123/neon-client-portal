@@ -5,6 +5,7 @@ import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
 import { VISIT_TASK_REFUSAL, isVisitTask } from "@/lib/site-visit-task-store";
 import { verifySubmission } from "@/lib/ai/verify-submission";
+import { MAX_PROOF_FILES } from "@/lib/attachments";
 import type { TaskState } from "@/generated/prisma/enums";
 
 // Handing in finished work, whichever screen it was handed in from.
@@ -43,7 +44,8 @@ export type ProofResult =
 export async function submitProof(
   employee: { id: string; name: string },
   subject: ProofSubject,
-  photo: File,
+  /** One, or several sent together. */
+  photos: File[],
   note: string | null
 ): Promise<ProofResult> {
   // Sending proof is a move like any other: work already with the manager, or
@@ -59,18 +61,24 @@ export async function submitProof(
     return { ok: false, error: VISIT_TASK_REFUSAL };
   }
 
-  if (!(photo instanceof File) || photo.size === 0) {
+  if (photos.length === 0) {
     return { ok: false, error: "Attach a photo or a file of the finished work." };
   }
+  if (photos.length > MAX_PROOF_FILES) {
+    return { ok: false, error: `Up to ${MAX_PROOF_FILES} files can be sent together.` };
+  }
 
-  // A PDF, a drawing or a spreadsheet is proof too, and the "image" rule would
-  // reject every one of them. The kind follows the file: photos keep their EXIF
-  // rotation and recompression, anything else is stored as it was sent.
-  const kind = photo.type.startsWith("image/") ? "image" : "document";
-
-  let saved: Awaited<ReturnType<typeof saveFile>>;
+  // One after the other, and all of them before anything is written: a proof
+  // missing the photo that could not be read is not what they meant to send.
+  const urls: string[] = [];
   try {
-    saved = await saveFile(photo, `submissions/${employee.id}`, kind);
+    for (const photo of photos) {
+      // A PDF, a drawing or a spreadsheet is proof too, and the "image" rule would
+      // reject every one of them. The kind follows the file: photos keep their EXIF
+      // rotation and recompression, anything else is stored as it was sent.
+      const kind = photo.type.startsWith("image/") ? "image" : "document";
+      urls.push((await saveFile(photo, `submissions/${employee.id}`, kind)).url);
+    }
   } catch (error) {
     // saveFile refuses what it will not store and says what it accepts. That
     // sentence is the useful one, so it travels rather than being swallowed.
@@ -81,7 +89,8 @@ export async function submitProof(
     data: {
       ...(subject.kind === "entry" ? { entryId: subject.id } : { assignedTaskId: subject.id }),
       employeeId: employee.id,
-      imageUrl: saved.url,
+      imageUrl: urls[0],
+      extraUrls: urls.slice(1),
       note,
     },
     select: { id: true },
@@ -111,7 +120,7 @@ export async function submitProof(
   await notifyAdmin({
     type: "TASK_SUBMITTED",
     title: `${employee.name} finished a task`,
-    message: `${subject.name}. A photo is waiting for your review.`,
+    message: `${subject.name}. ${urls.length === 1 ? "A photo is" : `${urls.length} files are`} waiting for your review.`,
     url: "/admin/reviews",
     dedupeKey: `TASK_SUBMITTED:${submission.id}`,
     entryId: subject.kind === "entry" ? subject.id : null,

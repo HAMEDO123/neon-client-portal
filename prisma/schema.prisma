@@ -1611,7 +1611,12 @@ model TaskSubmission {
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   // The proof itself — a photo of the work, or a screenshot.
-  imageUrl String
+  imageUrl  String
+  // The rest of it, when several were sent together (2026-11-22). Beside
+  // imageUrl rather than replacing it, so every reader of one photo — older
+  // phone builds among them — still has the first. lib/attachments.ts
+  // proofUrls is all of them, in the order they were sent.
+  extraUrls String[] @default([])
   note     String? @db.Text
 
   status     SubmissionStatus @default(PENDING)

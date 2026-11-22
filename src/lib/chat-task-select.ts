@@ -31,7 +31,7 @@ export const chatTaskSelect = {
         where: { status: "PENDING" },
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, imageUrl: true, note: true, createdAt: true },
+        select: { id: true, imageUrl: true, extraUrls: true, note: true, createdAt: true },
       },
     },
   },

@@ -10,6 +10,7 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 import { taskUrl } from "@/lib/notifications/types";
 import { recordStateChange } from "@/lib/task-state-log";
 import { submitProof } from "@/lib/task-proof";
+import { proofFiles } from "@/lib/attachments";
 import { getTimezone, getWorkHours } from "@/lib/settings";
 import { WARN_MINUTES, chargesForSendingBack, redeployDay, redeploysOn, warningCopy, warningKey } from "@/lib/task-cutoff";
 import { chargeSentBack } from "@/lib/deduction-store";
@@ -53,7 +54,7 @@ export async function submitTaskCompletion(entryId: string, formData: FormData) 
   const result = await submitProof(
     employee,
     { kind: "entry", id: task.id, state: task.state, name: `${task.task.name} — ${task.project.name}` },
-    formData.get("photo") as File,
+    proofFiles(formData),
     String(formData.get("note") ?? "").trim().slice(0, 1000) || null
   );
   if (!result.ok) throw new Error(result.error);
