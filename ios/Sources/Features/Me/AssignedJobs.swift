@@ -196,14 +196,10 @@ struct JobDetailView: View {
         DetailCard(title: L("What you sent"), symbol: "camera") {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(submissions) { submission in
+                    if submission.files.count > 1 { ProofStrip(files: submission.files, size: 56) }
                     HStack(alignment: .top, spacing: 12) {
-                        RemoteImage(url: resolvedMediaURL(submission.imageUrl), contentMode: .fill)
-                            .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        if submission.files.count == 1 { ProofTile(file: submission.files[0], size: 56) }
                         VStack(alignment: .leading, spacing: 4) {
-                            if let extra = submission.extraUrls, !extra.isEmpty {
-                                Text(verbatim: "+\(extra.count)").font(.neonCaption).foregroundStyle(Color.neonTextTertiary)
-                            }
                             BadgeView(text: submissionLabel(submission.status), tone: submissionTone(submission.status))
                             if let time = formattedISODate(submission.createdAt) {
                                 Text(time).font(.neonCaption).foregroundStyle(Color.neonTextTertiary)

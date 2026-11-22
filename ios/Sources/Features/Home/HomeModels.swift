@@ -194,12 +194,6 @@ struct CriterionCheckRow: Codable, Identifiable {
     let gap: String?
 }
 
-struct ProofFile: Codable {
-    let url: String
-    let isImage: Bool
-    let label: String
-}
-
 struct HomeSubmission: Codable, Identifiable {
     let id: String
     let name: String

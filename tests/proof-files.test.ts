@@ -52,6 +52,13 @@ describe("a proof of several files", () => {
       assert.match(read(...file), /<ProofThumbs /, file.at(-1));
     }
     assert.match(read("src", "lib", "mobile", "home-reads.ts"), /extraFiles:/);
+    for (const file of [
+      ["Home", "ReviewsRootView.swift"],
+      ["Chat", "ChatRoomCards.swift"],
+      ["Me", "AssignedJobs.swift"],
+    ]) {
+      assert.match(read("ios", "Sources", "Features", ...file), /ProofStrip\(files: /, file.at(-1));
+    }
     assert.match(read("src", "lib", "monthly-export.ts"), /proofUrls\(submission\)/);
     assert.match(read("src", "lib", "ai", "verify-submission.ts"), /pictures\.map/);
   });

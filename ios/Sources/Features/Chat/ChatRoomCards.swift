@@ -130,6 +130,7 @@ struct ChatTaskCardView: View {
                 }
                 .font(.system(.caption, weight: .medium))
                 .foregroundStyle(NeonHue.purple.deep)
+                if !pending.files.isEmpty { ProofStrip(files: pending.files, size: 64) }
                 if let note = pending.note, !note.isEmpty {
                     DirText(note, font: .system(.footnote), color: .neonTextSecondary)
                         .padding(8)

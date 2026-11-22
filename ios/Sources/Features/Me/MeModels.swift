@@ -57,6 +57,7 @@ struct JobSubmission: Decodable, Identifiable {
     let imageUrl: String
     /// What was sent beside the first file.
     let extraUrls: [String]?
+    var files: [ProofFile] { ([imageUrl] + (extraUrls ?? [])).map { ProofFile(url: $0) } }
     let status: String
     let reviewNote: String?
     let createdAt: String

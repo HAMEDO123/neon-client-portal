@@ -274,8 +274,13 @@ struct TaskCard: Decodable, Equatable {
         struct Submission: Decodable, Equatable {
             let id: String
             let imageUrl: String?
+            /// What was sent beside the first file. Absent from a server before
+            /// several could be sent together.
+            let extraUrls: [String]?
             let note: String?
             let createdAt: String?
+
+            var files: [ProofFile] { ((imageUrl.map { [$0] } ?? []) + (extraUrls ?? [])).map { ProofFile(url: $0) } }
         }
     }
 
