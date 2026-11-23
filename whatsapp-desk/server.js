@@ -278,7 +278,7 @@ const AUTO = {
   firstDebounceMs: 500,
   maxAgeSec: 180,           // never answer old messages (e.g. caught up after a reconnect)
   manualPauseSec: 30 * 60,  // owner replied by hand -> stay out of that chat for 30 min
-  minGapSec: 3600,                         // cooldown: at most one auto reply per hour, per chat (owner, 2026-11-23)
+  minGapSec: 30,                           // cooldown: at most one auto reply per 30 seconds, per chat (owner tried 1 h on 2026-11-23, went back)
   maxPerWindow: 30, windowSec: 3 * 3600,   // runaway guard only (e.g. a loop with another bot)
 };
 const autoTimers = new Map();   // jid -> timeout
