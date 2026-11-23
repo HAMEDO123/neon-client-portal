@@ -278,7 +278,7 @@ const AUTO = {
   firstDebounceMs: 500,
   maxAgeSec: 180,           // never answer old messages (e.g. caught up after a reconnect)
   manualPauseSec: 30 * 60,  // owner replied by hand -> stay out of that chat for 30 min
-  minGapSec: 30,                           // cooldown: at most one auto reply per 30 seconds, per chat
+  minGapSec: 3600,                         // cooldown: at most one auto reply per hour, per chat (owner, 2026-11-23)
   maxPerWindow: 30, windowSec: 3 * 3600,   // runaway guard only (e.g. a loop with another bot)
 };
 const autoTimers = new Map();   // jid -> timeout
@@ -480,11 +480,20 @@ function needsYou(c, reason) {
 }
 
 /** after a restart or reconnect: answer client messages from the last 10 minutes that are still unanswered */
+/** when our last automatic reply in this chat was sent (unix sec), 0 if none */
+function lastAutoTs(c) {
+  for (let i = c.messages.length - 1; i >= 0; i--) if (c.messages[i].fromMe && c.messages[i].auto) return c.messages[i].ts;
+  return 0;
+}
 function resumeAuto() {
   if (!settings.autoReply) return;
   for (const c of chats.values()) {
     const last = c.messages[c.messages.length - 1];
-    if (last && !last.fromMe && !c.needsYou) scheduleAuto(c, last, 600);
+    if (!last || last.fromMe || c.needsYou) continue;
+    // a message that was waiting for the cooldown to end is still owed its reply after a restart
+    const la = lastAutoTs(c);
+    const waitingForCooldown = la && last.ts - la < AUTO.minGapSec;
+    scheduleAuto(c, last, waitingForCooldown ? AUTO.minGapSec + 600 : 600);
   }
 }
 
@@ -681,8 +690,10 @@ async function runAuto(jid) {
   if (nowS() - (lastManualAt.get(jid) || 0) < AUTO.manualPauseSec) return; // owner is handling it
   const log = (autoLog.get(jid) || []).filter((t) => nowS() - t < AUTO.windowSec);
   if (log.length >= AUTO.maxPerWindow) return needsYou(c, 'توقف الرد التلقائي مؤقتاً في هذه المحادثة: 30 رداً خلال 3 ساعات (حماية من محادثة آلية لا تنتهي)');
-  // per-chat cooldown: answer as soon as the minute since the last auto reply is up
-  const coolLeft = log.length ? AUTO.minGapSec - (nowS() - log[log.length - 1]) : 0;
+  // per-chat cooldown: answer as soon as the hour since the last auto reply is up
+  // (the last auto reply is also read from the chat itself, so a restart does not reset the hour)
+  const lastAuto = Math.max(log.length ? log[log.length - 1] : 0, lastAutoTs(c));
+  const coolLeft = lastAuto ? AUTO.minGapSec - (nowS() - lastAuto) : 0;
   if (coolLeft > 0) {
     clearTimeout(autoTimers.get(jid));
     autoTimers.set(jid, setTimeout(() => { autoTimers.delete(jid); runAuto(jid).catch((e) => console.log('auto error', e.message)); }, coolLeft * 1000 + 500));
