@@ -369,7 +369,7 @@
     <div class="search">
       <div class="search-box">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/></svg>
-        <input id="search" placeholder="ابحث في المحادثات">
+        <input id="search" type="search" name="chat-search" autocomplete="off" placeholder="ابحث في المحادثات">
       </div>
     </div>
     <div class="chips" id="chips">
@@ -447,7 +447,7 @@
     <div class="composer" id="composer" hidden>
       <div class="tools">
         <button class="btn-claude" id="draftBtn" title="Alt+D">✨ اكتب الرد مع Claude</button>
-        <input type="text" id="instruction" placeholder="ملاحظة اختيارية لـ Claude، مثلاً: «اعرض توصيل مجاني»">
+        <input type="text" id="instruction" autocomplete="off" placeholder="ملاحظة اختيارية لـ Claude، مثلاً: «اعرض توصيل مجاني»">
         <label class="auto" title="اكتب مسودة تلقائياً عند فتح محادثة تنتظر ردك"><input type="checkbox" id="autoDraft"> مسودة تلقائية</label>
       </div>
       <div class="send-row">
@@ -468,7 +468,7 @@
     <div class="pair">
       <p style="font-size:12.5px;margin-top:0">المسح بطيء؟ اربط برقم هاتفك بدلاً من ذلك:</p>
       <div style="display:flex;gap:6px">
-        <input id="pairPhone" inputmode="tel" dir="ltr" placeholder="9627XXXXXXXX">
+        <input id="pairPhone" autocomplete="off" inputmode="tel" dir="ltr" placeholder="9627XXXXXXXX">
         <button class="btn primary" id="pairBtn">احصل على الرمز</button>
       </div>
       <div id="pairOut"></div>
@@ -487,7 +487,7 @@
   <div class="card" style="max-width:480px">
     <h2>ربط Claude</h2>
     <p>الصق هنا المفتاح اللي طلع لك من أمر <b dir="ltr">claude setup-token</b> (يبدأ بـ <span dir="ltr">sk-ant-</span>). نفس اشتراك Claude Code، بدون API. المفتاح بينحفظ على هذا الكمبيوتر بس وما بينعرض مرة ثانية.</p>
-    <input id="keyInput" type="password" dir="ltr" autocomplete="off" placeholder="sk-ant-oat01-…" style="width:100%;background:var(--search);border:0;color:var(--text);border-radius:8px;padding:10px 12px;font:inherit;outline:none;margin-top:8px">
+    <input id="keyInput" type="text" name="claude-key" dir="ltr" autocomplete="off" spellcheck="false" placeholder="sk-ant-oat01-…" style="-webkit-text-security:disc;width:100%;background:var(--search);border:0;color:var(--text);border-radius:8px;padding:10px 12px;font:inherit;outline:none;margin-top:8px">
     <p id="keyStatus" style="font-size:13px;margin-top:8px"></p>
     <div class="actions"><button class="btn" id="keyCancel">إغلاق</button><button class="btn primary" id="keySave">حفظ وتجربة</button></div>
   </div>
@@ -915,7 +915,7 @@ function apptsHtml(byDay) {
       <h3>إضافة موعد</h3>
       <div class="appt-form">
         <input type="date" id="apDate"><input type="time" id="apTime" step="900">
-        <input type="text" id="apName" placeholder="اسم الزبون"><input type="text" id="apPhone" dir="ltr" placeholder="الرقم" style="max-width:160px">
+        <input type="text" id="apName" autocomplete="off" placeholder="اسم الزبون"><input type="text" id="apPhone" autocomplete="off" dir="ltr" placeholder="الرقم" style="max-width:160px">
         <button class="btn-sm claude" id="apAdd">إضافة موعد</button>
       </div>
       <div class="muted" id="apErr">أضف هنا المواعيد التي حجزتها بنفسك، حتى لا يعطي Claude نفس الوقت لزبون آخر.</div>
