@@ -293,14 +293,16 @@ const myJid = () => (sock?.user?.id || '').replace(/:\d+@/, '@');
 const PAYMENT_RE = /(دفع|الدفع|دفعة|كاش|تحويل بنكي|كليك|تقسيط|أقساط|اقساط|payment|cash|installment)/i;
 const latinDigits = (s) => String(s).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
 const num = (s) => parseFloat(String(s).replace(/[,٬]/g, ''));
-/** every dinar amount in the reply must be 2 or 7 per m², or area × 2 / area × 7 for an area mentioned in the chat */
+/** every dinar amount in the reply must be 2 or 7 per m², or area × 2 / area × 7 for an area mentioned in the chat,
+ *  or for the sum of two of them (interior and exterior are priced separately, then added up) */
 function priceProblem(text, c) {
   const t = latinDigits(text);
   const amounts = [...t.matchAll(/(\d[\d,٬.]*)\s*(?:دينار|دنانير|JOD|JD)/gi)].map((m) => num(m[1]));
   if (!amounts.length) return null;
   const convo = latinDigits(c.messages.slice(-30).map((m) => m.text).join('\n') + '\n' + t);
   const areas = [...convo.matchAll(/(\d[\d,٬.]*)\s*(?:متر|م2|م²|m2|sqm)/gi)].map((m) => num(m[1]));
-  const ok = [2, 7, ...areas.flatMap((a) => [a * 2, a * 7])];
+  const sums = areas.flatMap((a, i) => areas.slice(i + 1).map((b) => a + b));
+  const ok = [2, 7, ...[...areas, ...sums].flatMap((a) => [a * 2, a * 7])];
   const bad = amounts.filter((x) => !ok.some((v) => Math.abs(v - x) < 0.01));
   return bad.length ? 'مبلغ في الرد لا يطابق حساب المساحة (' + bad.join('، ') + ' دينار)' : null;
 }
@@ -451,7 +453,7 @@ const AUTO_RULES = `
 
 You are now replying AUTOMATICALLY: your text is sent to the client immediately, nobody reviews it.
 - The text must be complete and ready to send. NEVER use placeholders like [price] or [address]. If a needed fact is missing from the business info, reply without it (for example offer to explain in the free visit or a call).
-- Money: you may give the DESIGN price only, exactly as the business info explains: ask for the area in m² if unknown, then price = area × 2 JD (limited-time offer) and mention the regular price area × 7 JD. Write numbers with Western digits. Double-check the arithmetic. Never discuss payment methods, installments, other discounts, or programming prices.
+- Money: you may give the DESIGN price only, exactly as the business info explains: interior and exterior design are priced SEPARATELY, so always ask for the interior area and the exterior area in m² as two separate numbers (if the client gives one area without saying which, ask whether it is interior or exterior). Price each one = area × 2 JD (limited-time offer) and mention the regular price area × 7 JD; say clearly that the interior price does not include exterior design and ask for the exterior area to price it. With both areas, give each price and then the total. Write numbers with Western digits. Double-check the arithmetic. Never discuss payment methods, installments, other discounts, or programming prices.
 - Set reply=false (and explain briefly in "reason", in Arabic) when:
   * this is not a business/client conversation (family, friends, personal, spam);
   * the message is automated (another business's bot or auto-reply, OTP, notification) — never reply to bots;
