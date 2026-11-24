@@ -149,6 +149,7 @@ public/               sw.js (push), manifests, icons, seed-images/, uploads/ (gi
 tests/                node:test run through tsx; *.db.test.ts need the local database
 scripts/              restore-local-data.mjs, backup-docker-db.ps1 (daily backup of the Docker database)
 ios/                  NeonAdmin SwiftUI app (XcodeGen spec in ios/project.yml; no .xcodeproj committed)
+ios/Ads/              NEON Ads, the Mac sidebar's marketing section (a local Swift package, Mac only; ios/Ads/README.md)
 whatsapp-worker/      standalone WhatsApp Web service (its own Dockerfile; not in render.yaml)
 Dockerfile            the site as a container (see "Running it on the studio's PC")
 docker-compose.yml    the site, its PostgreSQL and the tunnel on the studio's PC

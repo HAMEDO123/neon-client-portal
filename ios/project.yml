@@ -16,6 +16,11 @@ packages:
   WebRTC:
     url: https://github.com/stasel/WebRTC
     exactVersion: 153.0.0
+  # NEON Ads, the marketing section of the Mac sidebar (Ads/README.md). On the
+  # Mac only: every file is inside `#if targetEnvironment(macCatalyst)`, so the
+  # iPhone build links an empty module.
+  NeonAds:
+    path: Ads
 targets:
   NeonAdmin:
     type: application
@@ -36,6 +41,7 @@ targets:
         buildPhase: resources
     dependencies:
       - package: WebRTC
+      - package: NeonAds
       # The share extension ("NEON" in the share sheet), in PlugIns.
       - target: NeonShare
       # The widgets (Widgets/): the team map, today's tasks, what is waiting,
@@ -105,6 +111,10 @@ targets:
         # which is only ever read and corrected before anything is sent.
         NSSpeechRecognitionUsageDescription: "NEON turns what you say into text, so you can hand out tasks by speaking. You check the list before anything is sent."
         UIApplicationSupportsIndirectInputEvents: true
+        # The marketing section (Ads/) talks to the NEON Ads engine on the same
+        # Mac over plain HTTP, 127.0.0.1:8793. Local addresses only.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         # neon://open?path=<web path>: a widget opening its screen, routed
         # as a notification's link is (NeonAdminApp's onOpenURL).
         CFBundleURLTypes:
@@ -128,6 +138,9 @@ targets:
         # resizes. The iPhone build is untouched — it is still iPhone only.
         SUPPORTS_MACCATALYST: YES
         "TARGETED_DEVICE_FAMILY[sdk=macosx*]": "2,6"
+        # The Mac build needs macOS 14 (Catalyst 17), as NEON Ads always did;
+        # the iPhone keeps iOS 16.
+        "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "17.0"
         SWIFT_VERSION: "5.0"
         # Signed with the studio's paid team for TestFlight (and later an Apple
         # Business Manager Custom App). ios-build.yml passes
@@ -217,6 +230,9 @@ targets:
           - "**/*.md"
       - path: Sources/Core/TokenStore.swift
       - path: Sources/Core/WidgetShare.swift
+      # The NEON Ads widget's models and views (Mac only, Widgets/AdsWidget.swift).
+      - path: Ads/Shared/Shared.swift
+      - path: Ads/Shared/WidgetViews.swift
     entitlements:
       path: NeonWidgets.entitlements
       properties:
@@ -233,6 +249,9 @@ targets:
         NeonKeychainGroup: "$(DEVELOPMENT_TEAM).com.neonjo.staff.shared"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        # The NEON Ads widget reads the engine on this Mac, 127.0.0.1:8793.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_NAME: NeonWidgets
@@ -242,6 +261,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: YES
         "TARGETED_DEVICE_FAMILY[sdk=macosx*]": "2,6"
+        "IPHONEOS_DEPLOYMENT_TARGET[sdk=macosx*]": "17.0"
         SWIFT_VERSION: "5.0"
         APPLICATION_EXTENSION_API_ONLY: YES
         DEVELOPMENT_TEAM: 745F9U99BC

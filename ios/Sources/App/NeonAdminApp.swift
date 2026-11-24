@@ -1,4 +1,7 @@
 import SwiftUI
+#if targetEnvironment(macCatalyst)
+import NeonAds
+#endif
 
 @main
 struct NeonAdminApp: App {
@@ -72,6 +75,10 @@ struct NeonAdminApp: App {
             #if DEBUG
             .task { if DecodeCheck.requested, api.isLoggedIn { await DecodeCheck.run(api) } }
             #endif
+            #if DEBUG && targetEnvironment(macCatalyst)
+            // `-neonAdsSnapshot <dir>`: the marketing pages to PNG, then quit.
+            .task { await Ads.snapshotIfAsked() }
+            #endif
             // The widgets (Widgets/): who is signed in and in which language,
             // so they read the right side's figures and speak the app's language.
             .task(id: "\(api.isLoggedIn)|\(api.side?.rawValue ?? "")|\(languageRaw)") {
@@ -84,6 +91,10 @@ struct NeonAdminApp: App {
             // A widget opens its screen: neon://open?path=/admin/tasks, the
             // web path a notification would carry, routed the same way.
             .onOpenURL { url in
+                #if targetEnvironment(macCatalyst)
+                // neon://ads?c=…&a=… from the NEON Ads widget: its confirmation sheet.
+                if let row = Ads.open(url) { PushCenter.shared.pendingPath = "/admin/" + row; return }
+                #endif
                 guard url.scheme == "neon",
                       let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                         .queryItems?.first(where: { $0.name == "path" })?.value
@@ -196,13 +207,18 @@ struct AdminHome: View {
     @State private var tab: AdminTab
     @State private var unreadChat = 0
     @Environment(\.scenePhase) private var scenePhase
+    #if targetEnvironment(macCatalyst)
+    /// The marketing section's approvals badge (publishes only when the count moves).
+    @ObservedObject private var ads = Ads.badges
+    #endif
 
-    init(initialTab: AdminTab = .home) {
+    init(initialTab: AdminTab = .home, macRow: String = "home") {
         _tab = State(initialValue: initialTab)
+        _macRow = State(initialValue: macRow)
     }
 
     /// The sidebar row on a Mac (MacSidebarHome.swift).
-    @State private var macRow = "home"
+    @State private var macRow: String
 
     var body: some View {
         layout
@@ -226,7 +242,16 @@ struct AdminHome: View {
 
     @ViewBuilder private var layout: some View {
         #if targetEnvironment(macCatalyst)
-        MacSidebarHome(sections: macSections(unreadChat: unreadChat, onUnread: { unreadChat = $0 }), selection: $macRow)
+        MacSidebarHome(
+            sections: macSections(
+                unreadChat: unreadChat, onUnread: { unreadChat = $0 },
+                adsApprovals: ads.approvals, select: { macRow = $0 }
+            ),
+            selection: $macRow
+        )
+        // The NEON Ads engine on this Mac: its widget and the Brain need it running
+        // whether or not a marketing page is open. Nothing is asked of Meta here.
+        .task { Ads.startEngine() }
         #else
         tabs
         #endif

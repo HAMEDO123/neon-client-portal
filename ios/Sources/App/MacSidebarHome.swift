@@ -1,4 +1,7 @@
 import SwiftUI
+#if targetEnvironment(macCatalyst)
+import NeonAds
+#endif
 
 // On a Mac the app is a window, not a phone (Mac Catalyst). Five tabs and a
 // "More" grid are how a phone fits everything into a thumb's reach; a window
@@ -95,6 +98,8 @@ enum MacWindow {
 /// phone's five tabs, because every screen has a row of its own here.
 enum MacRoute {
     static func admin(_ path: String) -> String {
+        // The marketing section's own rows (neon://ads from its widget): "/admin/ads.approvals".
+        if path.hasPrefix("/admin/ads.") { return String(path.dropFirst("/admin/".count)) }
         let routes: [(String, String)] = [
             ("/admin/chat", "chat"), ("/admin/whatsapp", "whatsapp"), ("/admin/leads", "leads"),
             ("/admin/tasks", "tasks"), ("/admin/projects", "projects"),
@@ -124,8 +129,11 @@ enum MacRoute {
 // MARK: - The two sides' rows
 
 extension AdminHome {
-    func macSections(unreadChat: Int, onUnread: @escaping (Int) -> Void) -> [SidebarSection] {
-        [
+    /// `adsApprovals` and `select` are the marketing section's: its approvals badge, and
+    /// how one of its pages moves the sidebar to another.
+    func macSections(unreadChat: Int, onUnread: @escaping (Int) -> Void,
+                     adsApprovals: Int = 0, select: @escaping (String) -> Void = { _ in }) -> [SidebarSection] {
+        var sections = [
             SidebarSection(id: "main", title: nil, items: [
                 SidebarItem(id: "home", title: L("Home"), symbol: "house", ownsStack: true) { AnyView(AdminHomeView()) },
                 SidebarItem(id: "projects", title: L("Projects"), symbol: "square.grid.2x2", ownsStack: true) { AnyView(ProjectsRootView()) },
@@ -160,6 +168,18 @@ extension AdminHome {
                 SidebarItem(id: "more", title: L("Account"), symbol: "person.crop.circle", ownsStack: true) { AnyView(AdminMoreView()) },
             ]),
         ]
+        #if targetEnvironment(macCatalyst)
+        // NEON Ads (Ads/): campaigns, approvals, CRM, lead quality, the market, a new ad —
+        // what was its own app until 2026-11-24, now one more section of this window.
+        // Its pages are Arabic, as they always were.
+        sections.insert(SidebarSection(id: "ads", title: L("Marketing"), items: Ads.rows.map { row in
+            SidebarItem(id: row.id, title: AppLanguage.current == .arabic ? row.title : row.englishTitle, symbol: row.symbol,
+                        badge: row.id == "ads.approvals" ? adsApprovals : 0) {
+                AnyView(Ads.screen(row.id, select: select))
+            }
+        }), at: sections.count - 1)
+        #endif
+        return sections
     }
 }
 

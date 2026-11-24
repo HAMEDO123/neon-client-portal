@@ -20,6 +20,10 @@ struct NeonWidgetsBundle: WidgetBundle {
         StudioTodayWidget()
         WaitingWidget()
         MyTasksWidget()
+        // NEON Ads (the marketing section), reading the engine on this Mac.
+        #if targetEnvironment(macCatalyst)
+        AdsWidget()
+        #endif
     }
 }
 

@@ -42,6 +42,10 @@ enum DebugScreens {
         case "kit": return AnyView(DesignKitGallery())
         // What an outdated TestFlight build shows (a Debug build itself is never covered).
         case "update-required": return AnyView(UpdateRequiredView(current: 202610021122, latest: 202610031015))
+        #if targetEnvironment(macCatalyst)
+        // The Mac window on one sidebar row: `-neonScreen mac:ads.quality`, `mac:home`…
+        case let row where row.hasPrefix("mac:"): return AnyView(AdminHome(macRow: String(row.dropFirst(4))))
+        #endif
         case let kit where kit.hasPrefix("kit-"):
             if let slice = Int(kit.dropFirst(4)), (2...DesignKitGallery.slices).contains(slice) {
                 return AnyView(DesignKitGallery(slice: slice))
