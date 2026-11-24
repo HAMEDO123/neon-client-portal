@@ -1081,6 +1081,91 @@ function briefPayload() {
   return { briefAt, running: !!briefRun, chats: list };
 }
 
+// ---------- client report to the team group ----------
+const RATE = { high: '🔥 مهتم جداً', normal: '🙂 مهتم', low: '❄️ اهتمامه ضعيف' };
+function reportEntry(c, i, why) {
+  const s = summary(c);
+  const ins = insights[c.jid];
+  return [
+    `${i}. *${s.name}*${s.phone ? `\n📱 ${s.phone}` : '\n📱 الرقم مخفي، افتحوا المحادثة'}`,
+    ins?.priority ? `التقييم: ${RATE[ins.priority] || RATE.normal}` : null,
+    why ? `السبب: ${why}` : null,
+    ins?.summary ? `القصة: ${ins.summary}` : null,
+    ins?.nextStep ? `الخطوة الجاية: ${ins.nextStep}` : null,
+  ].filter(Boolean).join('\n');
+}
+/** split a long section into WhatsApp-sized messages on entry boundaries */
+function chunkSection(title, entries) {
+  const out = []; let cur = title;
+  for (const e of entries) {
+    if (cur.length + e.length + 2 > 3500 && cur !== title) { out.push(cur); cur = `${title} (تكملة)`; }
+    cur += '\n\n' + e;
+  }
+  out.push(cur);
+  return out;
+}
+const byPriority = (a, b) => {
+  const r = (c) => ({ high: 0, normal: 1, low: 2 })[insights[c.jid]?.priority] ?? 1;
+  return r(a) - r(b) || b.lastTs - a.lastTs;
+};
+/** the brief as WhatsApp messages: every live client, sorted by what the team should do about them */
+function buildReport() {
+  const seen = new Set();
+  const take = (pred) => briefScope().filter((c) => !seen.has(c.jid) && pred(c)).sort(byPriority).map((c) => { seen.add(c.jid); return c; });
+  const cur = (c) => { const ins = insights[c.jid]; return ins && isCurrent(ins, c) ? ins : null; };
+  const critical = take((c) => c.critical && nowS() - c.critical.ts < 3 * DAY);
+  const jobs = take((c) => c.job);
+  const toCall = take((c) => cur(c)?.call && cur(c).category !== 'done');
+  const needs = take((c) => c.needsYou);
+  const waiting = take((c) => cur(c)?.category === 'waiting');
+  const revive = take((c) => cur(c)?.category === 'revive');
+  const pending = take((c) => cur(c)?.category === 'pending');
+  const done = take((c) => cur(c)?.category === 'done');
+  const appts = upcomingAppts();
+  const day = new Date().toLocaleDateString('ar-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Amman' });
+  const msgs = [[
+    `📋 *تقرير الزبائن* · ${day}`,
+    `📞 لازم حدا يتصل فيهم: ${toCall.length}`,
+    critical.length ? `🚨 حالات حرجة: ${critical.length}` : null,
+    needs.length ? `🙋 يحتاجوا رد منكم: ${needs.length}` : null,
+    `⏳ بانتظار رد: ${waiting.length}`,
+    `🔁 يستاهلوا متابعة: ${revive.length}`,
+    `📅 مواعيد قادمة: ${appts.length}`,
+    `💬 بانتظار الزبون: ${pending.length} · منتهية: ${done.length}`,
+  ].filter(Boolean).join('\n')];
+  const add = (title, list, why) => { if (list.length) msgs.push(...chunkSection(title, list.map((c, i) => reportEntry(c, i + 1, why(c))))); };
+  add('📞 *لازم حدا منكم يتصل فيهم*\nمهتمين، والمكالمة أسرع طريق لموعد:', toCall, (c) => cur(c)?.callReason);
+  add('🚨 *حالات حرجة*', critical, (c) => c.critical.reason);
+  add('🙋 *يحتاجوا رد منكم* (الرد التلقائي ما رد عليهم)', needs, (c) => c.needsYou.reason);
+  add('⏳ *بانتظار رد*', waiting, () => null);
+  add('🔁 *يستاهلوا رسالة متابعة*', revive, () => null);
+  if (appts.length) msgs.push(['📅 *المواعيد القادمة*', ...appts.map((a, i) => `${i + 1}. ${a.name || 'زبون'}${a.phone ? ` · ${a.phone}` : ''}\n${slotLabel(a.start)}`)].join('\n\n'));
+  if (jobs.length) msgs.push(['💼 *طلبات توظيف*', ...jobs.map((c, i) => { const s = summary(c); return `${i + 1}. ${s.name}${s.phone ? ` · ${s.phone}` : ''}`; })].join('\n'));
+  return { msgs, counts: { call: toCall.length, critical: critical.length, needs: needs.length, waiting: waiting.length, revive: revive.length, appts: appts.length } };
+}
+let reportRun = null;
+/** refresh the brief, then post the report to every team group */
+function sendReport() {
+  if (reportRun) return reportRun;
+  reportRun = (async () => {
+    if (!sock || state.status !== 'open') throw new Error('واتساب غير متصل');
+    const r = await runBrief();
+    broadcast('brief-done', {});
+    const { msgs, counts } = buildReport();
+    const sentTo = [];
+    for (const name of settings.apptGroups || []) {
+      const gid = await findGroupJid(name);
+      if (!gid) continue;
+      for (const text of msgs) { await sock.sendMessage(gid, { text }); await new Promise((ok) => setTimeout(ok, 1200)); }
+      sentTo.push(name);
+    }
+    if (!sentTo.length) throw new Error(`لم أجد جروب ${(settings.apptGroups || []).join('، ')}`);
+    console.log(new Date().toISOString(), `client report posted to ${sentTo.join(', ')} (${msgs.length} messages)`);
+    return { sentTo, messages: msgs.length, counts, errors: r.errors };
+  })().finally(() => { reportRun = null; });
+  return reportRun;
+}
+
 // ---------- HTTP ----------
 function json(res, code, obj) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' });
@@ -1190,6 +1275,11 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ...briefPayload(), ...r });
       } catch (e) { return json(res, 500, { error: String(e.message || e) }); }
     }
+  }
+  if (p === '/api/brief/report' && req.method === 'GET') return json(res, 200, buildReport()); // preview, sends nothing
+  if (p === '/api/brief/report' && req.method === 'POST') {
+    try { return json(res, 200, await sendReport()); }
+    catch (e) { return json(res, 500, { error: String(e.message || e) }); }
   }
   if (p === '/api/appointments') {
     if (req.method === 'GET') return json(res, 200, upcomingAppts().map((a) => ({ ...a, label: slotLabel(a.start) })));

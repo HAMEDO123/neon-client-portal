@@ -416,6 +416,7 @@
      <span class="spacer"></span>
      <span class="sub" id="briefSub" hidden></span>
      <button class="btn-claude" id="briefRefresh" hidden>↻ تحديث الملخص</button>
+     <button class="btn-claude" id="briefReport" hidden title="يحدّث الملخص ويبعت كل الزبائن مع تقييمهم لجروب Neon">📤 ابعت التقرير للجروب</button>
    </nav>
    <section class="view" id="apptView" hidden>
     <div class="brief-head">
@@ -609,6 +610,7 @@ function showView(v) {
   $('tabBrief').classList.toggle('on', v === 'brief');
   $('tabAppts').classList.toggle('on', v === 'appt');
   $('briefRefresh').hidden = v !== 'brief';
+  $('briefReport').hidden = v !== 'brief';
   $('briefSub').hidden = v !== 'brief';
   $('briefView').hidden = v !== 'brief';
   $('apptView').hidden = v !== 'appt';
@@ -945,6 +947,17 @@ async function updateBrief() {
   catch (e) { alert('تعذّر تحديث الملخص: ' + e.message); }
   finally { briefRunning = false; briefProgress = null; renderBrief(); }
 }
+let reportBusy = false;
+async function sendReport() {
+  if (reportBusy || !confirm('أبعت تقرير كل الزبائن مع تقييمهم لجروب Neon؟')) return;
+  reportBusy = true; $('briefReport').disabled = true; $('briefReport').textContent = '📤 جارٍ الإرسال…';
+  try {
+    const r = await api('/api/brief/report', { method: 'POST' });
+    alert(`تم الإرسال لجروب ${r.sentTo.join('، ')}: ${r.counts.call} للاتصال، ${r.counts.waiting} بانتظار رد، ${r.counts.revive} للمتابعة.`);
+  } catch (e) { alert('تعذّر إرسال التقرير: ' + e.message); }
+  finally { reportBusy = false; $('briefReport').disabled = false; $('briefReport').textContent = '📤 ابعت التقرير للجروب'; }
+}
+$('briefReport').onclick = sendReport;
 function bcard(c) {
   const ins = c.insight;
   const cat = ins?.category;
