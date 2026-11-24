@@ -647,6 +647,7 @@ model Employee {
   locationDays    LocationDay[]
   // Clock-ins and clock-outs made from the app, each with where it was made.
   appPunches      AppPunch[]
+  appClockTries   AppClockAttempt[]
 }
 
 // A formal warning from the manager, with the reason the employee is shown at
@@ -2314,6 +2315,28 @@ model WalkieMessage {
 /// place the phone said it was made. Read by the attendance sync beside the
 /// fingerprint device's own log, so it counts exactly as a read there does
 /// (lib/app-clock.ts). The time is the server's, never the phone's.
+// Every press of "Clock in here", kept or refused, with where the phone said it
+// was (asked for on 2026-11-24, "خليه يحفظ كل محاولة بصمة من التلفون"). A
+// refused one leaves no AppPunch, so without this nobody could tell "never
+// tried" from "tried and was turned away".
+model AppClockAttempt {
+  id             String    @id @default(cuid())
+  employeeId     String
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  at             DateTime  @default(now())
+  source         String // "app" (the iPhone app) or "web" (the website's clock card)
+  outcome        String // RECORDED, REPEATED (a double tap) or REFUSED
+  reason         String? // the sentence the person was refused with
+  latitude       Float?
+  longitude      Float?
+  accuracy       Float? // metres, as the phone reported it
+  fixedAt        DateTime? // when the phone took the position
+  distanceMetres Float? // from the person's place, when they have one
+
+  @@index([employeeId, at])
+  @@index([at])
+}
+
 model AppPunch {
   id         String   @id @default(cuid())
   employeeId String

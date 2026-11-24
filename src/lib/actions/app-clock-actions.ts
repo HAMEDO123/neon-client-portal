@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireEmployee } from "@/lib/employee-session";
-import { readClockFix } from "@/lib/app-clock";
-import { recordAppPunch } from "@/lib/app-clock-store";
+import { clockInFromApp } from "@/lib/app-clock-store";
 import { writeAppDay } from "@/lib/attendance-sync";
 import { Refusal } from "@/lib/refusal";
 import { getTimezone } from "@/lib/settings";
@@ -25,8 +24,7 @@ export async function clockFromApp(position: {
   const employee = await requireEmployee();
   try {
     const now = new Date();
-    const fix = readClockFix(position, now);
-    const punch = await recordAppPunch(employee.id, fix, now);
+    const punch = await clockInFromApp(employee.id, position, "web", now);
     if (!punch.repeated) await writeAppDay(employee.id, now);
 
     revalidatePath("/employee");

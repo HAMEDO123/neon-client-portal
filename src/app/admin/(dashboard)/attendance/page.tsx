@@ -17,7 +17,7 @@ import type { WorkHours } from "@/lib/work-hours";
 import { DeviceUsers } from "@/components/admin/device-users";
 import { SaveButton } from "@/components/admin/form-buttons";
 import { SectionBar } from "@/components/admin/section-bar";
-import { appPunchesBetween } from "@/lib/app-clock-store";
+import { appClockAttemptsBetween, appPunchesBetween } from "@/lib/app-clock-store";
 import { mapLink } from "@/lib/app-clock";
 import { officeLocation } from "@/lib/mobile/location-service";
 import { metresBetween } from "@/lib/staff-location";
@@ -122,6 +122,7 @@ export default async function AttendanceDevicePage({ searchParams }: { searchPar
   const appFrom = instantAt(bounds.from, "00:00", timezone);
   const appTo = instantAt(shiftDayKey(bounds.to, 1), "00:00", timezone);
   const appPunches = appFrom && appTo ? await appPunchesBetween(appFrom, appTo) : [];
+  const appTries = appFrom && appTo ? await appClockAttemptsBetween(appFrom, appTo) : [];
   const office = appPunches.length > 0 ? await officeLocation() : null;
 
   const driftBad = clock ? Math.abs(clock.driftSeconds) > MAX_DRIFT_SECONDS : false;
@@ -143,7 +144,7 @@ export default async function AttendanceDevicePage({ searchParams }: { searchPar
           items={[
             { id: "month", label: "The month" },
             { id: "times", label: "Clock times" },
-            ...(appPunches.length > 0 ? [{ id: "app", label: "From the app" }] : []),
+            ...(appPunches.length > 0 || appTries.length > 0 ? [{ id: "app", label: "From the app" }] : []),
             { id: "device", label: "The device" },
             { id: "pairing", label: "Pair people" },
           ]}
@@ -161,6 +162,7 @@ export default async function AttendanceDevicePage({ searchParams }: { searchPar
 
       <section id="app" className="scroll-mt-20">
         <AppPunchList punches={appPunches} timezone={timezone} office={office} />
+        <AppTryList tries={appTries} timezone={timezone} />
       </section>
 
       <section id="device" className="mt-14 scroll-mt-20">
@@ -326,6 +328,85 @@ function AppPunchList({
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Every press of "Clock in here" this month, kept or refused, newest first —
+ * so "he never tried" and "he tried and was turned away" can be told apart.
+ */
+function AppTryList({
+  tries,
+  timezone,
+}: {
+  tries: Awaited<ReturnType<typeof appClockAttemptsBetween>>;
+  timezone: string;
+}) {
+  if (tries.length === 0) return null;
+  const said = { RECORDED: "Clocked in", REPEATED: "Double tap — same punch", REFUSED: "Refused" } as Record<string, string>;
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-lg font-semibold text-bark">Every try from the app</h2>
+      <p className="mt-1 text-sm text-bark/50">
+        Each press of &ldquo;Clock in here&rdquo;, kept or refused, with where the phone said it was. A try the phone could
+        not send at all (no internet, location off before a position came) cannot reach here.
+      </p>
+      <div className="mt-3 overflow-x-auto rounded-2xl border border-warm-line bg-white">
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase tracking-wider text-bark/40">
+            <tr>
+              <th className="px-4 py-2 font-medium">Who</th>
+              <th className="px-4 py-2 font-medium">When</th>
+              <th className="px-4 py-2 font-medium">Result</th>
+              <th className="px-4 py-2 font-medium">Where</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tries.map((attempt) => (
+              <tr key={attempt.id} className="border-t border-warm-line align-top">
+                <td className="px-4 py-2 text-bark">
+                  {attempt.employee.name}
+                  <span className="ml-1 text-xs text-bark/40">{attempt.source === "app" ? "iPhone" : "website"}</span>
+                </td>
+                <td className="px-4 py-2 tabular-nums text-bark/70">
+                  {formatDayIn(timezone, attempt.at)} · {formatTimeIn(timezone, attempt.at)}
+                </td>
+                <td className="px-4 py-2">
+                  <span className={attempt.outcome === "REFUSED" ? "font-medium text-red-700" : "font-medium text-emerald-700"}>
+                    {said[attempt.outcome] ?? attempt.outcome}
+                  </span>
+                  {attempt.reason ? <span className="block text-xs text-bark/60">{attempt.reason}</span> : null}
+                </td>
+                <td className="px-4 py-2">
+                  {attempt.latitude != null && attempt.longitude != null ? (
+                    <>
+                      <a
+                        href={mapLink({ latitude: attempt.latitude, longitude: attempt.longitude })}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-cyan-700 underline"
+                      >
+                        Open map
+                      </a>
+                      <span className="ml-2 text-xs text-bark/50">
+                        {[
+                          attempt.distanceMetres != null ? `${Math.round(attempt.distanceMetres)} m from their place` : null,
+                          attempt.accuracy != null ? `±${Math.round(attempt.accuracy)} m` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-bark/50">No location came with it</span>
+                  )}
                 </td>
               </tr>
             ))}

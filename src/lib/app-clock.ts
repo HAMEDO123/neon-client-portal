@@ -220,6 +220,48 @@ export function clockedInAlert(name: string, time: string, fix: ClockFix, place:
   };
 }
 
+/**
+ * Whatever position came with a try, as far as it can be read — for the
+ * record of tries, which keeps the refused ones too. Never refuses: a try with
+ * no position is still a try, kept with blanks.
+ */
+export function rawFix(input: { latitude: unknown; longitude: unknown; accuracy: unknown; fixedAt: unknown }) {
+  let latitude = finite(input.latitude);
+  let longitude = finite(input.longitude);
+  if (latitude === null || longitude === null || Math.abs(latitude) > 90 || Math.abs(longitude) > 180 || (latitude === 0 && longitude === 0)) {
+    latitude = null;
+    longitude = null;
+  }
+  const accuracy = finite(input.accuracy);
+  const fixedAt = typeof input.fixedAt === "string" && ISO_INSTANT.test(input.fixedAt) ? new Date(input.fixedAt) : null;
+  return {
+    latitude,
+    longitude,
+    accuracy: accuracy !== null && accuracy >= 0 ? accuracy : null,
+    fixedAt: fixedAt && !Number.isNaN(fixedAt.getTime()) ? fixedAt : null,
+  };
+}
+
+/** What the manager is told when a try is refused: who, when, why, and where the phone said it was. */
+export function refusedClockAlert(
+  name: string,
+  time: string,
+  reason: string,
+  fix: { latitude: number | null; longitude: number | null; accuracy: number | null },
+  distance: number | null
+) {
+  const where =
+    fix.latitude !== null && fix.longitude !== null
+      ? `At ${fix.latitude.toFixed(6)}, ${fix.longitude.toFixed(6)}${fix.accuracy !== null ? ` (±${Math.round(fix.accuracy)} m)` : ""}${
+          distance !== null ? ` — ${Math.round(distance)} m from their place` : ""
+        }. ${mapLink({ latitude: fix.latitude, longitude: fix.longitude })}`
+      : "No location came with it.";
+  return {
+    title: `${name} tried to clock in from the app at ${time} — refused`,
+    message: `"${reason}" ${where}`,
+  };
+}
+
 /** A link that opens the place on a map, on any phone or computer. */
 export function mapLink(place: { latitude: number; longitude: number }): string {
   return `https://www.google.com/maps?q=${place.latitude.toFixed(6)},${place.longitude.toFixed(6)}`;

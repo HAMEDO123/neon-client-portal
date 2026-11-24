@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { notifyAdmin } from "@/lib/admin-notifications";
-import { APP_CLOCK_PLACES, asPunches, checkClockPlace, clockedInAlert, isDoubleTap, mapLink, readClockPlaces, type ClockFix } from "@/lib/app-clock";
+import { APP_CLOCK_PLACES, asPunches, checkClockPlace, clockedInAlert, distanceMetres, isDoubleTap, mapLink, rawFix, readClockFix, readClockPlaces, refusedClockAlert, type ClockFix } from "@/lib/app-clock";
 import { getSetting, getTimezone } from "@/lib/settings";
 import { dayKeyIn, dayKeyToDate, formatTimeIn, instantAt, shiftDayKey } from "@/lib/time";
 import type { Punch } from "@/lib/attendance";
@@ -34,6 +34,74 @@ export async function appPunchesBetween(from: Date, to: Date, employeeId?: strin
       latitude: true,
       longitude: true,
       accuracy: true,
+      employee: { select: { name: true } },
+    },
+  });
+}
+
+type RawPosition = { latitude: unknown; longitude: unknown; accuracy: unknown; fixedAt: unknown };
+
+/**
+ * A press of "Clock in here", from the iPhone app or the website: the position
+ * read, the punch kept — and the try written down either way, refused ones
+ * included, with where the phone said it was. A refused try also tells the
+ * manager (asked for on 2026-11-24: "خليه يحفظ كل محاولة بصمة من التلفون
+ * وخليه يسجل الموقع"). Refusals still reach the caller as before.
+ */
+export async function clockInFromApp(employeeId: string, raw: RawPosition, source: "app" | "web", now: Date = new Date()) {
+  const seen = rawFix(raw);
+  const place = readClockPlaces(await getSetting(APP_CLOCK_PLACES))[employeeId] ?? null;
+  const distance =
+    place && seen.latitude !== null && seen.longitude !== null
+      ? Math.round(distanceMetres({ latitude: seen.latitude, longitude: seen.longitude }, place))
+      : null;
+  const keep = (outcome: "RECORDED" | "REPEATED" | "REFUSED", reason: string | null) =>
+    prisma.appClockAttempt
+      .create({
+        data: { employeeId, at: now, source, outcome, reason, ...seen, distanceMetres: distance },
+        select: { id: true },
+      })
+      .catch((error) => {
+        // The record of a try must never undo the try itself.
+        console.error("[app-clock-attempt]", error);
+        return null;
+      });
+
+  try {
+    const punch = await recordAppPunch(employeeId, readClockFix(raw, now), now);
+    await keep(punch.repeated ? "REPEATED" : "RECORDED", null);
+    return punch;
+  } catch (error) {
+    if (!(error instanceof Refusal)) throw error;
+    const attempt = await keep("REFUSED", error.message);
+    const who = await prisma.employee.findUnique({ where: { id: employeeId }, select: { name: true } });
+    await notifyAdmin({
+      type: "ATTENDANCE",
+      ...refusedClockAlert(who?.name ?? "Somebody", formatTimeIn(await getTimezone(), now) ?? "", error.message, seen, distance),
+      url: "/admin/attendance#app",
+      dedupeKey: `APP_CLOCK_REFUSED:${attempt?.id ?? `${employeeId}:${now.toISOString()}`}`,
+      employeeId,
+    }).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Every try from the app in a span, newest first, refused ones included. */
+export async function appClockAttemptsBetween(from: Date, to: Date) {
+  return prisma.appClockAttempt.findMany({
+    where: { at: { gte: from, lt: to } },
+    orderBy: { at: "desc" },
+    take: 300,
+    select: {
+      id: true,
+      at: true,
+      source: true,
+      outcome: true,
+      reason: true,
+      latitude: true,
+      longitude: true,
+      accuracy: true,
+      distanceMetres: true,
       employee: { select: { name: true } },
     },
   });

@@ -37,8 +37,7 @@ import {
 } from "@/lib/actions/assigned-task-actions";
 import { guarded, guardedAction, heard, param, optParam, str, oneOf, bool, RpcError, type ActionRegistry, type ReadRegistry } from "@/lib/mobile/rpc";
 import { locationPlanFor, reportLocation, setLocationPermission } from "@/lib/mobile/location-service";
-import { readClockFix } from "@/lib/app-clock";
-import { myAppClock, recordAppPunch } from "@/lib/app-clock-store";
+import { clockInFromApp, myAppClock } from "@/lib/app-clock-store";
 import { writeAppDay } from "@/lib/attendance-sync";
 import { PERMISSIONS } from "@/lib/staff-location";
 import { notifyAdmin } from "@/lib/admin-notifications";
@@ -396,8 +395,7 @@ export const actions: ActionRegistry = {
   // not on for, or without a real, fresh position. → { ok: true, time }
   "me/clock": guardedAction(requireEmployee, async ({ args }, me) => {
     const now = new Date();
-    const fix = readClockFix({ latitude: args[0], longitude: args[1], accuracy: args[2], fixedAt: args[3] }, now);
-    const punch = await recordAppPunch(me.id, fix, now);
+    const punch = await clockInFromApp(me.id, { latitude: args[0], longitude: args[1], accuracy: args[2], fixedAt: args[3] }, "app", now);
     if (!punch.repeated) await writeAppDay(me.id, now);
     return { ok: true, time: formatTimeIn(await getTimezone(), punch.at) ?? "" };
   }),

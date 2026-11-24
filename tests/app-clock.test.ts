@@ -15,6 +15,8 @@ import {
   readClockPlaces,
   DEFAULT_PLACE_RADIUS_METRES,
   recordedPunches,
+  rawFix,
+  refusedClockAlert,
 } from "../src/lib/app-clock";
 import { attendanceFromPunches } from "../src/lib/attendance";
 import { DEFAULT_WORK_HOURS } from "../src/lib/work-hours";
@@ -129,7 +131,7 @@ describe("where it is wired in", () => {
   it("takes the person from the session and the time from the server, on the site and in the phone app", () => {
     const action = read("src", "lib", "actions", "app-clock-actions.ts");
     assert.match(action, /const employee = await requireEmployee\(\);/);
-    assert.match(action, /recordAppPunch\(employee\.id, fix, now\)/);
+    assert.match(action, /clockInFromApp\(employee\.id, position, "web", now\)/);
     const phone = read("src", "lib", "mobile", "registry", "me.ts");
     assert.match(phone, /"me\/clock": guarded\(requireEmployee/);
     assert.match(phone, /"me\/clock": guardedAction\(requireEmployee/);
@@ -203,3 +205,27 @@ describe("a place to clock in from", () => {
   });
 });
 
+describe("every try from the app is kept (2026-11-24)", () => {
+  it("reads whatever position came, and never refuses", () => {
+    const seen = rawFix({ latitude: "31.97", longitude: 35.86, accuracy: 12, fixedAt: "2026-11-24T08:00:00Z" });
+    assert.equal(seen.latitude, 31.97);
+    assert.equal(seen.accuracy, 12);
+    assert.equal(seen.fixedAt?.toISOString(), "2026-11-24T08:00:00.000Z");
+    const blank = rawFix({ latitude: 0, longitude: 0, accuracy: -1, fixedAt: "yesterday" });
+    assert.deepEqual(blank, { latitude: null, longitude: null, accuracy: null, fixedAt: null });
+  });
+  it("tells the manager why it was refused and where the phone was", () => {
+    const alert = refusedClockAlert("Wael", "11:02 AM", "You're 2.4 km from where you clock in from the app.", { latitude: 31.99, longitude: 35.87, accuracy: 15 }, 2400);
+    assert.equal(alert.title, "Wael tried to clock in from the app at 11:02 AM — refused");
+    assert.match(alert.message, /2\.4 km from where/);
+    assert.match(alert.message, /31\.990000, 35\.870000 \(±15 m\) — 2400 m from their place/);
+    assert.match(alert.message, /google\.com\/maps\?q=31\.990000,35\.870000/);
+    assert.match(refusedClockAlert("Wael", "11:02 AM", "x", { latitude: null, longitude: null, accuracy: null }, null).message, /No location came with it/);
+  });
+  it("is how both the phone and the website clock in", () => {
+    const src = (...parts: string[]) => readFileSync(join(process.cwd(), ...parts), "utf8");
+    assert.match(src("src", "lib", "mobile", "registry", "me.ts"), /clockInFromApp\(me\.id, \{[^}]+\}, "app", now\)/);
+    assert.match(src("src", "lib", "actions", "app-clock-actions.ts"), /clockInFromApp\(employee\.id, position, "web", now\)/);
+    assert.doesNotMatch(src("src", "lib", "mobile", "registry", "me.ts"), /recordAppPunch\(/);
+  });
+});
