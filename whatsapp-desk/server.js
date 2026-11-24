@@ -470,10 +470,29 @@ You are now replying AUTOMATICALLY: your text is sent to the client immediately,
 - Never lose a client easily. If the client wants to cancel an appointment or back out (especially over price), do NOT accept on the first request: empathize, ask what worries him, and convince him that what we offer is the best value for this price using the strengths in the business info, then suggest keeping the free, no-commitment visit. Accept a cancellation only if he insists again after that; then accept politely, leave the door open, and set cancel_appointment=true.
 - CRITICAL: if the client threatens violence or damage (for example «بكسرلك الشركة»), harasses, threatens legal action, or says anything dangerous or urgent, set critical=true (reason in Arabic) AND reply=true with a short calming message: stay calm and respectful, acknowledge how he feels, apologize for any inconvenience, and say the company management will contact him personally very soon. No sales talk, no prices, no appointment, no arguing, never threaten back.
 - Learn from <owner_examples>: when the client's question or situation matches an example, give the same facts and follow the owner's approach (in your own short words; every other rule still applies). Never repeat a reply shown there as corrected.
+- Website link: when you give our website, put the link ALONE in its own message (just the link, nothing else), right after a short message that introduces it, for example «أعمالنا بتلاقيها على موقعنا» then «https://neonjo.com». Never put the link inside a sentence.
+- Short follow-up questions («على الفيس؟»، «وين؟»، «كم؟»، «بس هيك؟») continue the topic of the last few messages: read them as a question about what WE just said or what the client just asked. Example: after we say our work is on our website, «على الفيس؟» means "is your work on Facebook too?", not something about his own plans. If the business info lists no such page, just say all our work is on our website and give the link; never say whether we have or do not have a page there. Do not twist the question into another topic.
+- Once you asked the client for something (a photo, the area, a link) or he said he will send it («ثواني ابعثلك إياه»), do not ask for it, mention it or remind him of it again until it arrives: answer only his new question, and in that case the reply may end without a question (this overrides the "every reply ends with a question" rule).
 - Never repeat a message or sentence you already sent in this conversation. If you need to make the same point again, say it in clearly different words and structure.
 - Otherwise reply=true.
 - Write like a real person from the team texting on WhatsApp, not like a bot: everyday Jordanian phrasing, warm and simple, match the client's tone and energy. Vary greetings and wording; avoid stock phrases such as «كيف يمكنني مساعدتك» or «يسعدنا خدمتك» and avoid repeating the same opening as earlier in the conversation. Do not greet again if you already greeted in this conversation. Use the client's name only occasionally.
 - Split the reply into 1 to 3 separate messages the way people text (for example a short greeting, then the main point, then the question). Each message short; never split in the middle of a sentence. A very short reply can be a single message.`;
+
+// a website link inside a sentence (RTL text, a dot after it) is often not tappable on WhatsApp:
+// keep the sentence without it and send the link alone as the next message
+const LINK_RE = /(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+\.(?:com|net|org|jo|io|co)(?:\/[^\s،,]*)?)/gi;
+function linkOwnMessage(parts) {
+  const out = [];
+  for (const p of parts) {
+    const links = [...p.matchAll(LINK_RE)].map((m) => 'https://' + m[1].replace(/[.)\]]+$/, ''));
+    if (!links.length) { out.push(p); continue; }
+    const rest = p.replace(LINK_RE, ' ').replace(/\s+([.،,:!؟?])/g, '$1').replace(/\s{2,}/g, ' ')
+      .replace(/^[\s.،,:]+|[\s،,:]+$/g, '').replace(/:\.$/, '.').trim();
+    if (rest && /[\u0600-\u06FF]/.test(rest)) out.push(rest);
+    for (const l of links) if (!out.includes(l)) out.push(l);
+  }
+  return out;
+}
 
 function needsYou(c, reason) {
   c.needsYou = { ts: nowS(), reason: reason || 'يحتاج ردك' };
@@ -731,8 +750,8 @@ async function runAuto(jid) {
     if (!settings.autoReply || now.fromMe) return;
     if (now.id !== last.id) { scheduleAuto(c, now); return; }          // client wrote more: answer everything together
     if (nowS() - (lastManualAt.get(jid) || 0) < AUTO.manualPauseSec) return;
-    const parts = (Array.isArray(out.messages) ? out.messages : [out.text || ''])
-      .map((s) => String(s || '').trim()).filter(Boolean).slice(0, 4);
+    const parts = linkOwnMessage((Array.isArray(out.messages) ? out.messages : [out.text || ''])
+      .map((s) => String(s || '').trim()).filter(Boolean)).slice(0, 4);
     const text = parts.join('\n');
     if (out.critical) {
       console.log(new Date().toISOString(), 'auto: CRITICAL', c.name || jid, '-', out.reason);
@@ -883,7 +902,7 @@ How an expert with 30 years of experience texts:
 - Do not push the visit/appointment in every message; that is what makes a reply feel automated. Suggest it only at a natural moment (once you understand the project, right after giving the price, or when the client shows interest). If you suggested it and the client did not respond to that, do not repeat it in your next message: respond to what he actually said, and wait at least 3 of your messages before suggesting it again, unless the client brings it up.
 Rules:
 - Output ONLY the reply message text. No quotes, no preamble, no options, no explanations.
-- Write the reply entirely in Arabic (natural Jordanian/Levantine dialect), even if the client writes in English. Use no English words or Latin letters: write technical terms in Arabic (ثلاثي الأبعاد، الواقع الافتراضي) and brand names in Arabic script (نيون). The only exception is a website link given in the business info (for example neonjo.com), written exactly as given.
+- Write the reply entirely in Arabic (natural Jordanian/Levantine dialect), even if the client writes in English. Use no English words or Latin letters: write technical terms in Arabic (ثلاثي الأبعاد، الواقع الافتراضي) and brand names in Arabic script (نيون). The only exception is a website link given in the business info (for example https://neonjo.com), sent alone in its own message.
 - Talk only about the services relevant to the client's message. The current promotion is interior/exterior design: do not mention programming, websites or software unless the client's message is about them.
 - Keep it SHORT: one or two short sentences (about 25 words at most), at most one question. Warm and natural, like a real person texting. No lists, no markdown; WhatsApp *bold* is fine sparingly.
 - Follow the reply style and goals written in the business info (for example: steer politely toward booking a visit, how many emojis to use). Ignore those rules only if they conflict with the ones here.
