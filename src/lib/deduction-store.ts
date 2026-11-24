@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { periodOf } from "@/lib/payroll";
 import { dayKeyToDate } from "@/lib/time";
-import { HOURS_PER_TASK, hoursAsMoney, sentBackDedupe, taskDedupe } from "@/lib/task-cutoff";
+import { HOURS_PER_TASK, hoursAsMoney, lateTaskKey, sentBackDedupe } from "@/lib/task-cutoff";
 
 // The database side of deductions (lib/task-cutoff.ts has the rules).
 // Deliberately not "use server": these trust their caller to have checked who
@@ -100,7 +100,7 @@ export async function chargeLateTask(
         amount: hoursAsMoney(employee.salaryAmount, employee.payBasis, HOURS_PER_TASK),
         reason: `${round > 0 ? "Sent back and not handed in again" : "Not handed in"} by 11:59 PM: ${task.title}`.slice(0, 300),
         assignedTaskId: task.id,
-        dedupeKey: taskDedupe(task.id, round),
+        dedupeKey: lateTaskKey(task.id, dayKey, round),
       },
     });
     return true;

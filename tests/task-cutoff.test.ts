@@ -19,6 +19,11 @@ import {
   redeploysOn,
   sentBackDedupe,
   taskDedupe,
+  CARRY_FROM,
+  carriedCopy,
+  carriesOver,
+  carryDay,
+  lateTaskKey,
 } from "../src/lib/task-cutoff";
 import type { WorkHours } from "../src/lib/work-hours";
 
@@ -294,5 +299,33 @@ describe("charging after midnight", () => {
     const source = read("src", "lib", "notifications", "task-cutoff-events.ts");
     assert.match(source, /daysToCharge\(dayKey, phase, shiftDayKey\(dayKey, -1\)\)/);
     assert.match(source, /lateAt\(task, cutoffAt\)/);
+  });
+});
+
+describe("a job not handed in comes back the next day as a new one (from 2026-11-24)", () => {
+  const hours = { days: [0, 1, 2, 3, 4, 6] } as unknown as WorkHours;
+  it("starts on the 24th, and the days before keep their rule", () => {
+    assert.equal(CARRY_FROM, "2026-11-24");
+    assert.equal(carriesOver("2026-11-23"), false);
+    assert.equal(carriesOver("2026-11-24"), true);
+  });
+  it("comes back on the next day the studio works", () => {
+    assert.equal(carryDay(hours, "2026-11-24"), "2026-11-25");
+    assert.equal(carryDay(hours, "2026-11-26"), "2026-11-28", "Thursday's goes to Saturday, past the Friday off");
+  });
+  it("is charged once a day it stays out, and never twice for one day", () => {
+    assert.equal(lateTaskKey("t1", "2026-11-23"), "TASK:t1", "an old day keeps its old key");
+    assert.equal(lateTaskKey("t1", "2026-11-23", 2), taskDedupe("t1", 2));
+    assert.equal(lateTaskKey("t1", "2026-11-24"), lateTaskKey("t1", "2026-11-24", 1));
+    assert.notEqual(lateTaskKey("t1", "2026-11-24"), lateTaskKey("t1", "2026-11-25"));
+  });
+  it("is told as a new job", () => {
+    assert.equal(carriedCopy("Send the drawings", "2026-11-25", "2026-11-24").message, "Send the drawings — tomorrow's job.");
+    assert.equal(carriedCopy("Send the drawings", "2026-11-25", "2026-11-25").message, "Send the drawings — today's job.");
+  });
+  it("moves the job in the runner, but never a routine's", () => {
+    const runner = read("src", "lib", "notifications", "task-cutoff-events.ts");
+    assert.match(runner, /if \(task\.routineId\) continue;/);
+    assert.match(runner, /where: \{ id: task\.id, endDay: dayKeyToDate\(dayKey\) \}/);
   });
 });

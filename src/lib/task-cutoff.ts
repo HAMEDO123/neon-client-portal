@@ -164,6 +164,43 @@ export function redeployDay(hours: WorkHours, todayKey: string) {
   return isWorkingDay(hours, todayKey) ? todayKey : nextWorkingDay(hours, todayKey);
 }
 
+/**
+ * From this day a job not handed in by 11:59 PM is charged its hour and then
+ * comes back on the next working day as a new job, not as a late one. The
+ * owner, 2026-11-24: "بدي اياه يرجع ينزل ثاني يوم مش late، ينزل زي كأنه انا
+ * نزلته". Each day it stays out is its own hour.
+ */
+export const CARRY_FROM = "2026-11-24";
+
+export function carriesOver(dayKey: string) {
+  return dayKey >= CARRY_FROM;
+}
+
+/** The day a job not handed in comes back: the next day the studio works. */
+export function carryDay(hours: WorkHours, dayKey: string) {
+  return nextWorkingDay(hours, dayKey);
+}
+
+/**
+ * The key a late job's charge is written under. From `CARRY_FROM` a job can be
+ * due — and late — on many days, so the key is the job and the day: once a day,
+ * however often the scheduler comes round. Days before it keep the old key, so
+ * nothing already charged is charged twice.
+ */
+export function lateTaskKey(taskId: string, dayKey: string, round = 0) {
+  return carriesOver(dayKey) ? `TASK:${taskId}:DAY:${dayKey}` : taskDedupe(taskId, round);
+}
+
+/** What the person is told when a job comes back: the words a new job is handed out with. */
+export function carriedCopy(title: string, dueKey: string, todayKey: string) {
+  return {
+    title: "New Task Assigned",
+    message: `${title} — ${dueKey === todayKey ? "today's job" : "tomorrow's job"}.`,
+  };
+}
+
+export const carriedKey = (taskId: string, dueKey: string) => `CARRIED:${taskId}:${dueKey}`;
+
 /** An hour of somebody's pay, to the fils, as payroll works it out. */
 export function hoursAsMoney(salaryAmount: number | null | undefined, basis: PayBasis, hours: number) {
   if (!Number.isFinite(hours) || hours <= 0) return 0;
