@@ -82,6 +82,24 @@ export function moveSpanTo(span: DaySpan, dropKey: string) {
   };
 }
 
+/**
+ * The week's jobs, one list per day: each job in the column of the day it is
+ * due (its last day), and in no other. The board draws a day's square as that
+ * list (2026-11-25: "make each day's task fall in the day's square") — a job
+ * drawn as a bar across several days pushed the next days' jobs down under it,
+ * and the bars were mostly jobs sent back, whose due day had moved on while
+ * their first day stayed. A job due outside the week is in none of them.
+ */
+export function byDueDay<T extends DaySpan>(spans: T[], weekKeys: string[]): T[][] {
+  const columns: T[][] = weekKeys.map(() => []);
+  const ordered = [...spans].sort((a, b) => daysBetween(b.startKey, a.startKey));
+  for (const item of ordered) {
+    const column = weekKeys.indexOf(item.endKey);
+    if (column !== -1) columns[column].push(item);
+  }
+  return columns;
+}
+
 /** Lays out overlapping jobs so none of them sit on top of another. */
 export function stackRows<T extends DaySpan>(spans: T[]): { item: T; row: number }[] {
   const ordered = [...spans].sort(

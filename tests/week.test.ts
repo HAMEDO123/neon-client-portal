@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  byDueDay,
   daysBetween,
   moveSpanTo,
   placeInWeek,
@@ -162,5 +163,23 @@ describe("dragging a job to another day", () => {
     const place = placeInWeek(moved, WEEK);
     assert.equal(place?.startColumn, 5);
     assert.equal(place?.span, 2);
+  });
+});
+
+describe("each day's square", () => {
+  it("holds a job on the day it is due, and only there", () => {
+    const sentBack = { id: "a", startKey: "2026-09-06", endKey: "2026-09-08" };
+    const oneDay = { id: "b", startKey: "2026-09-08", endKey: "2026-09-08" };
+    const days = byDueDay([sentBack, oneDay], WEEK);
+    assert.equal(days.length, 7);
+    assert.deepEqual(days[0], []);
+    assert.deepEqual(days[1], []);
+    assert.deepEqual(days[2].map((job) => job.id).sort(), ["a", "b"]);
+    assert.equal(days.flat().length, 2);
+  });
+
+  it("leaves out a job due in another week, even one that started in this one", () => {
+    const days = byDueDay([{ startKey: "2026-09-11", endKey: "2026-09-14" }, { startKey: "2026-09-01", endKey: "2026-09-05" }], WEEK);
+    assert.equal(days.flat().length, 0);
   });
 });

@@ -18,7 +18,7 @@ import {
   updateAssignedTask,
 } from "@/lib/actions/assigned-task-actions";
 import type { AssignedTaskView } from "@/lib/assigned-tasks";
-import { daysBetween, dayLabel, moveSpanTo, placeInWeek, stackRows, weekLabel } from "@/lib/week";
+import { byDueDay, daysBetween, dayLabel, weekLabel } from "@/lib/week";
 import { STATE_LABEL, dotTone } from "@/lib/task-board";
 import { StateBadge } from "@/components/ui/state-badge";
 import { PRIORITY_BAR } from "@/components/tasks/priority";
@@ -29,12 +29,13 @@ import { shownError } from "@/lib/refusal";
 
 // The week of work the manager hands out by hand.
 //
-// One row per person, one column per day, and a job is a bar across the days it
-// runs over — so "two days to go and negotiate" is two filled cells, and what
-// somebody's week already looks like is the first thing you see before adding
-// to it. Overlapping jobs stack rather than hiding each other.
+// One row per person, one column per day, and each job sits in the square of
+// the day it is due (`byDueDay`) — so what somebody's week already looks like
+// is the first thing you see before adding to it. Until 2026-11-25 a job was a
+// bar across every day it ran over, which pushed the next days' jobs down
+// under it; the owner asked for "each day's task in the day's square".
 //
-// Bars are draggable, sideways to another day and up or down onto somebody
+// Jobs are draggable, sideways to another day and up or down onto somebody
 // else. Rescheduling is the thing that happens most and it should cost one
 // gesture, not a dialog. Pointer events rather than HTML drag-and-drop, because
 // the manager is as likely to be doing this on a phone as at a desk.
@@ -51,12 +52,6 @@ type Drag = {
   started: boolean;
 };
 
-/** Whether `key` falls inside where the dragged job would land. */
-function isWithin(key: string, dropKey: string, task: AssignedTaskView) {
-  const length = daysBetween(task.startKey, task.endKey);
-  const offset = daysBetween(dropKey, key);
-  return offset >= 0 && offset <= length;
-}
 
 // Which of the week's jobs are drawn. "All" is the board as it always was.
 const WEEK_FILTERS: { key: TaskFilter; label: string }[] = [
@@ -200,7 +195,8 @@ export function WeekBoard({
       const target = dropped.target;
       if (!target) return;
 
-      const { days } = moveSpanTo(dropped.task, target.dayKey);
+      // Dropped on a day, it is due that day; its length comes with it.
+      const days = daysBetween(dropped.task.endKey, target.dayKey);
       if (days === 0 && target.employeeId === dropped.task.employeeId) return;
 
       setMoved((current) => ({
@@ -315,8 +311,7 @@ export function WeekBoard({
           ) : (
             team.map((member) => {
               const mine = byEmployee.get(member.id) ?? [];
-              const placed = stackRows(mine);
-              const rows = Math.max(1, placed.length ? Math.max(...placed.map((p) => p.row)) + 1 : 1);
+              const days = byDueDay(mine, weekKeys);
 
               return (
                 <div
@@ -340,84 +335,78 @@ export function WeekBoard({
                     </span>
                   </div>
 
-                  {/* The days, and the bars laid over them. */}
-                  <div className="relative col-span-7 grid grid-cols-7">
-                    {weekKeys.map((key) => (
-                      <button
+                  {/* The days, each with its own jobs in it. */}
+                  <div className="col-span-7 grid grid-cols-7">
+                    {weekKeys.map((key, column) => (
+                      <div
                         key={key}
-                        type="button"
                         data-day-column={key}
-                        onClick={() => setAdding({ employeeId: member.id, dayKey: key })}
-                        aria-label={`Add a task for ${member.name} on ${key}`}
                         className={cn(
-                          "group/day border-l border-ink/6 transition-colors hover:bg-cyan/[0.06]",
+                          "group/day relative flex min-h-[3.5rem] min-w-0 flex-col gap-1.5 border-l border-ink/6 p-1 transition-colors hover:bg-cyan/[0.06]",
                           key === todayKey && "bg-cyan/[0.04]",
-                          // Where the bar being dragged would land.
-                          drag?.started &&
-                            drag.target?.employeeId === member.id &&
-                            isWithin(key, drag.target.dayKey, drag.task) &&
-                            "bg-cyan/20"
+                          // Where the job being dragged would land.
+                          drag?.started && drag.target?.employeeId === member.id && drag.target.dayKey === key && "bg-cyan/20"
                         )}
-                        style={{ minHeight: `${rows * 2.25 + 1.25}rem` }}
                       >
-                        <CalendarPlus
-                          size={13}
-                          strokeWidth={2}
-                          className="mx-auto text-ink/0 transition-colors group-hover/day:text-ink/25"
-                        />
-                      </button>
-                    ))}
+                        {days[column].map((item) => {
+                          const done = item.state === "DONE";
+                          const dragging = drag?.started && drag.task.id === item.id;
+                          const first = dayLabel(item.startKey);
+                          const from = item.startKey !== item.endKey ? `From ${first.day} ${first.month} · ` : "";
 
-                    {placed.map(({ item, row }) => {
-                      const place = placeInWeek(item, weekKeys);
-                      if (!place) return null;
-                      const done = item.state === "DONE";
-                      const dragging = drag?.started && drag.task.id === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onPointerDown={(event) => beginDrag(item, event)}
+                              title={
+                                from +
+                                (item.state === "IN_PROGRESS"
+                                  ? `${item.title} — ${member.name} is working on this now`
+                                  : item.state === "SUBMITTED"
+                                    ? `${item.title} — ${member.name} sent a photo, waiting for your review`
+                                    : (item.note ?? `${item.title} — drag to another day or person`))
+                              }
+                              className={cn(
+                                "relative flex h-[1.875rem] w-full shrink-0 touch-none items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-left text-[11px] font-medium",
+                                PRIORITY_BAR[item.priority],
+                                // Being worked on right now, whatever its priority.
+                                item.state === "IN_PROGRESS" && "ring-1 ring-cyan-strong/60",
+                                done && "opacity-55",
+                                dragging
+                                  ? "z-20 cursor-grabbing shadow-lg ring-2 ring-cyan/40"
+                                  : "cursor-grab transition-transform active:scale-[0.99]"
+                              )}
+                              style={{ transform: dragging ? `translate(${drag!.dx}px, ${drag!.dy}px)` : undefined }}
+                            >
+                              <GripVertical size={11} strokeWidth={2} className="-ml-1 shrink-0 opacity-40" />
+                              {/* Where the job stands, in the board's own marks; one not started carries none. */}
+                              {item.state !== "TODO" && (
+                                <>
+                                  <StateBadge state={item.state} size="bar" />
+                                  <span className="sr-only">{STATE_LABEL[item.state]}: </span>
+                                </>
+                              )}
+                              <span dir="auto" className={cn("min-w-0 flex-1 truncate text-start", done && "line-through")}>{item.title}</span>
+                            </button>
+                          );
+                        })}
 
-                      return (
+                        {/* The rest of the square adds a job on this day. */}
                         <button
-                          key={item.id}
                           type="button"
-                          onPointerDown={(event) => beginDrag(item, event)}
-                          title={
-                            item.state === "IN_PROGRESS"
-                              ? `${item.title} — ${member.name} is working on this now`
-                              : item.state === "SUBMITTED"
-                                ? `${item.title} — ${member.name} sent a photo, waiting for your review`
-                                : (item.note ?? `${item.title} — drag to another day or person`)
-                          }
-                          className={cn(
-                            "absolute flex touch-none items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-left text-[11px] font-medium",
-                            PRIORITY_BAR[item.priority],
-                            // Being worked on right now, whatever its priority.
-                            item.state === "IN_PROGRESS" && "ring-1 ring-cyan-strong/60",
-                            done && "opacity-55",
-                            place.continuesBefore && "rounded-l-none",
-                            place.continuesAfter && "rounded-r-none",
-                            dragging
-                              ? "z-20 cursor-grabbing shadow-lg ring-2 ring-cyan/40"
-                              : "cursor-grab transition-transform active:scale-[0.99]"
-                          )}
-                          style={{
-                            left: `calc(${(place.startColumn / 7) * 100}% + 3px)`,
-                            width: `calc(${(place.span / 7) * 100}% - 6px)`,
-                            top: `${row * 2.25 + 0.375}rem`,
-                            height: "1.875rem",
-                            transform: dragging ? `translate(${drag!.dx}px, ${drag!.dy}px)` : undefined,
-                          }}
+                          onClick={() => setAdding({ employeeId: member.id, dayKey: key })}
+                          aria-label={`Add a task for ${member.name} on ${key}`}
+                          className="flex min-h-[1.5rem] flex-1 items-center justify-center rounded-md"
                         >
-                          <GripVertical size={11} strokeWidth={2} className="-ml-1 shrink-0 opacity-40" />
-                          {/* Where the job stands, in the board's own marks; one not started carries none. */}
-                          {item.state !== "TODO" && (
-                            <>
-                              <StateBadge state={item.state} size="bar" />
-                              <span className="sr-only">{STATE_LABEL[item.state]}: </span>
-                            </>
-                          )}
-                          <span className={cn("truncate", done && "line-through")}>{item.title}</span>
+                          <CalendarPlus
+                            size={13}
+                            strokeWidth={2}
+                            className="text-ink/0 transition-colors group-hover/day:text-ink/25"
+                          />
                         </button>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
@@ -427,8 +416,8 @@ export function WeekBoard({
       </div>
 
       <p className="text-xs text-ink/40">
-        Click any day to give someone a job. Drag a bar sideways to move it to another day, or up and down to hand it
-        to somebody else — the job keeps its length. Click one to change it.
+        Each job sits on the day it is due. Click any day to give someone a job. Drag one sideways to make it due
+        another day, or up and down to hand it to somebody else. Click one to change it.
       </p>
 
       {(adding || editing) && (
