@@ -1,6 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { addOnPublish } from "@/lib/portfolio-store";
+import { PORTFOLIO_PATH } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { requireAdmin, requireStaff } from "@/lib/admin-guard";
 import { refreshProject, refreshProjectLists } from "@/lib/project-paths";
@@ -145,6 +148,19 @@ export async function updateProjectSettings(id: string, formData: FormData) {
 export async function setPublishState(id: string, state: PublishState) {
   await requireStaff();
   await prisma.project.update({ where: { id }, data: { publishState: state } });
+  // Published is on the public portfolio too, the first time (lib/portfolio.ts).
+  // The project is published either way: a portfolio that could not be written
+  // to is no reason to refuse that.
+  if (state === "PUBLISHED") {
+    try {
+      if (await addOnPublish(id)) {
+        revalidatePath(PORTFOLIO_PATH, "layout");
+        revalidatePath("/admin/portfolio");
+      }
+    } catch (cause) {
+      console.error("[portfolio] could not add a published project", id, cause);
+    }
+  }
   refresh(id);
 }
 

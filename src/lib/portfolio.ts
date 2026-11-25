@@ -65,6 +65,86 @@ export type PortfolioProject = {
   watermark: boolean;
 };
 
+/** How many photos a project shows when none were ticked by hand. */
+export const AUTO_PHOTOS = 12;
+
+/**
+ * What a word in a project's kind or name says it is — read for the category
+ * and the public title of a project published straight onto the portfolio
+ * (2026-11-25: "as i upload new projects it should appear automatically … when
+ * i press the publish button"). The word found is never shown; its English
+ * title is, so a project named after its client says "Villa", not the name.
+ */
+const KINDS: { words: RegExp; category: PortfolioCategory; title: string }[] = [
+  { words: /caf[eé]|coffee|كافي|كوفي|مقهى|قهوة/i, category: "hospitality", title: "Café" },
+  { words: /restaurant|bistro|bakery|مطعم|مخبز/i, category: "hospitality", title: "Restaurant" },
+  { words: /dental|clinic|عيادة|طبي/i, category: "commercial", title: "Clinic" },
+  { words: /beauty|salon|saloon|spa\b|صالون|تجميل/i, category: "commercial", title: "Salon" },
+  { words: /shop|store|showroom|boutique|retail|محل|معرض|متجر/i, category: "commercial", title: "Shop" },
+  { words: /office|workspace|company|مكتب|مكاتب|شركة/i, category: "offices", title: "Office" },
+  { words: /villa|فيلا|فلة/i, category: "residential", title: "Villa" },
+  { words: /apartment|flat|شقة/i, category: "residential", title: "Apartment" },
+  { words: /bedroom|غرفة نوم/i, category: "residential", title: "Bedroom" },
+  { words: /house|home|residence|room|منزل|بيت|غرفة|قصر/i, category: "residential", title: "Residence" },
+];
+
+const GENERIC_KIND = /^\s*interior(\s+design(ing)?)?(\s+project)?\s*$/i;
+
+/**
+ * The portfolio's first guess at a newly published project: a category, a
+ * place and a title — each only a starting point the manager can change.
+ *
+ * - The category and the title come from words in the kind of project or its
+ *   name, never from the name itself.
+ * - A kind that says something ("Dental clinic") is the title; "Interior
+ *   design" says nothing, so the word found in the name is, and failing that
+ *   "Interior project".
+ * - The place is the first part of the project's location ("Amman, North JU"
+ *   is "Amman"), so a street or a building does not reach the public.
+ */
+export function firstGuess(project: { name: string; projectType: string | null; location: string | null }) {
+  const kind = clean(project.projectType);
+  const said = `${kind ?? ""} ${project.name}`;
+  const found = KINDS.find((entry) => entry.words.test(said)) ?? null;
+  const place = placeOf(project.location);
+  const what = kind && !GENERIC_KIND.test(kind) ? capitalised(kind) : (found?.title ?? "Interior project");
+  return {
+    category: found?.category ?? null,
+    place,
+    title: place ? `${what} — ${place}` : what,
+  };
+}
+
+/** The first part of a location, written as a place: "AMMAN" and "salt" are Amman and Salt. */
+export function placeOf(location: string | null) {
+  const first = clean((location ?? "").split(/[,،\-–—/(]/)[0]);
+  if (!first) return null;
+  const words = first.slice(0, 40);
+  return /^[a-z\s.']+$/i.test(words) && (words === words.toUpperCase() || words === words.toLowerCase())
+    ? words.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : words;
+}
+
+function capitalised(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * The photos shown when none were ticked: up to `most`, taken a room at a
+ * time — the first of each room, then the second of each — so they range over
+ * the whole project rather than filling up from its first room. Being worked
+ * out on every read, photos uploaded after publishing join in by themselves.
+ */
+export function autoPick<T>(rooms: T[][], most = AUTO_PHOTOS) {
+  const picked: T[] = [];
+  for (let round = 0; picked.length < most && rooms.some((room) => room.length > round); round++) {
+    for (const room of rooms) {
+      if (room.length > round && picked.length < most) picked.push(room[round]);
+    }
+  }
+  return picked;
+}
+
 /** A project as the store reads it: only the fields the public may see. */
 export type PortfolioRow = {
   id: string;
@@ -76,7 +156,7 @@ export type PortfolioRow = {
   projectType: string | null;
   area: string | null;
   watermarkEnabled: boolean;
-  spaces: { images: { id: string; imageUrl: string; caption: string | null }[] }[];
+  spaces: { images: { id: string; imageUrl: string; caption: string | null; inPortfolio: boolean }[] }[];
 };
 
 const clean = (text: string | null | undefined) => {
@@ -93,9 +173,10 @@ const clean = (text: string | null | undefined) => {
  * project, and without that, "Interior project".
  */
 export function toPortfolioProject(row: PortfolioRow): PortfolioProject | null {
-  const photos = row.spaces.flatMap((space) =>
-    space.images.map((image) => ({ id: image.id, url: image.imageUrl, caption: clean(image.caption) }))
-  );
+  // The ones ticked by hand, or — with none ticked — a choice made here.
+  const ticked = row.spaces.map((space) => space.images.filter((image) => image.inPortfolio));
+  const chosen = ticked.some((room) => room.length > 0) ? ticked.flat() : autoPick(row.spaces.map((space) => space.images));
+  const photos = chosen.map((image) => ({ id: image.id, url: image.imageUrl, caption: clean(image.caption) }));
   if (photos.length === 0) return null;
 
   return {

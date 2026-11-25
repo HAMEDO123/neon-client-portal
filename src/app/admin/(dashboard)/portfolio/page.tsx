@@ -50,8 +50,8 @@ export default async function PortfolioAdminPage() {
       <div>
         <h1 className="text-2xl font-semibold text-ink">Portfolio</h1>
         <p className="mt-1 text-sm text-ink/55">
-          A public page of the work you choose, to send to people thinking of hiring NEON. Clients&apos; names, phones and prices never
-          appear on it.
+          A public page of the work you choose, to send to people thinking of hiring NEON. A project goes on it by itself the first
+          time it is published. Clients&apos; names, phones and prices never appear on it.
         </p>
       </div>
 
@@ -72,7 +72,7 @@ export default async function PortfolioAdminPage() {
                   <div className="truncate text-sm font-semibold text-ink">{row.portfolioTitle || "(no title)"}</div>
                   <div className="truncate text-xs text-ink/50">
                     {row.name} · {row.picked} photo{row.picked === 1 ? "" : "s"}
-                    {row.picked === 0 && <span className="text-red-700"> — not shown until a photo is ticked</span>}
+                    {row.picked === 0 && " — chosen for you"}
                   </div>
                 </div>
                 <form className="flex items-center gap-1">

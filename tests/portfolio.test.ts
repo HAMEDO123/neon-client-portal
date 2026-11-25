@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { areaOf, categoriesIn, wideAt, categoryOf, coverOf, moved, toPortfolioProject, whatsappLink, type PortfolioRow } from "../src/lib/portfolio";
+import { autoPick, firstGuess, placeOf, areaOf, categoriesIn, wideAt, categoryOf, coverOf, moved, toPortfolioProject, whatsappLink, type PortfolioRow } from "../src/lib/portfolio";
 
 // The public portfolio (/work), asked for on 2026-11-25: one link to send a
 // would-be client, showing the projects and photos the manager picks.
@@ -20,9 +20,9 @@ const row = (over: Partial<PortfolioRow> = {}): PortfolioRow => ({
   area: "450 m²",
   watermarkEnabled: false,
   spaces: [
-    { name: "Living", images: [{ id: "a", imageUrl: "https://x/a.jpg", caption: null }, { id: "b", imageUrl: "https://x/b.jpg", caption: " Sofa " }] },
+    { name: "Living", images: [{ id: "a", imageUrl: "https://x/a.jpg", caption: null, inPortfolio: true }, { id: "b", imageUrl: "https://x/b.jpg", caption: " Sofa ", inPortfolio: true }] },
     { name: "Empty", images: [] },
-    { name: "Kitchen", images: [{ id: "c", imageUrl: "https://x/c.jpg", caption: null }] },
+    { name: "Kitchen", images: [{ id: "c", imageUrl: "https://x/c.jpg", caption: null, inPortfolio: true }] },
   ] as unknown as PortfolioRow["spaces"], // named as the studio names them, to show the names go nowhere
   ...over,
 });
@@ -50,6 +50,66 @@ describe("what the public sees of a project", () => {
     assert.equal(toPortfolioProject(row({ portfolioCoverId: "c" }))!.cover, "https://x/c.jpg");
     assert.equal(toPortfolioProject(row({ portfolioCoverId: "gone" }))!.cover, "https://x/a.jpg");
     assert.equal(coverOf([{ id: "a", url: "u", caption: null }], null).id, "a");
+  });
+});
+
+describe("a project published straight onto the portfolio", () => {
+  it("is named by what it is, never by its name", () => {
+    assert.deepEqual(firstGuess({ name: "فيلا السيد النابلسي", projectType: "Interior design", location: "salt" }), {
+      category: "residential",
+      place: "Salt",
+      title: "Villa — Salt",
+    });
+    const named = firstGuess({ name: "Villa zaareer", projectType: "Interior Design", location: "AMMAN" });
+    assert.equal(named.title, "Villa — Amman");
+    assert.ok(!named.title.includes("zaareer"));
+  });
+  it("takes a kind that says something as its title", () => {
+    assert.deepEqual(firstGuess({ name: "Hala and Farrah", projectType: "Dental clinic", location: "Amman" }), {
+      category: "commercial",
+      place: "Amman",
+      title: "Dental clinic — Amman",
+    });
+    assert.equal(firstGuess({ name: "Watin Cafe", projectType: "Interior design", location: "Amman, North JU" }).title, "Café — Amman");
+    assert.equal(firstGuess({ name: "مكتب المحامي", projectType: null, location: null }).title, "Office");
+  });
+  it("is an interior project when nothing says more", () => {
+    assert.deepEqual(firstGuess({ name: "ARGON", projectType: "Interior Design", location: "" }), {
+      category: null,
+      place: null,
+      title: "Interior project",
+    });
+  });
+  it("keeps only the area of a location", () => {
+    assert.equal(placeOf("Abdoun, street 5, building 12"), "Abdoun");
+    assert.equal(placeOf("الصويفية"), "الصويفية");
+    assert.equal(placeOf("  "), null);
+  });
+});
+
+describe("photos with none ticked", () => {
+  it("are chosen a room at a time, up to twelve", () => {
+    assert.deepEqual(autoPick([["a1", "a2", "a3"], ["b1"], ["c1", "c2"]], 5), ["a1", "b1", "c1", "a2", "c2"]);
+    assert.equal(autoPick([Array.from({ length: 40 }, (_, i) => i)]).length, 12);
+    assert.deepEqual(autoPick([[], []]), []);
+  });
+  it("are used only while nothing is ticked", () => {
+    const untouched = row({
+      spaces: [
+        { images: [{ id: "a", imageUrl: "u", caption: null, inPortfolio: false }] },
+        { images: [{ id: "b", imageUrl: "v", caption: null, inPortfolio: false }] },
+      ],
+    });
+    assert.deepEqual(toPortfolioProject(untouched)!.photos.map((photo) => photo.id), ["a", "b"]);
+    const picked = row({
+      spaces: [{ images: [{ id: "a", imageUrl: "u", caption: null, inPortfolio: false }, { id: "b", imageUrl: "v", caption: null, inPortfolio: true }] }],
+    });
+    assert.deepEqual(toPortfolioProject(picked)!.photos.map((photo) => photo.id), ["b"]);
+  });
+  it("is added on publishing, once, and never fails the publish", () => {
+    const publish = read("src", "lib", "actions", "project-actions.ts");
+    assert.match(publish, /if \(state === "PUBLISHED"\) \{\n\s+try \{\n\s+if \(await addOnPublish\(id\)\)/);
+    assert.match(read("src", "lib", "portfolio-store.ts"), /where: \{ id: projectId, portfolioAddedAt: null \}/);
   });
 });
 
@@ -108,8 +168,9 @@ describe("the order", () => {
 });
 
 describe("nothing of the client's reaches the public page", () => {
-  // The code, without its comments, which name the client's fields to say why they are left out.
-  const store = read("src", "lib", "portfolio-store.ts").replace(/^\s*\/\/.*$/gm, "");
+  // What the public pages read: the store's PUBLIC_FIELDS, without its comments.
+  const whole = read("src", "lib", "portfolio-store.ts");
+  const store = whole.slice(whole.indexOf("const PUBLIC_FIELDS"), whole.indexOf("} as const;")).replace(/^\s*\/\/.*$/gm, "");
   it("names every field it reads", () => {
     assert.doesNotMatch(store, /include:/);
     assert.doesNotMatch(store, /name: true/, "neither the project's name nor a room's");
@@ -117,10 +178,9 @@ describe("nothing of the client's reaches the public page", () => {
       assert.ok(!store.includes(field), `portfolio-store.ts must not read ${field}`);
     }
   });
-  it("reads only ticked photos of shown projects", () => {
-    assert.match(store, /where: \{ inPortfolio: true \}/);
-    assert.match(store, /where: \{ portfolioShown: true \}/);
-    assert.match(store, /where: \{ id, portfolioShown: true \}/);
+  it("reads only shown projects", () => {
+    assert.match(whole, /where: \{ portfolioShown: true \}/);
+    assert.match(whole, /where: \{ id, portfolioShown: true \}/);
   });
   it("keeps the pages out of search engines", () => {
     for (const page of [read("src", "app", "work", "page.tsx"), read("src", "app", "work", "[id]", "page.tsx")]) {

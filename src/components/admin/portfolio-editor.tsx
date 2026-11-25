@@ -143,7 +143,9 @@ export function PortfolioEditor({
         <div className="flex flex-wrap items-center gap-3">
           <h3 className="text-base font-semibold text-ink">Photos</h3>
           <span className="text-sm text-ink/55">
-            {picked.size} ticked · tap a photo to tick it, the star makes it the cover
+            {picked.size === 0
+              ? "None ticked — the portfolio shows 12 from across the rooms by itself, new uploads included"
+              : `${picked.size} ticked · tap a photo to tick it, the star makes it the cover`}
           </span>
           <button type="button" onClick={() => setPicked(new Set())} className="ms-auto text-sm font-medium text-cyan-700 underline">
             Clear

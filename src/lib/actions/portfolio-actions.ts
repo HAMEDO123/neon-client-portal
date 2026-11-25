@@ -38,9 +38,8 @@ export async function savePortfolio(projectId: string, _before: PortfolioResult,
   const cover = String(form.get("cover") ?? "") || null;
 
   if (shown && !title) return { ok: false, message: "Write the title clients will see before showing it." };
-  if (shown && picked.length === 0) return { ok: false, message: "Tick at least one photo before showing it." };
 
-  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { portfolioShown: true } });
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { portfolioShown: true, portfolioAddedAt: true } });
   if (!project) return { ok: false, message: "That project is gone." };
 
   // A newly shown project goes to the end of the list.
@@ -65,6 +64,8 @@ export async function savePortfolio(projectId: string, _before: PortfolioResult,
         portfolioCategory: category,
         portfolioCoverId: cover && picked.includes(cover) ? cover : null,
         ...(order === undefined ? {} : { portfolioOrder: order }),
+        // Shown by hand counts as added: publishing it later changes nothing.
+        ...(shown && !project.portfolioAddedAt ? { portfolioAddedAt: new Date() } : {}),
       },
     }),
   ]);
@@ -72,7 +73,11 @@ export async function savePortfolio(projectId: string, _before: PortfolioResult,
   refresh(projectId);
   return {
     ok: true,
-    message: shown ? `Saved. It's on the portfolio with ${picked.length} photo${picked.length === 1 ? "" : "s"}.` : "Saved. It isn't on the portfolio.",
+    message: !shown
+      ? "Saved. It isn't on the portfolio."
+      : picked.length === 0
+        ? "Saved. It's on the portfolio, with photos chosen for you."
+        : `Saved. It's on the portfolio with ${picked.length} photo${picked.length === 1 ? "" : "s"}.`,
   };
 }
 

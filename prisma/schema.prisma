@@ -247,6 +247,10 @@ model Project {
   portfolioOrder   Int     @default(0)
   /// A GalleryImage of this project; the first ticked photo when unset.
   portfolioCoverId String?
+  /// When it first went on the portfolio, by hand or by being published
+  /// (lib/portfolio.ts). Publishing adds a project only while this is empty, so
+  /// one the manager took off does not come back on the next publish.
+  portfolioAddedAt DateTime?
 
   publishState      PublishState   @default(DRAFT)
   pipelineStatus    PipelineStatus @default(DRAFT)
