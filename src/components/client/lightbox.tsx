@@ -144,7 +144,7 @@ export function Lightbox({
         >
           {!immersive && (
             <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
-              <span className="text-xs font-medium text-white/60">
+              <span dir="ltr" className="text-xs font-medium text-white/60">
                 {index !== null ? index + 1 : 0} / {images.length}
               </span>
               <div className="flex items-center gap-1.5">

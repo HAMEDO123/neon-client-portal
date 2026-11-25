@@ -232,6 +232,22 @@ model Project {
   soldBy   Employee? @relation("ProjectSoldBy", fields: [soldById], references: [id], onDelete: SetNull)
   soldOn   DateTime? @db.Date
 
+  // The studio's public portfolio (/work, lib/portfolio.ts), asked for on
+  // 2026-11-25: one link to send a would-be client, showing the projects the
+  // manager picks. Nothing of the client's goes there: not their name, phone,
+  // prices or drawings — only the photos ticked `inPortfolio`, under a title
+  // written for the public.
+  portfolioShown   Boolean @default(false)
+  portfolioTitle   String?
+  portfolioNote    String? @db.Text
+  /// One of PORTFOLIO_CATEGORIES (lib/portfolio.ts): what the public filters by.
+  portfolioCategory String?
+  /// Where it is, as the public may read it ("Dabouq, Amman").
+  portfolioPlace   String?
+  portfolioOrder   Int     @default(0)
+  /// A GalleryImage of this project; the first ticked photo when unset.
+  portfolioCoverId String?
+
   publishState      PublishState   @default(DRAFT)
   pipelineStatus    PipelineStatus @default(DRAFT)
   currentStage      ProjectStage   @default(CONCEPT)
@@ -264,6 +280,7 @@ model Project {
   siteVisits   SiteVisit[]
 
   @@index([soldById, soldOn])
+  @@index([portfolioShown, portfolioOrder])
 }
 
 model GallerySpace {
@@ -288,6 +305,8 @@ model GalleryImage {
   beforeImageUrl String?
   order          Int      @default(0)
   createdAt      DateTime @default(now())
+  /// Shown on the public portfolio when the project is (Project.portfolioShown).
+  inPortfolio    Boolean  @default(false)
 
   hotspots ImageHotspot[]
 }

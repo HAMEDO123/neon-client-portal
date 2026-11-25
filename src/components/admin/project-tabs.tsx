@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 // `portal` is which portals a tab belongs to. All but one are both.
-const TABS: { key: string; label: string; only?: "/employee" }[] = [
+const TABS: { key: string; label: string; only?: "/employee" | "/admin" }[] = [
   { key: "", label: "Overview" },
   // The team's own steps on this project — where a step of the delivery
   // process is now read, since the studio asked for them out of the task list
@@ -24,6 +24,8 @@ const TABS: { key: string; label: string; only?: "/employee" }[] = [
   { key: "approvals", label: "Approvals" },
   { key: "comments", label: "Comments" },
   { key: "analytics", label: "Analytics" },
+  // What goes on the public portfolio (lib/portfolio.ts) — the manager's choice.
+  { key: "portfolio", label: "Portfolio", only: "/admin" },
 ];
 
 export function ProjectTabs({
