@@ -27,6 +27,14 @@ const AR: Record<string, string> = {
   "Project Sections": "أقسام المشروع",
   "Close Menu": "إغلاق القائمة",
 
+  // The gallery PDF button (components/client/gallery-pdf-button.tsx)
+  "Preparing your PDF…": "جاري تجهيز ملف PDF…",
+  "A large gallery can take up to a minute.": "المعرض الكبير قد يحتاج حتى دقيقة.",
+  "Save the PDF": "احفظ ملف PDF",
+  "Open the PDF": "افتح ملف PDF",
+  "Downloaded": "تم التنزيل",
+  "The PDF couldn't be made. Try again.": "تعذّر تجهيز الملف. حاول مرة أخرى.",
+
   // The public portfolio (/work, lib/portfolio.ts)
   "Projects": "المشاريع",
   "Contact us": "تواصل معنا",

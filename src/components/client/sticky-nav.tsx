@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/client-i18n";
 
@@ -10,6 +9,12 @@ export interface NavItem {
   label: string;
 }
 
+// The project's sections as one bar at the top of the screen, on a phone as on
+// a desk. A phone had a "Project Sections" button floating at the foot of the
+// screen instead, over whatever the client was reading (2026-11-25: "it covers
+// whats behind it, make it like the desktop view on the top of the page"). On a
+// phone the bar is the row of sections alone, scrolled sideways, and stops short
+// of the language button in the corner.
 export function StickyNav({ items, projectName }: { items: NavItem[]; projectName: string }) {
   const { t } = useI18n();
   const [active, setActive] = useState(items[0]?.key ?? "");
@@ -54,9 +59,9 @@ export function StickyNav({ items, projectName }: { items: NavItem[]; projectNam
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-x-0 top-0 z-40 hidden sm:block">
-      <nav className="glass-strong mx-auto mt-4 flex max-w-fit items-center gap-1 rounded-full px-2 py-2">
-        <span className="px-3 text-xs font-semibold uppercase tracking-wider text-ink/40">{projectName}</span>
+    <div className="fixed inset-x-0 top-0 z-40">
+      <nav className="glass-strong ms-3 me-32 mt-3 flex items-center gap-1 rounded-full px-1.5 py-1.5 sm:mx-auto sm:mt-4 sm:max-w-fit sm:px-2 sm:py-2">
+        <span className="hidden px-3 text-xs font-semibold uppercase tracking-wider text-ink/40 sm:inline">{projectName}</span>
         <div ref={railRef} className="scrollbar-none flex items-center gap-1 overflow-x-auto">
           {items.map((item) => (
             <button
@@ -73,51 +78,6 @@ export function StickyNav({ items, projectName }: { items: NavItem[]; projectNam
           ))}
         </div>
       </nav>
-    </div>
-  );
-}
-
-export function MobileNav({ items }: { items: NavItem[] }) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setVisible(window.scrollY > window.innerHeight * 0.6);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  function go(key: string) {
-    document.getElementById(key)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setOpen(false);
-  }
-
-  if (!visible) return null;
-
-  return (
-    <div className="fixed inset-x-4 bottom-4 z-40 sm:hidden">
-      {open && (
-        <div className="glass-strong mb-2 flex max-h-64 flex-col gap-1 overflow-y-auto rounded-2xl p-2">
-          {items.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => go(item.key)}
-              className="rounded-xl px-3 py-2.5 text-start text-sm font-medium text-ink/70 hover:bg-ink/5"
-            >
-              {t(item.label)}
-            </button>
-          ))}
-        </div>
-      )}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="glass-strong flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-sm font-medium text-ink shadow-lg"
-      >
-        {open ? <X size={16} /> : <Menu size={16} />}
-        {open ? t("Close Menu") : t("Project Sections")}
-      </button>
     </div>
   );
 }

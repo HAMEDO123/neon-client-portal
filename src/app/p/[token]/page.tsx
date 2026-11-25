@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getProjectByToken } from "@/lib/queries";
 import { logActivity } from "@/lib/activity";
-import { StickyNav, MobileNav, type NavItem } from "@/components/client/sticky-nav";
+import { StickyNav, type NavItem } from "@/components/client/sticky-nav";
 import { WelcomeOverlay } from "@/components/client/welcome-overlay";
 import { Hero } from "@/components/client/hero";
 import { OverviewSection } from "@/components/client/overview-section";
@@ -98,7 +98,6 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
       <LanguageToggle />
       <WelcomeOverlay projectName={project.name} />
       <StickyNav items={navItems} projectName={project.name} />
-      <MobileNav items={navItems} />
       <ShareFab projectName={project.name} />
 
       <Hero

@@ -8,10 +8,11 @@ import { buildGalleryPdf, pdfDownload } from "@/lib/gallery-pdf";
 // document itself is lib/gallery-pdf.ts, shared with the manager's screen.
 
 export const dynamic = "force-dynamic";
-// Rendering every image can take a while on a large gallery.
+// Rendering every image can take a while on a large gallery; once made, it is
+// kept (lib/gallery-pdf-cache.ts).
 export const maxDuration = 60;
 
-export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
 
   const project = await prisma.project.findUnique({
@@ -34,5 +35,7 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   }
 
   await logActivity(project.id, "downloaded_gallery_pdf", `${built.totalImages} renders`);
-  return pdfDownload(built.bytes, built.filename);
+  // `?inline=1` is the page's "Open the PDF": shown in the browser, for a phone
+  // whose browser will not save a file (components/client/gallery-pdf-button.tsx).
+  return pdfDownload(built.bytes, built.filename, new URL(request.url).searchParams.get("inline") === "1");
 }

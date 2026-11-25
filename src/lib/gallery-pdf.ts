@@ -3,6 +3,7 @@ import path from "path";
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFPage, type PDFFont, type RGB } from "pdf-lib";
 import sharp from "sharp";
 import { formatDate } from "@/lib/format";
+import { cachedPdf, inParallel, pdfCacheKey } from "@/lib/gallery-pdf-cache";
 
 // The gallery as one PDF: a cover made of the studio's own render, then one
 // page per render with its room and caption.
@@ -160,7 +161,9 @@ async function loadImage(url: string): Promise<Buffer | null> {
     return await sharp(raw)
       .rotate()
       .resize({ width: MAX_IMAGE_EDGE, height: MAX_IMAGE_EDGE, fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 82, mozjpeg: true })
+      // 78 rather than 82: a quarter smaller, which a phone downloading
+      // hundreds of renders feels, and the difference does not show on a page.
+      .jpeg({ quality: 78, mozjpeg: true })
       .toBuffer();
   } catch {
     // One unreadable image must not cost the client the whole document.
@@ -253,6 +256,37 @@ export async function buildGalleryPdf(
   const spaces = allSpaces.filter((space) => space.images.length > 0);
   if (spaces.length === 0) return null;
   const watermark = options.watermark ?? project.watermarkEnabled;
+  const totalImages = spaces.reduce((sum, space) => sum + space.images.length, 0);
+
+  // Made once and kept (lib/gallery-pdf-cache.ts): the key is everything the
+  // document prints, the day included, because the cover says when.
+  const key = pdfCacheKey({
+    v: 2,
+    day: formatDate(new Date()),
+    watermark,
+    project: [project.name, project.clientName, project.location, project.projectType, project.coverImageUrl],
+    spaces: spaces.map((space) => [space.name, space.images.map((image) => [image.imageUrl, image.caption])]),
+  });
+  const bytes = await cachedPdf(key, () => renderGalleryPdf(project, spaces, watermark, totalImages));
+  return { bytes, totalImages, filename: galleryFilename(project.name) };
+}
+
+function galleryFilename(name: string) {
+  return `${name.replace(/[^a-zA-Z0-9-_ ]/g, "").trim() || "project"} - Gallery.pdf`;
+}
+
+async function renderGalleryPdf(
+  project: GalleryPdfProject,
+  spaces: GalleryPdfSpace[],
+  watermark: boolean,
+  totalImages: number
+): Promise<Uint8Array> {
+  // Every render fetched and shrunk first, several at a time — one after
+  // another, 239 of them took 89 seconds, past the 100 Cloudflare allows — and
+  // then laid out in order.
+  const flat = spaces.flatMap((space) => space.images);
+  const loaded = await inParallel(flat, 8, (image) => loadImage(image.imageUrl));
+  const buffers = new Map(flat.map((image, index) => [image, loaded[index]]));
 
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${project.name} — Design Gallery`);
@@ -268,7 +302,6 @@ export async function buildGalleryPdf(
   // The studio's own render, darkened, with the facts written across the foot.
   // A gallery is a thing a client forwards to other people, and this is the
   // page they see before any of the work.
-  const totalImages = spaces.reduce((sum, space) => sum + space.images.length, 0);
   const cover = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
   // The cover image the studio chose, else the first render. A project that
@@ -352,7 +385,7 @@ export async function buildGalleryPdf(
 
   for (const space of spaces) {
     for (const image of space.images) {
-      const buffer = await loadImage(image.imageUrl);
+      const buffer = buffers.get(image);
       if (!buffer) continue;
 
       const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -411,17 +444,15 @@ export async function buildGalleryPdf(
     }
   }
 
-  const bytes = await pdf.save();
-  const filename = `${project.name.replace(/[^a-zA-Z0-9-_ ]/g, "").trim() || "project"} - Gallery.pdf`;
-  return { bytes, totalImages, filename };
+  return pdf.save();
 }
 
-/** The finished document as a download. */
-export function pdfDownload(bytes: Uint8Array, filename: string) {
+/** The finished document as a download — or, `inline`, to be shown in the browser. */
+export function pdfDownload(bytes: Uint8Array, filename: string, inline = false) {
   return new Response(Buffer.from(bytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${filename}"`,
       "Cache-Control": "no-store",
     },
   });
