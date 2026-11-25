@@ -24,8 +24,8 @@ const TABS: { key: string; label: string; only?: "/employee" | "/admin" }[] = [
   { key: "approvals", label: "Approvals" },
   { key: "comments", label: "Comments" },
   { key: "analytics", label: "Analytics" },
-  // What goes on the public portfolio (lib/portfolio.ts) — the manager's choice.
-  { key: "portfolio", label: "Portfolio", only: "/admin" },
+  // What goes on the public portfolio (lib/portfolio.ts) — the team's as well.
+  { key: "portfolio", label: "Portfolio" },
 ];
 
 export function ProjectTabs({

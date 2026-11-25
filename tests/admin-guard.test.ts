@@ -58,6 +58,8 @@ const EXPECTED: Record<string, { admin: number; staff: number }> = {
   // Mixed on purpose — see NAMED below, which is the part that matters.
   "project-actions.ts": { admin: 1, staff: 7 },
   "whatsapp-actions.ts": { admin: 6, staff: 1 },
+  // A project on the portfolio or off it is the team's; the order and the number are the manager's.
+  "portfolio-actions.ts": { admin: 2, staff: 2 },
   // The manager's alone.
   "analytics-actions.ts": { admin: 1, staff: 0 },
   "admin-alert-actions.ts": { admin: 1, staff: 0 },
@@ -100,6 +102,26 @@ const NAMED: Record<string, { file: string; guard: string; why: string }> = {
     file: "whatsapp-actions.ts",
     guard: STAFF,
     why: "Send to Client is on the project screen the team was given",
+  },
+  savePortfolio: {
+    file: "portfolio-actions.ts",
+    guard: STAFF,
+    why: "the studio asked for the team to put projects on the portfolio and take them off",
+  },
+  hideFromPortfolio: {
+    file: "portfolio-actions.ts",
+    guard: STAFF,
+    why: "taking a project off the portfolio is the team's too",
+  },
+  movePortfolio: {
+    file: "portfolio-actions.ts",
+    guard: ADMIN,
+    why: "the order the work is shown in is the manager's",
+  },
+  savePortfolioContact: {
+    file: "portfolio-actions.ts",
+    guard: ADMIN,
+    why: "the number every visitor is told to message is the studio's",
   },
   unlinkWhatsApp: {
     file: "whatsapp-actions.ts",

@@ -2,14 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdmin, requireStaff } from "@/lib/admin-guard";
 import { setSetting } from "@/lib/settings";
 import { refreshProject } from "@/lib/project-paths";
 import { categoryOf, moved, PORTFOLIO_CONTACT_KEY, PORTFOLIO_PATH } from "@/lib/portfolio";
 
-// The manager's choices for the public portfolio (lib/portfolio.ts). Each
-// answers in a sentence rather than throwing one, because a thrown message
-// never reaches the page in production.
+// The choices for the public portfolio (lib/portfolio.ts). Each answers in a
+// sentence rather than throwing one, because a thrown message never reaches the
+// page in production.
+//
+// Putting a project on it or taking it off — its title, words and photos — is
+// the team's as well as the manager's (2026-11-25: "make the employees also be
+// able to add or remove projects that appear on the portfolio"), on the
+// project's own Portfolio tab. The order of the projects and the studio's
+// number stay the manager's.
 
 export type PortfolioResult = { ok: boolean; message: string } | null;
 
@@ -24,9 +30,9 @@ const text = (form: FormData, name: string, most: number) => String(form.get(nam
 /** One project's place on the portfolio: shown or not, its public title and words, its photos and cover. */
 export async function savePortfolio(projectId: string, _before: PortfolioResult, form: FormData): Promise<PortfolioResult> {
   try {
-    await requireAdmin();
-  } catch (cause) {
-    return { ok: false, message: cause instanceof Error && cause.message === "Locked" ? "Editing is locked. Unlock it and save again." : "Sign in again to save." };
+    await requireStaff();
+  } catch {
+    return { ok: false, message: "Sign in again to save." };
   }
 
   const shown = form.get("shown") === "on";
@@ -96,7 +102,7 @@ export async function movePortfolio(projectId: string, direction: -1 | 1) {
 
 /** Take a project off the portfolio, keeping its title and photos for next time. */
 export async function hideFromPortfolio(projectId: string) {
-  await requireAdmin();
+  await requireStaff();
   await prisma.project.update({ where: { id: projectId }, data: { portfolioShown: false } });
   refresh(projectId);
 }

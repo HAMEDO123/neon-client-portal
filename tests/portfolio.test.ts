@@ -190,16 +190,20 @@ describe("nothing of the client's reaches the public page", () => {
   });
 });
 
-describe("the choosing is the manager's", () => {
-  it("guards every action with requireAdmin", () => {
+describe("who chooses", () => {
+  it("is the team as well as the manager for a project, and the manager alone for the order and the number", () => {
     const actions = read("src", "lib", "actions", "portfolio-actions.ts");
     const exported = actions.match(/export async function \w+/g) ?? [];
     assert.equal(exported.length, 4);
-    assert.equal(actions.split("await requireAdmin();").length - 1, exported.length);
-    assert.ok(!actions.includes("requireStaff"));
+    assert.equal(actions.split("await requireStaff();").length - 1, 2);
+    assert.equal(actions.split("await requireAdmin();").length - 1, 2);
   });
-  it("puts the project tab in the admin only", () => {
-    assert.match(read("src", "components", "admin", "project-tabs.tsx"), /\{ key: "portfolio", label: "Portfolio", only: "\/admin" \}/);
+  it("puts the project tab in both portals, the same module in each", () => {
+    assert.match(read("src", "components", "admin", "project-tabs.tsx"), /\{ key: "portfolio", label: "Portfolio" \}/);
+    assert.match(
+      read("src", "app", "employee", "(portal)", "projects", "[id]", "portfolio", "page.tsx"),
+      /export \{ default \} from "@\/app\/admin\/\(dashboard\)\/projects\/\[id\]\/portfolio\/page";/
+    );
   });
   it("ticks only the project's own photos", () => {
     assert.match(read("src", "lib", "actions", "portfolio-actions.ts"), /const mine = \{ space: \{ projectId \} \};/);
