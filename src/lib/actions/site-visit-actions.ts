@@ -8,8 +8,8 @@ import { dispatchNotification } from "@/lib/notifications/engine";
 import { answering, Refusal, type Answer } from "@/lib/refusal";
 import { needsReport, readVisitWhen } from "@/lib/site-visits";
 import { syncVisitTaskQuietly } from "@/lib/site-visit-task-store";
+import { writeVisitReport } from "@/lib/site-visit-report";
 import { getTimezone } from "@/lib/settings";
-import { sendWhatsApp } from "@/lib/whatsapp";
 import type { SiteVisitState } from "@/generated/prisma/enums";
 
 // The site-visit diary: writing a visit down, and answering for it after.
@@ -42,56 +42,6 @@ function refresh() {
   // so the person's own day and the manager's week board have changed too.
   revalidatePath("/employee");
   revalidatePath("/admin/tasks");
-}
-
-/**
- * Asks the client how the visit went, on WhatsApp.
- *
- * Sent when the person who went says it is finished, not when the manager
- * approves — the manager approves *on* the answer, so the answer has to exist
- * first. The reply arrives in the studio's WhatsApp tab like any other
- * message; there is no review page and nothing for the client to open.
- *
- * It never throws into the caller. A visit that happened must not fail to be
- * recorded because a number was wrong — so what happened to the message is
- * written on the visit instead, and a review nobody asked for never looks the
- * same as one nobody answered.
- */
-async function askForReview(visit: {
-  id: string;
-  title: string;
-  clientName: string | null;
-  clientPhone: string | null;
-  project: { clientName: string; clientPhone: string | null } | null;
-}): Promise<{ sentAt: Date | null; note: string }> {
-  // The visit's own answer wins; a linked project fills in what it does not
-  // have. A first visit often predates the project, which is the whole reason
-  // the visit carries its own.
-  const name = visit.clientName?.trim() || visit.project?.clientName?.trim() || null;
-  const phone = visit.clientPhone?.trim() || visit.project?.clientPhone?.trim() || null;
-
-  if (!phone) return { sentAt: null, note: "No client number on this visit — nobody was asked." };
-
-  // Arabic, because the client is: the studio works in Amman and this is the
-  // one message here that a client reads rather than the studio. Everything
-  // the team reads — the note below, the screens — stays English, the same
-  // split the client portal already makes.
-  const greeting = name ? `مرحباً ${name}،` : "مرحباً،";
-  const text = [
-    greeting,
-    "شكراً لاستقبالكم لنا في الموقع اليوم.",
-    "كيف كانت الزيارة؟ وهل هناك ما كان بإمكاننا تحسينه؟",
-    "يسعدنا أن تشاركنا رأيك بالرد على هذه الرسالة — تصل مباشرة إلى فريق NEON.",
-  ].join("\n");
-
-  const result = await sendWhatsApp(phone, text).catch((error: unknown) => ({
-    ok: false as const,
-    error: error instanceof Error ? error.message : "The message could not be sent.",
-  }));
-
-  return result.ok
-    ? { sentAt: new Date(), note: `Asked ${name ?? "the client"} on ${phone}.` }
-    : { sentAt: null, note: `Could not ask ${name ?? "the client"} on ${phone}: ${result.error}` };
 }
 
 async function readForm(formData: FormData) {
@@ -199,51 +149,7 @@ export async function reportSiteVisit(id: string, state: SiteVisitState, formDat
       );
     }
 
-    // Finished means finished *according to whoever went*. The client is asked
-    // now, so the manager has their answer to approve on.
-    let review: { sentAt: Date | null; note: string } | null = null;
-    if (state === "REPORTED") {
-      const full = await prisma.siteVisit.findUniqueOrThrow({
-        where: { id },
-        select: {
-          id: true,
-          title: true,
-          clientName: true,
-          clientPhone: true,
-          project: { select: { clientName: true, clientPhone: true } },
-        },
-      });
-      review = await askForReview(full);
-    }
-
-    await prisma.siteVisit.update({
-      where: { id },
-      data: {
-        state,
-        report,
-        reportedAt: new Date(),
-        ...(review ? { reviewSentAt: review.sentAt, reviewNote: review.note } : {}),
-      },
-    });
-    // Written up: its job is with the manager now. Not made, or called off: it is
-    // no longer work to do, and the diary keeps the record.
-    await syncVisitTaskQuietly(id);
-
-    await notifyAdmin({
-      type: "TASK_STATUS_CHANGED",
-      title:
-        state === "REPORTED"
-          ? `${actor.name} finished the visit to ${visit.title} — waiting for you`
-          : state === "MISSED"
-            ? `${actor.name} did not make the visit to ${visit.title}`
-            : `${actor.name} called off the visit to ${visit.title}`,
-      message: [report ?? "No note.", review?.note].filter(Boolean).join(" · "),
-      url: "/admin/site-visits",
-      // Keyed on what it became, so the scheduling alert and this one are two
-      // tellings and re-saving the same answer is one.
-      dedupeKey: `SITE_VISIT_REPORT:${id}:${state}`,
-      employeeId: actor.id,
-    }).catch(() => null);
+    await writeVisitReport(actor, visit, state as "REPORTED" | "MISSED" | "CANCELLED", report);
 
     refresh();
   });

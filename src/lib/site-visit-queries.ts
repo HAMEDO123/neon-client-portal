@@ -23,6 +23,7 @@ const visitSelect = {
   approvedAt: true,
   reviewSentAt: true,
   reviewNote: true,
+  photoUrls: true,
   employee: { select: { id: true, name: true, color: true, photoUrl: true } },
   project: { select: { id: true, name: true, clientName: true, clientPhone: true } },
 } as const;
@@ -46,6 +47,8 @@ export type SiteVisitView = {
   /** When the client was asked how it went, and what came of the asking. */
   reviewSentAt: Date | null;
   reviewNote: string | null;
+  /** Photos sent from the visit's job as its write-up. */
+  photoUrls: string[];
   employee: { id: string; name: string; color: string; photoUrl: string | null };
   project: { id: string; name: string; clientName: string | null; clientPhone: string | null } | null;
 };

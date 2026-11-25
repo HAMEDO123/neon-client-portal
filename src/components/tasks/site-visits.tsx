@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useTransition } from "react";
 import { CalendarDays, Check, MapPin, MessageCircle, Plus, Trash2, User, X } from "lucide-react";
 import {
@@ -195,6 +196,16 @@ function VisitCard({
           </span>
           <span className="whitespace-pre-wrap">{visit.report}</span>
         </p>
+      )}
+
+      {visit.photoUrls.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {visit.photoUrls.map((url) => (
+            <a key={url} href={url} target="_blank" rel="noreferrer" className="relative block h-14 w-14 overflow-hidden rounded-lg bg-ink/5">
+              <Image src={url} alt="" fill unoptimized className="object-cover" />
+            </a>
+          ))}
+        </div>
       )}
 
       {/* What became of the review request. Said either way: a client nobody

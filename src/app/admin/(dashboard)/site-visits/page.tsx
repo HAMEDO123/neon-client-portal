@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { MapPinned } from "lucide-react";
 import { PersonAvatar } from "@/components/chat/person-avatar";
 import { requireAdminRead } from "@/lib/admin-guard";
@@ -172,6 +173,17 @@ function Group({
                 </span>
                 {visit.report}
               </p>
+            )}
+
+            {/* Photos sent from the visit's job, as its write-up (lib/site-visit-report.ts). */}
+            {visit.photoUrls.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {visit.photoUrls.map((url) => (
+                  <a key={url} href={url} target="_blank" rel="noreferrer" className="relative block h-20 w-20 overflow-hidden rounded-lg bg-ink/5">
+                    <Image src={url} alt="" fill unoptimized className="object-cover" />
+                  </a>
+                ))}
+              </div>
             )}
 
             {/* Whether the client was actually asked. Said either way, because

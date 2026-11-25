@@ -2204,6 +2204,9 @@ model SiteVisit {
 
   /// When the client was asked, on WhatsApp, how the visit went.
   reviewSentAt DateTime?
+  /// Photos from the visit, when it was written up by sending them from its job
+  /// (lib/site-visit-report.ts).
+  photoUrls    String[]  @default([])
   /// What happened when it was asked: the number it went to, or why it did
   /// not go. Written either way — a review nobody asked for must not look the
   /// same as one nobody answered.

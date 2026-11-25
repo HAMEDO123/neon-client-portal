@@ -43,13 +43,18 @@ export async function refuseVisitTask(assignedTaskId: string): Promise<void> {
   if (task?.siteVisitId) throw new Error(VISIT_TASK_REFUSAL);
 }
 
-/** Whether this job stands for a visit — for the paths that answer rather than throw. */
-export async function isVisitTask(assignedTaskId: string): Promise<boolean> {
+/** The visit this job stands for, if it stands for one. */
+export async function visitOfTask(assignedTaskId: string): Promise<string | null> {
   const task = await prisma.assignedTask.findUnique({
     where: { id: assignedTaskId },
     select: { siteVisitId: true },
   });
-  return Boolean(task?.siteVisitId);
+  return task?.siteVisitId ?? null;
+}
+
+/** Whether this job stands for a visit — for the paths that answer rather than throw. */
+export async function isVisitTask(assignedTaskId: string): Promise<boolean> {
+  return (await visitOfTask(assignedTaskId)) !== null;
 }
 
 export type VisitTaskSync = "created" | "updated" | "removed" | "unchanged" | "none";

@@ -3,7 +3,8 @@ import { saveFile } from "@/lib/storage";
 import { notifyAdmin } from "@/lib/admin-notifications";
 import { recordStateChange } from "@/lib/task-state-log";
 import { canMove } from "@/lib/task-transitions";
-import { VISIT_TASK_REFUSAL, isVisitTask } from "@/lib/site-visit-task-store";
+import { visitOfTask } from "@/lib/site-visit-task-store";
+import { proofAsVisitReport } from "@/lib/site-visit-report";
 import { verifySubmission } from "@/lib/ai/verify-submission";
 import { MAX_PROOF_FILES } from "@/lib/attachments";
 import type { TaskState } from "@/generated/prisma/enums";
@@ -48,18 +49,20 @@ export async function submitProof(
   photos: File[],
   note: string | null
 ): Promise<ProofResult> {
+  // A site visit is finished by writing it up, where the client is asked and
+  // the manager approves — so photos sent from its job are that write-up, not a
+  // submission beside it (lib/site-visit-report.ts). They used to be turned
+  // away here, and the phone app offers its camera on every job: three of
+  // Wael's visits in one morning came back as an error (2026-11-25).
+  if (subject.kind === "assigned") {
+    const visitId = await visitOfTask(subject.id);
+    if (visitId) return proofAsVisitReport(employee, visitId, photos, note);
+  }
+
   // Sending proof is a move like any other: work already with the manager, or
   // already approved, must not be submitted again.
   const move = canMove(subject.state, "SUBMITTED", "employee", true);
   if (!move.ok) return { ok: false, error: move.reason };
-
-  // A site visit is written up in the diary, where the client is asked and the
-  // manager approves. A photo sent against its job would be a second record of
-  // the same visit — so it is turned away here, the one place the website and
-  // the phone both pass through.
-  if (subject.kind === "assigned" && (await isVisitTask(subject.id))) {
-    return { ok: false, error: VISIT_TASK_REFUSAL };
-  }
 
   if (photos.length === 0) {
     return { ok: false, error: "Attach a photo or a file of the finished work." };
