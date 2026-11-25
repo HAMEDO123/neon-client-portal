@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { SectionShell } from "@/components/client/section-shell";
+import { Lightbox, type LightboxImage } from "@/components/client/lightbox";
 import { SectionHeader } from "@/components/ui/section-header";
 import { GalleryGrid } from "@/components/client/gallery-grid";
 import { BeforeAfterSlider } from "@/components/client/before-after-slider";
@@ -23,6 +25,26 @@ export function GallerySection({
 }) {
   const { t } = useI18n();
   const nonEmptySpaces = spaces.filter((s) => s.images.length > 0);
+
+  // One viewer for the whole gallery, so the arrows and a swipe run on from
+  // the last render of a room to the first of the next rather than going round
+  // one room (2026-11-25: "I want the photos of the spaces to be continued").
+  // Each render carries its room's name, so crossing into the next room says so.
+  const isPair = (image: (typeof spaces)[number]["images"][number]) => image.isBeforeAfter && !!image.beforeImageUrl;
+  const rooms = nonEmptySpaces.map((space) => ({
+    space,
+    images: space.images.filter((image) => !isPair(image)).map(
+      (image): LightboxImage => ({
+        url: image.imageUrl,
+        caption: image.caption ? `${space.name} · ${image.caption}` : space.name,
+        downloadUrl: allowDownloads ? `/p/${token}/dl/image/${image.id}` : null,
+        hotspots: image.hotspots,
+      })
+    ),
+  }));
+  const everything = rooms.flatMap((room) => room.images);
+  const startOf = (roomIndex: number) => rooms.slice(0, roomIndex).reduce((sum, room) => sum + room.images.length, 0);
+  const [open, setOpen] = useState<number | null>(null);
 
   return (
     <SectionShell id="gallery">
@@ -56,9 +78,9 @@ export function GallerySection({
           </div>
 
           <div className="mt-8 flex flex-col gap-16">
-            {nonEmptySpaces.map((space) => {
-              const pairs = space.images.filter((i) => i.isBeforeAfter && i.beforeImageUrl);
-              const singles = space.images.filter((i) => !(i.isBeforeAfter && i.beforeImageUrl));
+            {nonEmptySpaces.map((space, roomIndex) => {
+              const pairs = space.images.filter((i) => isPair(i));
+              const singles = rooms[roomIndex].images;
 
               return (
                 <div key={space.id} id={`space-${space.id}`} className="scroll-mt-24">
@@ -80,21 +102,15 @@ export function GallerySection({
 
                   {singles.length > 0 && (
                     <div className="mt-4">
-                      <GalleryGrid
-                        images={singles.map((img) => ({
-                          url: img.imageUrl,
-                          caption: img.caption,
-                          downloadUrl: allowDownloads ? `/p/${token}/dl/image/${img.id}` : null,
-                          hotspots: img.hotspots,
-                        }))}
-                        watermark={watermark}
-                      />
+                      <GalleryGrid images={singles} watermark={watermark} onOpen={(index) => setOpen(startOf(roomIndex) + index)} />
                     </div>
                   )}
                 </div>
               );
             })}
           </div>
+
+          <Lightbox images={everything} index={open} onClose={() => setOpen(null)} onNavigate={setOpen} watermark={watermark} />
         </>
       )}
     </SectionShell>

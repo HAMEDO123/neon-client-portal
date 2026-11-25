@@ -6,8 +6,22 @@ import { Expand, MapPin } from "lucide-react";
 import { Lightbox, type LightboxImage } from "@/components/client/lightbox";
 import { WatermarkOverlay } from "@/components/client/watermark-overlay";
 
-export function GalleryGrid({ images, watermark = false }: { images: LightboxImage[]; watermark?: boolean }) {
+/**
+ * A grid of renders. On its own it opens them in a viewer of its own; given
+ * `onOpen`, it leaves the viewer to its caller instead — which is how the
+ * client's gallery runs one viewer across every room (gallery-section.tsx).
+ */
+export function GalleryGrid({
+  images,
+  watermark = false,
+  onOpen,
+}: {
+  images: LightboxImage[];
+  watermark?: boolean;
+  onOpen?: (index: number) => void;
+}) {
   const [index, setIndex] = useState<number | null>(null);
+  const open = onOpen ?? setIndex;
 
   return (
     <>
@@ -15,7 +29,7 @@ export function GalleryGrid({ images, watermark = false }: { images: LightboxIma
         {images.map((img, i) => (
           <button
             key={img.url}
-            onClick={() => setIndex(i)}
+            onClick={() => open(i)}
             className="group relative aspect-[4/3] overflow-hidden rounded-2xl bg-ink/5"
           >
             <Image
@@ -39,7 +53,7 @@ export function GalleryGrid({ images, watermark = false }: { images: LightboxIma
         ))}
       </div>
 
-      <Lightbox images={images} index={index} onClose={() => setIndex(null)} onNavigate={setIndex} watermark={watermark} />
+      {!onOpen && <Lightbox images={images} index={index} onClose={() => setIndex(null)} onNavigate={setIndex} watermark={watermark} />}
     </>
   );
 }
