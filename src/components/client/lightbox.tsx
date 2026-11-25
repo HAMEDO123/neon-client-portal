@@ -7,6 +7,7 @@ import { X, ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, Maximize2 } fr
 import { HotspotLayer, type Hotspot } from "@/components/client/hotspot-layer";
 import { WatermarkOverlay } from "@/components/client/watermark-overlay";
 import { useI18n } from "@/lib/client-i18n";
+import { swipeOf } from "@/lib/swipe";
 
 export interface LightboxImage {
   url: string;
@@ -85,6 +86,12 @@ export function Lightbox({
   const [naturalRatio, setNaturalRatio] = useState<number | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const { immersive, hint, enter, leave } = useImmersive(overlayRef);
+  // Which way the last move went, so the next picture slides in from that side.
+  const [direction, setDirection] = useState<-1 | 1>(1);
+  // Where a finger came down, and whether what it did was a swipe — a swipe
+  // must not also count as the tap that zooms, or that leaves full screen.
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
   const open = index !== null;
   const current = open ? images[index] : null;
 
@@ -100,6 +107,7 @@ export function Lightbox({
     (delta: number) => {
       if (index === null) return;
       const next = (index + delta + images.length) % images.length;
+      setDirection(delta < 0 ? -1 : 1);
       setZoomed(false);
       setNaturalRatio(null);
       onNavigate(next);
@@ -131,6 +139,32 @@ export function Lightbox({
   }, [open, onClose, go, immersive, leave]);
 
   const hasHotspots = !!current?.hotspots?.length;
+  const enterFrom = { opacity: 0, x: direction * 48 };
+
+  function onTouchStart(event: React.TouchEvent) {
+    swiped.current = false;
+    touchStart.current = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+  }
+
+  function onTouchEnd(event: React.TouchEvent) {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start || images.length < 2) return;
+    const touch = event.changedTouches[0];
+    const move = swipeOf(touch.clientX - start.x, touch.clientY - start.y);
+    if (move === 0) return;
+    swiped.current = true;
+    go(move);
+  }
+
+  /** A tap, unless the finger was swiping. */
+  const tapped = (then: () => void) => () => {
+    if (swiped.current) {
+      swiped.current = false;
+      return;
+    }
+    then();
+  };
 
   return (
     <AnimatePresence>
@@ -184,7 +218,10 @@ export function Lightbox({
 
           <div
             className={`relative flex flex-1 items-center justify-center overflow-hidden ${immersive ? "" : "px-4 pb-6"}`}
-            onClick={immersive ? leave : undefined}
+            onClick={immersive ? tapped(leave) : undefined}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+            onTouchCancel={() => (touchStart.current = null)}
           >
             {!immersive && (
               <button
@@ -201,9 +238,9 @@ export function Lightbox({
               // percentages — placed against the raw image in the admin editor — line up.
               <motion.div
                 key={current.url}
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
+                initial={enterFrom}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 className={`relative max-h-full ${immersive ? "" : "max-w-5xl"}`}
                 style={naturalRatio ? { aspectRatio: naturalRatio, width: "100%" } : { width: "100%" }}
               >
@@ -227,13 +264,13 @@ export function Lightbox({
             ) : (
               <motion.div
                 key={current.url}
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
+                initial={enterFrom}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 className={`relative h-full w-full ${immersive ? "" : "max-w-5xl cursor-zoom-in"}`}
                 // Full screen, a tap is the way out — the container's own handler — rather
                 // than a zoom: two meanings for one tap would fire both at once.
-                onClick={immersive ? undefined : () => setZoomed((z) => !z)}
+                onClick={immersive ? undefined : tapped(() => setZoomed((z) => !z))}
               >
                 <Image
                   src={current.url}
