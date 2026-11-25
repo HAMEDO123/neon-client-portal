@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -8,6 +8,7 @@ import { ArrowDown, ArrowLeft, ArrowUpRight, MessageCircle } from "lucide-react"
 import { Lightbox } from "@/components/client/lightbox";
 import { WatermarkOverlay } from "@/components/client/watermark-overlay";
 import { useI18n } from "@/lib/client-i18n";
+import { swipeOf } from "@/lib/swipe";
 import {
   categoriesIn,
   categoryLabel,
@@ -83,17 +84,50 @@ function Header({ over, whatsapp }: { over: boolean; whatsapp: string | null }) 
   );
 }
 
-function Hero({ projects }: { projects: PortfolioProject[] }) {
-  const { t } = useI18n();
-  const still = useReducedMotion();
-  const slides = projects.slice(0, 5);
-  const [at, setAt] = useState(0);
+/** How long each project stays in the hero before the next, as a story's bar fills. */
+const STORY_SECONDS = 6;
+/** The share of the hero, from its start edge, that steps back rather than on. */
+const BACK_ZONE = 0.3;
 
-  useEffect(() => {
-    if (still || slides.length < 2) return;
-    const timer = setInterval(() => setAt((current) => (current + 1) % slides.length), 6000);
-    return () => clearInterval(timer);
-  }, [still, slides.length]);
+/**
+ * The hero as stories (2026-11-25: "اعمل هاي زي الستوري … اقدر اكبس عليها تمشي
+ * على الي بعدها"): the covers of the projects in turn, a bar each along the foot
+ * that fills while it is shown and moves on when full. A tap moves on at once,
+ * a tap near the start edge steps back — the left in English, the right in
+ * Arabic — and on a phone a swipe does either. The text and its links sit above
+ * the tap layer and keep their own clicks.
+ */
+function Hero({ projects }: { projects: PortfolioProject[] }) {
+  const { t, lang } = useI18n();
+  const still = useReducedMotion();
+  const slides = projects.slice(0, 12);
+  const [at, setAt] = useState(0);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
+
+  const step = (by: number) => setAt((current) => (current + by + slides.length) % slides.length);
+
+  function onTap(event: React.MouseEvent<HTMLButtonElement>) {
+    if (swiped.current) {
+      swiped.current = false;
+      return;
+    }
+    if (slides.length < 2) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    const fromStart = lang === "ar" ? box.right - event.clientX : event.clientX - box.left;
+    step(fromStart < box.width * BACK_ZONE ? -1 : 1);
+  }
+
+  function onTouchEnd(event: React.TouchEvent) {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start || slides.length < 2) return;
+    const touch = event.changedTouches[0];
+    const move = swipeOf(touch.clientX - start.x, touch.clientY - start.y);
+    if (move === 0) return;
+    swiped.current = true;
+    step(lang === "ar" ? -move : move);
+  }
 
   const current = slides[at];
   return (
@@ -104,7 +138,7 @@ function Hero({ projects }: { projects: PortfolioProject[] }) {
           initial={{ opacity: 0, scale: still ? 1 : 1.08 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ opacity: { duration: 1.4 }, scale: { duration: 7, ease: "linear" } }}
+          transition={{ opacity: { duration: 0.9 }, scale: { duration: STORY_SECONDS + 1, ease: "linear" } }}
           className="absolute inset-0"
         >
           <Image src={current.cover} alt={current.title} fill priority unoptimized className="object-cover" />
@@ -112,7 +146,21 @@ function Hero({ projects }: { projects: PortfolioProject[] }) {
       </AnimatePresence>
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/45" />
 
-      <div className={`${FRAME} relative z-10 flex h-full flex-col justify-end pb-8 sm:pb-12`}>
+      {/* The whole picture is the tap: on to the next project, or back from near the start edge. */}
+      <button
+        type="button"
+        aria-label={t("Next project")}
+        onClick={onTap}
+        onTouchStart={(event) => {
+          swiped.current = false;
+          touchStart.current = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+        }}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={() => (touchStart.current = null)}
+        className="absolute inset-0 z-[5] cursor-pointer"
+      />
+
+      <div className={`${FRAME} pointer-events-none relative z-10 flex h-full flex-col justify-end pb-8 sm:pb-12`}>
         <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} className={`${EYEBROW} text-white/70`}>
           {t("Interior design studio · Amman")}
         </motion.p>
@@ -127,7 +175,7 @@ function Hero({ projects }: { projects: PortfolioProject[] }) {
 
         <div className="mt-10 border-t border-white/20 pt-5 text-white sm:mt-14">
           <div className="flex items-end justify-between gap-6">
-            <Link href={`${PORTFOLIO_PATH}/${current.id}`} className="group min-w-0">
+            <Link href={`${PORTFOLIO_PATH}/${current.id}`} className="group pointer-events-auto min-w-0">
               <span className="block text-[11px] uppercase tracking-[0.25em] rtl:tracking-normal text-white/55">
                 {t("Featured")} · <span dir="ltr">{pad(at + 1)} / {pad(slides.length)}</span>
               </span>
@@ -138,22 +186,33 @@ function Hero({ projects }: { projects: PortfolioProject[] }) {
                 <ArrowUpRight size={18} className="shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 rtl:-scale-x-100" />
               </span>
             </Link>
-            <a href="#projects" className="hidden shrink-0 items-center gap-2 text-[11px] uppercase tracking-[0.25em] rtl:tracking-normal text-white/70 hover:text-white sm:flex">
+            <a
+              href="#projects"
+              className="pointer-events-auto hidden shrink-0 items-center gap-2 text-[11px] uppercase tracking-[0.25em] rtl:tracking-normal text-white/70 hover:text-white sm:flex"
+            >
               {t("Explore the work")}
               <ArrowDown size={14} />
             </a>
           </div>
           {slides.length > 1 && (
-            <div className="mt-5 flex gap-1.5">
+            <div className="pointer-events-auto mt-5 flex gap-1.5">
               {slides.map((slide, index) => (
-                <button
-                  key={slide.id}
-                  type="button"
-                  onClick={() => setAt(index)}
-                  aria-label={slide.title}
-                  className="group h-5 flex-1"
-                >
-                  <span className={`block h-[2px] w-full transition-colors duration-500 ${index === at ? "bg-white" : "bg-white/25 group-hover:bg-white/50"}`} />
+                <button key={slide.id} type="button" onClick={() => setAt(index)} aria-label={slide.title} className="group h-5 flex-1">
+                  <span className="relative block h-[2px] w-full overflow-hidden bg-white/25 group-hover:bg-white/40">
+                    {(index < at || (index === at && still)) && <span className="absolute inset-0 bg-white" />}
+                    {index === at && !still && (
+                      // The bar is the clock: when it is full, the next project. A tap
+                      // changes `at`, which replaces this bar before it finishes.
+                      <motion.span
+                        key={`${slide.id}-${at}`}
+                        className="absolute inset-y-0 start-0 bg-white"
+                        initial={{ width: "0%" }}
+                        animate={{ width: "100%" }}
+                        transition={{ duration: STORY_SECONDS, ease: "linear" }}
+                        onAnimationComplete={() => step(1)}
+                      />
+                    )}
+                  </span>
                 </button>
               ))}
             </div>

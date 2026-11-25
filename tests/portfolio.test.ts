@@ -209,3 +209,16 @@ describe("who chooses", () => {
     assert.match(read("src", "lib", "actions", "portfolio-actions.ts"), /const mine = \{ space: \{ projectId \} \};/);
   });
 });
+
+describe("the hero as stories", () => {
+  const work = read("src", "components", "portfolio", "work.tsx");
+  it("moves on when its bar is full, not on a timer of its own", () => {
+    assert.match(work, /onAnimationComplete=\{\(\) => step\(1\)\}/);
+    assert.doesNotMatch(work, /setInterval/);
+  });
+  it("is a tap layer under the text, whose links keep their own clicks", () => {
+    assert.match(work, /onClick=\{onTap\}/);
+    assert.match(work, /pointer-events-none relative z-10/);
+    assert.match(work, /className="group pointer-events-auto min-w-0"/);
+  });
+});
