@@ -540,7 +540,7 @@ function stopTyping(jid) {
 
 const FORCE_RULE = `
 
-The owner explicitly asked you to reply in this chat: set reply=true and write the reply. Skip only if the other side is clearly an automated bot. If earlier messages in the conversation are unrelated to this business (for example from another service or system), ignore them and answer the client's latest message as this business.`;
+The owner explicitly asked you to reply in this chat: set reply=true and write the reply. Skip only if the other side is clearly an automated bot. This applies even if the client is angry, rude or insulting: never return empty messages. Then stay calm and polite, do not argue, do not take it personally and never insult back; acknowledge briefly (for example «حقك علينا إذا في إشي ضايقك»), and answer any real question in his messages (for example if he asks to see our work, give the website link). No sales push in that reply. If earlier messages in the conversation are unrelated to this business (for example from another service or system), ignore them and answer the client's latest message as this business.`;
 
 // ---------- appointment schedule (each visit 45 min, no overlaps) ----------
 const APPTS_FILE = path.join(DATA, 'appointments.json');
