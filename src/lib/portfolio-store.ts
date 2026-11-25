@@ -21,8 +21,8 @@ const PUBLIC_FIELDS = {
   watermarkEnabled: true,
   spaces: {
     orderBy: { order: "asc" },
+    // The images only: a room's name is the studio's label, not the public's.
     select: {
-      name: true,
       images: {
         where: { inPortfolio: true },
         orderBy: { order: "asc" },

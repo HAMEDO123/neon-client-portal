@@ -46,7 +46,6 @@ export function categoriesIn(projects: { category: PortfolioCategory | null }[])
 }
 
 export type PortfolioPhoto = { id: string; url: string; caption: string | null };
-export type PortfolioRoom = { name: string; photos: PortfolioPhoto[] };
 
 export type PortfolioProject = {
   id: string;
@@ -56,7 +55,12 @@ export type PortfolioProject = {
   area: string | null;
   note: string | null;
   cover: string;
-  rooms: PortfolioRoom[];
+  /**
+   * Every ticked photo, room after room — but not the rooms' names. A room is
+   * named for the studio's own use ("villa zaareer", the client's name; "التعديل
+   * 1", a revision), so the names are not even read (2026-11-25).
+   */
+  photos: PortfolioPhoto[];
   photoCount: number;
   watermark: boolean;
 };
@@ -72,7 +76,7 @@ export type PortfolioRow = {
   projectType: string | null;
   area: string | null;
   watermarkEnabled: boolean;
-  spaces: { name: string; images: { id: string; imageUrl: string; caption: string | null }[] }[];
+  spaces: { images: { id: string; imageUrl: string; caption: string | null }[] }[];
 };
 
 const clean = (text: string | null | undefined) => {
@@ -89,13 +93,9 @@ const clean = (text: string | null | undefined) => {
  * project, and without that, "Interior project".
  */
 export function toPortfolioProject(row: PortfolioRow): PortfolioProject | null {
-  const rooms = row.spaces
-    .map((space) => ({
-      name: space.name,
-      photos: space.images.map((image) => ({ id: image.id, url: image.imageUrl, caption: clean(image.caption) })),
-    }))
-    .filter((room) => room.photos.length > 0);
-  const photos = rooms.flatMap((room) => room.photos);
+  const photos = row.spaces.flatMap((space) =>
+    space.images.map((image) => ({ id: image.id, url: image.imageUrl, caption: clean(image.caption) }))
+  );
   if (photos.length === 0) return null;
 
   return {
@@ -106,7 +106,7 @@ export function toPortfolioProject(row: PortfolioRow): PortfolioProject | null {
     area: areaOf(row.area),
     note: clean(row.portfolioNote),
     cover: coverOf(photos, row.portfolioCoverId).url,
-    rooms,
+    photos,
     photoCount: photos.length,
     watermark: row.watermarkEnabled,
   };
@@ -119,7 +119,7 @@ export function areaOf(area: string | null) {
 }
 
 /**
- * How a room's photos are laid out on a project's page: rows of one wide photo
+ * How a project's photos are laid out on a project's page: rows of one wide photo
  * and then two side by side, again and again. A photo that would sit alone in
  * a row of two takes the whole row instead. True means wide.
  */

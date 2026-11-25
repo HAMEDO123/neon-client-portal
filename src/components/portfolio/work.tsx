@@ -166,10 +166,10 @@ function Hero({ projects }: { projects: PortfolioProject[] }) {
 
 function Intro({ projects }: { projects: PortfolioProject[] }) {
   const { t } = useI18n();
-  const spaces = projects.reduce((total, project) => total + project.rooms.length, 0);
+  const images = projects.reduce((total, project) => total + project.photoCount, 0);
   const facts = [
     { value: pad(projects.length), label: t("Selected projects") },
-    { value: pad(spaces), label: t("Spaces designed") },
+    { value: String(images), label: t("Images") },
     { value: t("Amman"), label: t("Based in") },
   ];
   return (
@@ -362,13 +362,13 @@ export function WorkProject({
   const { t } = useI18n();
   const still = useReducedMotion();
   const [open, setOpen] = useState<number | null>(null);
-  const photos = project.rooms.flatMap((room) => room.photos);
+  const photos = project.photos;
+  const wide = wideAt(photos.length);
   const category = categoryLabel(project.category);
   const details = [
     { label: "Category", value: category ? t(category) : null },
     { label: "Location", value: project.place },
     { label: "Area", value: project.area },
-    { label: "Spaces", value: project.rooms.length > 1 ? String(project.rooms.length) : null },
     { label: "Images", value: String(project.photoCount) },
   ].filter((detail) => detail.value);
 
@@ -430,48 +430,30 @@ export function WorkProject({
         </dl>
       </section>
 
-      <section className={`${FRAME} flex flex-col gap-20`}>
-        {project.rooms.map((room, roomIndex) => {
-          const wide = wideAt(room.photos.length);
-          return (
-            <div key={roomIndex}>
-              {project.rooms.length > 1 && (
-                <div className="mb-6 flex items-baseline gap-4 border-t border-[#d9d3c9] pt-5">
-                  <span dir="ltr" className="text-[12px] tabular-nums text-[#8a7f72]">
-                    {pad(roomIndex + 1)}
-                  </span>
-                  <h2 dir="auto" className="font-display text-xl text-[#171614] sm:text-2xl">
-                    {room.name}
-                  </h2>
-                  <span className="ms-auto text-[12px] text-[#8a7f72]">{t("{n} photos", { n: room.photos.length })}</span>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3 sm:gap-5">
-                {room.photos.map((photo, index) => (
-                  <motion.button
-                    key={photo.id}
-                    type="button"
-                    onClick={() => setOpen(photos.indexOf(photo))}
-                    initial={{ opacity: 0, y: 24 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-80px" }}
-                    transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                    className={`group relative overflow-hidden bg-[#e9e5de] ${wide[index] ? "col-span-2 aspect-[16/10] sm:aspect-[16/9]" : "aspect-[4/5] sm:aspect-[4/3]"}`}
-                  >
-                    <Image
-                      src={photo.url}
-                      alt={photo.caption ?? room.name}
-                      fill
-                      unoptimized
-                      className="object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-[1.03]"
-                    />
-                    {project.watermark && <WatermarkOverlay />}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <section className={FRAME}>
+        <div className="grid grid-cols-2 gap-3 sm:gap-5">
+          {photos.map((photo, index) => (
+            <motion.button
+              key={photo.id}
+              type="button"
+              onClick={() => setOpen(index)}
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              className={`group relative overflow-hidden bg-[#e9e5de] ${wide[index] ? "col-span-2 aspect-[16/10] sm:aspect-[16/9]" : "aspect-[4/5] sm:aspect-[4/3]"}`}
+            >
+              <Image
+                src={photo.url}
+                alt={photo.caption ?? project.title}
+                fill
+                unoptimized
+                className="object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-[1.03]"
+              />
+              {project.watermark && <WatermarkOverlay />}
+            </motion.button>
+          ))}
+        </div>
       </section>
 
       <Lightbox

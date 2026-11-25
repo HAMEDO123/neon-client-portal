@@ -23,21 +23,22 @@ const row = (over: Partial<PortfolioRow> = {}): PortfolioRow => ({
     { name: "Living", images: [{ id: "a", imageUrl: "https://x/a.jpg", caption: null }, { id: "b", imageUrl: "https://x/b.jpg", caption: " Sofa " }] },
     { name: "Empty", images: [] },
     { name: "Kitchen", images: [{ id: "c", imageUrl: "https://x/c.jpg", caption: null }] },
-  ],
+  ] as unknown as PortfolioRow["spaces"], // named as the studio names them, to show the names go nowhere
   ...over,
 });
 
 describe("what the public sees of a project", () => {
-  it("is its ticked photos, room by room, empty rooms left out", () => {
+  it("is its ticked photos, room after room, and no room's name", () => {
     const project = toPortfolioProject(row())!;
-    assert.deepEqual(project.rooms.map((room) => room.name), ["Living", "Kitchen"]);
+    assert.deepEqual(project.photos.map((photo) => photo.id), ["a", "b", "c"]);
     assert.equal(project.photoCount, 3);
-    assert.equal(project.rooms[0].photos[1].caption, "Sofa");
+    assert.equal(project.photos[1].caption, "Sofa");
+    assert.ok(!JSON.stringify(project).includes("Living"), "a room is named for the studio, not the public");
     assert.equal(project.note, null, "blank words are no words");
   });
 
   it("is nothing at all with no photo ticked", () => {
-    assert.equal(toPortfolioProject(row({ spaces: [{ name: "Living", images: [] }] })), null);
+    assert.equal(toPortfolioProject(row({ spaces: [{ images: [] }] })), null);
   });
 
   it("never falls back to the project's own name, which is the client's", () => {
@@ -111,6 +112,7 @@ describe("nothing of the client's reaches the public page", () => {
   const store = read("src", "lib", "portfolio-store.ts").replace(/^\s*\/\/.*$/gm, "");
   it("names every field it reads", () => {
     assert.doesNotMatch(store, /include:/);
+    assert.doesNotMatch(store, /name: true/, "neither the project's name nor a room's");
     for (const field of ["clientName", "clientPhone", "clientEmail", "token", "accessCode", "name: true, portfolio", "pricingItems", "boqItems", "documents", "drawings"]) {
       assert.ok(!store.includes(field), `portfolio-store.ts must not read ${field}`);
     }
