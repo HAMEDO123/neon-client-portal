@@ -34,6 +34,9 @@ const AR: Record<string, string> = {
   "Open the PDF": "افتح ملف PDF",
   "Downloaded": "تم التنزيل",
   "The PDF couldn't be made. Try again.": "تعذّر تجهيز الملف. حاول مرة أخرى.",
+  "Download the full project as PDF": "تنزيل المشروع كاملًا PDF",
+  "Renders, drawings and documents in one file.": "التصاميم والمخططات والمستندات في ملف واحد.",
+  "Every original file, as a ZIP.": "كل الملفات الأصلية في ملف ZIP.",
 
   // The public portfolio (/work, lib/portfolio.ts)
   "Projects": "المشاريع",

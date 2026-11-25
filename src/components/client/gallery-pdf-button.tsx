@@ -19,6 +19,9 @@ import { useI18n } from "@/lib/client-i18n";
 // - **anywhere else** saves it straight away;
 // - and always offers "Open the PDF" as well, the server's copy shown in the
 //   browser, for a browser that will do neither.
+//
+// The project PDF in the Download Center uses it too (`label`, and `tone`
+// "dark" for that section's dark band).
 
 type Phase =
   | { kind: "idle" }
@@ -40,7 +43,15 @@ function saveBlob(url: string, name: string) {
   link.remove();
 }
 
-export function GalleryPdfButton({ href }: { href: string }) {
+export function GalleryPdfButton({
+  href,
+  label = "Download the gallery as PDF",
+  tone = "light",
+}: {
+  href: string;
+  label?: string;
+  tone?: "light" | "dark";
+}) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
 
@@ -79,10 +90,14 @@ export function GalleryPdfButton({ href }: { href: string }) {
     }
   }
 
-  const button =
-    "inline-flex items-center gap-2 rounded-full border border-ink/15 bg-white/70 px-5 py-2.5 text-sm font-medium text-ink/70 transition-colors hover:border-cyan-strong hover:text-cyan-strong disabled:opacity-70";
+  const dark = tone === "dark";
+  const button = dark
+    ? "inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold text-ink transition-colors hover:bg-white/90 disabled:opacity-80"
+    : "inline-flex items-center gap-2 rounded-full border border-ink/15 bg-white/70 px-5 py-2.5 text-sm font-medium text-ink/70 transition-colors hover:border-cyan-strong hover:text-cyan-strong disabled:opacity-70";
+  const quiet = dark ? "text-white/60" : "text-ink/55";
+  const align = dark ? "items-center" : "items-center sm:items-start";
   const open = (
-    <a href={`${href}?inline=1`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-ink/55 underline">
+    <a href={`${href}?inline=1`} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 text-xs font-medium underline ${quiet}`}>
       <ExternalLink size={13} />
       {t("Open the PDF")}
     </a>
@@ -90,8 +105,8 @@ export function GalleryPdfButton({ href }: { href: string }) {
 
   if (phase.kind === "ready") {
     return (
-      <div className="flex flex-col items-center gap-2 sm:items-start">
-        <button type="button" onClick={() => share(phase.file)} className={`${button} border-cyan-strong text-cyan-strong`}>
+      <div className={`flex flex-col gap-2 ${align}`}>
+        <button type="button" onClick={() => share(phase.file)} className={dark ? button : `${button} border-cyan-strong text-cyan-strong`}>
           <Share size={16} strokeWidth={1.75} />
           {t("Save the PDF")}
         </button>
@@ -101,7 +116,7 @@ export function GalleryPdfButton({ href }: { href: string }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-2 sm:items-start">
+    <div className={`flex flex-col gap-2 ${align}`}>
       <button type="button" onClick={prepare} disabled={phase.kind === "preparing"} className={button}>
         {phase.kind === "preparing" ? (
           <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
@@ -110,10 +125,10 @@ export function GalleryPdfButton({ href }: { href: string }) {
         ) : (
           <FileDown size={16} strokeWidth={1.75} />
         )}
-        {phase.kind === "preparing" ? t("Preparing your PDF…") : phase.kind === "saved" ? t("Downloaded") : t("Download the gallery as PDF")}
+        {phase.kind === "preparing" ? t("Preparing your PDF…") : phase.kind === "saved" ? t("Downloaded") : t(label)}
       </button>
-      {phase.kind === "preparing" && <p className="text-xs text-ink/50">{t("A large gallery can take up to a minute.")}</p>}
-      {phase.kind === "failed" && <p className="text-xs text-red-700">{t("The PDF couldn't be made. Try again.")}</p>}
+      {phase.kind === "preparing" && <p className={`text-xs ${quiet}`}>{t("A large gallery can take up to a minute.")}</p>}
+      {phase.kind === "failed" && <p className={`text-xs ${dark ? "text-red-300" : "text-red-700"}`}>{t("The PDF couldn't be made. Try again.")}</p>}
       {(phase.kind === "saved" || phase.kind === "failed") && open}
     </div>
   );

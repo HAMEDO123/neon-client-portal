@@ -15,15 +15,15 @@ import { cachedPdf, inParallel, pdfCacheKey } from "@/lib/gallery-pdf-cache";
 // Not "use server": nothing here checks who is asking; both routes do.
 
 // A4 landscape, in points.
-const PAGE_WIDTH = 842;
-const PAGE_HEIGHT = 595;
-const MARGIN = 40;
+export const PAGE_WIDTH = 842;
+export const PAGE_HEIGHT = 595;
+export const MARGIN = 40;
 // Renders are downscaled before embedding: a 4K original would make a file
 // nobody can email.
 const MAX_IMAGE_EDGE = 1600;
 
-const INK = rgb(0.08, 0.075, 0.12);
-const MUTED = rgb(0.45, 0.45, 0.5);
+export const INK = rgb(0.08, 0.075, 0.12);
+export const MUTED = rgb(0.45, 0.45, 0.5);
 
 // The cover is the studio's own render with the facts written over it, so its
 // palette is the opposite of every other page: paper on near-black.
@@ -113,7 +113,7 @@ async function textAsImage(text: string, size: number, color: RGB, bold = false)
  * Nothing here is allowed to throw. A gallery of ninety renders must not be
  * lost because of one character in a caption.
  */
-async function drawLine(
+export async function drawLine(
   pdf: PDFDocument,
   page: PDFPage,
   text: string,
@@ -150,7 +150,7 @@ async function drawLine(
   if (stripped) page.drawText(stripped, options);
 }
 
-async function loadImage(url: string): Promise<Buffer | null> {
+export async function loadImage(url: string): Promise<Buffer | null> {
   try {
     const raw = url.startsWith("/")
       ? await readFile(path.join(process.cwd(), "public", url))
@@ -281,22 +281,51 @@ async function renderGalleryPdf(
   watermark: boolean,
   totalImages: number
 ): Promise<Uint8Array> {
-  // Every render fetched and shrunk first, several at a time — one after
-  // another, 239 of them took 89 seconds, past the 100 Cloudflare allows — and
-  // then laid out in order.
+  const buffers = await loadRenders(spaces);
+  const { pdf, fonts } = await startPdf(`${project.name} — Design Gallery`, `Design gallery for ${project.clientName}`);
+  await addCover(pdf, fonts, project, {
+    backdropUrl: project.coverImageUrl ?? spaces[0].images[0].imageUrl,
+    subtitle: project.projectType ? `${project.projectType} Gallery` : "Design Gallery",
+    scope: `${totalImages} render${totalImages === 1 ? "" : "s"} · ${spaces.length} space${spaces.length === 1 ? "" : "s"}`,
+  });
+  await addRenderPages(pdf, fonts, spaces, buffers, watermark, totalImages);
+  return pdf.save();
+}
+
+export type PdfFonts = { bold: PDFFont; regular: PDFFont };
+
+/** A new document, with the studio as its author and the two standard fonts every page uses. */
+export async function startPdf(title: string, subject: string) {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(title);
+  pdf.setAuthor("NEON Design & Programming");
+  pdf.setSubject(subject);
+  pdf.setCreationDate(new Date());
+  const fonts: PdfFonts = {
+    bold: await pdf.embedFont(StandardFonts.HelveticaBold),
+    regular: await pdf.embedFont(StandardFonts.Helvetica),
+  };
+  return { pdf, fonts };
+}
+
+/**
+ * Every render fetched and shrunk first, several at a time — one after
+ * another, 239 of them took 89 seconds, past the 100 Cloudflare allows — and
+ * then laid out in order. Keyed by the image itself.
+ */
+export async function loadRenders(spaces: GalleryPdfSpace[]) {
   const flat = spaces.flatMap((space) => space.images);
   const loaded = await inParallel(flat, 8, (image) => loadImage(image.imageUrl));
-  const buffers = new Map(flat.map((image, index) => [image, loaded[index]]));
+  return new Map(flat.map((image, index) => [image, loaded[index]]));
+}
 
-  const pdf = await PDFDocument.create();
-  pdf.setTitle(`${project.name} — Design Gallery`);
-  pdf.setAuthor("NEON Design & Programming");
-  pdf.setSubject(`Design gallery for ${project.clientName}`);
-  pdf.setCreationDate(new Date());
-
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-
+/** The cover: the studio's render darkened, the name, a subtitle, and the facts along the foot. */
+export async function addCover(
+  pdf: PDFDocument,
+  { bold, regular }: PdfFonts,
+  project: GalleryPdfProject,
+  { backdropUrl, subtitle, scope }: { backdropUrl: string | null; subtitle: string; scope: string }
+) {
   // --- Cover -----------------------------------------------------------
   //
   // The studio's own render, darkened, with the facts written across the foot.
@@ -306,7 +335,7 @@ async function renderGalleryPdf(
 
   // The cover image the studio chose, else the first render. A project that
   // reaches this route always has at least the second.
-  const backdrop = await coverBackdrop(project.coverImageUrl ?? spaces[0].images[0].imageUrl);
+  const backdrop = await coverBackdrop(backdropUrl);
 
   if (backdrop) {
     const picture = await pdf.embedJpg(backdrop);
@@ -342,7 +371,7 @@ async function renderGalleryPdf(
   // The subtitle says what kind of work this is, in the studio's own words from
   // the project's Details — so the capitalisation on the cover is whatever was
   // typed there, rather than something invented here.
-  await drawLine(pdf, cover, project.projectType ? `${project.projectType} Gallery` : "Design Gallery", {
+  await drawLine(pdf, cover, subtitle, {
     x: COVER_MARGIN,
     y: 240,
     size: 15,
@@ -361,10 +390,7 @@ async function renderGalleryPdf(
     { value: project.location ?? "", label: "Location" },
     { value: project.projectType ?? "", label: "Focus Area" },
     { value: formatDate(new Date()), label: "Prepared" },
-    {
-      value: `${totalImages} render${totalImages === 1 ? "" : "s"} · ${spaces.length} space${spaces.length === 1 ? "" : "s"}`,
-      label: "Scope Summary",
-    },
+    { value: scope, label: "Scope Summary" },
   ].filter((fact) => fact.value.trim());
 
   // Spread evenly rather than packed to the left, and each fact keeps the same
@@ -379,7 +405,17 @@ async function renderGalleryPdf(
     await drawLine(pdf, cover, fact.value, { x, y: 44, size: 11, font: bold, color: PAPER, bold: true });
     cover.drawText(fact.label, { x, y: 28, size: 8.5, font: regular, color: PAPER_DIM });
   }
+}
 
+/** One page per render, room by room, numbered across all of them. */
+export async function addRenderPages(
+  pdf: PDFDocument,
+  { bold, regular }: PdfFonts,
+  spaces: GalleryPdfSpace[],
+  buffers: Map<GalleryPdfSpace["images"][number], Buffer | null>,
+  watermark: boolean,
+  totalImages: number
+) {
   // --- One page per render ---------------------------------------------
   let pageNumber = 1;
 
@@ -443,8 +479,6 @@ async function renderGalleryPdf(
       }
     }
   }
-
-  return pdf.save();
 }
 
 /** The finished document as a download — or, `inline`, to be shown in the browser. */
