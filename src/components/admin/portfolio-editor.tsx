@@ -88,6 +88,9 @@ export function PortfolioEditor({
   };
 
   const shownCover = cover && picked.has(cover) ? cover : withPhotos.flatMap((room) => room.images).find((image) => picked.has(image.id))?.id;
+  // The cover clients see first, drawn at the top of the photos (2026-11-26: "put the cover photo on top here").
+  // With nothing ticked the portfolio chooses, and its first photo is the first of the first room.
+  const coverPhoto = allPhotos.find((image) => image.id === shownCover) ?? (picked.size === 0 ? allPhotos[0] : undefined);
 
   if (withPhotos.length === 0) {
     return (
@@ -204,6 +207,27 @@ export function PortfolioEditor({
             </button>
           </div>
         </div>
+
+        {coverPhoto && (
+          <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-amber-300/70 bg-amber-50/60 p-3">
+            <div className="relative aspect-[16/10] w-full overflow-hidden rounded-lg sm:w-72">
+              <Image src={coverPhoto.imageUrl} alt="The cover" fill unoptimized className="object-cover" />
+              <span className="absolute start-2 top-2 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-semibold text-ink shadow">
+                <Star size={12} fill="currentColor" />
+                Cover
+              </span>
+            </div>
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="font-semibold text-ink">The cover</p>
+              <p className="mt-1 text-ink/65">
+                The first photo clients see of this project, on the portfolio and on its own page.
+                {picked.size === 0
+                  ? " Tick photos below to choose the cover yourself."
+                  : " To change it, tap the star on any photo below."}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* How it works, in the marks the photos themselves wear. */}
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-ink/[0.04] px-4 py-3 text-sm text-ink/75">
