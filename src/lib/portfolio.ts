@@ -181,7 +181,7 @@ export type PortfolioRow = {
   watermarkEnabled: boolean;
   spaces: { images: { id: string; imageUrl: string; caption: string | null; inPortfolio: boolean }[] }[];
   /** Only the ticked ones are read (portfolio-store.ts). */
-  drawings: { id: string; fileUrl: string; fileType: string; portfolioLabel: string | null }[];
+  drawings: { id: string; fileUrl: string; fileType: string; portfolioLabel: string | null; portfolioFileUrl?: string | null }[];
 };
 
 const clean = (text: string | null | undefined) => {
@@ -215,8 +215,10 @@ export function toPortfolioProject(row: PortfolioRow): PortfolioProject | null {
     photos,
     photoCount: photos.length,
     drawings: row.drawings.flatMap((drawing) => {
-      const kind = drawingKind(drawing.fileType, drawing.fileUrl);
-      return kind ? [{ id: drawing.id, label: clean(drawing.portfolioLabel), url: drawing.fileUrl, kind }] : [];
+      // The copy with the client's name taken out, when there is one; its own type, since a cleaned picture may be a PNG.
+      const url = clean(drawing.portfolioFileUrl) ?? drawing.fileUrl;
+      const kind = url === drawing.fileUrl ? drawingKind(drawing.fileType, url) : drawingKind("", url);
+      return kind ? [{ id: drawing.id, label: clean(drawing.portfolioLabel), url, kind }] : [];
     }),
     watermark: row.watermarkEnabled,
   };

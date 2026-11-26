@@ -182,7 +182,7 @@ describe("nothing of the client's reaches the public page", () => {
   it("reads only the ticked drawings, and never their own names", () => {
     assert.match(store, /drawings: \{\s*where: \{ inPortfolio: true \}/);
     const drawings = store.slice(store.indexOf("drawings:"));
-    assert.match(drawings, /select: \{ id: true, fileUrl: true, fileType: true, portfolioLabel: true \}/);
+    assert.match(drawings, /select: \{ id: true, fileUrl: true, fileType: true, portfolioLabel: true, portfolioFileUrl: true \}/);
   });
   it("reads only shown projects", () => {
     assert.match(whole, /where: \{ portfolioShown: true \}/);
@@ -251,6 +251,20 @@ describe("the drawings on the portfolio", () => {
     assert.deepEqual(shown?.drawings, [
       { id: "d1", label: "Ground floor plan", url: "https://x/1.pdf", kind: "pdf" },
       { id: "d2", label: null, url: "https://x/2.png", kind: "image" },
+    ]);
+  });
+  it("show the copy with the client's name taken out, when there is one", () => {
+    const shown = toPortfolioProject(
+      row({
+        drawings: [
+          { id: "d1", fileUrl: "https://x/1.pdf", fileType: "pdf", portfolioLabel: "Plan", portfolioFileUrl: "https://x/1-clean.pdf" },
+          { id: "d2", fileUrl: "https://x/2.jpg", fileType: "jpg", portfolioLabel: null, portfolioFileUrl: "https://x/2-clean.png" },
+        ],
+      })
+    );
+    assert.deepEqual(shown?.drawings.map((drawing) => [drawing.url, drawing.kind]), [
+      ["https://x/1-clean.pdf", "pdf"],
+      ["https://x/2-clean.png", "image"],
     ]);
   });
   it("are ticked only on the project's own drawings", () => {

@@ -29,7 +29,7 @@ export default async function ProjectPortfolioPage({ params }: { params: Promise
       },
       drawings: {
         orderBy: { order: "asc" },
-        select: { id: true, name: true, category: true, fileUrl: true, fileType: true, inPortfolio: true, portfolioLabel: true },
+        select: { id: true, name: true, category: true, fileUrl: true, fileType: true, inPortfolio: true, portfolioLabel: true, portfolioFileUrl: true },
       },
     },
   });

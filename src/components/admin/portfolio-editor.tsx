@@ -26,6 +26,7 @@ type Drawing = {
   fileType: string;
   inPortfolio: boolean;
   portfolioLabel: string | null;
+  portfolioFileUrl: string | null;
 };
 
 export function PortfolioEditor({
@@ -375,6 +376,17 @@ export function PortfolioEditor({
                     {drawing.category} · {drawing.fileType}
                   </span>
                 </a>
+                {drawing.portfolioFileUrl && (
+                  <a
+                    href={drawing.portfolioFileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Clients see this copy, with the client's name taken out"
+                    className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:underline"
+                  >
+                    Name removed — open the copy
+                  </a>
+                )}
                 {kind ? (
                   <input
                     name={`drawingLabel:${drawing.id}`}

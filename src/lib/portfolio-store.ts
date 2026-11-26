@@ -35,7 +35,7 @@ const PUBLIC_FIELDS = {
   drawings: {
     where: { inPortfolio: true },
     orderBy: { order: "asc" },
-    select: { id: true, fileUrl: true, fileType: true, portfolioLabel: true },
+    select: { id: true, fileUrl: true, fileType: true, portfolioLabel: true, portfolioFileUrl: true },
   },
 } as const;
 

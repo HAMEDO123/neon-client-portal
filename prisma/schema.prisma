@@ -349,6 +349,10 @@ model Drawing {
   inPortfolio    Boolean @default(false)
   /// What the portfolio calls it — never `name`, which is often the client's.
   portfolioLabel String?
+  /// A copy for the portfolio with the client's name taken out of the drawing
+  /// itself (title block, heading); the portfolio shows it instead of
+  /// `fileUrl`, which stays the client's original.
+  portfolioFileUrl String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
