@@ -753,6 +753,7 @@ async function runAuto(jid) {
   const c = chats.get(jid);
   const force = !!c?.forceAuto;
   if (!c || !settings.autoReply || autoBusy.has(jid) || !sock || state.status !== 'open') return;
+  if (c.noAuto) return;                                              // owner turned auto replies off for this chat
   const last = c.messages[c.messages.length - 1];
   if (!last || last.fromMe) return;                                  // already answered
   if (nowS() - (lastManualAt.get(jid) || 0) < AUTO.manualPauseSec) return; // owner is handling it
@@ -945,6 +946,7 @@ function summary(c) {
     needsYou: c.needsYou || null,
     critical: c.critical || null,
     job: !!c.job,
+    noAuto: !!c.noAuto,
     voice: !!c.voiceAt,
     appointment: c.appointment && nowS() - c.appointment.ts < 7 * DAY ? c.appointment : null,
   };
@@ -1498,11 +1500,20 @@ const server = http.createServer(async (req, res) => {
       await markCritical(c, reason || 'حالة حرجة', lastIn?.text || '');
       return json(res, 200, { ok: true });
     }
+    if (action === '/noauto' && req.method === 'POST') {
+      // owner's per-chat switch: on = never auto-reply in this chat (drafts still work)
+      const { on } = await body(req);
+      if (on) { c.noAuto = true; delete c.forceAuto; delete c.needsYou; clearTimeout(autoTimers.get(jid)); autoTimers.delete(jid); }
+      else delete c.noAuto;
+      console.log(new Date().toISOString(), 'auto replies', on ? 'OFF' : 'ON', 'for', c.name || jid);
+      saveSoon(); broadcast('chat', summary(c));
+      return json(res, 200, { ok: true, noAuto: !!c.noAuto });
+    }
     if (action === '/auto' && req.method === 'POST') {
       // answer this chat now through the auto-reply rules; force = "always reply in this chat" (owner's choice)
       if (!settings.autoReply) return json(res, 409, { error: 'الرد التلقائي متوقف' });
       const { force } = await body(req);
-      if (force) { c.forceAuto = true; delete c.needsYou; lastManualAt.delete(jid); saveSoon(); broadcast('chat', summary(c)); }
+      if (force) { c.forceAuto = true; delete c.noAuto; delete c.needsYou; lastManualAt.delete(jid); saveSoon(); broadcast('chat', summary(c)); }
       runAuto(jid).catch(() => {});
       return json(res, 200, { ok: true });
     }
