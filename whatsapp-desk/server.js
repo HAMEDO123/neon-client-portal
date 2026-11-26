@@ -1340,6 +1340,27 @@ async function morningDigest() {
 if (!settings.digestDay) { settings.digestDay = ammanDay(); saveSettings(); } // first start: the first reminder is tomorrow morning
 setInterval(() => morningDigest().catch((e) => console.log('morning reminder failed:', e.message)), 5 * 60 * 1000);
 
+// ---------- reminder one hour before each visit ----------
+const REMIND_MIN = 60;
+async function remindAppts() {
+  if (!sock || state.status !== 'open') return;
+  const now = slotMin(ammanNow());
+  let changed = false;
+  for (const a of upcomingAppts()) {
+    const left = slotMin(a.start) - now;
+    if (a.reminded || left <= 0 || left > REMIND_MIN) continue;
+    a.reminded = true; changed = true;
+    // booked less than 15 minutes ago: the team just got the "new appointment" message, no reminder needed
+    if (nowS() - (a.createdAt || 0) < 15 * 60) continue;
+    const ins = a.jid ? insights[a.jid] : null;
+    const text = [`⏰ *تذكير: موعد بعد ${left >= 55 ? 'ساعة' : left + ' دقيقة'}*`, ...apptLines(a),
+      ins?.summary ? `عن المشروع: ${ins.summary}` : null].filter(Boolean).join('\n');
+    await postApptText(text);
+  }
+  if (changed) saveAppts();
+}
+setInterval(() => remindAppts().catch((e) => console.log('appointment reminder failed:', e.message)), 60 * 1000);
+
 // ---------- HTTP ----------
 function json(res, code, obj) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' });
