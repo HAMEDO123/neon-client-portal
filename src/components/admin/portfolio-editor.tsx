@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import Image from "next/image";
-import { Check, ExternalLink, FileText, Loader2, Star } from "lucide-react";
+import { Check, ExternalLink, FileText, Loader2, Plus, Star } from "lucide-react";
 import { savePortfolio, type PortfolioResult } from "@/lib/actions/portfolio-actions";
 import { cn } from "@/lib/utils";
 import { drawingKind, PORTFOLIO_CATEGORIES } from "@/lib/portfolio";
@@ -10,7 +10,11 @@ import { drawingKind, PORTFOLIO_CATEGORIES } from "@/lib/portfolio";
 // One project's place on the public portfolio (lib/portfolio.ts): shown or
 // not, the title and words clients read, which photos, which is the cover, and
 // which drawings, under what label.
-// Ticking is done here, in the browser; nothing is saved until Save.
+// Ticking is done here, in the browser; nothing is saved until Save, and the
+// bar at the foot says so while there is something unsaved. Every photo shows
+// whether it is on (a filled tick) or off (dimmed, with a +), because a tick
+// that only appeared on the chosen ones left "how do I choose" unanswered
+// (2026-11-26: "التاب مش مفهوم كيف بختار او بشيل").
 
 type Photo = { id: string; imageUrl: string; caption: string | null; inPortfolio: boolean };
 type Room = { id: string; name: string; images: Photo[] };
@@ -53,16 +57,26 @@ export function PortfolioEditor({
   );
   const [cover, setCover] = useState<string | null>(coverId);
   const [pickedDrawings, setPickedDrawings] = useState(() => new Set(drawings.filter((d) => d.inPortfolio).map((d) => d.id)));
-  const toggleDrawing = (id: string) =>
+  // Anything changed since the last save: the bar at the foot says so.
+  const [dirty, setDirty] = useState(false);
+  const toggleDrawing = (id: string) => {
+    setDirty(true);
     setPickedDrawings((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  const [state, save, saving] = useActionState<PortfolioResult, FormData>(savePortfolio.bind(null, projectId), null);
+  };
+  const [state, save, saving] = useActionState<PortfolioResult, FormData>(async (before, form) => {
+    const result = await savePortfolio(projectId, before, form);
+    if (result?.ok) setDirty(false);
+    return result;
+  }, null);
 
-  const setMany = (ids: string[], on: boolean) =>
+  const allPhotos = withPhotos.flatMap((room) => room.images);
+  const setMany = (ids: string[], on: boolean) => {
+    setDirty(true);
     setPicked((current) => {
       const next = new Set(current);
       for (const id of ids) {
@@ -71,6 +85,7 @@ export function PortfolioEditor({
       }
       return next;
     });
+  };
 
   const shownCover = cover && picked.has(cover) ? cover : withPhotos.flatMap((room) => room.images).find((image) => picked.has(image.id))?.id;
 
@@ -83,7 +98,7 @@ export function PortfolioEditor({
   }
 
   return (
-    <form action={save} className="flex flex-col gap-6">
+    <form action={save} onChange={() => setDirty(true)} className="flex flex-col gap-6">
       {[...picked].map((id) => (
         <input key={id} type="hidden" name="photo" value={id} />
       ))}
@@ -163,64 +178,124 @@ export function PortfolioEditor({
       </section>
 
       <section className="glass rounded-2xl p-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h3 className="text-base font-semibold text-ink">Photos</h3>
-          <span className="text-sm text-ink/55">
-            {picked.size === 0
-              ? "None ticked — the portfolio shows 12 from across the rooms by itself, new uploads included"
-              : `${picked.size} ticked · tap a photo to tick it, the star makes it the cover`}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-ink">Photos</h3>
+            <p className="mt-0.5 text-sm text-ink/60">
+              {picked.size === 0
+                ? "None chosen, so the portfolio shows 12 from across the rooms by itself."
+                : `${picked.size} of ${allPhotos.length} photos on the portfolio.`}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setMany(allPhotos.map((image) => image.id), true)}
+              className="rounded-full border border-ink/15 bg-white px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
+            >
+              Add all
+            </button>
+            <button
+              type="button"
+              onClick={() => setMany(allPhotos.map((image) => image.id), false)}
+              className="rounded-full border border-ink/15 bg-white px-3.5 py-1.5 text-sm font-medium text-ink hover:bg-ink/5"
+            >
+              Remove all
+            </button>
+          </div>
+        </div>
+
+        {/* How it works, in the marks the photos themselves wear. */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-ink/[0.04] px-4 py-3 text-sm text-ink/75">
+          <span className="font-medium text-ink">Tap a photo to add it or remove it.</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-clay text-white">
+              <Check size={12} strokeWidth={3} />
+            </span>
+            On the portfolio
           </span>
-          <button type="button" onClick={() => setPicked(new Set())} className="ms-auto text-sm font-medium text-cyan-700 underline">
-            Clear
-          </button>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-ink/25 bg-white text-ink/60">
+              <Plus size={12} strokeWidth={2.5} />
+            </span>
+            Not on it
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Star size={14} className="text-amber-500" fill="currentColor" />
+            The cover, shown first — tap the star on a photo to make it the cover
+          </span>
         </div>
 
         {withPhotos.map((room) => {
           const ids = room.images.map((image) => image.id);
-          const all = ids.every((id) => picked.has(id));
+          const on = ids.filter((id) => picked.has(id)).length;
+          const all = on === ids.length;
           return (
-            <div key={room.id} className="mt-5">
-              <div className="flex items-center gap-3">
-                <h4 className="text-sm font-semibold text-ink">{room.name}</h4>
-                <button type="button" onClick={() => setMany(ids, !all)} className="text-xs font-medium text-cyan-700 underline">
-                  {all ? "None from this room" : "All from this room"}
+            <div key={room.id} className="mt-6">
+              <div className="flex flex-wrap items-center gap-3">
+                <h4 dir="auto" className="text-sm font-semibold text-ink">
+                  {room.name}
+                </h4>
+                <span className="text-xs text-ink/55">
+                  {on} of {ids.length} on
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMany(ids, !all)}
+                  className="rounded-full border border-ink/15 bg-white px-3 py-1 text-xs font-medium text-ink hover:bg-ink/5"
+                >
+                  {all ? "Remove this room" : "Add this room"}
                 </button>
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                 {room.images.map((image) => {
-                  const on = picked.has(image.id);
-                  const isCover = on && image.id === shownCover;
+                  const chosen = picked.has(image.id);
+                  const isCover = chosen && image.id === shownCover;
                   return (
                     <div key={image.id} className="relative">
                       <button
                         type="button"
-                        onClick={() => setMany([image.id], !on)}
-                        aria-pressed={on}
+                        onClick={() => setMany([image.id], !chosen)}
+                        aria-pressed={chosen}
+                        aria-label={chosen ? "Remove from the portfolio" : "Add to the portfolio"}
+                        title={chosen ? "On the portfolio — tap to remove" : "Not on the portfolio — tap to add"}
                         className={cn(
-                          "relative block aspect-[4/3] w-full overflow-hidden rounded-lg border-2 transition",
-                          on ? "border-clay" : "border-transparent opacity-60 hover:opacity-100"
+                          "relative block aspect-[4/3] w-full overflow-hidden rounded-lg ring-offset-2 transition",
+                          chosen ? "ring-[3px] ring-clay" : "ring-1 ring-ink/10"
                         )}
                       >
-                        <Image src={image.imageUrl} alt={image.caption ?? room.name} fill unoptimized className="object-cover" />
-                        {on && (
-                          <span className="absolute end-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-clay text-white">
-                            <Check size={12} strokeWidth={3} />
-                          </span>
-                        )}
-                      </button>
-                      {on && (
-                        <button
-                          type="button"
-                          onClick={() => setCover(image.id)}
-                          aria-label="Make this the cover"
-                          title="Make this the cover"
+                        <Image
+                          src={image.imageUrl}
+                          alt={image.caption ?? room.name}
+                          fill
+                          unoptimized
+                          className={cn("object-cover transition", !chosen && "opacity-40 grayscale")}
+                        />
+                        <span
                           className={cn(
-                            "absolute bottom-1 start-1 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                            isCover ? "bg-amber-400 text-ink" : "bg-ink/60 text-white"
+                            "absolute end-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full shadow",
+                            chosen ? "bg-clay text-white" : "border border-ink/20 bg-white/90 text-ink/70"
                           )}
                         >
-                          <Star size={10} fill={isCover ? "currentColor" : "none"} />
-                          {isCover ? "Cover" : ""}
+                          {chosen ? <Check size={15} strokeWidth={3} /> : <Plus size={15} strokeWidth={2.5} />}
+                        </span>
+                      </button>
+                      {chosen && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDirty(true);
+                            setCover(image.id);
+                          }}
+                          title={isCover ? "This is the cover" : "Make this the cover"}
+                          aria-label={isCover ? "This is the cover" : "Make this the cover"}
+                          className={cn(
+                            "absolute bottom-1.5 start-1.5 flex h-7 items-center gap-1 rounded-full text-[11px] font-semibold shadow",
+                            isCover ? "bg-amber-400 px-2.5 text-ink" : "w-7 justify-center bg-black/55 text-white hover:bg-black/75"
+                          )}
+                        >
+                          <Star size={13} fill={isCover ? "currentColor" : "none"} />
+                          {isCover && "Cover"}
                         </button>
                       )}
                     </div>
@@ -294,16 +369,30 @@ export function PortfolioEditor({
       </section>
 
       {/* Kept in reach: a project can have a hundred photos above it. */}
-      <div className="glass-strong sticky bottom-4 z-10 flex flex-wrap items-center gap-3 self-start rounded-full px-3 py-2">
+      <div className="glass-strong sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3">
+        <div className="min-w-0 flex-1 text-sm">
+          {dirty ? (
+            <span className="inline-flex items-center gap-2 font-medium text-amber-700">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              Not saved yet — press Save
+            </span>
+          ) : state ? (
+            <span className={state.ok ? "text-emerald-700" : "text-red-700"}>{state.message}</span>
+          ) : (
+            <span className="text-ink/60">
+              {picked.size === 0 ? "Photos chosen by the portfolio" : `${picked.size} photo${picked.size === 1 ? "" : "s"}`}
+              {pickedDrawings.size > 0 && ` · ${pickedDrawings.size} drawing${pickedDrawings.size === 1 ? "" : "s"}`}
+            </span>
+          )}
+        </div>
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-bg disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-bg disabled:opacity-60"
         >
           {saving && <Loader2 size={14} className="animate-spin" />}
           Save
         </button>
-        {state && <span className={cn("text-sm", state.ok ? "text-emerald-700" : "text-red-700")}>{state.message}</span>}
       </div>
     </form>
   );
