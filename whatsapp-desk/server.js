@@ -570,10 +570,12 @@ function clash(start, jid) {
   return upcomingAppts().find((a) => a.jid !== jid && s < slotMin(a.start) + APPT_MIN && slotMin(a.start) < e);
 }
 function bookAppt({ jid, name, phone, start, note, by }) {
-  appts = appts.filter((a) => !(jid && a.jid === jid && slotMin(a.start) + APPT_MIN > slotMin(ammanNow()))); // reschedule = replace
+  const isPrev = (a) => jid && a.jid === jid && slotMin(a.start) + APPT_MIN > slotMin(ammanNow());
+  const prev = appts.find(isPrev) || null;
+  appts = appts.filter((a) => !isPrev(a)); // reschedule = replace
   const a = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), jid: jid || null, name: name || '', phone: phone || '', start, note: note || '', by: by || 'auto', createdAt: nowS() };
   appts.push(a); saveAppts(); broadcast('appointments', upcomingAppts());
-  return a;
+  return { ...a, prev };
 }
 // ----- working hours -----
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -633,9 +635,9 @@ async function findGroupJid(name) {
 }
 
 /** post a newly arranged appointment to every team group (settings.apptGroups) */
-async function notifyGroup(c, appt) {
+async function notifyGroup(c, appt, opts = {}) {
   for (const name of settings.apptGroups || []) {
-    try { await notifyOneGroup(c, appt, name); } catch (e) { console.log(`posting to «${name}» failed:`, e.message); }
+    try { await notifyOneGroup(c, appt, name, opts); } catch (e) { console.log(`posting to «${name}» failed:`, e.message); }
   }
 }
 /** tell the team group that a client sent a voice note (Claude cannot listen to it) */
@@ -648,6 +650,16 @@ async function notifyVoice(c) {
   }
 }
 
+/** post a plain text to every team group (appointments added or removed by hand) */
+async function postApptText(text) {
+  if (!sock || state.status !== 'open') return;
+  for (const name of settings.apptGroups || []) {
+    try { const gid = await findGroupJid(name); if (gid) { await sock.sendMessage(gid, { text }); console.log(new Date().toISOString(), `appointment update posted to «${name}»`); } }
+    catch (e) { console.log(`appointment update to «${name}» failed:`, e.message); }
+  }
+}
+const apptLines = (a) => [a.name ? `الزبون: ${a.name}` : null, a.phone ? `الرقم: ${a.phone}` : null, `الموعد: ${slotLabel(a.start)}`, a.note ? `ملاحظة: ${a.note}` : null];
+
 /** tell the team groups that a client cancelled */
 async function notifyCancel(c, what) {
   const s = summary(c);
@@ -656,7 +668,7 @@ async function notifyCancel(c, what) {
     try { const gid = await findGroupJid(name); if (gid) await sock.sendMessage(gid, { text }); } catch (e) { console.log(`cancel to «${name}» failed:`, e.message); }
   }
 }
-async function notifyOneGroup(c, appt, name) {
+async function notifyOneGroup(c, appt, name, opts = {}) {
   const gid = await findGroupJid(name);
   const s = summary(c);
   if (!gid) {
@@ -666,10 +678,11 @@ async function notifyOneGroup(c, appt, name) {
   }
   const ins = insights[c.jid];
   const text = [
-    '📅 *موعد جديد* (رتّبه الرد التلقائي)',
+    opts.kind === 'change' ? '🔄 *تعديل موعد* (الزبون غيّر الوقت)' : '📅 *موعد جديد* (رتّبه الرد التلقائي)',
     `الزبون: ${s.name}`,
     s.phone ? `الرقم: ${s.phone}` : null,
-    `الموعد: ${appt}`,
+    opts.kind === 'change' ? `كان: ${opts.old}` : null,
+    `${opts.kind === 'change' ? 'صار' : 'الموعد'}: ${appt}`,
     ins?.summary ? `عن المشروع: ${ins.summary}` : null,
     'يحتاج تأكيد مع الزبون.',
   ].filter(Boolean).join('\n');
@@ -809,15 +822,18 @@ async function runAuto(jid) {
       broadcast('job', { jid, name: summary(c).name });
     }
     let appt = String(out.appointment || '').trim();
+    let apptPost = { kind: 'new' };
     if (appt && apptStart) {
       const s0 = summary(c);
-      bookAppt({ jid, name: s0.name, phone: s0.phone, start: apptStart, note: appt, by: 'auto' });
+      const booked = bookAppt({ jid, name: s0.name, phone: s0.phone, start: apptStart, note: appt, by: 'auto' });
+      if (booked.prev && booked.prev.start === apptStart) apptPost = { kind: 'same' };
+      else if (booked.prev) apptPost = { kind: 'change', old: slotLabel(booked.prev.start) };
       appt = `${appt} (${slotLabel(apptStart)})`;
-    }
+    } else if (appt && c.appointment && c.appointment.text === appt) apptPost = { kind: 'same' };
     if (appt) {
       c.appointment = { ts: nowS(), text: appt, start: apptStart || null };
-      console.log(new Date().toISOString(), 'auto: APPOINTMENT', c.name || jid, '-', appt);
-      notifyGroup(c, appt).catch((e) => console.log('group notify failed:', e.message));
+      console.log(new Date().toISOString(), 'auto: APPOINTMENT', c.name || jid, '-', appt, apptPost.kind);
+      if (apptPost.kind !== 'same') notifyGroup(c, appt, apptPost).catch((e) => console.log('group notify failed:', e.message));
     }
     autoLog.set(jid, [...log, nowS()]);
     saveSoon();
@@ -1306,15 +1322,17 @@ async function morningDigest() {
   await runBrief().catch((e) => console.log('digest brief failed:', e.message));
   for (const c of briefScope()) { const ins = curIns(c); if (c.callAlert && ins && !ins.call) delete c.callAlert; }
   const list = briefScope().filter((c) => { const ins = curIns(c); return ins?.call && ins.category !== 'done' && !c.job && !(c.critical && nowS() - c.critical.ts < 3 * DAY); }).sort(byPriority);
-  if (!list.length) { saveSoon(); return; }
+  const todays = upcomingAppts().filter((a) => a.start.slice(0, 10) === today);
+  if (!list.length && !todays.length) { saveSoon(); return; }
   const due = list.filter((c) => c.callAlert && c.callAlert.when === 'tomorrow' && c.callAlert.day < today);
   const fresh = list.filter((c) => !c.callAlert);
   const asked = list.filter((c) => c.callAlert && !due.includes(c));
   const blocks = [];
+  if (todays.length) blocks.push('📅 *مواعيد اليوم:*\n' + todays.map((a, i) => `${i + 1}. ${a.start.slice(11, 16)} · *${a.name || 'زبون'}*${a.phone ? ' · ' + a.phone : ''}${a.note ? '\n    ' + a.note : ''}`).join('\n'));
   if (due.length) { blocks.push('⏰ *قلنا نحكي معهم اليوم:*'); due.forEach((c, i) => blocks.push(clientCard(c, i + 1))); }
   if (fresh.length) { blocks.push('📞 *زبائن جدد لازم تحكوا معهم:*'); fresh.forEach((c, i) => blocks.push(clientCard(c, i + 1))); }
   if (asked.length) blocks.push('❓ *حدا حكى مع هدول؟* إذا لأ، احكوا معهم اليوم (الكرت تبعهم انبعت قبل):\n' + asked.map((c, i) => shortLine(c, i + 1)).join('\n'));
-  const { sentTo } = await postToGroups(pack('☀️ *صباح الخير يا جماعة · مكالمات اليوم*', blocks));
+  const { sentTo } = await postToGroups(pack(list.length ? '☀️ *صباح الخير يا جماعة · مواعيد ومكالمات اليوم*' : '☀️ *صباح الخير يا جماعة · مواعيد اليوم*', blocks));
   if (sentTo.length) for (const c of list) c.callAlert = { ts: nowS(), day: today, when: 'today' };
   saveSoon();
   console.log(new Date().toISOString(), `morning reminder posted (${list.length} clients)`);
@@ -1450,12 +1468,17 @@ const server = http.createServer(async (req, res) => {
       if (hp) return json(res, 409, { error: `لا يمكن: ${hp}` });
       const t = clash(start, null);
       if (t) return json(res, 409, { error: `يتعارض مع موعد ${t.name || 'آخر'}: ${slotLabel(t.start)}` });
-      return json(res, 200, bookAppt({ jid: null, name, phone, start, note, by: 'owner' }));
+      const a = bookAppt({ jid: null, name, phone, start, note, by: 'owner' });
+      postApptText(['📅 *موعد جديد* (انضاف من الديسك)', ...apptLines(a)].filter(Boolean).join('\n')).catch(() => {});
+      return json(res, 200, a);
     }
   }
   const am = p.match(/^\/api\/appointments\/([a-z0-9]+)$/);
   if (am && req.method === 'DELETE') {
+    const gone = appts.find((a) => a.id === am[1]);
     appts = appts.filter((a) => a.id !== am[1]); saveAppts(); broadcast('appointments', upcomingAppts());
+    if (gone && slotMin(gone.start) + APPT_MIN > slotMin(ammanNow()))
+      postApptText(['❌ *إلغاء موعد* (انحذف من الديسك)', ...apptLines(gone)].filter(Boolean).join('\n')).catch(() => {});
     return json(res, 200, { ok: true });
   }
   if (p === '/api/claude-token') {
