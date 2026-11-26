@@ -27,6 +27,10 @@ export default async function ProjectPortfolioPage({ params }: { params: Promise
           images: { orderBy: { order: "asc" }, select: { id: true, imageUrl: true, caption: true, inPortfolio: true } },
         },
       },
+      drawings: {
+        orderBy: { order: "asc" },
+        select: { id: true, name: true, category: true, fileUrl: true, fileType: true, inPortfolio: true, portfolioLabel: true },
+      },
     },
   });
   if (!project) notFound();
@@ -43,6 +47,7 @@ export default async function ProjectPortfolioPage({ params }: { params: Promise
       place={project.portfolioPlace ?? ""}
       coverId={project.portfolioCoverId}
       rooms={project.spaces}
+      drawings={project.drawings}
       publicUrl={`${portfolioUrl()}/${project.id}`}
     />
   );

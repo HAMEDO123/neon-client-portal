@@ -5,9 +5,10 @@
 //
 // It is built from the galleries the projects already have — nothing is
 // uploaded twice — and it shows only what was chosen for it: the photos ticked
-// `inPortfolio`, under a title written for the public. The client's name,
-// phone, prices, drawings and documents never reach it; the queries in
-// `portfolio-store.ts` do not even read them.
+// `inPortfolio`, under a title written for the public, and the drawings ticked
+// the same way (2026-11-26: "لازم نحط مع كل مشروع مخططاته التنفيذية لانه في
+// كثير ناس بهمهم"). The client's name, phone, prices and documents never reach
+// it; the queries in `portfolio-store.ts` do not even read them.
 //
 // This file is the pure half; the database half is `portfolio-store.ts`.
 
@@ -47,6 +48,26 @@ export function categoriesIn(projects: { category: PortfolioCategory | null }[])
 
 export type PortfolioPhoto = { id: string; url: string; caption: string | null };
 
+/**
+ * A drawing on the portfolio: a picture shown in the viewer, or a PDF opened in
+ * the browser's own. `label` is what the studio typed for the public, or null —
+ * never the drawing's own name, which is often the client's ("فيلا السيد
+ * النابلسي"), so it is not even read.
+ */
+export type PortfolioDrawing = { id: string; label: string | null; url: string; kind: "image" | "pdf" };
+
+/**
+ * How a drawing can be shown in a browser, or null when it cannot. An AutoCAD
+ * file (.dwg) is not shown: a stranger cannot open one, and the studio uploads
+ * a PDF of it for that.
+ */
+export function drawingKind(fileType: string | null | undefined, url = ""): PortfolioDrawing["kind"] | null {
+  const type = (fileType || url.split("?")[0].split(".").pop() || "").toLowerCase().replace(/^\./, "");
+  if (type === "pdf" || type === "application/pdf") return "pdf";
+  if (/^(image\/)?(jpe?g|png|webp|gif)$/.test(type)) return "image";
+  return null;
+}
+
 export type PortfolioProject = {
   id: string;
   title: string;
@@ -62,6 +83,8 @@ export type PortfolioProject = {
    */
   photos: PortfolioPhoto[];
   photoCount: number;
+  /** The drawings ticked for the portfolio that a browser can show, in the project's order. */
+  drawings: PortfolioDrawing[];
   watermark: boolean;
 };
 
@@ -157,6 +180,8 @@ export type PortfolioRow = {
   area: string | null;
   watermarkEnabled: boolean;
   spaces: { images: { id: string; imageUrl: string; caption: string | null; inPortfolio: boolean }[] }[];
+  /** Only the ticked ones are read (portfolio-store.ts). */
+  drawings: { id: string; fileUrl: string; fileType: string; portfolioLabel: string | null }[];
 };
 
 const clean = (text: string | null | undefined) => {
@@ -189,6 +214,10 @@ export function toPortfolioProject(row: PortfolioRow): PortfolioProject | null {
     cover: coverOf(photos, row.portfolioCoverId).url,
     photos,
     photoCount: photos.length,
+    drawings: row.drawings.flatMap((drawing) => {
+      const kind = drawingKind(drawing.fileType, drawing.fileUrl);
+      return kind ? [{ id: drawing.id, label: clean(drawing.portfolioLabel), url: drawing.fileUrl, kind }] : [];
+    }),
     watermark: row.watermarkEnabled,
   };
 }

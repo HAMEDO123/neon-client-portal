@@ -2,17 +2,27 @@
 
 import { useActionState, useState } from "react";
 import Image from "next/image";
-import { Check, ExternalLink, Loader2, Star } from "lucide-react";
+import { Check, ExternalLink, FileText, Loader2, Star } from "lucide-react";
 import { savePortfolio, type PortfolioResult } from "@/lib/actions/portfolio-actions";
 import { cn } from "@/lib/utils";
-import { PORTFOLIO_CATEGORIES } from "@/lib/portfolio";
+import { drawingKind, PORTFOLIO_CATEGORIES } from "@/lib/portfolio";
 
 // One project's place on the public portfolio (lib/portfolio.ts): shown or
-// not, the title and words clients read, which photos, and which is the cover.
+// not, the title and words clients read, which photos, which is the cover, and
+// which drawings, under what label.
 // Ticking is done here, in the browser; nothing is saved until Save.
 
 type Photo = { id: string; imageUrl: string; caption: string | null; inPortfolio: boolean };
 type Room = { id: string; name: string; images: Photo[] };
+type Drawing = {
+  id: string;
+  name: string;
+  category: string;
+  fileUrl: string;
+  fileType: string;
+  inPortfolio: boolean;
+  portfolioLabel: string | null;
+};
 
 export function PortfolioEditor({
   projectId,
@@ -23,6 +33,7 @@ export function PortfolioEditor({
   place,
   coverId,
   rooms,
+  drawings,
   publicUrl,
 }: {
   projectId: string;
@@ -33,6 +44,7 @@ export function PortfolioEditor({
   place: string;
   coverId: string | null;
   rooms: Room[];
+  drawings: Drawing[];
   publicUrl: string;
 }) {
   const withPhotos = rooms.filter((room) => room.images.length > 0);
@@ -40,6 +52,14 @@ export function PortfolioEditor({
     () => new Set(withPhotos.flatMap((room) => room.images.filter((image) => image.inPortfolio).map((image) => image.id)))
   );
   const [cover, setCover] = useState<string | null>(coverId);
+  const [pickedDrawings, setPickedDrawings] = useState(() => new Set(drawings.filter((d) => d.inPortfolio).map((d) => d.id)));
+  const toggleDrawing = (id: string) =>
+    setPickedDrawings((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [state, save, saving] = useActionState<PortfolioResult, FormData>(savePortfolio.bind(null, projectId), null);
 
   const setMany = (ids: string[], on: boolean) =>
@@ -68,14 +88,17 @@ export function PortfolioEditor({
         <input key={id} type="hidden" name="photo" value={id} />
       ))}
       <input type="hidden" name="cover" value={shownCover ?? ""} />
+      {[...pickedDrawings].map((id) => (
+        <input key={id} type="hidden" name="drawing" value={id} />
+      ))}
 
       <section className="glass flex flex-col gap-4 rounded-2xl p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-ink">On the portfolio</h3>
             <p className="mt-0.5 text-sm text-ink/55">
-              The link you send clients to show NEON&apos;s work. They see only the title, the words below and the photos you tick —
-              never the client&apos;s name, phone, prices or drawings.
+              The link you send clients to show NEON&apos;s work. They see only the title, the words below, the photos and the
+              drawings you tick — never the client&apos;s name, phone or prices.
             </p>
           </div>
           <a href={publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan-700 underline">
@@ -207,6 +230,67 @@ export function PortfolioEditor({
             </div>
           );
         })}
+      </section>
+
+      <section className="glass rounded-2xl p-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="text-base font-semibold text-ink">Drawings</h3>
+          <span className="text-sm text-ink/55">
+            {drawings.length === 0
+              ? "This project has no drawings yet. Add them on the Drawings tab."
+              : `${pickedDrawings.size} of ${drawings.length} on the portfolio`}
+          </span>
+        </div>
+        {drawings.length > 0 && (
+          <p className="mt-1 text-xs text-ink/55">
+            Open each one before ticking it: a drawing&apos;s title block often has the client&apos;s name. Clients see the label you
+            write, never the file&apos;s name.
+          </p>
+        )}
+        <ul className="mt-4 flex flex-col divide-y divide-ink/8">
+          {drawings.map((drawing) => {
+            const kind = drawingKind(drawing.fileType, drawing.fileUrl);
+            const on = pickedDrawings.has(drawing.id);
+            return (
+              <li key={drawing.id} className="flex flex-wrap items-center gap-3 py-3">
+                <input type="hidden" name="drawingRow" value={drawing.id} />
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!kind && !on}
+                  onChange={() => toggleDrawing(drawing.id)}
+                  aria-label={`Show ${drawing.name} on the portfolio`}
+                  className="h-4 w-4 shrink-0"
+                />
+                <a
+                  href={drawing.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-w-0 flex-1 basis-48 items-center gap-2 text-sm text-ink hover:underline"
+                >
+                  <FileText size={15} className="shrink-0 text-ink/45" />
+                  <span dir="auto" className="truncate font-medium">
+                    {drawing.name}
+                  </span>
+                  <span className="shrink-0 text-xs uppercase text-ink/45">
+                    {drawing.category} · {drawing.fileType}
+                  </span>
+                </a>
+                {kind ? (
+                  <input
+                    name={`drawingLabel:${drawing.id}`}
+                    defaultValue={drawing.portfolioLabel ?? ""}
+                    maxLength={120}
+                    placeholder="Label clients see, e.g. Ground floor plan"
+                    className="w-full rounded-xl border border-ink/10 bg-white px-3 py-1.5 text-sm text-ink sm:w-72"
+                  />
+                ) : (
+                  <span className="text-xs text-ink/50">AutoCAD files can&apos;t be opened in a browser. Upload a PDF of it.</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
       {/* Kept in reach: a project can have a hundred photos above it. */}

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowDown, ArrowLeft, ArrowUpRight, MessageCircle } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUpRight, FileText, MessageCircle } from "lucide-react";
 import { Lightbox } from "@/components/client/lightbox";
 import { WatermarkOverlay } from "@/components/client/watermark-overlay";
 import { useI18n } from "@/lib/client-i18n";
@@ -421,7 +421,12 @@ export function WorkProject({
   const { t } = useI18n();
   const still = useReducedMotion();
   const [open, setOpen] = useState<number | null>(null);
+  const [openDrawing, setOpenDrawing] = useState<number | null>(null);
   const photos = project.photos;
+  const drawings = project.drawings;
+  // Only the pictures go through the viewer; a PDF opens in the browser's own.
+  const drawingImages = drawings.filter((drawing) => drawing.kind === "image");
+  const drawingName = (drawing: (typeof drawings)[number], index: number) => drawing.label ?? `${t("Drawing")} ${pad(index + 1)}`;
   const wide = wideAt(photos.length);
   const category = categoryLabel(project.category);
   const details = [
@@ -429,6 +434,7 @@ export function WorkProject({
     { label: "Location", value: project.place },
     { label: "Area", value: project.area },
     { label: "Images", value: String(project.photoCount) },
+    { label: "Drawings", value: drawings.length > 0 ? String(drawings.length) : null },
   ].filter((detail) => detail.value);
 
   return (
@@ -520,6 +526,76 @@ export function WorkProject({
         index={open}
         onClose={() => setOpen(null)}
         onNavigate={setOpen}
+        watermark={project.watermark}
+      />
+
+      {/* The drawings ticked for the portfolio (2026-11-26: people want to see the execution drawings too). */}
+      {drawings.length > 0 && (
+        <section className={`${FRAME} pt-24 sm:pt-32`}>
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#d9d3c9] pb-6">
+            <div>
+              <p className={`${EYEBROW} text-[#8a7f72]`}>{t("Execution drawings")}</p>
+              <h2 className="mt-3 font-display text-4xl text-[#171614] sm:text-5xl">{t("Drawings")}</h2>
+            </div>
+            <p className="max-w-sm text-sm text-[#6f6a63]">{t("The plans and details the project was built from. Open one to see it in full.")}</p>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+            {drawings.map((drawing, index) => {
+              const name = drawingName(drawing, index);
+              const body = (
+                <>
+                  <div
+                    className="relative aspect-[4/3] overflow-hidden border border-[#d9d3c9] bg-white"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(#ece8e1 1px, transparent 1px), linear-gradient(90deg, #ece8e1 1px, transparent 1px)",
+                      backgroundSize: "24px 24px",
+                    }}
+                  >
+                    {drawing.kind === "image" ? (
+                      <Image src={drawing.url} alt={name} fill unoptimized className="object-contain p-3" />
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-3 text-[#8a7f72]">
+                        <FileText size={40} strokeWidth={1.2} />
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.3em]">PDF</span>
+                      </div>
+                    )}
+                    {drawing.kind === "image" && project.watermark && <WatermarkOverlay />}
+                  </div>
+                  <div className="flex items-center justify-between gap-4 pt-3">
+                    <p dir="auto" className="min-w-0 truncate text-[15px] font-medium text-[#171614]">
+                      {name}
+                    </p>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#171614] transition-colors group-hover:bg-[#171614] group-hover:text-white">
+                      <ArrowUpRight size={15} className="rtl:-scale-x-100" />
+                    </span>
+                  </div>
+                </>
+              );
+              return drawing.kind === "image" ? (
+                <button
+                  key={drawing.id}
+                  type="button"
+                  onClick={() => setOpenDrawing(drawingImages.indexOf(drawing))}
+                  className="group block text-start"
+                >
+                  {body}
+                </button>
+              ) : (
+                <a key={drawing.id} href={drawing.url} target="_blank" rel="noreferrer" className="group block">
+                  {body}
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <Lightbox
+        images={drawingImages.map((drawing) => ({ url: drawing.url, caption: drawingName(drawing, drawings.indexOf(drawing)) }))}
+        index={openDrawing}
+        onClose={() => setOpenDrawing(null)}
+        onNavigate={setOpenDrawing}
         watermark={project.watermark}
       />
 

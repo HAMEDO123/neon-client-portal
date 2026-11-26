@@ -41,6 +41,12 @@ export async function savePortfolio(projectId: string, _before: PortfolioResult,
   const place = text(form, "place", 80);
   const category = categoryOf(String(form.get("category") ?? ""));
   const picked = [...new Set(form.getAll("photo").map(String))];
+  const drawings = [...new Set(form.getAll("drawing").map(String))];
+  // Every drawing on the form carries its label box, ticked or not.
+  const labels = [...new Set(form.getAll("drawingRow").map(String))].map((id) => ({
+    id,
+    label: text(form, `drawingLabel:${id}`, 120) || null,
+  }));
   const cover = String(form.get("cover") ?? "") || null;
 
   if (shown && !title) return { ok: false, message: "Write the title clients will see before showing it." };
@@ -58,6 +64,10 @@ export async function savePortfolio(projectId: string, _before: PortfolioResult,
   // Only this project's photos can be ticked, whatever ids the form carried.
   const mine = { space: { projectId } };
   await prisma.$transaction([
+    // The same for drawings: this project's, and only the ticked ones shown.
+    prisma.drawing.updateMany({ where: { projectId, inPortfolio: true, id: { notIn: drawings } }, data: { inPortfolio: false } }),
+    prisma.drawing.updateMany({ where: { projectId, id: { in: drawings } }, data: { inPortfolio: true } }),
+    ...labels.map(({ id, label }) => prisma.drawing.updateMany({ where: { id, projectId }, data: { portfolioLabel: label } })),
     prisma.galleryImage.updateMany({ where: { ...mine, inPortfolio: true, id: { notIn: picked } }, data: { inPortfolio: false } }),
     prisma.galleryImage.updateMany({ where: { ...mine, id: { in: picked } }, data: { inPortfolio: true } }),
     prisma.project.update({
@@ -77,13 +87,14 @@ export async function savePortfolio(projectId: string, _before: PortfolioResult,
   ]);
 
   refresh(projectId);
+  const withDrawings = drawings.length > 0 ? ` and ${drawings.length} drawing${drawings.length === 1 ? "" : "s"}` : "";
   return {
     ok: true,
     message: !shown
       ? "Saved. It isn't on the portfolio."
       : picked.length === 0
-        ? "Saved. It's on the portfolio, with photos chosen for you."
-        : `Saved. It's on the portfolio with ${picked.length} photo${picked.length === 1 ? "" : "s"}.`,
+        ? `Saved. It's on the portfolio, with photos chosen for you${withDrawings}.`
+        : `Saved. It's on the portfolio with ${picked.length} photo${picked.length === 1 ? "" : "s"}${withDrawings}.`,
   };
 }
 

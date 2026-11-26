@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { autoPick, firstGuess, placeOf, areaOf, categoriesIn, wideAt, categoryOf, coverOf, moved, toPortfolioProject, whatsappLink, type PortfolioRow } from "../src/lib/portfolio";
+import { autoPick, drawingKind, firstGuess, placeOf, areaOf, categoriesIn, wideAt, categoryOf, coverOf, moved, toPortfolioProject, whatsappLink, type PortfolioRow } from "../src/lib/portfolio";
 
 // The public portfolio (/work), asked for on 2026-11-25: one link to send a
 // would-be client, showing the projects and photos the manager picks.
@@ -24,6 +24,7 @@ const row = (over: Partial<PortfolioRow> = {}): PortfolioRow => ({
     { name: "Empty", images: [] },
     { name: "Kitchen", images: [{ id: "c", imageUrl: "https://x/c.jpg", caption: null, inPortfolio: true }] },
   ] as unknown as PortfolioRow["spaces"], // named as the studio names them, to show the names go nowhere
+  drawings: [],
   ...over,
 });
 
@@ -174,9 +175,14 @@ describe("nothing of the client's reaches the public page", () => {
   it("names every field it reads", () => {
     assert.doesNotMatch(store, /include:/);
     assert.doesNotMatch(store, /name: true/, "neither the project's name nor a room's");
-    for (const field of ["clientName", "clientPhone", "clientEmail", "token", "accessCode", "name: true, portfolio", "pricingItems", "boqItems", "documents", "drawings"]) {
+    for (const field of ["clientName", "clientPhone", "clientEmail", "token", "accessCode", "name: true, portfolio", "pricingItems", "boqItems", "documents"]) {
       assert.ok(!store.includes(field), `portfolio-store.ts must not read ${field}`);
     }
+  });
+  it("reads only the ticked drawings, and never their own names", () => {
+    assert.match(store, /drawings: \{\s*where: \{ inPortfolio: true \}/);
+    const drawings = store.slice(store.indexOf("drawings:"));
+    assert.match(drawings, /select: \{ id: true, fileUrl: true, fileType: true, portfolioLabel: true \}/);
   });
   it("reads only shown projects", () => {
     assert.match(whole, /where: \{ portfolioShown: true \}/);
@@ -220,5 +226,39 @@ describe("the hero as stories", () => {
     assert.match(work, /onClick=\{onTap\}/);
     assert.match(work, /pointer-events-none relative z-10/);
     assert.match(work, /className="group pointer-events-auto min-w-0"/);
+  });
+});
+
+describe("the drawings on the portfolio", () => {
+  // 2026-11-26: "لازم نحط مع كل مشروع مخططاته التنفيذية لانه في كثير ناس بهمهم".
+  it("are the ones a browser can show: pictures and PDFs, not AutoCAD files", () => {
+    assert.equal(drawingKind("pdf"), "pdf");
+    assert.equal(drawingKind("PNG"), "image");
+    assert.equal(drawingKind("image/jpeg"), "image");
+    assert.equal(drawingKind("dwg"), null);
+    assert.equal(drawingKind("", "https://x/a.pdf?v=2"), "pdf");
+  });
+  it("go out under the label written for the public, or none, and the dwg stays out", () => {
+    const shown = toPortfolioProject(
+      row({
+        drawings: [
+          { id: "d1", fileUrl: "https://x/1.pdf", fileType: "pdf", portfolioLabel: " Ground floor plan " },
+          { id: "d2", fileUrl: "https://x/2.png", fileType: "png", portfolioLabel: "  " },
+          { id: "d3", fileUrl: "https://x/3.dwg", fileType: "dwg", portfolioLabel: "CAD" },
+        ],
+      })
+    );
+    assert.deepEqual(shown?.drawings, [
+      { id: "d1", label: "Ground floor plan", url: "https://x/1.pdf", kind: "pdf" },
+      { id: "d2", label: null, url: "https://x/2.png", kind: "image" },
+    ]);
+  });
+  it("are ticked only on the project's own drawings", () => {
+    const actions = read("src", "lib", "actions", "portfolio-actions.ts");
+    assert.match(actions, /prisma\.drawing\.updateMany\(\{ where: \{ projectId, id: \{ in: drawings \} \}/);
+    assert.match(actions, /where: \{ id, projectId \}, data: \{ portfolioLabel: label \}/);
+  });
+  it("start unticked: a title block often carries the client's name", () => {
+    assert.match(read("prisma", "schema.prisma"), /inPortfolio    Boolean @default\(false\)/);
   });
 });

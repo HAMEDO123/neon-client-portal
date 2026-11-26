@@ -344,6 +344,11 @@ model Drawing {
   fileType      String
   fileSize      Int?
   order         Int     @default(0)
+  /// Ticked for the public portfolio (lib/portfolio.ts). Off until somebody
+  /// ticks it: a drawing's title block often carries the client's name.
+  inPortfolio    Boolean @default(false)
+  /// What the portfolio calls it — never `name`, which is often the client's.
+  portfolioLabel String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

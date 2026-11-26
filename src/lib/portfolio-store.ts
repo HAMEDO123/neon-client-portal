@@ -31,6 +31,12 @@ const PUBLIC_FIELDS = {
       },
     },
   },
+  // Only the ticked ones, and never their own names (the client's, often).
+  drawings: {
+    where: { inPortfolio: true },
+    orderBy: { order: "asc" },
+    select: { id: true, fileUrl: true, fileType: true, portfolioLabel: true },
+  },
 } as const;
 
 /** Every shown project with something to show, in the manager's order. */
