@@ -742,6 +742,19 @@ function renderNeeds(chat) {
     catch (e) { $('forceBtn').disabled = false; alert(e.message); }
   };
 }
+/** group switch for «شادي», the assistant that answers the team when called */
+function renderTeamBtn(chat) {
+  const b = $('teamBotBtn'); if (!b || !chat) return;
+  b.classList.toggle('off', !chat.teamBot);
+  b.textContent = chat.teamBot ? 'شادي شغّال بالقروب' : 'شادي موقوف بالقروب';
+  b.title = chat.teamBot ? 'شادي (Claude) بيرد لما حدا يناديه بالقروب. اضغط لإيقافه' : 'اضغط عشان شادي (Claude) يرد لما حدا يناديه بالقروب';
+  b.disabled = false;
+  b.onclick = async () => {
+    b.disabled = true;
+    try { const r = await api(`/api/chats/${encodeURIComponent(chat.jid)}/teambot`, { method: 'POST', body: { on: !chat.teamBot } }); chat.teamBot = r.teamBot; renderTeamBtn(chat); }
+    catch (e) { b.disabled = false; alert(e.message); }
+  };
+}
 /** per-chat switch for automatic replies (header button) */
 function renderAutoBtn(chat) {
   const b = $('autoChatBtn'); if (!b || !chat) return;
@@ -789,10 +802,11 @@ async function openChat(jid, opts = {}) {
   $('chatHead').innerHTML = `<button class="icon-btn back" id="backBtn" aria-label="رجوع"><svg class="flip" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5m6-6-6 6 6 6"/></svg></button><div class="avatar">${avatarInner(chat.name)}</div>
     <div style="min-width:0"><div class="name" dir="${nd(chat.name)}">${esc(chat.name)}</div><div class="sub" dir="${chat.phone ? 'ltr' : 'auto'}" style="text-align:start">${esc(chat.phone || (chat.group ? 'مجموعة' : ''))}</div></div>
     <span style="flex:1"></span>
-    ${chat.group ? '' : '<button class="auto-chat" id="autoChatBtn"></button>'}
+    ${chat.group ? '<button class="auto-chat" id="teamBotBtn"></button>' : '<button class="auto-chat" id="autoChatBtn"></button>'}
     <button class="icon-btn close-chat" id="closeChatBtn" title="إغلاق المحادثة (Esc)" aria-label="إغلاق المحادثة"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
   $('closeChatBtn').onclick = closeChat;
   renderAutoBtn(chat);
+  renderTeamBtn(chat);
   renderNeeds(chat);
   $('backBtn').onclick = () => { $('app').classList.remove('in-chat'); };
   $('composer').hidden = false;
@@ -1157,7 +1171,7 @@ function connect() {
   es.addEventListener('reload', () => { loadChats().then(updateTitle); briefSoon(true); });
   es.addEventListener('brief-progress', (e) => { briefRunning = true; briefProgress = JSON.parse(e.data); renderBrief(); });
   es.addEventListener('brief-done', () => { loadChats(); if (!$('briefView').hidden) loadBrief(); });
-  es.addEventListener('chat', (e) => { const c = JSON.parse(e.data); upsertChat(c); renderList(); updateTitle(); if (c.jid === active) { renderAutoBtn(c); renderNeeds(c); } });
+  es.addEventListener('chat', (e) => { const c = JSON.parse(e.data); upsertChat(c); renderList(); updateTitle(); if (c.jid === active) { renderAutoBtn(c); renderTeamBtn(c); renderNeeds(c); } });
   es.addEventListener('settings', (e) => renderAuto(JSON.parse(e.data)));
   es.addEventListener('critical', (e) => {
     const v = JSON.parse(e.data);

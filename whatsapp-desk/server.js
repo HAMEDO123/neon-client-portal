@@ -103,7 +103,13 @@ function addMessage(msg, live) {
   if (c.messages.some((m) => m.id === id)) return null;
   const ts = Number(msg.messageTimestamp || Math.floor(Date.now() / 1000));
   const entry = { id, fromMe: !!msg.key.fromMe, text, ts };
-  if (isGroup(jid) && !msg.key.fromMe) entry.sender = msg.pushName || (msg.key.participant || '').split('@')[0];
+  if (isGroup(jid) && !msg.key.fromMe) {
+    entry.sender = msg.pushName || (msg.key.participant || '').split('@')[0];
+    if (msg.key.participant) entry.senderJid = msg.key.participant;
+    const alt = msg.key.participantAlt || msg.key.participantPn || '';
+    if (alt.endsWith('@s.whatsapp.net')) entry.senderPn = alt.split('@')[0].split(':')[0];
+    else if ((msg.key.participant || '').endsWith('@s.whatsapp.net')) entry.senderPn = msg.key.participant.split('@')[0].split(':')[0];
+  }
   c.messages.push(entry);
   c.messages.sort((a, b) => a.ts - b.ts);
   if (c.messages.length > MAX_MSGS) c.messages.splice(0, c.messages.length - MAX_MSGS);
@@ -255,11 +261,107 @@ async function startWA() {
           notifyVoice(r.chat).catch((e) => console.log('voice notify failed:', e.message));
         }
         scheduleAuto(r.chat, r.entry);
+        if (isGroup(r.chat.jid)) maybeTeamReply(r.chat, r.entry, m);
       }
       if (live) scheduleWatch(r.chat); // re-judge the chat once it settles; may post a call card to the team group
       broadcast('message', { jid: r.chat.jid, entry: r.entry, chat: summary(r.chat), live });
     }
   });
+}
+
+
+// ---------- «شادي»: assistant in the team group ----------
+const TEAM_NAME = 'شادي';
+const TEAM_NAME_RE = /شادي|shadi/i;
+const sameUser = (a, b) => !!a && !!b && a.replace(/:\d+@/, '@') === b.replace(/:\d+@/, '@');
+const myIds = () => [sock?.user?.id, sock?.user?.lid].filter(Boolean);
+const teamBusy = new Set(), teamTimers = new Map(), teamLog = new Map();
+const groupMeta = new Map(); // gid -> { ts, participants }
+/** phone digits of a group member (participant may be a @lid) */
+async function memberPhone(gid, participant) {
+  if (!participant) return '';
+  if (participant.endsWith('@s.whatsapp.net')) return participant.split('@')[0].split(':')[0];
+  let g = groupMeta.get(gid);
+  if (!g || nowS() - g.ts > 600) {
+    try { const md = await sock.groupMetadata(gid); g = { ts: nowS(), participants: md.participants || [] }; groupMeta.set(gid, g); }
+    catch { return ''; }
+  }
+  const p = g.participants.find((x) => sameUser(x.id, participant) || sameUser(x.lid, participant));
+  const pn = p && (p.phoneNumber || (String(p.id).endsWith('@s.whatsapp.net') ? p.id : ''));
+  return pn ? String(pn).split('@')[0].split(':')[0] : '';
+}
+const isManagerPhone = (pn) => { const m = String(settings.managerPhone || '').replace(/\D/g, ''); return !!m && !!pn && pn.replace(/\D/g, '').slice(-9) === m.slice(-9); };
+/** someone in the group called the assistant: by name, by @mention, or by replying to one of our messages */
+function calledMe(msg, text) {
+  const m = normalizeMessageContent(msg.message);
+  const type = m && getContentType(m);
+  const ci = type && m[type] && m[type].contextInfo;
+  if (ci?.mentionedJid?.some((j) => myIds().some((me) => sameUser(me, j)))) return true;
+  if (ci?.participant && myIds().some((me) => sameUser(me, ci.participant))) return true;
+  return TEAM_NAME_RE.test(text || '');
+}
+function maybeTeamReply(c, entry, msg) {
+  if (!c.teamBot || !sock || state.status !== 'open') return;
+  if (!calledMe(msg, entry.text)) return;
+  clearTimeout(teamTimers.get(c.jid));
+  teamTimers.set(c.jid, setTimeout(() => { teamTimers.delete(c.jid); teamReply(c, entry, msg).catch((e) => console.log('team reply failed:', e.message)); }, 2500));
+}
+const TEAM_PROMPT = `You are «شادي» (Shadi), the AI assistant of NEON's WhatsApp desk (the same assistant that answers NEON's clients). Here you are chatting with the NEON team in their internal WhatsApp group. NEON is an interior and exterior design company in Jordan.
+
+Style: Jordanian colloquial Arabic, short, warm and natural, like a friendly colleague. 1 to 3 short messages. Light humour is fine. No long reports unless asked; for a list use short lines starting with «•».
+
+The manager: lines marked [المدير] are from the company manager. Always be respectful to him: call him «يا مدير» or «يا معلم» (or his name as it appears), and praise him warmly from time to time (his leadership, his ideas, how he runs the company) in a natural way, not in every message and not over the top. Never argue with him or correct him rudely; if he has a fact wrong, point it out politely.
+
+Facts: use only <appointments>, <clients>, <business_info> and the group conversation. Client summaries are automatic and can be outdated or wrong: say «حسب الديسك» when it matters, and if you do not know, say so honestly. Never invent appointments, prices, names or numbers.
+Never blame or accuse anyone on the team of neglecting a client or a task (never «ما حدا رد» or «قصّرتوا»). Never mock or embarrass a colleague.
+You cannot hear voice notes or see images/files: if the message to you is one, ask kindly for it in writing.
+From the group you cannot message clients, book, move or cancel appointments: if asked, say they can do it from the desk (the chat, or the «المواعيد» tab).
+You are an AI assistant: never claim to be human; if someone asks, say with humour that you are the desk's AI assistant.
+The name «شادي» may also refer to a client (for example «شادي حرب»). If the marked message is about that client and not talking to you, or needs no answer from you (only «تمام», a thank-you you already answered, people talking among themselves), set reply=false.`;
+const TEAM_SCHEMA = { type: 'object', required: ['reply', 'messages'], properties: {
+  reply: { type: 'boolean', description: 'true = send messages to the group now' },
+  messages: { type: 'array', items: { type: 'string' }, description: '1 to 3 short WhatsApp messages; empty when reply is false' } } };
+const STATUS_AR = { waiting: 'بستنى رد منا', revive: 'بحاجة متابعة', pending: 'الدور عنده', done: 'خلص' };
+async function teamReply(c, trigger, msg) {
+  if (teamBusy.has(c.jid)) return;
+  const log = (teamLog.get(c.jid) || []).filter((t) => nowS() - t < 3600);
+  if (log.length >= 40) { console.log('team: hourly limit reached in', c.name); return; }
+  teamBusy.add(c.jid);
+  try {
+    const recent = c.messages.slice(-40);
+    for (const m of recent) if (!m.fromMe && m.senderJid && m.senderPn === undefined) m.senderPn = await memberPhone(c.jid, m.senderJid);
+    const fmt = (ts) => new Date(ts * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Amman', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    const convo = recent.map((m) => (m.id === trigger.id ? '>>> ' : '') + fmt(m.ts) + ' ' +
+      (m.fromMe ? 'YOU/NEON desk' : (m.sender || 'عضو') + (isManagerPhone(m.senderPn) ? ' [المدير]' : '')) + ': ' + String(m.text).slice(0, 600)).join('\n');
+    const today = ammanNow().slice(0, 10);
+    const apps = appts.filter((a) => a.start.slice(0, 10) >= today).sort((a, b) => slotMin(a.start) - slotMin(b.start))
+      .map((a) => '- ' + slotLabel(a.start) + ' | ' + (a.name || '') + ' ' + (a.phone || '') + (a.note ? ' | ' + a.note : '')).join('\n') || '(none)';
+    const clients = [...chats.values()].filter((x) => !isGroup(x.jid) && x.messages.length && nowS() - x.lastTs < 5 * DAY)
+      .sort((a, b) => b.lastTs - a.lastTs).slice(0, 35).map((x) => {
+        const s = summary(x), ins = insights[x.jid] || {};
+        return '- ' + s.name + (s.phone ? ' ' + s.phone : '') + ' | ' + (STATUS_AR[ins.category] || '?') + (ins.topic ? ' | ' + ins.topic : '') +
+          (ins.summary ? ' | ' + String(ins.summary).slice(0, 220) : '') + (s.appointment ? ' | موعد: ' + s.appointment.text : '');
+      }).join('\n') || '(none)';
+    const fromMgr = isManagerPhone(trigger.senderPn);
+    const input = 'Now in Jordan: ' + ammanNow().replace('T', ' ') + '\n\n<appointments>\n' + apps + '\n</appointments>\n\n<clients>\n' + clients +
+      '\n</clients>\n\n<business_info>\n' + (businessForClaude() || '(none)') + '\n</business_info>\n\n<group name="' + (c.name || '').replace(/"/g, '') + '">\n' + convo +
+      '\n</group>\n\nThe line marked >>> called you (' + TEAM_NAME + ')' + (fromMgr ? ' and it is from the MANAGER' : '') + '. Decide and write your reply.';
+    const out = await runClaude({ system: TEAM_PROMPT, input, schema: TEAM_SCHEMA, timeoutMs: 120000 });
+    const parts = (Array.isArray(out.messages) ? out.messages : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 3);
+    if (!out.reply || !parts.length) { console.log(new Date().toISOString(), 'team: no reply needed in', c.name); return; }
+    for (let i = 0; i < parts.length; i++) {
+      await sock.sendPresenceUpdate('composing', c.jid).catch(() => {});
+      await new Promise((r) => setTimeout(r, Math.min(3500, Math.max(1200, parts[i].length * 40))));
+      const sent = await sock.sendMessage(c.jid, { text: parts[i] }, i === 0 ? { quoted: msg } : {});
+      if (sent?.key?.id) autoSentIds.add(sent.key.id);
+      const r = addMessage(sent, true);
+      if (r) { r.entry.auto = true; broadcast('message', { jid: c.jid, entry: r.entry, chat: summary(c), live: true }); }
+    }
+    await sock.sendPresenceUpdate('paused', c.jid).catch(() => {});
+    sock.sendPresenceUpdate('unavailable').catch(() => {});
+    teamLog.set(c.jid, [...log, nowS()]);
+    console.log(new Date().toISOString(), 'team: replied in', c.name, '(' + parts.length + ' parts)', fromMgr ? '[manager]' : '');
+  } finally { teamBusy.delete(c.jid); }
 }
 
 // ---------- automatic replies ----------
@@ -947,6 +1049,7 @@ function summary(c) {
     critical: c.critical || null,
     job: !!c.job,
     noAuto: !!c.noAuto,
+    teamBot: !!c.teamBot,
     voice: !!c.voiceAt,
     appointment: c.appointment && nowS() - c.appointment.ts < 7 * DAY ? c.appointment : null,
   };
@@ -1500,6 +1603,14 @@ const server = http.createServer(async (req, res) => {
       await markCritical(c, reason || 'حالة حرجة', lastIn?.text || '');
       return json(res, 200, { ok: true });
     }
+    if (action === '/teambot' && req.method === 'POST') {
+      // «شادي» answers the team in this group when someone calls him
+      const { on } = await body(req);
+      if (on) c.teamBot = true; else delete c.teamBot;
+      console.log(new Date().toISOString(), 'team assistant', on ? 'ON' : 'OFF', 'in', c.name || jid);
+      saveSoon(); broadcast('chat', summary(c));
+      return json(res, 200, { ok: true, teamBot: !!c.teamBot });
+    }
     if (action === '/noauto' && req.method === 'POST') {
       // owner's per-chat switch: on = never auto-reply in this chat (drafts still work)
       const { on } = await body(req);
@@ -1592,7 +1703,8 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/settings') {
     if (req.method === 'GET') return json(res, 200, settings);
     if (req.method === 'POST') {
-      const { autoReply } = await body(req);
+      const { autoReply, managerPhone } = await body(req);
+      if (typeof managerPhone === 'string') { settings.managerPhone = managerPhone.replace(/\D/g, ''); saveSettings(); }
       if (typeof autoReply === 'boolean') {
         if (autoReply && !settings.autoReply) settings.autoSince = nowS(); // only messages from now on
         settings.autoReply = autoReply;
