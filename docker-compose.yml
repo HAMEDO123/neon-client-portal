@@ -188,6 +188,10 @@ services:
     build: ./whatsapp-desk
     container_name: neon-desk
     restart: unless-stopped
+    environment:
+      # «شادي» takes pay off on the manager's word through the platform (src/app/api/desk/cutoff).
+      PORTAL_URL: http://app:3000
+      DESK_SECRET: ${DESK_SECRET:-}
     volumes:
       # The WhatsApp session, chats, appointments, company info, the token.
       # Named, so `down` leaves it alone; losing it means scanning the QR again.

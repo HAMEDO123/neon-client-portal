@@ -144,7 +144,19 @@ describe("who may take money off", () => {
   });
 
   it("needs a reason, because the person is told it", () => {
-    assert.match(actions, /if \(!reason\) throw new Refusal\(/);
+    // Written once (lib/manual-cutoff.ts) for the payroll screen, the phone and the desk's assistant.
+    assert.match(read("src", "lib", "manual-cutoff.ts"), /if \(!reason\) throw new Refusal\(/);
+    assert.match(actions, /await applyManualCutoff\(/);
+  });
+
+  // The WhatsApp desk acts on the manager's word in the team group; the route
+  // trusts the desk's secret and nothing else, and is shut without one.
+  it("lets the desk in only with its secret", () => {
+    const route = read("src", "app", "api", "desk", "cutoff", "route.ts");
+    assert.match(route, /const secret = process\.env\.DESK_SECRET;\n  if \(!secret\) return false;/);
+    assert.match(route, /timingSafeEqual\(given, wanted\)/);
+    assert.equal((route.match(/if \(!authorised\(request\)\)/g) ?? []).length, 2);
+    assert.match(route, /await applyManualCutoff\(/);
   });
 
   // Turned off and on again, nobody is charged under a rule they were told had ended.

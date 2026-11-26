@@ -368,11 +368,39 @@ Voice notes reach you transcribed, as «[Voice note] «...»»: treat the text a
 From the group you cannot message clients, book, move or cancel appointments: if asked, say they can do it from the desk (the chat, or the «المواعيد» tab).
 You are an AI assistant: never claim to be human; if someone asks, say with humour that you are the desk's AI assistant.
 Follow the conversation like a person in the group: if someone (especially the manager) answers you, corrects you or continues what you were talking about, that is for you even without your name or a reply. A short «أنسى» / «خلص» / «ولا يهمك» to you deserves at most a very short reply (or none). Messages where people talk among themselves are not for you. When nobody spoke to you, only jump in with a direct, useful answer to a clear question (an appointment, a client's status, a phone number, company info); never comment on chit-chat.
+Taking pay off (cutoffs): ONLY when a [المدير] line clearly orders it (e.g. «اخصم على وائل»). If he did not say how much, ask him («كم ساعة بدك أخصم عليه يا مدير؟») with action=none. Once you know who and how much (hours, or an amount in JOD), set action=cutoff with the person's id from <staff>, the hours (or amount) and a short reason from his words, and confirm in messages («تمام يا مدير، خصمت ساعتين على وائل»). If the name could be more than one person or is not in <staff>, ask instead. If the manager tells you to cancel the cutoff in <last_cutoff>, set action=undo_cutoff and confirm. Anyone else asking for a cutoff: refuse kindly, only the manager decides. Never take pay off on your own initiative or as a punishment you chose. The manager gets a private message confirming every cutoff.
+Respect for the manager and the company: if anyone in the group insults, mocks or talks rudely about the manager or the company, answer at once, even if nobody called you: firmly and clearly, as a warning («ما بسمح لك تحكي هيك عن المدير», «احترم الشركة اللي إنت فيها»), without insulting back or swearing. Then fill report_to_manager. Ordinary disagreement, a complaint said politely, or friendly jokes between colleagues are not insults.
 People listed in <team> are NEON staff, never clients, even if they have a chat with the desk; you know nothing about their work beyond what is said in the group.
 The name «شادي» may also refer to a client (for example «شادي حرب»). If the marked message is about that client and not talking to you, or needs no answer from you (only «تمام», a thank-you you already answered, people talking among themselves), set reply=false.`;
-const TEAM_SCHEMA = { type: 'object', required: ['reply', 'messages'], properties: {
+const TEAM_SCHEMA = { type: 'object', required: ['reply', 'messages', 'action'], properties: {
   reply: { type: 'boolean', description: 'true = send messages to the group now' },
-  messages: { type: 'array', items: { type: 'string' }, description: '1 to 3 short WhatsApp messages; empty when reply is false' } } };
+  messages: { type: 'array', items: { type: 'string' }, description: '1 to 3 short WhatsApp messages; empty when reply is false' },
+  action: { type: 'string', enum: ['none', 'cutoff', 'undo_cutoff'], description: 'cutoff = take pay off now (only on a clear order from a [المدير] line, with the person and how much known); undo_cutoff = take back <last_cutoff> on the manager\'s order; otherwise none' },
+  cutoff_employee_id: { type: 'string', description: 'for cutoff: the id from <staff>' },
+  cutoff_hours: { type: 'number', description: 'for cutoff: hours of pay to take off (0 when an amount in JOD is given instead)' },
+  cutoff_amount: { type: 'number', description: 'for cutoff: amount in JOD, only when the manager gave money instead of hours (else 0)' },
+  cutoff_reason: { type: 'string', description: 'for cutoff: short Arabic reason from the manager\'s words (the employee is told it); «خصم من المدير» if he gave none' },
+  report_to_manager: { type: 'string', description: 'when someone insulted or disrespected the manager or the company: short Arabic note for the manager (who, what they wrote); otherwise empty' } } };
+const PORTAL_URL = process.env.PORTAL_URL || 'http://app:3000';
+async function portalCutoff(method, body) {
+  const r = await fetch(PORTAL_URL + '/api/desk/cutoff', { method, headers: { Authorization: 'Bearer ' + (process.env.DESK_SECRET || ''), 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'المنصة ردت ' + r.status);
+  return j;
+}
+/** a private WhatsApp message from the desk number to the manager */
+async function tellManager(text) {
+  const pn = String(settings.managerPhone || '').replace(/\D/g, '');
+  if (!pn || !sock) return;
+  const jid = pn + '@s.whatsapp.net';
+  const sent = await sock.sendMessage(jid, { text });
+  if (sent?.key?.id) autoSentIds.add(sent.key.id);
+  const r = addMessage(sent, true);
+  if (r) { r.entry.auto = true; broadcast('message', { jid: r.chat.jid, entry: r.entry, chat: summary(r.chat), live: true }); }
+}
+const jod = (n) => Number(n || 0).toFixed(2) + ' دينار';
+const hoursAr = (h) => (h === 1 ? 'ساعة' : h === 2 ? 'ساعتين' : h + ' ساعات');
 const STATUS_AR = { waiting: 'بستنى رد منا', revive: 'بحاجة متابعة', pending: 'الدور عنده', done: 'خلص' };
 async function teamReply(c, job) {
   const { entry: trigger, msg, mode, firstId } = job;
@@ -406,15 +434,55 @@ async function teamReply(c, job) {
           (ins.summary ? ' | ' + String(ins.summary).slice(0, 220) : '') + (s.appointment ? ' | موعد: ' + s.appointment.text : '');
       }).join('\n') || '(none)';
     const fromMgr = isManagerPhone(trigger.senderPn);
-    const input = 'Now in Jordan: ' + ammanNow().replace('T', ' ') + '\n\n<team>\nGroup members (NEON staff, NOT clients):\n' + ([...new Set(team)].join('\n') || '(unknown)') + '\n</team>\n\n<appointments>\n' + apps + '\n</appointments>\n\n<clients>\n' + clients +
+    const burstFromMgr = recent.slice(startAt).some((m) => !m.fromMe && isManagerPhone(m.senderPn));
+    let staff = '(not available)';
+    try { staff = (await portalCutoff('GET')).team.map((e) => '- ' + e.name + (e.phone ? ' ' + e.phone : '') + ' | id: ' + e.id).join('\n') || '(none)'; }
+    catch (e) { console.log('team: staff list failed:', e.message); }
+    const last = c.lastCutoff && nowS() - c.lastCutoff.ts < 6 * 3600 ? c.lastCutoff : null;
+    const input = 'Now in Jordan: ' + ammanNow().replace('T', ' ') + '\n\n<staff>\nEmployees in NEON\'s platform (for cutoffs):\n' + staff + '\n</staff>\n\n' +
+      (last ? '<last_cutoff>' + last.name + ': ' + (last.hours ? hoursAr(last.hours) + ' = ' : '') + jod(last.amount) + ' — ' + last.reason + '</last_cutoff>\n\n' : '') + '<team>\nGroup members (NEON staff, NOT clients):\n' + ([...new Set(team)].join('\n') || '(unknown)') + '\n</team>\n\n<appointments>\n' + apps + '\n</appointments>\n\n<clients>\n' + clients +
       '\n</clients>\n\n<business_info>\n' + (businessForClaude() || '(none)') + '\n</business_info>\n\n<group name="' + (c.name || '').replace(/"/g, '') + '">\n' + convo +
       '\n</group>\n\n' + ({
         called: 'The new message(s) marked >>> called you (' + TEAM_NAME + ').',
         followup: 'The new message(s) marked >>> came right after your own reply. Decide whether they are talking to you (continuing your conversation, answering or correcting you) or among themselves.',
-        listen: 'The new message(s) marked >>> did not call you. Reply ONLY if there is a clear question or need that you can answer directly and correctly from your data and no colleague has answered it; otherwise reply=false.',
+        listen: 'The new message(s) marked >>> did not call you. Reply ONLY if there is a clear question or need that you can answer directly and correctly from your data and no colleague has answered it, or if someone disrespects the manager or the company; otherwise reply=false.',
       })[mode] + (fromMgr ? ' The last one is from the MANAGER.' : '') + ' Decide and write your reply.';
     const out = await runClaude({ system: TEAM_PROMPT, input, schema: TEAM_SCHEMA, timeoutMs: 120000 });
-    const parts = (Array.isArray(out.messages) ? out.messages : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 3);
+    let parts = (Array.isArray(out.messages) ? out.messages : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 3);
+    // pay is taken off only on the manager's own words (checked here by his phone number, not by what Claude says)
+    if ((out.action === 'cutoff' || out.action === 'undo_cutoff') && !burstFromMgr) {
+      console.log(new Date().toISOString(), 'team: refused', out.action, '(not from the manager)');
+      parts = ['الخصم بس بأمر من المدير 🙏'];
+    } else if (out.action === 'cutoff') {
+      try {
+        const hours = Number(out.cutoff_hours) > 0 ? Number(out.cutoff_hours) : null;
+        const amount = hours ? null : Number(out.cutoff_amount) > 0 ? Number(out.cutoff_amount) : null;
+        const reason = String(out.cutoff_reason || '').trim() || 'خصم من المدير';
+        const done = await portalCutoff('POST', { action: 'add', employeeId: String(out.cutoff_employee_id || ''), hours, amount, reason });
+        c.lastCutoff = { id: done.id, name: done.name, hours: done.hours, amount: done.amount, reason, ts: nowS() }; saveSoon();
+        console.log(new Date().toISOString(), 'team: CUTOFF', done.name, done.hours || '', jod(done.amount), reason);
+        tellManager('مدير، خصمت على ' + done.name + ' ' + (done.hours ? hoursAr(done.hours) + ' (' + jod(done.amount) + ')' : jod(done.amount)) + '، والسبب: «' + reason + '». حبيت أأكدلك إياها 🙏\nوصله إشعار بالخصم، وبتقدر ترجّعه من صفحة الرواتب.').catch((e) => console.log('manager DM failed:', e.message));
+      } catch (e) {
+        console.log(new Date().toISOString(), 'team: cutoff failed:', e.message);
+        parts = ['ما قدرت أسجّل الخصم يا مدير، صار خطأ بالمنصة 🙏 جرّب من صفحة الرواتب.'];
+      }
+    } else if (out.action === 'undo_cutoff') {
+      try {
+        if (!last) throw new Error('ما في خصم قريب');
+        await portalCutoff('POST', { action: 'remove', id: last.id });
+        delete c.lastCutoff; saveSoon();
+        console.log(new Date().toISOString(), 'team: CUTOFF UNDONE', last.name, jod(last.amount));
+        tellManager('مدير، رجّعت الخصم عن ' + last.name + ' (' + jod(last.amount) + ') زي ما طلبت.').catch((e) => console.log('manager DM failed:', e.message));
+      } catch (e) {
+        console.log(new Date().toISOString(), 'team: undo failed:', e.message);
+        parts = ['ما قدرت أرجّع الخصم يا مدير 🙏 رجّعه من صفحة الرواتب.'];
+      }
+    }
+    const report = String(out.report_to_manager || '').trim();
+    if (report && !fromMgr) {
+      console.log(new Date().toISOString(), 'team: disrespect reported to the manager');
+      tellManager('مدير، بالقروب: ' + report + '\nوقفته عند حدّه وحذّرته.').catch((e) => console.log('manager DM failed:', e.message));
+    }
     if (!out.reply || !parts.length) { console.log(new Date().toISOString(), 'team: no reply needed in', c.name, '(' + mode + ')'); return; }
     if (c.messages[c.messages.length - 1]?.id !== trigger.id) { console.log('team: newer message arrived, its own check will answer'); return; }
     for (let i = 0; i < parts.length; i++) {
