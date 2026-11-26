@@ -444,6 +444,7 @@ const AUTO_SCHEMA = {
     reason: { type: 'string', description: 'when reply is false: short reason in Arabic for the owner; otherwise empty' },
     appointment: { type: 'string', description: 'if the client has just agreed to a visit/meeting day and time: short Arabic summary with the ACTUAL calendar date (weekday + date, e.g. «الأحد 22 نوفمبر»), time and place; otherwise empty' },
     appointment_start: { type: 'string', description: 'when appointment is set: its start as Jordan local time "YYYY-MM-DDTHH:MM" (24h); otherwise empty' },
+    reschedule_request: { type: 'string', description: 'if the client already has a booked appointment (see <booked>) and asks to change its day or time: short Arabic note of what he wants (e.g. «بدو يغيّره للسبت الساعة 4»); otherwise empty' },
     cancel_appointment: { type: 'boolean', description: 'true ONLY if the client insisted on cancelling a second time (after you tried to keep him) and your reply accepts the cancellation' },
     job_application: { type: 'boolean', description: 'true if the sender is applying for a job / sending a CV or portfolio' },
     nothing_to_answer: { type: 'boolean', description: 'true when reply is false only because the client just closed the conversation (thanks, ok, a courtesy) and nothing needs an answer' },
@@ -468,6 +469,7 @@ You are now replying AUTOMATICALLY: your text is sent to the client immediately,
   * if it looks like a job application (CV, résumé, portfolio, سيرة ذاتية, طلب توظيف, or someone offering to work with us): thank him for his interest with «شكراً على اهتمامك» (never «يعطيك العافية على اهتمامك»), say his file reached us and the management will contact him, set job_application=true. No sales talk, no prices, no visit.
   * otherwise: say it reached you (e.g. «وصلني الملف») and ask what it is about or what he needs for his project.
 - Scheduling: every visit takes 45 minutes. Never offer or accept a time that overlaps a slot in <schedule>, and stay within the working hours in the business info. If the client asks for a taken time, tell him politely that there is another appointment at that time and offer the nearest free times. Never mention other clients.
+- A booked appointment (see <booked>) is fixed: never change it yourself. If the client asks to move it to another day or time, do NOT agree to, offer or confirm any new time, and leave appointment and appointment_start empty. Just reply briefly that you will check the company's appointments and get back to him, for example «تمام، بشوف مواعيد الشركة وبرجعلك», and set reschedule_request. The team will contact him.
 - Never lose a client easily. If the client wants to cancel an appointment or back out (especially over price), do NOT accept on the first request: empathize, ask what worries him, and convince him that what we offer is the best value for this price using the strengths in the business info, then suggest keeping the free, no-commitment visit. Accept a cancellation only if he insists again after that; then accept politely, leave the door open, and set cancel_appointment=true.
 - Angry, rude or insulting client (insults, «تافه»، «بكرهكم», no threats and no real complaint about our work): still reply=true. Stay calm and polite, do not argue, do not take it personally and never insult back; acknowledge briefly and generally (for example «حقك علينا إذا في إشي ضايقك»). Do not admit a mistake or apologize for a specific message of ours, and never call our earlier reply rude or wrong, unless it really was. Answer any real question in his messages (for example if he asks to see our work, give the website link). No sales push, no price and no visit in that reply. If he keeps insulting after your calm reply, a second calm reply is fine, then stop answering insults (reply=false, nothing_to_answer=true).
 - CRITICAL: if the client threatens violence or damage (for example «بكسرلك الشركة»), harasses, threatens legal action, or says anything dangerous or urgent, set critical=true (reason in Arabic) AND reply=true with a short calming message: stay calm and respectful, acknowledge how he feels, apologize for any inconvenience, and say the company management will contact him personally very soon. No sales talk, no prices, no appointment, no arguing, never threaten back.
@@ -651,6 +653,25 @@ async function notifyVoice(c) {
   }
 }
 
+/** a client asked to move his booked appointment: the bot did not change it, the team decides */
+async function notifyMoveAsk(c, booked, want) {
+  if (!sock || state.status !== 'open') return;
+  const key = booked.id + '|' + want;
+  if (c.moveAsked === key) return; // same request already posted
+  c.moveAsked = key; saveSoon();
+  const s = summary(c);
+  const text = ['🔁 *طلب تغيير موعد*', `الزبون: ${s.name}`, s.phone ? `الرقم: ${s.phone}` : null, `موعده الحالي: ${slotLabel(booked.start)}`,
+    want ? `طلبه: ${want}` : null, 'الموعد ما تغيّر. حكيتله «بشوف مواعيد الشركة وبرجعلك»، تواصلوا معه.'].filter(Boolean).join('\n');
+  for (const name of settings.apptGroups || []) {
+    try {
+      const gid = await findGroupJid(name); if (!gid) continue;
+      const first = c.apptPosts?.[name];
+      await sock.sendMessage(gid, { text }, first ? { quoted: first } : {});
+      console.log(new Date().toISOString(), `reschedule request posted to «${name}»`);
+    } catch (e) { console.log(`reschedule request to «${name}» failed:`, e.message); }
+  }
+}
+
 /** post a plain text to every team group (appointments added or removed by hand) */
 async function postApptText(text) {
   if (!sock || state.status !== 'open') return;
@@ -755,7 +776,9 @@ async function runAuto(jid) {
     const lastPitch = mine.map((m) => /زيار|موعد|نمر عليك|نمرّ عليك|بتشرفنا/.test(m.text)).lastIndexOf(true);
     const pitchNote = lastPitch < 0 ? 'You have not suggested a visit yet in this conversation.'
       : `You last suggested a visit/appointment ${mine.length - 1 - lastPitch} of your messages ago (0 = your latest message). Do not suggest it again unless at least 3 of your messages have passed since, or the client brings it up.`;
-    const input = `Today is ${today} (Jordan time).\n${pitchNote}\n\n${scheduleForClaude()}\n\n<business_info>\n${businessForClaude() || '(none provided)'}\n</business_info>\n\n${ownerExamplesFor(c)}\n\n` +
+    const myAppt = upcomingAppts().find((a) => a.jid === jid);
+    const bookedNote = myAppt ? `<booked>This client already has a booked appointment: ${slotLabel(myAppt.start)}. It is fixed; you never change it.</booked>\n\n` : '';
+    const input = `Today is ${today} (Jordan time).\n${pitchNote}\n\n${bookedNote}${scheduleForClaude()}\n\n<business_info>\n${businessForClaude() || '(none provided)'}\n</business_info>\n\n${ownerExamplesFor(c)}\n\n` +
       `<client name="${(c.name || '').replace(/"/g, '')}">\n<conversation>\n${transcript(c, 30) || '(empty)'}\n</conversation>\n</client>\n\nDecide and write the reply now.`;
     const sys = SYSTEM_PROMPT + AUTO_RULES + (force ? FORCE_RULE : '');
     let out = await runClaude({ system: sys, input, schema: AUTO_SCHEMA, timeoutMs: 120000 });
@@ -792,7 +815,18 @@ async function runAuto(jid) {
     if (pp) { console.log(new Date().toISOString(), 'auto: blocked (price check)', c.name || jid, pp); return needsYou(c, pp); }
     // double-booking guard: the agreed time must not overlap another client's visit
     const rawStart = String(out.appointment_start || '').trim().replace(' ', 'T').slice(0, 16);
-    const apptStart = SLOT_RE.test(rawStart) ? rawStart : '';
+    let apptStart = SLOT_RE.test(rawStart) ? rawStart : '';
+    const booked = upcomingAppts().find((a) => a.jid === jid);
+    let moveAsk = null;
+    if (booked && ((apptStart && apptStart !== booked.start) || String(out.reschedule_request || '').trim())) {
+      moveAsk = { booked, want: String(out.reschedule_request || '').trim().replace(/^(true|false)$/i, '') || (apptStart ? `بدو ${slotLabel(apptStart)}` : '') };
+      if (apptStart && apptStart !== booked.start) {
+        // Claude agreed to a new time anyway: do not book it, and do not send that agreement
+        console.log(new Date().toISOString(), 'auto: blocked (bot tried to move a booked appointment)', c.name || jid, booked.start, '->', apptStart);
+        parts.splice(0, parts.length, 'تمام، بشوف مواعيد الشركة وبرجعلك');
+      }
+      apptStart = ''; out.appointment = '';
+    }
     const taken = apptStart && clash(apptStart, jid);
     if (taken) { console.log(new Date().toISOString(), 'auto: blocked (slot taken)', c.name || jid, apptStart); return needsYou(c, `الوقت المتفق عليه (${slotLabel(apptStart)}) يتعارض مع موعد آخر`); }
     const offHours = apptStart && hoursProblem(apptStart);
@@ -832,7 +866,14 @@ async function runAuto(jid) {
     }
     let appt = String(out.appointment || '').trim();
     let apptPost = { kind: 'new' };
-    if (appt && apptStart) {
+    if (moveAsk) {
+      console.log(new Date().toISOString(), 'auto: RESCHEDULE REQUEST', c.name || jid, moveAsk.booked.start, moveAsk.want);
+      notifyMoveAsk(c, moveAsk.booked, moveAsk.want).catch((e) => console.log('reschedule notify failed:', e.message));
+    }
+    if (appt && booked && apptStart === booked.start) {
+      apptPost = { kind: 'same' }; // already booked at this time: keep it untouched (and its reminder)
+      appt = `${appt} (${slotLabel(apptStart)})`;
+    } else if (appt && apptStart) {
       const s0 = summary(c);
       const booked = bookAppt({ jid, name: s0.name, phone: s0.phone, start: apptStart, note: appt, by: 'auto' });
       if (booked.prev && booked.prev.start === apptStart) apptPost = { kind: 'same' };
