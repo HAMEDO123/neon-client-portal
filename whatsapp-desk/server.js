@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import makeWASocket, {
   useMultiFileAuthState, DisconnectReason, Browsers,
-  normalizeMessageContent, getContentType, fetchLatestWaWebVersion,
+  normalizeMessageContent, getContentType, fetchLatestWaWebVersion, downloadMediaMessage,
 } from 'baileys';
 import QRCode from 'qrcode';
 import pino from 'pino';
@@ -252,21 +252,53 @@ async function startWA() {
     for (const m of messages) {
       const r = addMessage(m, live);
       if (!r) continue;
-      if (r.entry.fromMe) noteOwnMessage(r.chat, r.entry);
-      else if (live) {
-        // voice notes: alert the owner (Claude cannot listen to them)
-        if (/^\[(Voice note|Audio)\]/.test(r.entry.text) && !isGroup(r.chat.jid)) {
-          r.chat.voiceAt = r.entry.ts; saveSoon();
-          broadcast('voice', { jid: r.chat.jid, name: summary(r.chat).name });
-          notifyVoice(r.chat).catch((e) => console.log('voice notify failed:', e.message));
-        }
-        scheduleAuto(r.chat, r.entry);
-        if (isGroup(r.chat.jid)) maybeTeamReply(r.chat, r.entry, m);
-      }
-      if (live) scheduleWatch(r.chat); // re-judge the chat once it settles; may post a call card to the team group
-      broadcast('message', { jid: r.chat.jid, entry: r.entry, chat: summary(r.chat), live });
+      // a voice note is turned into text first (local Whisper), then handled like any message
+      if (live && isBareVoice(r.entry.text) && (!isGroup(r.chat.jid) || r.chat.teamBot)) { handleVoice(r, m, live); continue; }
+      afterMessage(r, m, live);
     }
   });
+}
+
+const isBareVoice = (t) => t === '[Voice note]' || t === '[Audio]';
+const WHISPER_URL = process.env.WHISPER_URL || 'http://neon-whisper:3478';
+/** voice note -> { text, clear } through the local Whisper service; null when it could not be done */
+async function transcribeVoice(m) {
+  try {
+    const buf = await downloadMediaMessage(m, 'buffer', {}, { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage });
+    const r = await fetch(WHISPER_URL + '/transcribe', { method: 'POST', body: buf, headers: { 'Content-Type': 'application/octet-stream' }, signal: AbortSignal.timeout(120000) });
+    if (!r.ok) throw new Error('whisper answered ' + r.status);
+    const j = await r.json();
+    const text = String(j.text || '').trim();
+    return { ...j, text, clear: !!text && j.avg_logprob > -1.0 && j.no_speech_prob < 0.8 };
+  } catch (e) { console.log(new Date().toISOString(), 'voice transcription failed:', e.message); return null; }
+}
+async function handleVoice(r, m, live) {
+  r.entry.transcribing = true;
+  const t = await transcribeVoice(m);
+  delete r.entry.transcribing;
+  if (t?.clear) {
+    r.entry.text = r.entry.text + ' «' + t.text.replace(/[«»]/g, '"') + '»';
+    r.entry.transcribed = true;
+    saveSoon();
+    console.log(new Date().toISOString(), 'voice transcribed', summary(r.chat).name, t.duration + 's in ' + t.seconds + 's');
+  } else if (t) console.log(new Date().toISOString(), 'voice unclear', summary(r.chat).name, 'logprob', t.avg_logprob, 'no_speech', t.no_speech_prob);
+  afterMessage(r, m, live);
+}
+/** everything that follows a new message: owner bookkeeping, auto reply, team assistant, watch, UI */
+function afterMessage(r, m, live) {
+  if (r.entry.fromMe) noteOwnMessage(r.chat, r.entry);
+  else if (live) {
+    // voice notes Whisper could not make out: alert the owner (Claude cannot listen to them)
+    if (isBareVoice(r.entry.text) && !isGroup(r.chat.jid)) {
+      r.chat.voiceAt = r.entry.ts; saveSoon();
+      broadcast('voice', { jid: r.chat.jid, name: summary(r.chat).name });
+      notifyVoice(r.chat).catch((e) => console.log('voice notify failed:', e.message));
+    }
+    scheduleAuto(r.chat, r.entry);
+    if (isGroup(r.chat.jid)) maybeTeamReply(r.chat, r.entry, m);
+  }
+  if (live) scheduleWatch(r.chat); // re-judge the chat once it settles; may post a call card to the team group
+  broadcast('message', { jid: r.chat.jid, entry: r.entry, chat: summary(r.chat), live });
 }
 
 
@@ -312,7 +344,7 @@ function maybeTeamReply(c, entry, msg) {
     const lastOurs = [...before].reverse().find((m) => m.fromMe && m.auto);
     if (lastOurs && entry.ts - lastOurs.ts < 10 * 60 && before.slice(before.indexOf(lastOurs)).length <= 4) mode = 'followup';
   }
-  if (mode === 'listen' && entry.text.startsWith('[')) return; // a photo/voice note nobody addressed to us
+  if (mode === 'listen' && entry.text.startsWith('[') && !entry.transcribed) return; // a photo/voice note nobody addressed to us
   const p = teamPending.get(c.jid);
   const next = { mode: p && MODE_RANK[p.mode] > MODE_RANK[mode] ? p.mode : mode, firstId: p ? p.firstId : entry.id, entry, msg };
   teamPending.set(c.jid, next);
@@ -332,7 +364,7 @@ The manager: lines marked [المدير] are from the company manager. Always be
 
 Facts: use only <appointments>, <clients>, <business_info> and the group conversation. Client summaries are automatic and can be outdated or wrong: say «حسب الديسك» when it matters, and if you do not know, say so honestly. Never invent appointments, prices, names or numbers.
 Never blame or accuse anyone on the team of neglecting a client or a task (never «ما حدا رد» or «قصّرتوا»). Never mock or embarrass a colleague.
-You cannot hear voice notes or see images/files: if the message to you is one, ask kindly for it in writing.
+Voice notes reach you transcribed, as «[Voice note] «...»»: treat the text as what was said (names and numbers may be misheard). A bare [Voice note] could not be made out, and you cannot see images or files: if the message to you is one of those, ask kindly for it in writing.
 From the group you cannot message clients, book, move or cancel appointments: if asked, say they can do it from the desk (the chat, or the «المواعيد» tab).
 You are an AI assistant: never claim to be human; if someone asks, say with humour that you are the desk's AI assistant.
 Follow the conversation like a person in the group: if someone (especially the manager) answers you, corrects you or continues what you were talking about, that is for you even without your name or a reply. A short «أنسى» / «خلص» / «ولا يهمك» to you deserves at most a very short reply (or none). Messages where people talk among themselves are not for you. When nobody spoke to you, only jump in with a direct, useful answer to a clear question (an appointment, a client's status, a phone number, company info); never comment on chit-chat.
@@ -601,7 +633,7 @@ You are now replying AUTOMATICALLY: your text is sent to the client immediately,
   * it is a real complaint or dispute about our work or service, or needs the owner's decision (custom price, discount beyond the business info, contract terms, payment problems).
   * the client EXPLICITLY asks whether he is talking to a bot, an AI, an automatic system, or a real human (reason: «الزبون يسأل إذا كان يحكي مع شخص حقيقي»). Never claim to be human and never deny being automated; the owner will answer this personally.
 - "مين انت؟" / "مين معي؟" / "مين حضرتك؟" is a question about identity, not about being a bot: answer it naturally with the company (for example «معك شركة نيون للتصميم الداخلي والخارجي») and continue the conversation. Do not claim to be a specific person.
-- Voice notes: never mention them and never ask the client to write them out (the owner has been alerted and will listen). If the client's latest messages are only voice notes, set reply=false and nothing_to_answer=true. If he also sent text messages, answer the text only.
+- Voice notes: a line «[Voice note] «...»» is the client's voice note, transcribed automatically: treat the quoted text as what he said and answer it exactly like a text message, without mentioning the voice note or the transcription. Speech-to-text can mishear names and numbers: if one that matters (an area, a phone number, a time) looks wrong or unclear, ask him to confirm it. A bare [Voice note] with no text could not be made out: never mention it and never ask the client to write it out (the owner has been alerted and will listen). If the client's latest messages are only bare voice notes, set reply=false and nothing_to_answer=true; if he also sent text messages, answer the text only.
 - Job seekers: if the person asks about work with us (فرص عمل، وظيفة، توظيف، شغل عندكم، تدريب، بدي أشتغل معكم), even with no file and even if he mentions design (for example «هل لديكم فرص عمل لتصميم داخلي»), he is looking for a JOB, not a client: thank him with «شكراً على اهتمامك», ask him to send his CV and portfolio here and say the management will review them and contact him. Never promise there is an opening. No sales talk, no prices, no visit. Set job_application=true.
 - Document, image, video or file: NEVER say you could not open it. Use the file name and the conversation:
   * if it looks like a job application (CV, résumé, portfolio, سيرة ذاتية, طلب توظيف, or someone offering to work with us): thank him for his interest with «شكراً على اهتمامك» (never «يعطيك العافية على اهتمامك»), say his file reached us and the management will contact him, set job_application=true. No sales talk, no prices, no visit.
@@ -894,6 +926,7 @@ async function runAuto(jid) {
   if (c.noAuto) return;                                              // owner turned auto replies off for this chat
   const last = c.messages[c.messages.length - 1];
   if (!last || last.fromMe) return;                                  // already answered
+  if (last.transcribing) return;                                     // its transcript will schedule the reply
   if (nowS() - (lastManualAt.get(jid) || 0) < AUTO.manualPauseSec) return; // owner is handling it
   const log = (autoLog.get(jid) || []).filter((t) => nowS() - t < AUTO.windowSec);
   if (log.length >= AUTO.maxPerWindow) return needsYou(c, 'توقف الرد التلقائي مؤقتاً في هذه المحادثة: 30 رداً خلال 3 ساعات (حماية من محادثة آلية لا تنتهي)');

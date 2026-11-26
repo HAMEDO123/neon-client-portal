@@ -196,6 +196,28 @@ services:
       # This PC only: the desk's own page, and the one place its Claude key is set.
       - "127.0.0.1:3477:3477"
 
+  whisper:
+    # Speech-to-text for the desk's WhatsApp voice notes (whisper-service/):
+    # faster-whisper large-v3 on this PC's GPU, so a client's voice note reaches
+    # Claude as text. Added 2026-11-26. Nothing leaves the PC; the model is
+    # downloaded once into its volume. The desk reaches it at http://neon-whisper:3478.
+    build: ./whisper-service
+    container_name: neon-whisper
+    restart: unless-stopped
+    volumes:
+      - whisper-models:/models
+    ports:
+      # This PC only, for checking.
+      - "127.0.0.1:3478:3478"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   db-data:
   desk-data:
+  whisper-models:

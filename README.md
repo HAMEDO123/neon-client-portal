@@ -112,6 +112,7 @@ npx prisma generate
 | `neon-whatsapp` | The WhatsApp worker, in its own project (`whatsapp-worker/`) because it holds a linked session. The site reaches it at `host.docker.internal:4100`. |
 | `neon-website` | nginx serving `deploy/website/` through the same tunnel, set up on 2026-11-10 to take `neonjo.com` over from NEXORA (now `nexorajo.space`; `/platform…` forwards there). **Only `www.neonjo.com` points here**, and it redirects to the bare domain — by 2026-11-14 `neonjo.com` itself was serving a new "NEON Studio" site from somewhere other than this PC. `127.0.0.1:3012` for checking. |
 | `neon-cameras` | The CCTV relay: go2rtc 1.9.14 (`alexxit/go2rtc`, ffmpeg included). The site registers the cameras added in the app with it at run time and proxies their pictures to the manager's phone. `127.0.0.1:1984` on this PC only (go2rtc's own page); never published. Settings in `deploy/go2rtc/` — see "Cameras" below. |
+| `neon-whisper` | Speech-to-text for the WhatsApp desk (`whisper-service/`, added 2026-11-26): faster-whisper large-v3 on the PC's RTX 3060 Ti through the NVIDIA runtime. The desk (`neon-desk`) sends each voice note to `http://neon-whisper:3478/transcribe` and a clear transcript reaches Claude as `[Voice note] «…»`; an unclear one falls back to the 🎤 alert. The model (~3 GB) lives in the `whisper-models` volume; nothing leaves the PC. `127.0.0.1:3478` on this PC only. |
 
 ```
 docker compose --env-file .env.docker up -d --build            # site + database
