@@ -678,17 +678,25 @@ async function notifyOneGroup(c, appt, name, opts = {}) {
     return;
   }
   const ins = insights[c.jid];
-  const text = [
-    opts.kind === 'change' ? '🔄 *تعديل موعد* (الزبون غيّر الوقت)' : '📅 *موعد جديد* (رتّبه الرد التلقائي)',
+  const change = opts.kind === 'change';
+  // a change is a short update, sent as a reply to the first post so the team sees which appointment moved
+  const text = (change ? [
+    '🔄 *تعديل على الموعد*: الزبون غيّر الوقت',
+    `الزبون: ${s.name}`,
+    `كان: ${opts.old}`,
+    `صار: ${opts.now || appt}`,
+  ] : [
+    '📅 *موعد جديد* (رتّبه الرد التلقائي)',
     `الزبون: ${s.name}`,
     s.phone ? `الرقم: ${s.phone}` : null,
-    opts.kind === 'change' ? `كان: ${opts.old}` : null,
-    `${opts.kind === 'change' ? 'صار' : 'الموعد'}: ${appt}`,
+    `الموعد: ${appt}`,
     ins?.summary ? `عن المشروع: ${ins.summary}` : null,
     'يحتاج تأكيد مع الزبون.',
-  ].filter(Boolean).join('\n');
-  await sock.sendMessage(gid, { text });
-  console.log(new Date().toISOString(), `appointment posted to «${name}»`);
+  ]).filter(Boolean).join('\n');
+  const first = change ? c.apptPosts?.[name] : null;
+  const sent = await sock.sendMessage(gid, { text }, first ? { quoted: first } : {});
+  if (sent?.key && !change) { c.apptPosts = { ...(c.apptPosts || {}), [name]: { key: sent.key, message: { conversation: text } } }; saveSoon(); }
+  console.log(new Date().toISOString(), `appointment posted to «${name}»`, change ? (first ? '(change, quoted)' : '(change)') : '');
 }
 
 /** critical situation (threat, harassment, legal threat…): flag it, alert the owner loudly, and warn the team group */
@@ -828,7 +836,7 @@ async function runAuto(jid) {
       const s0 = summary(c);
       const booked = bookAppt({ jid, name: s0.name, phone: s0.phone, start: apptStart, note: appt, by: 'auto' });
       if (booked.prev && booked.prev.start === apptStart) apptPost = { kind: 'same' };
-      else if (booked.prev) apptPost = { kind: 'change', old: slotLabel(booked.prev.start) };
+      else if (booked.prev) apptPost = { kind: 'change', old: slotLabel(booked.prev.start), now: slotLabel(apptStart) };
       appt = `${appt} (${slotLabel(apptStart)})`;
     } else if (appt && c.appointment && c.appointment.text === appt) apptPost = { kind: 'same' };
     if (appt) {
