@@ -300,11 +300,29 @@ function calledMe(msg, text) {
   if (ci?.participant && myIds().some((me) => sameUser(me, ci.participant))) return true;
   return TEAM_NAME_RE.test(text || '');
 }
+const MODE_RANK = { listen: 0, followup: 1, called: 2 };
+const teamPending = new Map(); // gid -> { mode, firstId, entry, msg }
+/** every group message: called -> answer; right after our own reply -> maybe a follow-up to us; otherwise just listen */
 function maybeTeamReply(c, entry, msg) {
   if (!c.teamBot || !sock || state.status !== 'open') return;
-  if (!calledMe(msg, entry.text)) return;
+  let mode = 'listen';
+  if (calledMe(msg, entry.text)) mode = 'called';
+  else {
+    const before = c.messages.slice(-6, -1);
+    const lastOurs = [...before].reverse().find((m) => m.fromMe && m.auto);
+    if (lastOurs && entry.ts - lastOurs.ts < 10 * 60 && before.slice(before.indexOf(lastOurs)).length <= 4) mode = 'followup';
+  }
+  if (mode === 'listen' && entry.text.startsWith('[')) return; // a photo/voice note nobody addressed to us
+  const p = teamPending.get(c.jid);
+  const next = { mode: p && MODE_RANK[p.mode] > MODE_RANK[mode] ? p.mode : mode, firstId: p ? p.firstId : entry.id, entry, msg };
+  teamPending.set(c.jid, next);
   clearTimeout(teamTimers.get(c.jid));
-  teamTimers.set(c.jid, setTimeout(() => { teamTimers.delete(c.jid); teamReply(c, entry, msg).catch((e) => console.log('team reply failed:', e.message)); }, 2500));
+  // wait for the burst to end; longer when nobody spoke to us (a colleague may answer first)
+  const wait = next.mode === 'listen' ? 12000 : next.mode === 'followup' ? 5000 : 2500;
+  teamTimers.set(c.jid, setTimeout(() => {
+    teamTimers.delete(c.jid); const job = teamPending.get(c.jid); teamPending.delete(c.jid);
+    teamReply(c, job).catch((e) => console.log('team reply failed:', e.message));
+  }, wait));
 }
 const TEAM_PROMPT = `You are «شادي» (Shadi), the AI assistant of NEON's WhatsApp desk (the same assistant that answers NEON's clients). Here you are chatting with the NEON team in their internal WhatsApp group. NEON is an interior and exterior design company in Jordan.
 
@@ -317,13 +335,17 @@ Never blame or accuse anyone on the team of neglecting a client or a task (never
 You cannot hear voice notes or see images/files: if the message to you is one, ask kindly for it in writing.
 From the group you cannot message clients, book, move or cancel appointments: if asked, say they can do it from the desk (the chat, or the «المواعيد» tab).
 You are an AI assistant: never claim to be human; if someone asks, say with humour that you are the desk's AI assistant.
+Follow the conversation like a person in the group: if someone (especially the manager) answers you, corrects you or continues what you were talking about, that is for you even without your name or a reply. A short «أنسى» / «خلص» / «ولا يهمك» to you deserves at most a very short reply (or none). Messages where people talk among themselves are not for you. When nobody spoke to you, only jump in with a direct, useful answer to a clear question (an appointment, a client's status, a phone number, company info); never comment on chit-chat.
+People listed in <team> are NEON staff, never clients, even if they have a chat with the desk; you know nothing about their work beyond what is said in the group.
 The name «شادي» may also refer to a client (for example «شادي حرب»). If the marked message is about that client and not talking to you, or needs no answer from you (only «تمام», a thank-you you already answered, people talking among themselves), set reply=false.`;
 const TEAM_SCHEMA = { type: 'object', required: ['reply', 'messages'], properties: {
   reply: { type: 'boolean', description: 'true = send messages to the group now' },
   messages: { type: 'array', items: { type: 'string' }, description: '1 to 3 short WhatsApp messages; empty when reply is false' } } };
 const STATUS_AR = { waiting: 'بستنى رد منا', revive: 'بحاجة متابعة', pending: 'الدور عنده', done: 'خلص' };
-async function teamReply(c, trigger, msg) {
-  if (teamBusy.has(c.jid)) return;
+async function teamReply(c, job) {
+  const { entry: trigger, msg, mode, firstId } = job;
+  if (teamBusy.has(c.jid)) { setTimeout(() => teamReply(c, job).catch(() => {}), 3000); return; }
+  if (c.messages[c.messages.length - 1]?.fromMe) return; // someone already posted from the desk number after this
   const log = (teamLog.get(c.jid) || []).filter((t) => nowS() - t < 3600);
   if (log.length >= 40) { console.log('team: hourly limit reached in', c.name); return; }
   teamBusy.add(c.jid);
@@ -331,24 +353,38 @@ async function teamReply(c, trigger, msg) {
     const recent = c.messages.slice(-40);
     for (const m of recent) if (!m.fromMe && m.senderJid && m.senderPn === undefined) m.senderPn = await memberPhone(c.jid, m.senderJid);
     const fmt = (ts) => new Date(ts * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Amman', weekday: 'short', hour: '2-digit', minute: '2-digit' });
-    const convo = recent.map((m) => (m.id === trigger.id ? '>>> ' : '') + fmt(m.ts) + ' ' +
+    const startAt = Math.max(0, recent.findIndex((m) => m.id === firstId));
+    const convo = recent.map((m, i) => (i >= startAt && !m.fromMe ? '>>> ' : '') + fmt(m.ts) + ' ' +
       (m.fromMe ? 'YOU/NEON desk' : (m.sender || 'عضو') + (isManagerPhone(m.senderPn) ? ' [المدير]' : '')) + ': ' + String(m.text).slice(0, 600)).join('\n');
     const today = ammanNow().slice(0, 10);
     const apps = appts.filter((a) => a.start.slice(0, 10) >= today).sort((a, b) => slotMin(a.start) - slotMin(b.start))
       .map((a) => '- ' + slotLabel(a.start) + ' | ' + (a.name || '') + ' ' + (a.phone || '') + (a.note ? ' | ' + a.note : '')).join('\n') || '(none)';
+    let members = [];
+    try { await memberPhone(c.jid, '_'); members = (groupMeta.get(c.jid)?.participants || []); } catch {}
+    const memberPns = new Set();
+    for (const p of members) { const pn = String(p.phoneNumber || (String(p.id).endsWith('@s.whatsapp.net') ? p.id : '')).split('@')[0].split(':')[0]; if (pn) memberPns.add(pn.slice(-9)); }
+    const team = [...chats.values()].filter((x) => !isGroup(x.jid) && memberPns.has(String(summary(x).phone || '').replace(/\D/g, '').slice(-9)))
+      .map((x) => '- ' + summary(x).name + ' ' + summary(x).phone);
+    for (const m of recent) if (!m.fromMe && m.sender && m.senderPn && !team.some((t) => t.includes(m.sender))) team.push('- ' + m.sender + ' +' + m.senderPn);
     const clients = [...chats.values()].filter((x) => !isGroup(x.jid) && x.messages.length && nowS() - x.lastTs < 5 * DAY)
+      .filter((x) => !memberPns.has(String(summary(x).phone || '').replace(/\D/g, '').slice(-9)))
       .sort((a, b) => b.lastTs - a.lastTs).slice(0, 35).map((x) => {
         const s = summary(x), ins = insights[x.jid] || {};
         return '- ' + s.name + (s.phone ? ' ' + s.phone : '') + ' | ' + (STATUS_AR[ins.category] || '?') + (ins.topic ? ' | ' + ins.topic : '') +
           (ins.summary ? ' | ' + String(ins.summary).slice(0, 220) : '') + (s.appointment ? ' | موعد: ' + s.appointment.text : '');
       }).join('\n') || '(none)';
     const fromMgr = isManagerPhone(trigger.senderPn);
-    const input = 'Now in Jordan: ' + ammanNow().replace('T', ' ') + '\n\n<appointments>\n' + apps + '\n</appointments>\n\n<clients>\n' + clients +
+    const input = 'Now in Jordan: ' + ammanNow().replace('T', ' ') + '\n\n<team>\nGroup members (NEON staff, NOT clients):\n' + ([...new Set(team)].join('\n') || '(unknown)') + '\n</team>\n\n<appointments>\n' + apps + '\n</appointments>\n\n<clients>\n' + clients +
       '\n</clients>\n\n<business_info>\n' + (businessForClaude() || '(none)') + '\n</business_info>\n\n<group name="' + (c.name || '').replace(/"/g, '') + '">\n' + convo +
-      '\n</group>\n\nThe line marked >>> called you (' + TEAM_NAME + ')' + (fromMgr ? ' and it is from the MANAGER' : '') + '. Decide and write your reply.';
+      '\n</group>\n\n' + ({
+        called: 'The new message(s) marked >>> called you (' + TEAM_NAME + ').',
+        followup: 'The new message(s) marked >>> came right after your own reply. Decide whether they are talking to you (continuing your conversation, answering or correcting you) or among themselves.',
+        listen: 'The new message(s) marked >>> did not call you. Reply ONLY if there is a clear question or need that you can answer directly and correctly from your data and no colleague has answered it; otherwise reply=false.',
+      })[mode] + (fromMgr ? ' The last one is from the MANAGER.' : '') + ' Decide and write your reply.';
     const out = await runClaude({ system: TEAM_PROMPT, input, schema: TEAM_SCHEMA, timeoutMs: 120000 });
     const parts = (Array.isArray(out.messages) ? out.messages : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 3);
-    if (!out.reply || !parts.length) { console.log(new Date().toISOString(), 'team: no reply needed in', c.name); return; }
+    if (!out.reply || !parts.length) { console.log(new Date().toISOString(), 'team: no reply needed in', c.name, '(' + mode + ')'); return; }
+    if (c.messages[c.messages.length - 1]?.id !== trigger.id) { console.log('team: newer message arrived, its own check will answer'); return; }
     for (let i = 0; i < parts.length; i++) {
       await sock.sendPresenceUpdate('composing', c.jid).catch(() => {});
       await new Promise((r) => setTimeout(r, Math.min(3500, Math.max(1200, parts[i].length * 40))));
@@ -360,7 +396,7 @@ async function teamReply(c, trigger, msg) {
     await sock.sendPresenceUpdate('paused', c.jid).catch(() => {});
     sock.sendPresenceUpdate('unavailable').catch(() => {});
     teamLog.set(c.jid, [...log, nowS()]);
-    console.log(new Date().toISOString(), 'team: replied in', c.name, '(' + parts.length + ' parts)', fromMgr ? '[manager]' : '');
+    console.log(new Date().toISOString(), 'team: replied in', c.name, '(' + parts.length + ' parts, ' + mode + ')', fromMgr ? '[manager]' : '');
   } finally { teamBusy.delete(c.jid); }
 }
 
