@@ -66,6 +66,8 @@ const AR: Record<string, string> = {
   "Images": "الصور",
   "Drawing": "مخطط",
   "Execution drawings": "المخططات التنفيذية",
+  "These drawings were made for this client and this space alone. Every NEON project is drawn from scratch for its own client — yours would be too.":
+    "هاي المخططات مصمّمة خصيصاً لهذا الزبون ولهاي المساحة بس. كل مشروع عند NEON بنرسم مخططاته من الصفر لزبونه — ومخططاتك كمان رح تنرسم إلك.",
   "The plans and details the project was built from. Open one to see it in full.": "المخططات والتفاصيل اللي اتنفّذ عليها المشروع. افتح أي مخطط لتشوفه كامل.",
   "Next project": "المشروع التالي",
   "Start a project": "ابدأ مشروعك",

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowDown, ArrowLeft, ArrowUpRight, FileText, MessageCircle } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUpRight, FileText, MessageCircle, PencilRuler } from "lucide-react";
 import { Lightbox } from "@/components/client/lightbox";
 import { WatermarkOverlay } from "@/components/client/watermark-overlay";
 import { useI18n } from "@/lib/client-i18n";
@@ -539,6 +539,11 @@ export function WorkProject({
             </div>
             <p className="max-w-sm text-sm text-[#6f6a63]">{t("The plans and details the project was built from. Open one to see it in full.")}</p>
           </div>
+          {/* Said where the drawings are (2026-11-26: "لازم تكتب انه المخططات مخصصة لكل زبون"). */}
+          <p className="mt-5 flex items-start gap-3 border border-[#d9d3c9] bg-white px-4 py-3 text-sm text-[#171614]">
+            <PencilRuler size={18} strokeWidth={1.6} className="mt-0.5 shrink-0 text-[#8a7f72]" />
+            <span>{t("These drawings were made for this client and this space alone. Every NEON project is drawn from scratch for its own client — yours would be too.")}</span>
+          </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
             {drawings.map((drawing, index) => {
               const name = drawingName(drawing, index);
