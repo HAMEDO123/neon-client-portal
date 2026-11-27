@@ -20,7 +20,13 @@ import {
   editAttendanceDay,
   removeAttendanceDay,
 } from "@/lib/actions/operations-actions";
-import { deleteSiteVisit, reportSiteVisit, scheduleSiteVisit, updateSiteVisit } from "@/lib/actions/site-visit-actions";
+import {
+  assignSiteVisit,
+  deleteSiteVisit,
+  reportSiteVisit,
+  scheduleSiteVisit,
+  updateSiteVisit,
+} from "@/lib/actions/site-visit-actions";
 import { savePlanningNotes, saveWorkHours } from "@/lib/actions/settings-actions";
 import { saveTimezone } from "@/lib/actions/whatsapp-actions";
 import {
@@ -141,7 +147,7 @@ export const actions: ActionRegistry = {
   },
 
   // --- Site visits ---------------------------------------------------------
-  // These four answer with a refusal rather than throwing it; `heard` hands
+  // These answer with a refusal rather than throwing it; `heard` hands
   // the app the same `{ error }` it always got.
   "ops/scheduleSiteVisit": async (input) => heard(await scheduleSiteVisit(input.form)),
   "ops/updateSiteVisit": async (input) => heard(await updateSiteVisit(str(input.args[0], "id"), input.form)),
@@ -151,6 +157,12 @@ export const actions: ActionRegistry = {
     return heard(await reportSiteVisit(id, state, input.form));
   },
   "ops/deleteSiteVisit": async (input) => heard(await deleteSiteVisit(str(input.args[0], "id"))),
+  // The manager handing a visit to somebody who keeps the diary — the website's
+  // /admin/site-visits form, for the phone and for NEON Ads, which puts the
+  // appointments the WhatsApp desk books on the visitor's list. Same form
+  // (employeeId, title, scheduledAt?, location?, purpose?, clientName?,
+  // clientPhone?, projectId?); `assignSiteVisit` is `requireAdmin` itself.
+  "ops/assignSiteVisit": async (input) => heard(await assignSiteVisit(input.form)),
 
   // --- Settings --------------------------------------------------------------
   "ops/saveWorkHours": async (input) => saveWorkHours(input.form),
