@@ -254,6 +254,8 @@ async function startWA() {
       if (!r) continue;
       // a voice note is turned into text first (local Whisper), then handled like any message
       if (live && isBareVoice(r.entry.text) && (!isGroup(r.chat.jid) || r.chat.teamBot)) { handleVoice(r, m, live); continue; }
+      // a picture is saved first so Claude can look at it, then handled like any message
+      if (live && isImageText(r.entry.text) && (!isGroup(r.chat.jid) || r.chat.teamBot)) { handleImage(r, m, live); continue; }
       afterMessage(r, m, live);
     }
   });
@@ -284,6 +286,50 @@ async function handleVoice(r, m, live) {
   } else if (t) console.log(new Date().toISOString(), 'voice unclear', summary(r.chat).name, 'logprob', t.avg_logprob, 'no_speech', t.no_speech_prob);
   afterMessage(r, m, live);
 }
+// ---------- pictures (2026-11-28: «بتقدرش تشوف الصور؟» → «اه») ----------
+// Each picture is kept in data/media for IMG_KEEP_DAYS and the latest few in a conversation are attached to
+// Claude's input (runClaude images), so the bot answers about what a plan, a room or a sketch actually shows.
+const MEDIA = path.join(DATA, 'media');
+const IMG_KEEP_DAYS = 30;
+const IMG_MAX = 4;              // pictures attached per Claude call (the newest)
+const IMG_MAX_BYTES = 4.5e6;    // Claude takes up to 5 MB per picture
+const isImageText = (t) => /^\[Image\]/.test(String(t || ''));
+async function handleImage(r, m, live) {
+  r.entry.transcribing = true; // the auto reply waits for it
+  try {
+    const buf = await downloadMediaMessage(m, 'buffer', {}, { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage });
+    if (buf.length > IMG_MAX_BYTES) throw new Error('too big (' + buf.length + ' bytes)');
+    const mime = String(normalizeMessageContent(m.message)?.imageMessage?.mimetype || 'image/jpeg');
+    const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : mime.includes('gif') ? 'gif' : 'jpg';
+    fs.mkdirSync(MEDIA, { recursive: true });
+    const file = String(r.entry.id).replace(/[^\w-]/g, '') + '.' + ext;
+    fs.writeFileSync(path.join(MEDIA, file), buf);
+    r.entry.img = file;
+    saveSoon();
+  } catch (e) { console.log(new Date().toISOString(), 'picture download failed', summary(r.chat).name, e.message); }
+  delete r.entry.transcribing;
+  afterMessage(r, m, live);
+}
+const IMG_MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+/** the newest saved pictures among msgs, labelled with when and by whom (the same way the transcript shows it) */
+function picsOf(msgs, who, when) {
+  return msgs.filter((m) => m.img && fs.existsSync(path.join(MEDIA, m.img))).slice(-IMG_MAX).map((m) => {
+    const cap = String(m.text).replace(/^\[Image\]\s*/, '').trim();
+    return { file: path.join(MEDIA, m.img), label: 'Picture sent at ' + when(m.ts) + ' by ' + who(m) + (cap ? ' (caption: ' + cap.slice(0, 200) + ')' : '') + ':' };
+  });
+}
+const isoWhen = (ts) => new Date(ts * 1000).toISOString().slice(0, 16).replace('T', ' ');
+const clientWho = (m) => (m.fromMe ? 'ME (business)' : 'CLIENT');
+function pruneMedia() {
+  try {
+    for (const name of fs.readdirSync(MEDIA)) {
+      const p = path.join(MEDIA, name);
+      if (Date.now() - fs.statSync(p).mtimeMs > IMG_KEEP_DAYS * 86400000) fs.unlinkSync(p);
+    }
+  } catch {}
+}
+setTimeout(pruneMedia, 60 * 1000);
+setInterval(pruneMedia, 12 * 3600 * 1000);
 /** everything that follows a new message: owner bookkeeping, auto reply, team assistant, watch, UI */
 function afterMessage(r, m, live) {
   if (r.entry.fromMe) noteOwnMessage(r.chat, r.entry);
@@ -344,7 +390,7 @@ function maybeTeamReply(c, entry, msg) {
     const lastOurs = [...before].reverse().find((m) => m.fromMe && m.auto);
     if (lastOurs && entry.ts - lastOurs.ts < 10 * 60 && before.slice(before.indexOf(lastOurs)).length <= 4) mode = 'followup';
   }
-  if (mode === 'listen' && entry.text.startsWith('[') && !entry.transcribed) return; // a photo/voice note nobody addressed to us
+  if (mode === 'listen' && entry.text.startsWith('[') && !entry.transcribed && !entry.img) return; // a voice note/file nobody addressed to us
   const p = teamPending.get(c.jid);
   const next = { mode: p && MODE_RANK[p.mode] > MODE_RANK[mode] ? p.mode : mode, firstId: p ? p.firstId : entry.id, entry, msg };
   teamPending.set(c.jid, next);
@@ -364,7 +410,7 @@ The manager: lines marked [المدير] are from the company manager. Always be
 
 Facts: use only <appointments>, <clients>, <business_info> and the group conversation. Client summaries are automatic and can be outdated or wrong: say «حسب الديسك» when it matters, and if you do not know, say so honestly. Never invent appointments, prices, names or numbers.
 Never blame or accuse anyone on the team of neglecting a client or a task (never «ما حدا رد» or «قصّرتوا»). Never mock or embarrass a colleague.
-Voice notes reach you transcribed, as «[Voice note] «...»»: treat the text as what was said (names and numbers may be misheard). A bare [Voice note] could not be made out, and you cannot see images or files: if the message to you is one of those, ask kindly for it in writing.
+Voice notes reach you transcribed, as «[Voice note] «...»»: treat the text as what was said (names and numbers may be misheard). A bare [Voice note] could not be made out: if the message to you is one, ask kindly for it in writing. Pictures sent in the group are attached after the conversation, each labelled with when and by whom it was sent: look at them when they matter. An [Image] line with no attached picture could not be loaded, and you cannot open videos or documents: never pretend you saw them.
 From the group you cannot message clients, book, move or cancel appointments: if asked, say they can do it from the desk (the chat, or the «المواعيد» tab).
 You are an AI assistant: never claim to be human; if someone asks, say with humour that you are the desk's AI assistant.
 Follow the conversation like a person in the group: if someone (especially the manager) answers you, corrects you or continues what you were talking about, that is for you even without your name or a reply. A short «أنسى» / «خلص» / «ولا يهمك» to you deserves at most a very short reply (or none). Messages where people talk among themselves are not for you. When nobody spoke to you, only jump in with a direct, useful answer to a clear question (an appointment, a client's status, a phone number, company info); never comment on chit-chat.
@@ -447,7 +493,8 @@ async function teamReply(c, job) {
         followup: 'The new message(s) marked >>> came right after your own reply. Decide whether they are talking to you (continuing your conversation, answering or correcting you) or among themselves.',
         listen: 'The new message(s) marked >>> did not call you. Reply ONLY if there is a clear question or need that you can answer directly and correctly from your data and no colleague has answered it, or if someone disrespects the manager or the company; otherwise reply=false.',
       })[mode] + (fromMgr ? ' The last one is from the MANAGER.' : '') + ' Decide and write your reply.';
-    const out = await runClaude({ system: TEAM_PROMPT, input, schema: TEAM_SCHEMA, timeoutMs: 120000 });
+    const images = picsOf(recent, (m) => (m.fromMe ? 'YOU/NEON desk' : (m.sender || 'عضو') + (isManagerPhone(m.senderPn) ? ' [المدير]' : '')), fmt);
+    const out = await runClaude({ system: TEAM_PROMPT, input, schema: TEAM_SCHEMA, timeoutMs: 120000, images });
     let parts = (Array.isArray(out.messages) ? out.messages : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 3);
     // pay is taken off only on the manager's own words (checked here by his phone number, not by what Claude says)
     if ((out.action === 'cutoff' || out.action === 'undo_cutoff') && !burstFromMgr) {
@@ -703,7 +750,8 @@ You are now replying AUTOMATICALLY: your text is sent to the client immediately,
 - "مين انت؟" / "مين معي؟" / "مين حضرتك؟" is a question about identity, not about being a bot: answer it naturally with the company (for example «معك شركة نيون للتصميم الداخلي والخارجي») and continue the conversation. Do not claim to be a specific person.
 - Voice notes: a line «[Voice note] «...»» is the client's voice note, transcribed automatically: treat the quoted text as what he said and answer it exactly like a text message, without mentioning the voice note or the transcription. Speech-to-text can mishear names and numbers: if one that matters (an area, a phone number, a time) looks wrong or unclear, ask him to confirm it. A bare [Voice note] with no text could not be made out: never mention it and never ask the client to write it out (the owner has been alerted and will listen). If the client's latest messages are only bare voice notes, set reply=false and nothing_to_answer=true; if he also sent text messages, answer the text only.
 - Job seekers: if the person asks about work with us (فرص عمل، وظيفة، توظيف، شغل عندكم، تدريب، بدي أشتغل معكم), even with no file and even if he mentions design (for example «هل لديكم فرص عمل لتصميم داخلي»), he is looking for a JOB, not a client: thank him with «شكراً على اهتمامك», ask him to send his CV and portfolio here and say the management will review them and contact him. Never promise there is an opening. No sales talk, no prices, no visit. Set job_application=true.
-- Document, image, video or file: NEVER say you could not open it. Use the file name and the conversation:
+- Pictures: the pictures in this conversation are attached after it, each labelled with when it was sent and by whom (CLIENT or ME). Look at them and answer about what they really show: a plan or sketch with dimensions (read the numbers; you may use them to work out the area and the price, and ask him to confirm a number that is unclear), a room, a site or a building. Mention briefly what you see when it helps, but no design ideas or suggestions in chat (those come after the visit). Only what you can actually see: never guess or invent details. An [Image] line with no attached picture could not be loaded: never pretend you saw it; ask what it shows or answer the rest of his message.
+- Document, video or file (or a picture that is a job CV): NEVER say you could not open it. Use the file name and the conversation:
   * if it looks like a job application (CV, résumé, portfolio, سيرة ذاتية, طلب توظيف, or someone offering to work with us): thank him for his interest with «شكراً على اهتمامك» (never «يعطيك العافية على اهتمامك»), say his file reached us and the management will contact him, set job_application=true. No sales talk, no prices, no visit.
   * otherwise: say it reached you (e.g. «وصلني الملف») and ask what it is about or what he needs for his project.
 - Scheduling: every visit takes 45 minutes. Never offer or accept a time that overlaps a slot in <schedule>, and stay within the working hours in the business info. If the client asks for a taken time, tell him politely that there is another appointment at that time and offer the nearest free times. Never mention other clients.
@@ -1021,14 +1069,15 @@ async function runAuto(jid) {
     const input = `Today is ${today} (Jordan time).\n${pitchNote}\n\n${bookedNote}${scheduleForClaude()}\n\n<business_info>\n${businessForClaude() || '(none provided)'}\n</business_info>\n\n${ownerExamplesFor(c)}\n\n` +
       `<client name="${(c.name || '').replace(/"/g, '')}">\n<conversation>\n${transcript(c, 30) || '(empty)'}\n</conversation>\n</client>\n\nDecide and write the reply now.`;
     const sys = SYSTEM_PROMPT + AUTO_RULES + (force ? FORCE_RULE : '');
-    let out = await runClaude({ system: sys, input, schema: AUTO_SCHEMA, timeoutMs: 120000 });
+    const images = picsOf(c.messages.slice(-30), clientWho, isoWhen);
+    let out = await runClaude({ system: sys, input, schema: AUTO_SCHEMA, timeoutMs: 120000, images });
     // no repeats: if a part is (almost) the same as something we already sent, ask for a rephrase once
     const sentBefore = c.messages.filter((m) => m.fromMe).slice(-25).map((m) => m.text);
     const repeatsOf = (o) => (Array.isArray(o.messages) ? o.messages : []).filter((p) => sentBefore.some((s) => tooSimilar(p, s)));
     let reps = repeatsOf(out);
     if (reps.length) {
       console.log(new Date().toISOString(), 'auto: rephrasing repeated text for', c.name || jid);
-      out = await runClaude({ system: sys, schema: AUTO_SCHEMA, timeoutMs: 120000,
+      out = await runClaude({ system: sys, schema: AUTO_SCHEMA, timeoutMs: 120000, images,
         input: input + `\n\nThese were ALREADY SENT earlier in this conversation. Do not repeat them; if the point is still needed, say it with completely different wording:\n${reps.map((r) => '- ' + r).join('\n')}` });
       reps = repeatsOf(out);
       if (reps.length && Array.isArray(out.messages)) out.messages = out.messages.filter((p) => !reps.includes(p)); // still repeating: drop those parts
@@ -1230,14 +1279,21 @@ const TOKEN_FILE = path.join(DATA, 'claude-oauth-token');
 const readClaudeToken = () => { try { return fs.readFileSync(TOKEN_FILE, 'utf8').trim(); } catch { return ''; } };
 
 /** Runs Claude Code headless with all tools disabled. Returns text, or the parsed object when a schema is given. */
-function runClaude({ system, input, schema, timeoutMs = 180000 }) {
+function runClaude({ system, input, schema, timeoutMs = 180000, images = [] }) {
   return new Promise((resolve, reject) => {
     const { cmd, shell } = claudeCmd();
     const token = readClaudeToken();
     const env = token ? { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: token } : process.env;
     const args = ['-p', '--model', MODEL, '--tools', '', '--strict-mcp-config', '--no-session-persistence',
       '--setting-sources', '', '--system-prompt', system];
-    if (schema) args.push('--output-format', 'json', '--json-schema', JSON.stringify(schema));
+    // pictures go in as image blocks of one stream-json user message (the plain prompt is text only)
+    const pics = [];
+    for (const im of images || []) {
+      try { pics.push({ label: im.label, mime: IMG_MIME[path.extname(im.file).slice(1)] || 'image/jpeg', data: fs.readFileSync(im.file).toString('base64') }); } catch {}
+    }
+    const stream = pics.length > 0;
+    if (stream) args.push('--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose');
+    if (schema) args.push(...(stream ? [] : ['--output-format', 'json']), '--json-schema', JSON.stringify(schema));
     const p = spawn(cmd, shell ? args.map((a) => (a === '' ? '""' : JSON.stringify(a))) : args,
       { shell, cwd: DATA, windowsHide: true, env });
     let out = '', err = '';
@@ -1248,6 +1304,15 @@ function runClaude({ system, input, schema, timeoutMs = 180000 }) {
     p.on('close', (code) => {
       clearTimeout(timer);
       if (code !== 0 || !out.trim()) return reject(new Error((err || out || `claude exited ${code}`).trim().slice(0, 500)));
+      if (stream) {
+        // the last "result" line holds what the plain json output would have
+        const lines = out.split('\n').map((l) => { try { return JSON.parse(l); } catch { return null; } });
+        const j = lines.reverse().find((l) => l && l.type === 'result');
+        if (!j) return reject(new Error('Claude gave no result'));
+        if (j.is_error) return reject(new Error(String(j.result || 'Claude error').slice(0, 500)));
+        if (!schema) return resolve(String(j.result || '').trim());
+        try { return resolve(j.structured_output ?? JSON.parse(j.result)); } catch (e) { return reject(new Error('Could not read Claude output: ' + e.message)); }
+      }
       if (!schema) return resolve(out.trim());
       try {
         const j = JSON.parse(out);
@@ -1255,7 +1320,8 @@ function runClaude({ system, input, schema, timeoutMs = 180000 }) {
         resolve(j.structured_output ?? JSON.parse(j.result));
       } catch (e) { reject(new Error('Could not read Claude output: ' + e.message)); }
     });
-    p.stdin.end(input, 'utf8');
+    p.stdin.end(stream ? JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: input },
+      ...pics.flatMap((x) => [{ type: 'text', text: x.label }, { type: 'image', source: { type: 'base64', media_type: x.mime, data: x.data } }])] } }) + '\n' : input, 'utf8');
   });
 }
 
@@ -1273,7 +1339,7 @@ function draftReply(c, instruction) {
     `<client name="${(c.name || '').replace(/"/g, '')}">\n<conversation>\n${transcript(c, 30) || '(empty)'}\n</conversation>\n</client>\n\n` +
     (instruction ? `Owner's instruction for this reply: ${instruction}\n\n` : '') +
     `Write the reply now.`;
-  return runClaude({ system: SYSTEM_PROMPT, input, timeoutMs: 120000 });
+  return runClaude({ system: SYSTEM_PROMPT, input, timeoutMs: 120000, images: picsOf(c.messages.slice(-30), clientWho, isoWhen) });
 }
 
 // ---------- chat insights (brief + per-chat summary) ----------
@@ -1726,7 +1792,7 @@ async function runFollowUps() {
       const input = 'Today is ' + today + ' (Jordan time). The client last wrote ' + f.days + ' days ago; the line where they asked for time: «' + f.defer.text.slice(0, 300) + '».\n\n<business_info>\n' + (businessForClaude() || '(none provided)') + '\n</business_info>\n\n' +
         '<client name="' + (c.name || '').replace(/"/g, '') + '">\n<conversation>\n' + (transcript(c, 40) || '(empty)') + '\n</conversation>\n</client>\n\nDecide now.';
       let out;
-      try { out = await runClaude({ system: SYSTEM_PROMPT + FOLLOW_RULES, input, schema: FOLLOW_SCHEMA, timeoutMs: 120000 }); }
+      try { out = await runClaude({ system: SYSTEM_PROMPT + FOLLOW_RULES, input, schema: FOLLOW_SCHEMA, timeoutMs: 120000, images: picsOf(c.messages.slice(-40), clientWho, isoWhen) }); }
       catch (e) { console.log(new Date().toISOString(), 'follow-up: claude failed', c.name || c.jid, e.message); c.followUpTries = (c.followUpTries || 0) + 1; if (c.followUpTries >= 3) c.followUpFor = f.last.id; saveSoon(); break; }
       c.followUpFor = f.last.id; delete c.followUpTries; saveSoon();
       const text = String(out.message || '').trim();
