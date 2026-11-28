@@ -1654,6 +1654,105 @@ async function remindAppts() {
 }
 setInterval(() => remindAppts().catch((e) => console.log('appointment reminder failed:', e.message)), 60 * 1000);
 
+// ---------- follow-up 3 days after a client asked for time («بفكر وبرجعلك») ----------
+// Asked for on 2026-11-28: "بعد 3 ايام من المحادثة ارجع ابعث بس للزبون الي حكى بفكر او برد خبر مش تبعث لاي حدا".
+// Only chats where the client himself asked for time, then went quiet; Claude reads the conversation first and
+// may still say no (declined, booked, we owe him something, not a client...). One follow-up per quiet spell.
+const FOLLOW = { afterSec: 3 * 86400, maxAgeSec: 21 * 86400, quietGapSec: 6 * 3600, everyMs: 15 * 60 * 1000, perDay: 15 };
+const DEFER_RE = /(بفكر|بنفكر|افكر|أفكر|نفكر|برجعل|برجع ل|بنرجعل|برجع بحكي|برجع احكي|بحكيلك|بحكيلكم|بخبرك|بخبركم|بعطيك خبر|بعطيكم خبر|برد عليك|برد عليكم|بردلك|بردلكم|برد خبر|اردلك|أردلك|بنردلك|بنرد عليك|بشوف و|بنشوف و|اشوف و|أشوف و|بشاور|اشاور|أشاور|بستشير|بتواصل معك|بتواصل معكم|بنتواصل|أتواصل|اتواصل معك|بأكد عليك|باكد عليك|بكلمك|بحاكيك|بدرس|لما اشوف|لما أشوف|انتظر.{0,6}رد)/;
+const followSent = []; // unix sec of follow-ups sent (daily cap)
+async function staffIds() {
+  const ids = new Set();
+  for (const name of settings.apptGroups || []) {
+    try {
+      const gid = await findGroupJid(name);
+      if (!gid) continue;
+      await memberPhone(gid, '_');
+      for (const p of groupMeta.get(gid)?.participants || []) {
+        for (const v of [p.id, p.jid, p.lid, p.phoneNumber]) if (v) ids.add(String(v).split(':')[0].split('@')[0]);
+      }
+    } catch {}
+  }
+  return ids;
+}
+function followCandidate(c, now) {
+  if (!/@(s\.whatsapp\.net|lid)$/.test(c.jid) || c.noAuto) return null;
+  const m = c.messages;
+  let li = -1;
+  for (let i = m.length - 1; i >= 0; i--) if (!m[i].fromMe) { li = i; break; }
+  if (li < 0) return null;
+  const last = m[li];
+  if (c.followUpFor === last.id) return null;                       // already decided for this quiet spell
+  const age = now - last.ts;
+  if (age < FOLLOW.afterSec || age > FOLLOW.maxAgeSec) return null;
+  // we already wrote again after it went quiet (by hand or an earlier follow-up): leave it
+  if (m.slice(li + 1).some((x) => x.ts - last.ts > FOLLOW.quietGapSec)) return null;
+  // the client asked for time in one of his last few messages (a «شكرا» or 👍 after it is fine)
+  const recent = m.slice(0, li + 1).filter((x) => !x.fromMe).slice(-4);
+  const defer = recent.find((x) => last.ts - x.ts < 86400 && DEFER_RE.test(x.text || ''));
+  if (!defer) return null;
+  if (upcomingAppts().some((a) => a.jid === c.jid)) return null;
+  return { last, defer, days: Math.floor(age / 86400) };
+}
+const FOLLOW_SCHEMA = { type: 'object', required: ['send', 'message', 'reason'], properties: {
+  send: { type: 'boolean', description: 'true = send the follow-up now' },
+  message: { type: 'string', description: 'the one WhatsApp follow-up message; empty when send is false' },
+  reason: { type: 'string', description: 'short reason for the decision (for the owner log)' } } };
+const FOLLOW_RULES = `
+
+FOLLOW-UP TASK (not a reply). The client went quiet a few days ago after saying they would think about it / get back to us / check with someone. Read the whole conversation, then decide whether to send ONE gentle follow-up now.
+send=true only when the client is a prospective client who asked for time to decide (on our price, the offer, a visit, to consult someone, or to send us details) and it is still open.
+send=false when: they declined or said not interested; a visit or meeting is already booked or done; we are the ones who owe them something (for example we promised a quotation or to call them), so the team must act, not a follow-up; it is an existing project client, a supplier, a staff member, a personal chat, a job applicant, or another business's automatic message; the «I'll get back to you» was ours, not theirs; or anything unclear.
+The message: one WhatsApp message of 2 to 3 short lines in the Jordanian dialect of the conversation. Start with «مرحبا، يعطيك العافية» (يعطيكِ for a woman, يعطيكم when unsure) and «معك فريق نيون». Mention specifically what they talked about (the project, its size, and the price we gave). If the price per metre we gave in the conversation is not the current offer in business_info, give the current one, calculated the same way, and say it «صار». End with one easy question that moves it forward (did they decide, or a free no-obligation visit: morning or afternoon?; if a visit does not fit, for example the client is abroad, offer a short call instead). Warm, no pressure, never a reproach like «ما رديت». Use the gender the conversation shows; if unknown, address them in the plural. Never invent facts that are not in the conversation or business_info. Do not mention payment.`;
+let followBusy = false;
+async function runFollowUps() {
+  if (followBusy || !settings.autoReply || settings.followUp === false || !sock || state.status !== 'open') return;
+  // inside working hours only, and not in the last hour of the day
+  const nowA = ammanNow(), h = hoursFor(nowA.slice(0, 10)), nm = slotMin(nowA);
+  if (!h || nm < h[0] || nm > h[1] - 60) return;
+  const now = nowS();
+  while (followSent.length && now - followSent[0] > 86400) followSent.shift();
+  if (followSent.length >= FOLLOW.perDay) return;
+  followBusy = true;
+  try {
+    let staff = null;
+    const list = [...chats.values()].map((c) => ({ c, f: followCandidate(c, now) })).filter((x) => x.f).sort((a, b) => b.f.last.ts - a.f.last.ts);
+    for (const { c, f } of list) {
+      if (autoBusy.has(c.jid)) continue;
+      staff ||= await staffIds();
+      const ids = [c.jid, c.alt].filter(Boolean).map((v) => String(v).split(':')[0].split('@')[0]);
+      if (ids.some((v) => staff.has(v)) || isManagerPhone(displayPhone(c))) { c.followUpFor = f.last.id; saveSoon(); continue; }
+      const today = new Date().toLocaleDateString('ar-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Amman' });
+      const input = 'Today is ' + today + ' (Jordan time). The client last wrote ' + f.days + ' days ago; the line where they asked for time: «' + f.defer.text.slice(0, 300) + '».\n\n<business_info>\n' + (businessForClaude() || '(none provided)') + '\n</business_info>\n\n' +
+        '<client name="' + (c.name || '').replace(/"/g, '') + '">\n<conversation>\n' + (transcript(c, 40) || '(empty)') + '\n</conversation>\n</client>\n\nDecide now.';
+      let out;
+      try { out = await runClaude({ system: SYSTEM_PROMPT + FOLLOW_RULES, input, schema: FOLLOW_SCHEMA, timeoutMs: 120000 }); }
+      catch (e) { console.log(new Date().toISOString(), 'follow-up: claude failed', c.name || c.jid, e.message); c.followUpTries = (c.followUpTries || 0) + 1; if (c.followUpTries >= 3) c.followUpFor = f.last.id; saveSoon(); break; }
+      c.followUpFor = f.last.id; delete c.followUpTries; saveSoon();
+      const text = String(out.message || '').trim();
+      // the chat moved on while Claude was thinking (the client wrote, or someone answered by hand)
+      const li = c.messages.indexOf(f.last);
+      if (li < 0 || !c.messages.slice(li + 1).every((x) => x.fromMe && x.ts - f.last.ts <= FOLLOW.quietGapSec)) continue;
+      if (!out.send || !text) { console.log(new Date().toISOString(), 'follow-up: not sending to', c.name || c.jid, '-', out.reason); continue; }
+      if (/\[[^\]]{1,40}\]/.test(text) || PAYMENT_RE.test(text) || priceProblem(text, c)) { console.log(new Date().toISOString(), 'follow-up: blocked by checks', c.name || c.jid); continue; }
+      await showTyping(c.jid, Date.now() / 1000 + Math.min(6, 2 + text.length / 60));
+      try {
+        const sent = await sock.sendMessage(c.jid, { text });
+        if (sent?.key?.id) autoSentIds.add(sent.key.id);
+        const r = addMessage(sent, true);
+        const entry = r?.entry || c.messages.find((m) => m.id === sent?.key?.id);
+        if (entry) { entry.auto = true; entry.followUp = true; broadcast('message', { jid: c.jid, entry, chat: summary(c), live: true }); }
+      } finally { stopTyping(c.jid); }
+      followSent.push(nowS());
+      console.log(new Date().toISOString(), 'follow-up: SENT to', c.name || c.jid, '(' + f.days + ' days quiet) -', out.reason);
+      broadcast('auto', { jid: c.jid, name: summary(c).name, sent: true, followUp: true });
+      break; // one per pass: they go out spaced, 15 minutes apart
+    }
+  } finally { followBusy = false; }
+}
+setInterval(() => runFollowUps().catch((e) => console.log('follow-up failed:', e.message)), FOLLOW.everyMs);
+setTimeout(() => runFollowUps().catch((e) => console.log('follow-up failed:', e.message)), 90 * 1000);
+
 // ---------- HTTP ----------
 function json(res, code, obj) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' });
@@ -1840,7 +1939,8 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/settings') {
     if (req.method === 'GET') return json(res, 200, settings);
     if (req.method === 'POST') {
-      const { autoReply, managerPhone } = await body(req);
+      const { autoReply, managerPhone, followUp } = await body(req);
+      if (typeof followUp === 'boolean') { settings.followUp = followUp; saveSettings(); console.log(new Date().toISOString(), 'follow-ups', followUp ? 'ON' : 'OFF'); }
       if (typeof managerPhone === 'string') { settings.managerPhone = managerPhone.replace(/\D/g, ''); saveSettings(); }
       if (typeof autoReply === 'boolean') {
         if (autoReply && !settings.autoReply) settings.autoSince = nowS(); // only messages from now on
