@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { HotspotEditor } from "@/components/admin/hotspot-editor";
 import { ProjectPhotoUpload } from "@/components/employee/project-photo-upload";
 import { GalleryPdfPicker } from "@/components/admin/gallery-pdf-picker";
+import { PhotoViewer, PhotoViewerOpen } from "@/components/admin/photo-viewer";
 
 // The gallery, and the one tab that is not simply the manager's screen.
 //
@@ -70,31 +71,33 @@ export default async function EmployeeProjectGalleryPage({ params }: { params: P
           </div>
 
           {space.images.length > 0 && (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-              {space.images.map((img) => (
-                <div key={img.id} className="group relative overflow-hidden rounded-xl border border-ink/8">
-                  <div className="relative aspect-[4/3]">
-                    <Image src={img.imageUrl} alt={img.caption ?? space.name} fill className="object-cover" unoptimized />
+            <PhotoViewer images={space.images.map((img) => ({ url: img.imageUrl, caption: img.caption ?? space.name }))}>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                {space.images.map((img, index) => (
+                  <div key={img.id} className="group relative overflow-hidden rounded-xl border border-ink/8">
+                    <PhotoViewerOpen index={index} className="relative aspect-[4/3]">
+                      <Image src={img.imageUrl} alt={img.caption ?? space.name} fill className="object-cover" unoptimized />
+                    </PhotoViewerOpen>
+                    {img.isBeforeAfter && (
+                      <span className="absolute left-2 top-2 rounded-full bg-ink/80 px-2 py-0.5 text-[10px] font-medium text-bg">
+                        Before/After
+                      </span>
+                    )}
+                    {/* Always visible rather than on hover: a phone has no hover,
+                        and a control that only appears to a mouse does not exist
+                        to the people this screen is for. */}
+                    <form className="absolute right-2 top-2">
+                      <DeleteButton
+                        formAction={deleteImage.bind(null, project.id, img.id)}
+                        label="Delete"
+                        confirmMessage="Remove this photo? It leaves the client's page and storage for good."
+                      />
+                    </form>
+                    <HotspotEditor projectId={project.id} imageId={img.id} imageUrl={img.imageUrl} hotspots={img.hotspots} />
                   </div>
-                  {img.isBeforeAfter && (
-                    <span className="absolute left-2 top-2 rounded-full bg-ink/80 px-2 py-0.5 text-[10px] font-medium text-bg">
-                      Before/After
-                    </span>
-                  )}
-                  {/* Always visible rather than on hover: a phone has no hover,
-                      and a control that only appears to a mouse does not exist
-                      to the people this screen is for. */}
-                  <form className="absolute right-2 top-2">
-                    <DeleteButton
-                      formAction={deleteImage.bind(null, project.id, img.id)}
-                      label="Delete"
-                      confirmMessage="Remove this photo? It leaves the client's page and storage for good."
-                    />
-                  </form>
-                  <HotspotEditor projectId={project.id} imageId={img.id} imageUrl={img.imageUrl} hotspots={img.hotspots} />
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </PhotoViewer>
           )}
 
           <ProjectPhotoUpload projectId={project.id} spaceId={space.id} />

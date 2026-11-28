@@ -38,7 +38,7 @@ export function HotspotEditor({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-ink/70 px-2.5 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
+        className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-ink/70 px-2.5 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <MapPin size={11} />
         Hotspots {hotspots.length > 0 && `(${hotspots.length})`}
